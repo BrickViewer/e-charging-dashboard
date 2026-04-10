@@ -1,40 +1,40 @@
 
+## Correctie: boog weer vullen vanaf 0, gemiddelde alleen als middelpunt-marker
 
-## Fix: Arc toont delta, kleur blijft groen
+De fout zit nu in `src/components/portal/GaugeChart.tsx`: zodra `average` is gezet, tekent de gauge alleen nog het verschil tussen gemiddelde en huidige waarde. Dat is niet de gewenste logica.
 
-### Wat er mis is
+### Gewenst gedrag
+- `0` = start links-onder, geen vulling
+- `average` = exact 50% gevuld, naald bovenaan
+- `average * 2` = volledige boog gevuld
+- Alles daartussen vult lineair vanaf 0 tot de huidige waarde
+- Dit moet identiek werken voor `Opbrengst` en `Energie geladen`
 
-De progress arc tekent nu van het **begin** (links-onder, -135°) tot de waarde-positie. Bij 1380/2400 is dat ~57% van de boog — lijkt bijna vol. Gebruiker wil alleen het stukje **verschil** t.o.v. gemiddelde zien.
+### Implementatie
+1. De schaal behouden zoals die nu al goed staat:
+   - `effectiveMax = average ? average * 2 : max`
+   - `targetAngle = -135 + (clampedValue / effectiveMax) * 270`
+2. In de XL gauge de huidige “delta arc” verwijderen:
+   - niet meer van gemiddelde naar waarde tekenen
+   - altijd tekenen van `-135` tot `-135 + animatedProgress * 270`
+3. In de SM/LG gauges exact dezelfde wijziging doen:
+   - ook daar de delta-logica verwijderen
+   - dezelfde 0→waarde boog gebruiken
+4. De gemiddelde-marker behouden:
+   - marker + tooltip blijven op `0°` als referentie
+   - kleur blijft gewoon groen
+5. Comments/benaming opschonen:
+   - geen “delta arc” meer, maar “active arc from zero to current value”
 
-### Wat er moet gebeuren
+### Bestanden
+- `src/components/portal/GaugeChart.tsx` — actieve boog terugzetten naar 0→waarde, terwijl gemiddelde 50% van de schaal blijft
+- `src/pages/portal/ClientDashboard.tsx` — geen functionele wijziging nodig; de huidige props (`average` en `max={average * 2}`) passen al bij deze berekening
 
-De progress arc moet alleen het segment tekenen **tussen het gemiddelde (midden/top) en de huidige waarde**. Kleur blijft gewoon de primaire kleur (groen), geen kleurverandering.
+### Technische notitie
+De naald-positie is waarschijnlijk al correct. De echte fout zit in de getekende boog. De sample `earningsValue = 1380` met `avgEarnings = 1200` kan dus gewoon blijven; met de juiste logica hoort dat ongeveer 57,5% gevulde boog te geven.
 
-```text
-        gem.
-         ↓
-    ╭────├██──╮     ← klein groen stukje rechts van midden
-   ╱     │ ██ ╲       = "iets boven gemiddeld"
-  │      │     │
-   ╲     │    ╱
-    ╰────┴────╯
-```
-
-### Wijziging in `src/components/portal/GaugeChart.tsx`
-
-**XL gauge** (regel 134-144): Arc van `-135` → verander naar:
-- `avgAngle = -135 + 0.5 * 270` = 0° (midden)
-- `valueAngle = -135 + animatedProgress * 270`
-- Als value > average: `describeArc(cx, cy, 0, valueAngle, radius)`
-- Als value < average: `describeArc(cx, cy, valueAngle, 0, radius)`
-
-**SM gauges** (regel ~275-285): Zelfde logica voor de active arc.
-
-**Kleur**: Verwijder `getNeedleColor()` logica — gewoon altijd `color` (= primary groen) gebruiken voor arc, naald en dots. Geen oranje/rood.
-
-**Glow dot**: Blijft op de waarde-positie staan.
-
-| Bestand | Wijziging |
-|---------|-----------|
-| `src/components/portal/GaugeChart.tsx` | Arc tekent alleen delta segment, kleur altijd groen |
-
+### Controle na implementatie
+- Opbrengst: `value = average` toont exact halve boog
+- Opbrengst: `value = average * 2` toont volledig gevulde boog
+- kWh gauge volgt exact dezelfde logica
+- Laadpunten online blijft ongewijzigd
