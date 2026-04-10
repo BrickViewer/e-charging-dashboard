@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 export async function getClients() {
   return supabase
@@ -15,7 +16,7 @@ export async function getClientById(id: string) {
     .maybeSingle();
 }
 
-export async function updateClient(clientId: string, data: Record<string, any>) {
+export async function updateClient(clientId: string, data: TablesUpdate<"clients">) {
   return supabase
     .from("clients")
     .update({ ...data, updated_at: new Date().toISOString() })
@@ -24,10 +25,6 @@ export async function updateClient(clientId: string, data: Record<string, any>) 
     .single();
 }
 
-export async function createClient(data: Record<string, any>) {
-  return supabase
-    .from("clients")
-    .insert(data)
-    .select()
-    .single();
+export async function createClient(data: TablesInsert<"clients">) {
+  return supabase.from("clients").insert(data).select().single();
 }
