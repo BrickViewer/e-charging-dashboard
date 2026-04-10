@@ -1,17 +1,40 @@
 
 
-## Fix: Sample opbrengst iets boven gemiddelde
+## Fix: Arc toont delta, kleur blijft groen
 
-De huidige fallback waarden zijn:
-- `earningsValue = 1050` (huidige maand)
-- `avgEarnings = 1200` (gemiddelde)
+### Wat er mis is
 
-Dit plaatst de naald/arc **links** van het midden (onder gemiddeld). De gebruiker wil dat de opbrengst **iets boven** het gemiddelde ligt.
+De progress arc tekent nu van het **begin** (links-onder, -135°) tot de waarde-positie. Bij 1380/2400 is dat ~57% van de boog — lijkt bijna vol. Gebruiker wil alleen het stukje **verschil** t.o.v. gemiddelde zien.
 
-### Wijziging
+### Wat er moet gebeuren
 
-**`src/pages/portal/ClientDashboard.tsx`** regel 31:
-- `earningsValue` fallback van `1050` → `1380` (iets boven het gemiddelde van 1200)
+De progress arc moet alleen het segment tekenen **tussen het gemiddelde (midden/top) en de huidige waarde**. Kleur blijft gewoon de primaire kleur (groen), geen kleurverandering.
 
-Hierdoor staat de arc/lijn iets voorbij het midden — precies het gewenste effect.
+```text
+        gem.
+         ↓
+    ╭────├██──╮     ← klein groen stukje rechts van midden
+   ╱     │ ██ ╲       = "iets boven gemiddeld"
+  │      │     │
+   ╲     │    ╱
+    ╰────┴────╯
+```
+
+### Wijziging in `src/components/portal/GaugeChart.tsx`
+
+**XL gauge** (regel 134-144): Arc van `-135` → verander naar:
+- `avgAngle = -135 + 0.5 * 270` = 0° (midden)
+- `valueAngle = -135 + animatedProgress * 270`
+- Als value > average: `describeArc(cx, cy, 0, valueAngle, radius)`
+- Als value < average: `describeArc(cx, cy, valueAngle, 0, radius)`
+
+**SM gauges** (regel ~275-285): Zelfde logica voor de active arc.
+
+**Kleur**: Verwijder `getNeedleColor()` logica — gewoon altijd `color` (= primary groen) gebruiken voor arc, naald en dots. Geen oranje/rood.
+
+**Glow dot**: Blijft op de waarde-positie staan.
+
+| Bestand | Wijziging |
+|---------|-----------|
+| `src/components/portal/GaugeChart.tsx` | Arc tekent alleen delta segment, kleur altijd groen |
 
