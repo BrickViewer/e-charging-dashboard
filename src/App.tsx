@@ -4,24 +4,42 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { lazy, Suspense } from "react";
 
 import Login from "./pages/Login";
 import ClientLayout from "./layouts/ClientLayout";
-import ClientDashboard from "./pages/portal/ClientDashboard";
-import ClientSessions from "./pages/portal/ClientSessions";
-import ClientFinancial from "./pages/portal/ClientFinancial";
-import ClientProfilePage from "./pages/portal/ClientProfilePage";
-import ClientMessages from "./pages/portal/ClientMessages";
 import AdminLayout from "./layouts/AdminLayout";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminClients from "./pages/admin/AdminClients";
-import AdminCalculator from "./pages/admin/AdminCalculator";
-import AdminFinancial from "./pages/admin/AdminFinancial";
-import AdminChargePoints from "./pages/admin/AdminChargePoints";
-import AdminSettings from "./pages/admin/AdminSettings";
 import NotFound from "./pages/NotFound";
 
+// Client portal pages
+const ClientDashboard = lazy(() => import("./pages/portal/ClientDashboard"));
+const ClientSessions = lazy(() => import("./pages/portal/ClientSessions"));
+const ClientFinancial = lazy(() => import("./pages/portal/ClientFinancial"));
+const ClientProfilePage = lazy(() => import("./pages/portal/ClientProfilePage"));
+const ClientMessages = lazy(() => import("./pages/portal/ClientMessages"));
+
+// Admin pages — lazy loaded
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminClients = lazy(() => import("./pages/admin/AdminClients"));
+const AdminClientWizard = lazy(() => import("./pages/admin/AdminClientWizard"));
+const AdminClientDetail = lazy(() => import("./pages/admin/AdminClientDetail"));
+const AdminCalculator = lazy(() => import("./pages/admin/AdminCalculator"));
+const AdminQuotes = lazy(() => import("./pages/admin/AdminQuotes"));
+const AdminQuoteCreate = lazy(() => import("./pages/admin/AdminQuoteCreate"));
+const AdminQuoteDetail = lazy(() => import("./pages/admin/AdminQuoteDetail"));
+const AdminFinancial = lazy(() => import("./pages/admin/AdminFinancial"));
+const AdminChargePoints = lazy(() => import("./pages/admin/AdminChargePoints"));
+const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
+
 const queryClient = new QueryClient();
+
+function PageLoader() {
+  return (
+    <div className="min-h-[400px] flex items-center justify-center text-muted-foreground">
+      Laden...
+    </div>
+  );
+}
 
 function AuthRedirect() {
   const { isLoading, user, role, isInternal } = useAuth();
@@ -40,7 +58,6 @@ function RequireAuth({ children, allowedRoles }: { children: React.ReactNode; al
   return <>{children}</>;
 }
 
-// E-Charging App
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -48,39 +65,46 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<AuthRedirect />} />
-            <Route path="/login" element={<Login />} />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<AuthRedirect />} />
+              <Route path="/login" element={<Login />} />
 
-            {/* Client Portal */}
-            <Route path="/portal" element={
-              <RequireAuth allowedRoles={["client"]}>
-                <ClientLayout />
-              </RequireAuth>
-            }>
-              <Route index element={<ClientDashboard />} />
-              <Route path="sessies" element={<ClientSessions />} />
-              <Route path="financieel" element={<ClientFinancial />} />
-              <Route path="gegevens" element={<ClientProfilePage />} />
-              <Route path="berichten" element={<ClientMessages />} />
-            </Route>
+              {/* Client Portal */}
+              <Route path="/portal" element={
+                <RequireAuth allowedRoles={["client"]}>
+                  <ClientLayout />
+                </RequireAuth>
+              }>
+                <Route index element={<ClientDashboard />} />
+                <Route path="sessies" element={<ClientSessions />} />
+                <Route path="financieel" element={<ClientFinancial />} />
+                <Route path="gegevens" element={<ClientProfilePage />} />
+                <Route path="berichten" element={<ClientMessages />} />
+              </Route>
 
-            {/* Admin Panel */}
-            <Route path="/admin" element={
-              <RequireAuth allowedRoles={["admin", "manager", "viewer"]}>
-                <AdminLayout />
-              </RequireAuth>
-            }>
-              <Route index element={<AdminDashboard />} />
-              <Route path="klanten" element={<AdminClients />} />
-              <Route path="calculator" element={<AdminCalculator />} />
-              <Route path="financieel" element={<AdminFinancial />} />
-              <Route path="laadpunten" element={<AdminChargePoints />} />
-              <Route path="instellingen" element={<AdminSettings />} />
-            </Route>
+              {/* Admin Panel */}
+              <Route path="/admin" element={
+                <RequireAuth allowedRoles={["admin", "manager", "viewer"]}>
+                  <AdminLayout />
+                </RequireAuth>
+              }>
+                <Route index element={<AdminDashboard />} />
+                <Route path="klanten" element={<AdminClients />} />
+                <Route path="klanten/nieuw" element={<AdminClientWizard />} />
+                <Route path="klanten/:id" element={<AdminClientDetail />} />
+                <Route path="offertes" element={<AdminQuotes />} />
+                <Route path="offertes/nieuw" element={<AdminQuoteCreate />} />
+                <Route path="offertes/:id" element={<AdminQuoteDetail />} />
+                <Route path="calculator" element={<AdminCalculator />} />
+                <Route path="financieel" element={<AdminFinancial />} />
+                <Route path="laadpunten" element={<AdminChargePoints />} />
+                <Route path="instellingen" element={<AdminSettings />} />
+              </Route>
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
