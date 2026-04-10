@@ -113,8 +113,24 @@ export function useAllQuotes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quotes")
-        .select("*")
+        .select("*, clients(company_name)")
         .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useQuoteById(id: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-quote", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("quotes")
+        .select("*, clients(company_name)")
+        .eq("id", id!)
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
