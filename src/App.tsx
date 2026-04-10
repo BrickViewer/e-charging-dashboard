@@ -17,6 +17,7 @@ const ClientSessions = lazy(() => import("./pages/portal/ClientSessions"));
 const ClientFinancial = lazy(() => import("./pages/portal/ClientFinancial"));
 const ClientProfilePage = lazy(() => import("./pages/portal/ClientProfilePage"));
 const ClientMessages = lazy(() => import("./pages/portal/ClientMessages"));
+const ClientLocationDetail = lazy(() => import("./pages/portal/ClientLocationDetail"));
 
 // Admin pages — lazy loaded
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -81,6 +82,7 @@ const App = () => (
                 <Route path="financieel" element={<ClientFinancial />} />
                 <Route path="gegevens" element={<ClientProfilePage />} />
                 <Route path="berichten" element={<ClientMessages />} />
+                <Route path="locatie/:id" element={<ClientLocationDetail />} />
               </Route>
 
               {/* Admin Panel */}

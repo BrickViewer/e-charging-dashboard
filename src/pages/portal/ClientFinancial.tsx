@@ -1,17 +1,38 @@
 import { useClientProfile, useClientSettlements } from "@/hooks/useClientData";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, Euro, Leaf, TrendingUp } from "lucide-react";
+import { useState, useMemo } from "react";
 
 export default function ClientFinancial() {
   const { data: client } = useClientProfile();
   const { data: settlements, isLoading } = useClientSettlements(client?.id);
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filtered = useMemo(() => {
+    if (!settlements) return [];
+    if (statusFilter === "all") return settlements;
+    return settlements.filter((s: any) => s.status === statusFilter);
+  }, [settlements, statusFilter]);
+
+  // KPIs
+  const kpis = useMemo(() => {
+    if (!settlements || settlements.length === 0) return { totalPaid: 0, totalEre: 0, avgMonthly: 0 };
+    const paid = settlements.filter((s: any) => s.status === "paid");
+    const totalPaid = paid.reduce((sum: number, s: any) => sum + Number(s.client_payout || 0), 0);
+    const totalEre = settlements.reduce((sum: number, s: any) => sum + Number(s.ere_estimate || 0), 0);
+    const avgMonthly = settlements.length > 0
+      ? settlements.reduce((sum: number, s: any) => sum + Number(s.client_payout || 0), 0) / settlements.length
+      : 0;
+    return { totalPaid, totalEre, avgMonthly };
+  }, [settlements]);
 
   const statusIcon = (status: string) => {
     switch (status) {
       case "paid": return <CheckCircle className="w-4 h-4 text-primary" />;
-      case "approved": return <Clock className="w-4 h-4 text-warning" />;
+      case "approved": return <Clock className="w-4 h-4 text-yellow-500" />;
       default: return <AlertCircle className="w-4 h-4 text-muted-foreground" />;
     }
   };
@@ -31,7 +52,63 @@ export default function ClientFinancial() {
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-semibold">Financieel overzicht</h1>
 
-      {settlements?.map((s: any) => (
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Card className="portal-card">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Euro className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Totaal uitbetaald</p>
+                <p className="text-lg font-semibold text-primary">{fmt(kpis.totalPaid)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="portal-card">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-green-500/10 flex items-center justify-center">
+                <Leaf className="w-4 h-4 text-green-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Totaal ERE (indicatief)</p>
+                <p className="text-lg font-semibold">{fmt(kpis.totalEre)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="portal-card">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Gem. maandopbrengst</p>
+                <p className="text-lg font-semibold">{fmt(kpis.avgMonthly)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Status filter */}
+      <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <SelectTrigger className="w-[200px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Alle statussen</SelectItem>
+          <SelectItem value="calculated">Berekend</SelectItem>
+          <SelectItem value="approved">Goedgekeurd</SelectItem>
+          <SelectItem value="paid">Uitbetaald</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {filtered.map((s: any) => (
         <Card key={s.id}>
           <CardContent className="p-6">
             <h3 className="text-lg font-semibold mb-4 uppercase">
@@ -81,8 +158,8 @@ export default function ClientFinancial() {
         </Card>
       ))}
 
-      {(!settlements || settlements.length === 0) && !isLoading && (
-        <Card><CardContent className="p-12 text-center text-muted-foreground">Nog geen afrekeningen beschikbaar.</CardContent></Card>
+      {filtered.length === 0 && !isLoading && (
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Geen afrekeningen gevonden.</CardContent></Card>
       )}
     </div>
   );
