@@ -125,26 +125,8 @@ export function GaugeChart({
             strokeLinecap="round"
           />
 
-          {/* Progress arc — delta between average and value */}
-          {average && Math.abs(animatedProgress - 0.5) > 0.005 && (() => {
-            const avgAngleDeg = 0; // middle of 270° arc
-            const valueAngleDeg = -135 + animatedProgress * 270;
-            const startA = Math.min(avgAngleDeg, valueAngleDeg);
-            const endA = Math.max(avgAngleDeg, valueAngleDeg);
-            return (
-              <path
-                d={describeArc(cx, cy, startA, endA, radius)}
-                fill="none"
-                stroke={arcColor}
-                strokeWidth={strokeW + 1}
-                strokeLinecap="round"
-                style={{ transition: "all 1.4s cubic-bezier(0.34, 1.2, 0.64, 1)" }}
-                opacity={0.7}
-              />
-            );
-          })()}
-          {/* Progress arc — full from start when no average */}
-          {!average && animatedProgress > 0.005 && (
+          {/* Active arc — from zero to current value */}
+          {animatedProgress > 0.005 && (
             <path
               d={describeArc(cx, cy, -135, -135 + animatedProgress * 270, radius)}
               fill="none"
@@ -288,25 +270,8 @@ export function GaugeChart({
           strokeLinecap="round"
         />
 
-        {/* Active arc — delta between average and value */}
-        {average && Math.abs(animatedProgress - 0.5) > 0.005 && (() => {
-          const avgAngleDeg = 0;
-          const valueAngleDeg = -135 + animatedProgress * 270;
-          const startA = Math.min(avgAngleDeg, valueAngleDeg);
-          const endA = Math.max(avgAngleDeg, valueAngleDeg);
-          return (
-            <path
-              d={describeArc(cx, cy, startA, endA, radius)}
-              fill="none"
-              stroke={needleColor}
-              strokeWidth={strokeW}
-              strokeLinecap="round"
-              style={{ transition: "all 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)" }}
-              opacity={0.5}
-            />
-          );
-        })()}
-        {!average && animatedAngle > -134 && (
+        {/* Active arc — from zero to current value */}
+        {animatedAngle > -134 && (
           <path
             d={describeArc(cx, cy, -135, Math.min(animatedAngle, 135), radius)}
             fill="none"
