@@ -55,34 +55,34 @@ export default function ClientDashboard() {
 
       {/* Gauges — cockpit layout */}
       <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 py-4">
-        {/* Left gauge — Opbrengst */}
-        <div className="order-2 md:order-1">
-          <GaugeChart
-            value={kpis.totalEarned}
-            max={maxEarnings}
-            label="Opbrengst deze maand"
-            unit="EUR"
-            size="sm"
-            color="hsl(var(--primary))"
-            formatValue={(v) => `€${v.toLocaleString("nl-NL", { maximumFractionDigits: 0 })}`}
-          />
-        </div>
-
-        {/* Center gauge — kWh (large) */}
-        <div className="order-1 md:order-2">
+      {/* Left gauge — kWh */}
+        <div className="order-2 md:order-1 flex items-center">
           <GaugeChart
             value={kpis.kwhLoaded}
             max={maxKwh}
-            label="Energie geladen deze maand"
+            label="Energie geladen"
             unit="kWh"
-            size="lg"
+            size="sm"
             color="hsl(var(--primary))"
             formatValue={(v) => v.toLocaleString("nl-NL", { maximumFractionDigits: 0 })}
           />
         </div>
 
+        {/* Center gauge — Opbrengst (xl digital) */}
+        <div className="order-1 md:order-2">
+          <GaugeChart
+            value={kpis.totalEarned}
+            max={maxEarnings}
+            label="Opbrengst deze maand"
+            unit="EUR"
+            size="xl"
+            color="hsl(var(--primary))"
+            formatValue={(v) => `€${v.toLocaleString("nl-NL", { maximumFractionDigits: 0 })}`}
+          />
+        </div>
+
         {/* Right gauge — Laadpunten online */}
-        <div className="order-3">
+        <div className="order-3 flex items-center">
           <GaugeChart
             value={kpis.chargePointsOnline}
             max={Math.max(kpis.chargePointsTotal, 1)}
