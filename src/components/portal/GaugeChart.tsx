@@ -225,10 +225,10 @@ export function GaugeChart({
   }
 
   // ── SM / LG: Scaled-down arc gauge (same style as XL) ──
-  const smSvgSize = isLarge ? 220 : 180;
+  const smSvgSize = isLarge ? 220 : 210;
   const smCx = smSvgSize / 2;
   const smCy = smSvgSize / 2;
-  const smRadius = isLarge ? 85 : 70;
+  const smRadius = isLarge ? 85 : 82;
   const smStrokeW = isLarge ? 3 : 2.5;
   const smAvgAngle = 0;
 
@@ -321,7 +321,7 @@ export function GaugeChart({
           textAnchor="middle"
           dominantBaseline="middle"
           fill="hsl(var(--foreground))"
-          fontSize={isLarge ? 28 : 22}
+          fontSize={isLarge ? 28 : 26}
           fontWeight="700"
           fontFamily="var(--font-family)"
         >
@@ -335,7 +335,7 @@ export function GaugeChart({
             y={smCy + (isLarge ? 22 : 18)}
             textAnchor="middle"
             fill="hsl(var(--muted-foreground))"
-            fontSize={isLarge ? 12 : 11}
+            fontSize={isLarge ? 12 : 12}
             fontFamily="var(--font-family)"
           >
             {unit}
