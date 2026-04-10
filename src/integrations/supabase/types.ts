@@ -14,16 +14,631 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activity_log: {
+        Row: {
+          action: string | null
+          client_id: string | null
+          created_at: string
+          details: Json | null
+          id: string
+          organization_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action?: string | null
+          client_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          organization_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string | null
+          client_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          organization_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_points: {
+        Row: {
+          brand: string | null
+          created_at: string
+          eflux_evse_id: string | null
+          has_mid_meter: boolean | null
+          id: string
+          location_id: string
+          model: string | null
+          monthly_platform_cost: number | null
+          name: string | null
+          status: string | null
+          type: string | null
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          eflux_evse_id?: string | null
+          has_mid_meter?: boolean | null
+          id?: string
+          location_id: string
+          model?: string | null
+          monthly_platform_cost?: number | null
+          name?: string | null
+          status?: string | null
+          type?: string | null
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          eflux_evse_id?: string | null
+          has_mid_meter?: boolean | null
+          id?: string
+          location_id?: string
+          model?: string | null
+          monthly_platform_cost?: number | null
+          name?: string | null
+          status?: string | null
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_points_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_sessions: {
+        Row: {
+          charge_point_id: string
+          client_id: string
+          client_share: number | null
+          created_at: string
+          duration_minutes: number | null
+          echarging_share: number | null
+          eflux_session_id: string | null
+          ended_at: string | null
+          energy_cost: number | null
+          ere_estimate: number | null
+          gross_revenue: number | null
+          id: string
+          kwh_delivered: number | null
+          location_id: string
+          net_margin: number | null
+          started_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          client_id: string
+          client_share?: number | null
+          created_at?: string
+          duration_minutes?: number | null
+          echarging_share?: number | null
+          eflux_session_id?: string | null
+          ended_at?: string | null
+          energy_cost?: number | null
+          ere_estimate?: number | null
+          gross_revenue?: number | null
+          id?: string
+          kwh_delivered?: number | null
+          location_id: string
+          net_margin?: number | null
+          started_at: string
+        }
+        Update: {
+          charge_point_id?: string
+          client_id?: string
+          client_share?: number | null
+          created_at?: string
+          duration_minutes?: number | null
+          echarging_share?: number | null
+          eflux_session_id?: string | null
+          ended_at?: string | null
+          energy_cost?: number | null
+          ere_estimate?: number | null
+          gross_revenue?: number | null
+          id?: string
+          kwh_delivered?: number | null
+          location_id?: string
+          net_margin?: number | null
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_sessions_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_sessions_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          billing_address: string | null
+          company_name: string
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          contract_duration_months: number | null
+          contract_start_date: string | null
+          created_at: string
+          id: string
+          kvk: string | null
+          notes: string | null
+          organization_id: string
+          portal_user_id: string | null
+          revenue_share_percentage: number | null
+          status: string | null
+          stripe_connected_account_id: string | null
+          stripe_onboarding_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          billing_address?: string | null
+          company_name: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contract_duration_months?: number | null
+          contract_start_date?: string | null
+          created_at?: string
+          id?: string
+          kvk?: string | null
+          notes?: string | null
+          organization_id: string
+          portal_user_id?: string | null
+          revenue_share_percentage?: number | null
+          status?: string | null
+          stripe_connected_account_id?: string | null
+          stripe_onboarding_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billing_address?: string | null
+          company_name?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contract_duration_months?: number | null
+          contract_start_date?: string | null
+          created_at?: string
+          id?: string
+          kvk?: string | null
+          notes?: string | null
+          organization_id?: string
+          portal_user_id?: string | null
+          revenue_share_percentage?: number | null
+          status?: string | null
+          stripe_connected_account_id?: string | null
+          stripe_onboarding_status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      locations: {
+        Row: {
+          address: string | null
+          city: string | null
+          client_id: string
+          created_at: string
+          ean_code: string | null
+          eflux_location_id: string | null
+          grid_connection_amps: number | null
+          has_solar: boolean | null
+          id: string
+          name: string | null
+          parking_spots: number | null
+          postal_code: string | null
+          property_type: string | null
+          solar_capacity_kwp: number | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          client_id: string
+          created_at?: string
+          ean_code?: string | null
+          eflux_location_id?: string | null
+          grid_connection_amps?: number | null
+          has_solar?: boolean | null
+          id?: string
+          name?: string | null
+          parking_spots?: number | null
+          postal_code?: string | null
+          property_type?: string | null
+          solar_capacity_kwp?: number | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          client_id?: string
+          created_at?: string
+          ean_code?: string | null
+          eflux_location_id?: string | null
+          grid_connection_amps?: number | null
+          has_solar?: boolean | null
+          id?: string
+          name?: string | null
+          parking_spots?: number | null
+          postal_code?: string | null
+          property_type?: string | null
+          solar_capacity_kwp?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_settlements: {
+        Row: {
+          client_id: string
+          client_payout: number | null
+          created_at: string
+          echarging_revenue: number | null
+          ere_estimate: number | null
+          gross_revenue: number | null
+          id: string
+          month: string
+          net_margin: number | null
+          paid_at: string | null
+          status: string | null
+          stripe_transfer_id: string | null
+          total_energy_cost: number | null
+          total_kwh: number | null
+          total_platform_cost: number | null
+          total_sessions: number | null
+        }
+        Insert: {
+          client_id: string
+          client_payout?: number | null
+          created_at?: string
+          echarging_revenue?: number | null
+          ere_estimate?: number | null
+          gross_revenue?: number | null
+          id?: string
+          month: string
+          net_margin?: number | null
+          paid_at?: string | null
+          status?: string | null
+          stripe_transfer_id?: string | null
+          total_energy_cost?: number | null
+          total_kwh?: number | null
+          total_platform_cost?: number | null
+          total_sessions?: number | null
+        }
+        Update: {
+          client_id?: string
+          client_payout?: number | null
+          created_at?: string
+          echarging_revenue?: number | null
+          ere_estimate?: number | null
+          gross_revenue?: number | null
+          id?: string
+          month?: string
+          net_margin?: number | null
+          paid_at?: string | null
+          status?: string | null
+          stripe_transfer_id?: string | null
+          total_energy_cost?: number | null
+          total_kwh?: number | null
+          total_platform_cost?: number | null
+          total_sessions?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_settlements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          read: boolean | null
+          recipient_id: string
+          title: string | null
+          type: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          read?: boolean | null
+          recipient_id: string
+          title?: string | null
+          type?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          read?: boolean | null
+          recipient_id?: string
+          title?: string | null
+          type?: string | null
+        }
+        Relationships: []
+      }
+      organizations: {
+        Row: {
+          address: string | null
+          created_at: string
+          email: string | null
+          id: string
+          kvk: string | null
+          name: string
+          phone: string | null
+          stripe_account_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          kvk?: string | null
+          name: string
+          phone?: string | null
+          stripe_account_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          kvk?: string | null
+          name?: string
+          phone?: string | null
+          stripe_account_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          organization_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          organization_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          organization_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quotes: {
+        Row: {
+          calculation_data: Json | null
+          client_id: string | null
+          created_at: string
+          id: string
+          locations_data: Json | null
+          monthly_projection: Json | null
+          notes: string | null
+          organization_id: string
+          prospect_company: string | null
+          prospect_contact: string | null
+          prospect_email: string | null
+          quote_number: string | null
+          signed_at: string | null
+          status: string | null
+          tariff_data: Json | null
+          total_hardware_cost: number | null
+          total_installation_cost: number | null
+          valid_until: string | null
+        }
+        Insert: {
+          calculation_data?: Json | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          locations_data?: Json | null
+          monthly_projection?: Json | null
+          notes?: string | null
+          organization_id: string
+          prospect_company?: string | null
+          prospect_contact?: string | null
+          prospect_email?: string | null
+          quote_number?: string | null
+          signed_at?: string | null
+          status?: string | null
+          tariff_data?: Json | null
+          total_hardware_cost?: number | null
+          total_installation_cost?: number | null
+          valid_until?: string | null
+        }
+        Update: {
+          calculation_data?: Json | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          locations_data?: Json | null
+          monthly_projection?: Json | null
+          notes?: string | null
+          organization_id?: string
+          prospect_company?: string | null
+          prospect_contact?: string | null
+          prospect_email?: string | null
+          quote_number?: string | null
+          signed_at?: string | null
+          status?: string | null
+          tariff_data?: Json | null
+          total_hardware_cost?: number | null
+          total_installation_cost?: number | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tariff_profiles: {
+        Row: {
+          charge_rate_per_kwh: number | null
+          client_id: string
+          created_at: string
+          energy_cost_per_kwh: number | null
+          ere_rate_per_kwh: number | null
+          id: string
+          location_id: string | null
+          valid_from: string | null
+        }
+        Insert: {
+          charge_rate_per_kwh?: number | null
+          client_id: string
+          created_at?: string
+          energy_cost_per_kwh?: number | null
+          ere_rate_per_kwh?: number | null
+          id?: string
+          location_id?: string | null
+          valid_from?: string | null
+        }
+        Update: {
+          charge_rate_per_kwh?: number | null
+          client_id?: string
+          created_at?: string
+          energy_cost_per_kwh?: number | null
+          ere_rate_per_kwh?: number | null
+          id?: string
+          location_id?: string | null
+          valid_from?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tariff_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tariff_profiles_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_client_id_for_user: { Args: { _user_id: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_internal: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "manager" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +765,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "manager", "viewer"],
+    },
   },
 } as const
