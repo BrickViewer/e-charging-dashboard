@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useAdminData";
@@ -40,22 +40,53 @@ const emptyLocation = (): LocationData => ({
 
 export default function AdminClientWizard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { data: org } = useOrganization();
   const { user } = useAuth();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  // Pre-fill state from calculator or quote
+  const prefill = (location.state as any) || {};
+
   // Step 1
-  const [company, setCompany] = useState({ company_name: "", kvk: "", contact_name: "", contact_email: "", contact_phone: "", billing_street: "", billing_postal: "", billing_city: "" });
+  const [company, setCompany] = useState({
+    company_name: prefill.prospectCompany || "",
+    kvk: "",
+    contact_name: prefill.prospectContact || "",
+    contact_email: prefill.prospectEmail || "",
+    contact_phone: "",
+    billing_street: "",
+    billing_postal: "",
+    billing_city: "",
+  });
 
   // Step 2
   const [locations, setLocations] = useState<LocationData[]>([emptyLocation()]);
 
   // Step 4
   const [tariff, setTariff] = useState({
-    charge_rate: "0.45", energy_cost: "0.25", revenue_share: "50", ere_rate: "0.10",
+    charge_rate: prefill.chargeRate ? String(prefill.chargeRate) : "0.45",
+    energy_cost: prefill.energyCost ? String(prefill.energyCost) : "0.25",
+    revenue_share: prefill.revenueShare ? String(prefill.revenueShare) : "50",
+    ere_rate: prefill.ereRate ? String(prefill.ereRate) : "0.10",
   });
+
+  // Pre-fill charge points from calculator/quote
+  useEffect(() => {
+    if (prefill.numChargePoints && prefill.numChargePoints > 0) {
+      const n = Number(prefill.numChargePoints);
+      const cpType = prefill.chargePointType === "dc" ? "dc_50" : "ac_11";
+      const cps = Array.from({ length: n }, (_, j) => ({
+        name: `LP-${String(j + 1).padStart(3, "0")}`,
+        type: cpType,
+        brand: "",
+        model: "",
+      }));
+      setLocations(prev => prev.map((l, i) => i === 0 ? { ...l, chargePointCount: String(n), chargePoints: cps } : l));
+    }
+  }, []);
 
   const updateLocation = (idx: number, partial: Partial<LocationData>) => {
     setLocations(prev => prev.map((l, i) => i === idx ? { ...l, ...partial } : l));
@@ -174,7 +205,13 @@ export default function AdminClientWizard() {
         description: `Klant ${company.company_name} aangemaakt`,
       });
 
+      // 5. Link quote if created from quote
+      if (prefill.fromQuote && prefill.quoteId) {
+        await supabase.from("quotes").update({ client_id: client.id }).eq("id", prefill.quoteId);
+      }
+
       queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-quotes"] });
       toast.success("Klant succesvol aangemaakt");
       navigate(`/admin/klanten/${client.id}`);
     } catch (err: any) {

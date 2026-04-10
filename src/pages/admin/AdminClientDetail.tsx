@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useClientById, useClientSettlements, useClientActivity, useClientSessions } from "@/hooks/useAdminData";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -6,17 +7,92 @@ import { formatEuro, formatNumber } from "@/services/calculations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, ChevronDown, MapPin, Zap, FileText, Activity, Building2, Upload } from "lucide-react";
+import { ArrowLeft, ChevronDown, MapPin, Zap, FileText, Activity, Building2, Upload, Pencil, Save, X } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function AdminClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { data: client, isLoading } = useClientById(id);
   const { data: settlements } = useClientSettlements(id);
   const { data: activity } = useClientActivity(id);
   const { data: sessions } = useClientSessions(id);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editData, setEditData] = useState<Record<string, any>>({});
+
+  const startEditing = () => {
+    if (!client) return;
+    setEditData({
+      company_name: client.company_name || "",
+      kvk: client.kvk || "",
+      contact_name: client.contact_name || "",
+      contact_email: client.contact_email || "",
+      contact_phone: client.contact_phone || "",
+      billing_address_street: client.billing_address_street || "",
+      billing_address_postal: client.billing_address_postal || "",
+      billing_address_city: client.billing_address_city || "",
+      contract_start_date: client.contract_start_date || "",
+      contract_duration_months: client.contract_duration_months ?? 36,
+      revenue_share_percentage: client.revenue_share_percentage ?? 50,
+      charge_rate_per_kwh: client.charge_rate_per_kwh ?? 0.45,
+      energy_cost_per_kwh: client.energy_cost_per_kwh ?? 0.25,
+      ere_rate_per_kwh: client.ere_rate_per_kwh ?? 0.10,
+    });
+    setIsEditing(true);
+  };
+
+  const handleSave = async () => {
+    if (!id || !client) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("clients").update({
+        company_name: editData.company_name,
+        kvk: editData.kvk || null,
+        contact_name: editData.contact_name,
+        contact_email: editData.contact_email,
+        contact_phone: editData.contact_phone || null,
+        billing_address_street: editData.billing_address_street || null,
+        billing_address_postal: editData.billing_address_postal || null,
+        billing_address_city: editData.billing_address_city || null,
+        contract_start_date: editData.contract_start_date || null,
+        contract_duration_months: Number(editData.contract_duration_months) || 36,
+        revenue_share_percentage: Number(editData.revenue_share_percentage) || 50,
+        charge_rate_per_kwh: Number(editData.charge_rate_per_kwh) || 0.45,
+        energy_cost_per_kwh: Number(editData.energy_cost_per_kwh) || 0.25,
+        ere_rate_per_kwh: Number(editData.ere_rate_per_kwh) || 0.10,
+      }).eq("id", id);
+      if (error) throw error;
+
+      // Log activity
+      await supabase.from("activity_log").insert({
+        client_id: id,
+        organization_id: (client as any).organization_id,
+        user_id: user?.id,
+        action: "client_updated",
+        description: "Klantgegevens gewijzigd",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
+      toast.success("Klantgegevens opgeslagen");
+      setIsEditing(false);
+    } catch (err: any) {
+      toast.error(err.message || "Fout bij opslaan");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -41,6 +117,9 @@ export default function AdminClientDetail() {
   const totalRevenue = settlements?.reduce((s, set) => s + Number(set.gross_revenue || 0), 0) || 0;
   const totalPayout = settlements?.reduce((s, set) => s + Number(set.client_payout || 0), 0) || 0;
 
+  const ed = editData;
+  const setEd = (field: string, value: any) => setEditData(prev => ({ ...prev, [field]: value }));
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -52,6 +131,21 @@ export default function AdminClientDetail() {
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-semibold">{client.company_name}</h1>
         <StatusBadge status={client.status || "prospect"} />
+        {!isEditing && (
+          <Button variant="outline" size="sm" onClick={startEditing}>
+            <Pencil className="w-4 h-4 mr-1" />Bewerken
+          </Button>
+        )}
+        {isEditing && (
+          <>
+            <Button size="sm" onClick={handleSave} disabled={saving}>
+              <Save className="w-4 h-4 mr-1" />{saving ? "Opslaan..." : "Opslaan"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+              <X className="w-4 h-4 mr-1" />Annuleren
+            </Button>
+          </>
+        )}
       </div>
 
       <Tabs defaultValue="overzicht">
@@ -75,22 +169,54 @@ export default function AdminClientDetail() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader><CardTitle className="text-base">Klantgegevens</CardTitle></CardHeader>
-              <CardContent className="text-sm space-y-1">
-                <p><span className="text-muted-foreground">Contact:</span> {client.contact_name}</p>
-                <p><span className="text-muted-foreground">E-mail:</span> {client.contact_email}</p>
-                <p><span className="text-muted-foreground">Telefoon:</span> {client.contact_phone || "—"}</p>
-                <p><span className="text-muted-foreground">KVK:</span> {client.kvk || "—"}</p>
-                <p><span className="text-muted-foreground">Adres:</span> {[client.billing_address_street, client.billing_address_postal, client.billing_address_city].filter(Boolean).join(", ") || "—"}</p>
+              <CardContent className="text-sm space-y-2">
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <div><Label>Bedrijfsnaam</Label><Input value={ed.company_name} onChange={e => setEd("company_name", e.target.value)} /></div>
+                    <div><Label>KVK</Label><Input value={ed.kvk} onChange={e => setEd("kvk", e.target.value)} /></div>
+                    <div><Label>Contactpersoon</Label><Input value={ed.contact_name} onChange={e => setEd("contact_name", e.target.value)} /></div>
+                    <div><Label>E-mail</Label><Input value={ed.contact_email} onChange={e => setEd("contact_email", e.target.value)} /></div>
+                    <div><Label>Telefoon</Label><Input value={ed.contact_phone} onChange={e => setEd("contact_phone", e.target.value)} /></div>
+                    <div><Label>Straat + nr</Label><Input value={ed.billing_address_street} onChange={e => setEd("billing_address_street", e.target.value)} /></div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><Label>Postcode</Label><Input value={ed.billing_address_postal} onChange={e => setEd("billing_address_postal", e.target.value)} /></div>
+                      <div><Label>Stad</Label><Input value={ed.billing_address_city} onChange={e => setEd("billing_address_city", e.target.value)} /></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p><span className="text-muted-foreground">Contact:</span> {client.contact_name}</p>
+                    <p><span className="text-muted-foreground">E-mail:</span> {client.contact_email}</p>
+                    <p><span className="text-muted-foreground">Telefoon:</span> {client.contact_phone || "—"}</p>
+                    <p><span className="text-muted-foreground">KVK:</span> {client.kvk || "—"}</p>
+                    <p><span className="text-muted-foreground">Adres:</span> {[client.billing_address_street, client.billing_address_postal, client.billing_address_city].filter(Boolean).join(", ") || "—"}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle className="text-base">Contract</CardTitle></CardHeader>
-              <CardContent className="text-sm space-y-1">
-                <p><span className="text-muted-foreground">Startdatum:</span> {client.contract_start_date || "—"}</p>
-                <p><span className="text-muted-foreground">Looptijd:</span> {client.contract_duration_months} maanden</p>
-                <p><span className="text-muted-foreground">Revenue share:</span> {client.revenue_share_percentage}%</p>
-                <p><span className="text-muted-foreground">Laadtarief:</span> €{Number(client.charge_rate_per_kwh).toFixed(2)}/kWh</p>
-                <p><span className="text-muted-foreground">Stripe:</span> {client.stripe_onboarding_status || "pending"}</p>
+              <CardContent className="text-sm space-y-2">
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <div><Label>Startdatum</Label><Input type="date" value={ed.contract_start_date} onChange={e => setEd("contract_start_date", e.target.value)} /></div>
+                    <div><Label>Looptijd (maanden)</Label><Input type="number" value={ed.contract_duration_months} onChange={e => setEd("contract_duration_months", e.target.value)} /></div>
+                    <div><Label>Revenue share (%)</Label><Input type="number" value={ed.revenue_share_percentage} onChange={e => setEd("revenue_share_percentage", e.target.value)} /></div>
+                    <div><Label>Laadtarief (€/kWh)</Label><Input type="number" step="0.01" value={ed.charge_rate_per_kwh} onChange={e => setEd("charge_rate_per_kwh", e.target.value)} /></div>
+                    <div><Label>Energiekost (€/kWh)</Label><Input type="number" step="0.01" value={ed.energy_cost_per_kwh} onChange={e => setEd("energy_cost_per_kwh", e.target.value)} /></div>
+                    <div><Label>ERE-tarief (€/kWh)</Label><Input type="number" step="0.01" value={ed.ere_rate_per_kwh} onChange={e => setEd("ere_rate_per_kwh", e.target.value)} /></div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p><span className="text-muted-foreground">Startdatum:</span> {client.contract_start_date || "—"}</p>
+                    <p><span className="text-muted-foreground">Looptijd:</span> {client.contract_duration_months} maanden</p>
+                    <p><span className="text-muted-foreground">Revenue share:</span> {client.revenue_share_percentage}%</p>
+                    <p><span className="text-muted-foreground">Laadtarief:</span> €{Number(client.charge_rate_per_kwh).toFixed(2)}/kWh</p>
+                    <p><span className="text-muted-foreground">Energiekost:</span> €{Number(client.energy_cost_per_kwh).toFixed(2)}/kWh</p>
+                    <p><span className="text-muted-foreground">ERE-tarief:</span> €{Number(client.ere_rate_per_kwh).toFixed(2)}/kWh</p>
+                    <p><span className="text-muted-foreground">Stripe:</span> {client.stripe_onboarding_status || "pending"}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

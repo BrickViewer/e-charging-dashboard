@@ -1,11 +1,11 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuoteById, useOrganization } from "@/hooks/useAdminData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, UserPlus } from "lucide-react";
 import { formatEuro } from "@/services/calculations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -19,12 +19,32 @@ const fmtRound = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractio
 
 export default function AdminQuoteDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data: quote, isLoading } = useQuoteById(id);
   const { data: org } = useOrganization();
   const queryClient = useQueryClient();
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const snap = (quote?.calculation_snapshot || {}) as any;
+
+  const handleCreateClientFromQuote = () => {
+    if (!quote) return;
+    navigate("/admin/klanten/nieuw", {
+      state: {
+        fromQuote: true,
+        quoteId: quote.id,
+        prospectCompany: quote.prospect_company || "",
+        prospectContact: quote.prospect_contact || "",
+        prospectEmail: quote.prospect_email || "",
+        numChargePoints: quote.num_charge_points || 0,
+        chargePointType: quote.charge_point_type || "ac",
+        chargeRate: Number(quote.charge_rate_per_kwh || 0.45),
+        energyCost: Number(quote.energy_cost_per_kwh || 0.25),
+        revenueShare: Number(quote.revenue_share_pct || 50),
+        ereRate: Number(quote.ere_rate_per_kwh || 0.10),
+      },
+    });
+  };
 
   const handleStatusChange = async (newStatus: string) => {
     if (!id) return;
@@ -179,6 +199,11 @@ export default function AdminQuoteDetail() {
           <Button variant="outline" onClick={handleExportPDF}>
             <Download className="w-4 h-4 mr-2" />PDF
           </Button>
+          {quote.status === "getekend" && (
+            <Button onClick={handleCreateClientFromQuote} className="bg-primary hover:bg-primary/90">
+              <UserPlus className="w-4 h-4 mr-2" />Klant aanmaken vanuit offerte
+            </Button>
+          )}
         </div>
       </div>
 
