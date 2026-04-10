@@ -60,7 +60,36 @@
     --sidebar-ring: 120 100% 25%;
   }
 
-  /* Dark theme for client portal */
+  /* Portal light theme for client dashboard */
+  .portal-theme {
+    --background: 210 20% 97%;
+    --foreground: 220 15% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 15%;
+    --secondary: 210 15% 94%;
+    --secondary-foreground: 220 15% 15%;
+    --muted: 210 15% 94%;
+    --muted-foreground: 220 5% 46%;
+    --accent: 210 15% 94%;
+    --accent-foreground: 220 15% 15%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 10% 90%;
+    --input: 220 10% 90%;
+    --ring: 120 100% 25%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 15% 15%;
+    --sidebar-primary: 120 100% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 15% 96%;
+    --sidebar-accent-foreground: 220 15% 15%;
+    --sidebar-border: 220 10% 90%;
+    --sidebar-ring: 120 100% 25%;
+  }
+
+  /* Dark theme (kept for potential future use) */
   .dark {
     --background: 240 6% 11%;
     --foreground: 0 0% 95%;

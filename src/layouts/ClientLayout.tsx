@@ -24,7 +24,7 @@ export default function ClientLayout() {
   };
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="portal-theme min-h-screen bg-background text-foreground">
       {/* Mobile header */}
       <header className="lg:hidden flex items-center justify-between p-4 border-b border-border">
         <Logo />
@@ -35,7 +35,7 @@ export default function ClientLayout() {
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className={`${mobileOpen ? "block" : "hidden"} lg:block fixed lg:sticky top-0 left-0 z-40 w-64 h-screen bg-card border-r border-border flex-shrink-0`}>
+        <aside className={`${mobileOpen ? "block" : "hidden"} lg:block fixed lg:sticky top-0 left-0 z-40 w-64 h-screen bg-card border-r border-border flex-shrink-0 shadow-sm`}>
           <div className="p-6 hidden lg:block">
             <Logo />
           </div>
