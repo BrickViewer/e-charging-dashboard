@@ -54,7 +54,7 @@ export default function AdminLayout() {
     <div className="flex flex-col h-full" style={{ background: '#1A1A1E' }}>
       {/* Logo */}
       <div className="px-5 py-6">
-        <Logo variant="dark" subtitle="Beheer" />
+        <Logo variant="dark" subtitle="Beheer" className="[&_img]:h-9" />
       </div>
 
       {/* Main nav */}
