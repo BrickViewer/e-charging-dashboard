@@ -19,8 +19,10 @@ export type Database = {
           action: string | null
           client_id: string | null
           created_at: string
+          description: string | null
           details: Json | null
           id: string
+          metadata: Json | null
           organization_id: string | null
           user_id: string | null
         }
@@ -28,8 +30,10 @@ export type Database = {
           action?: string | null
           client_id?: string | null
           created_at?: string
+          description?: string | null
           details?: Json | null
           id?: string
+          metadata?: Json | null
           organization_id?: string | null
           user_id?: string | null
         }
@@ -37,8 +41,10 @@ export type Database = {
           action?: string | null
           client_id?: string | null
           created_at?: string
+          description?: string | null
           details?: Json | null
           id?: string
+          metadata?: Json | null
           organization_id?: string | null
           user_id?: string | null
         }
@@ -62,42 +68,63 @@ export type Database = {
       charge_points: {
         Row: {
           brand: string | null
+          connectivity_state: string | null
           created_at: string
+          eflux_evse_controller_id: string | null
           eflux_evse_id: string | null
           has_mid_meter: boolean | null
           id: string
+          last_heartbeat_at: string | null
           location_id: string
+          max_power: number | null
           model: string | null
           monthly_platform_cost: number | null
           name: string | null
+          num_connectors: number | null
+          serial_number: string | null
           status: string | null
           type: string | null
+          updated_at: string | null
         }
         Insert: {
           brand?: string | null
+          connectivity_state?: string | null
           created_at?: string
+          eflux_evse_controller_id?: string | null
           eflux_evse_id?: string | null
           has_mid_meter?: boolean | null
           id?: string
+          last_heartbeat_at?: string | null
           location_id: string
+          max_power?: number | null
           model?: string | null
           monthly_platform_cost?: number | null
           name?: string | null
+          num_connectors?: number | null
+          serial_number?: string | null
           status?: string | null
           type?: string | null
+          updated_at?: string | null
         }
         Update: {
           brand?: string | null
+          connectivity_state?: string | null
           created_at?: string
+          eflux_evse_controller_id?: string | null
           eflux_evse_id?: string | null
           has_mid_meter?: boolean | null
           id?: string
+          last_heartbeat_at?: string | null
           location_id?: string
+          max_power?: number | null
           model?: string | null
           monthly_platform_cost?: number | null
           name?: string | null
+          num_connectors?: number | null
+          serial_number?: string | null
           status?: string | null
           type?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -114,55 +141,94 @@ export type Database = {
           charge_point_id: string
           client_id: string
           client_share: number | null
+          connector_id: string | null
           created_at: string
+          currency: string | null
           duration_minutes: number | null
+          duration_seconds: number | null
           echarging_share: number | null
           eflux_session_id: string | null
           ended_at: string | null
           energy_cost: number | null
+          energy_costs: number | null
           ere_estimate: number | null
+          excluded: boolean | null
+          external_calculated_price: number | null
           gross_revenue: number | null
           id: string
+          idle_costs: number | null
           kwh_delivered: number | null
           location_id: string
           net_margin: number | null
+          power_type: string | null
+          start_costs: number | null
           started_at: string
+          status: string | null
+          time_costs: number | null
+          total_price: number | null
+          updated_at: string | null
         }
         Insert: {
           charge_point_id: string
           client_id: string
           client_share?: number | null
+          connector_id?: string | null
           created_at?: string
+          currency?: string | null
           duration_minutes?: number | null
+          duration_seconds?: number | null
           echarging_share?: number | null
           eflux_session_id?: string | null
           ended_at?: string | null
           energy_cost?: number | null
+          energy_costs?: number | null
           ere_estimate?: number | null
+          excluded?: boolean | null
+          external_calculated_price?: number | null
           gross_revenue?: number | null
           id?: string
+          idle_costs?: number | null
           kwh_delivered?: number | null
           location_id: string
           net_margin?: number | null
+          power_type?: string | null
+          start_costs?: number | null
           started_at: string
+          status?: string | null
+          time_costs?: number | null
+          total_price?: number | null
+          updated_at?: string | null
         }
         Update: {
           charge_point_id?: string
           client_id?: string
           client_share?: number | null
+          connector_id?: string | null
           created_at?: string
+          currency?: string | null
           duration_minutes?: number | null
+          duration_seconds?: number | null
           echarging_share?: number | null
           eflux_session_id?: string | null
           ended_at?: string | null
           energy_cost?: number | null
+          energy_costs?: number | null
           ere_estimate?: number | null
+          excluded?: boolean | null
+          external_calculated_price?: number | null
           gross_revenue?: number | null
           id?: string
+          idle_costs?: number | null
           kwh_delivered?: number | null
           location_id?: string
           net_margin?: number | null
+          power_type?: string | null
+          start_costs?: number | null
           started_at?: string
+          status?: string | null
+          time_costs?: number | null
+          total_price?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -191,6 +257,10 @@ export type Database = {
       clients: {
         Row: {
           billing_address: string | null
+          billing_address_city: string | null
+          billing_address_postal: string | null
+          billing_address_street: string | null
+          charge_rate_per_kwh: number | null
           company_name: string
           contact_email: string | null
           contact_name: string | null
@@ -198,8 +268,11 @@ export type Database = {
           contract_duration_months: number | null
           contract_start_date: string | null
           created_at: string
+          energy_cost_per_kwh: number | null
+          ere_rate_per_kwh: number | null
           id: string
           kvk: string | null
+          monthly_platform_surcharge: number | null
           notes: string | null
           organization_id: string
           portal_user_id: string | null
@@ -211,6 +284,10 @@ export type Database = {
         }
         Insert: {
           billing_address?: string | null
+          billing_address_city?: string | null
+          billing_address_postal?: string | null
+          billing_address_street?: string | null
+          charge_rate_per_kwh?: number | null
           company_name: string
           contact_email?: string | null
           contact_name?: string | null
@@ -218,8 +295,11 @@ export type Database = {
           contract_duration_months?: number | null
           contract_start_date?: string | null
           created_at?: string
+          energy_cost_per_kwh?: number | null
+          ere_rate_per_kwh?: number | null
           id?: string
           kvk?: string | null
+          monthly_platform_surcharge?: number | null
           notes?: string | null
           organization_id: string
           portal_user_id?: string | null
@@ -231,6 +311,10 @@ export type Database = {
         }
         Update: {
           billing_address?: string | null
+          billing_address_city?: string | null
+          billing_address_postal?: string | null
+          billing_address_street?: string | null
+          charge_rate_per_kwh?: number | null
           company_name?: string
           contact_email?: string | null
           contact_name?: string | null
@@ -238,8 +322,11 @@ export type Database = {
           contract_duration_months?: number | null
           contract_start_date?: string | null
           created_at?: string
+          energy_cost_per_kwh?: number | null
+          ere_rate_per_kwh?: number | null
           id?: string
           kvk?: string | null
+          monthly_platform_surcharge?: number | null
           notes?: string | null
           organization_id?: string
           portal_user_id?: string | null
@@ -259,6 +346,36 @@ export type Database = {
           },
         ]
       }
+      eflux_sync_log: {
+        Row: {
+          created_at: string | null
+          entity_type: string
+          error_message: string | null
+          id: string
+          last_synced_at: string | null
+          records_synced: number | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          entity_type: string
+          error_message?: string | null
+          id?: string
+          last_synced_at?: string | null
+          records_synced?: number | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          entity_type?: string
+          error_message?: string | null
+          id?: string
+          last_synced_at?: string | null
+          records_synced?: number | null
+          status?: string | null
+        }
+        Relationships: []
+      }
       locations: {
         Row: {
           address: string | null
@@ -270,11 +387,14 @@ export type Database = {
           grid_connection_amps: number | null
           has_solar: boolean | null
           id: string
+          latitude: number | null
+          longitude: number | null
           name: string | null
           parking_spots: number | null
           postal_code: string | null
           property_type: string | null
           solar_capacity_kwp: number | null
+          updated_at: string | null
         }
         Insert: {
           address?: string | null
@@ -286,11 +406,14 @@ export type Database = {
           grid_connection_amps?: number | null
           has_solar?: boolean | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string | null
           parking_spots?: number | null
           postal_code?: string | null
           property_type?: string | null
           solar_capacity_kwp?: number | null
+          updated_at?: string | null
         }
         Update: {
           address?: string | null
@@ -302,11 +425,14 @@ export type Database = {
           grid_connection_amps?: number | null
           has_solar?: boolean | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string | null
           parking_spots?: number | null
           postal_code?: string | null
           property_type?: string | null
           solar_capacity_kwp?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -417,32 +543,65 @@ export type Database = {
         Row: {
           address: string | null
           created_at: string
+          default_charge_rate_per_kwh: number | null
+          default_eflux_cost_ac: number | null
+          default_eflux_cost_dc: number | null
+          default_energy_cost_per_kwh: number | null
+          default_ere_rate_per_kwh: number | null
+          default_revenue_share_pct: number | null
+          eflux_api_key: string | null
           email: string | null
           id: string
           kvk: string | null
+          logo_url: string | null
           name: string
           phone: string | null
           stripe_account_id: string | null
+          stripe_publishable_key: string | null
+          stripe_secret_key: string | null
+          updated_at: string | null
         }
         Insert: {
           address?: string | null
           created_at?: string
+          default_charge_rate_per_kwh?: number | null
+          default_eflux_cost_ac?: number | null
+          default_eflux_cost_dc?: number | null
+          default_energy_cost_per_kwh?: number | null
+          default_ere_rate_per_kwh?: number | null
+          default_revenue_share_pct?: number | null
+          eflux_api_key?: string | null
           email?: string | null
           id?: string
           kvk?: string | null
+          logo_url?: string | null
           name: string
           phone?: string | null
           stripe_account_id?: string | null
+          stripe_publishable_key?: string | null
+          stripe_secret_key?: string | null
+          updated_at?: string | null
         }
         Update: {
           address?: string | null
           created_at?: string
+          default_charge_rate_per_kwh?: number | null
+          default_eflux_cost_ac?: number | null
+          default_eflux_cost_dc?: number | null
+          default_energy_cost_per_kwh?: number | null
+          default_ere_rate_per_kwh?: number | null
+          default_revenue_share_pct?: number | null
+          eflux_api_key?: string | null
           email?: string | null
           id?: string
           kvk?: string | null
+          logo_url?: string | null
           name?: string
           phone?: string | null
           stripe_account_id?: string | null
+          stripe_publishable_key?: string | null
+          stripe_secret_key?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -481,62 +640,95 @@ export type Database = {
       quotes: {
         Row: {
           calculation_data: Json | null
+          calculation_snapshot: Json | null
+          charge_point_type: string | null
+          charge_rate_per_kwh: number | null
           client_id: string | null
           created_at: string
+          energy_cost_per_kwh: number | null
+          ere_rate_per_kwh: number | null
+          estimated_kwh_per_point: number | null
+          has_solar: boolean | null
           id: string
           locations_data: Json | null
           monthly_projection: Json | null
           notes: string | null
+          num_charge_points: number | null
           organization_id: string
           prospect_company: string | null
           prospect_contact: string | null
           prospect_email: string | null
           quote_number: string | null
+          revenue_share_pct: number | null
           signed_at: string | null
+          solar_percentage: number | null
           status: string | null
           tariff_data: Json | null
           total_hardware_cost: number | null
           total_installation_cost: number | null
+          updated_at: string | null
           valid_until: string | null
         }
         Insert: {
           calculation_data?: Json | null
+          calculation_snapshot?: Json | null
+          charge_point_type?: string | null
+          charge_rate_per_kwh?: number | null
           client_id?: string | null
           created_at?: string
+          energy_cost_per_kwh?: number | null
+          ere_rate_per_kwh?: number | null
+          estimated_kwh_per_point?: number | null
+          has_solar?: boolean | null
           id?: string
           locations_data?: Json | null
           monthly_projection?: Json | null
           notes?: string | null
+          num_charge_points?: number | null
           organization_id: string
           prospect_company?: string | null
           prospect_contact?: string | null
           prospect_email?: string | null
           quote_number?: string | null
+          revenue_share_pct?: number | null
           signed_at?: string | null
+          solar_percentage?: number | null
           status?: string | null
           tariff_data?: Json | null
           total_hardware_cost?: number | null
           total_installation_cost?: number | null
+          updated_at?: string | null
           valid_until?: string | null
         }
         Update: {
           calculation_data?: Json | null
+          calculation_snapshot?: Json | null
+          charge_point_type?: string | null
+          charge_rate_per_kwh?: number | null
           client_id?: string | null
           created_at?: string
+          energy_cost_per_kwh?: number | null
+          ere_rate_per_kwh?: number | null
+          estimated_kwh_per_point?: number | null
+          has_solar?: boolean | null
           id?: string
           locations_data?: Json | null
           monthly_projection?: Json | null
           notes?: string | null
+          num_charge_points?: number | null
           organization_id?: string
           prospect_company?: string | null
           prospect_contact?: string | null
           prospect_email?: string | null
           quote_number?: string | null
+          revenue_share_pct?: number | null
           signed_at?: string | null
+          solar_percentage?: number | null
           status?: string | null
           tariff_data?: Json | null
           total_hardware_cost?: number | null
           total_installation_cost?: number | null
+          updated_at?: string | null
           valid_until?: string | null
         }
         Relationships: [
