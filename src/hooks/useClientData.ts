@@ -94,7 +94,7 @@ export function useClientKPIs(clientId?: string) {
   const pastSettlements = settlements?.filter(s => s.month?.slice(0, 7) !== currentMonth) || [];
   const avgEarnings = pastSettlements.length > 0
     ? pastSettlements.reduce((sum, s) => sum + Number(s.client_payout || 0), 0) / pastSettlements.length
-    : 1200; // fallback sample
+    : 1000; // fallback sample
   const avgKwh = pastSettlements.length > 0
     ? pastSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0) / pastSettlements.length
     : 800; // fallback sample
