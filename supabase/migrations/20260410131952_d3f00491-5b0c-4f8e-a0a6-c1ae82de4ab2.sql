@@ -1,0 +1,13 @@
+INSERT INTO activity_log (organization_id, client_id, action, description, created_at) VALUES
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'client_created', 'Klant aangemaakt', NOW() - INTERVAL '120 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'quote_created', 'Offerte OFF-2026-001 aangemaakt', NOW() - INTERVAL '118 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'quote_sent', 'Offerte OFF-2026-001 verstuurd', NOW() - INTERVAL '115 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'contract_signed', 'Contract getekend', NOW() - INTERVAL '110 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'location_added', 'Locatie Fellenoord 15 toegevoegd', NOW() - INTERVAL '108 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'charge_points_added', '14 laadpunten geconfigureerd', NOW() - INTERVAL '105 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'first_session', 'Eerste laadsessie geregistreerd', NOW() - INTERVAL '100 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'settlement_paid', 'Afrekening januari uitbetaald', NOW() - INTERVAL '60 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'client_created', 'Klant aangemaakt', NOW() - INTERVAL '90 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'contract_signed', 'Contract getekend', NOW() - INTERVAL '85 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', 'client_created', 'Klant aangemaakt', NOW() - INTERVAL '45 days'),
+('00000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000004', 'quote_sent', 'Offerte verstuurd', NOW() - INTERVAL '10 days');
