@@ -40,6 +40,7 @@ function RequireAuth({ children, allowedRoles }: { children: React.ReactNode; al
   return <>{children}</>;
 }
 
+// E-Charging App
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
