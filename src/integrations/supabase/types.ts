@@ -380,7 +380,7 @@ export type Database = {
         Row: {
           address: string | null
           city: string | null
-          client_id: string
+          client_id: string | null
           created_at: string
           ean_code: string | null
           eflux_location_id: string | null
@@ -399,7 +399,7 @@ export type Database = {
         Insert: {
           address?: string | null
           city?: string | null
-          client_id: string
+          client_id?: string | null
           created_at?: string
           ean_code?: string | null
           eflux_location_id?: string | null
@@ -418,7 +418,7 @@ export type Database = {
         Update: {
           address?: string | null
           city?: string | null
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           ean_code?: string | null
           eflux_location_id?: string | null
