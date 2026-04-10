@@ -122,6 +122,11 @@ export default function AdminClientWizard() {
         status: "prospect",
       }).select().single();
       if (clientErr) throw clientErr;
+      if (!client?.id) {
+        toast.warning("Klant aangemaakt maar ID niet ontvangen");
+        navigate("/admin/klanten");
+        return;
+      }
 
       // 2. Insert locations + charge_points
       for (const loc of locations) {
