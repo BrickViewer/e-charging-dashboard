@@ -97,7 +97,7 @@ export function useClientKPIs(clientId?: string) {
     : 1000; // fallback sample
   const avgKwh = pastSettlements.length > 0
     ? pastSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0) / pastSettlements.length
-    : 800; // fallback sample
+    : 3000; // fallback sample
 
   return {
     totalEarned: Number(currentEarnings),
