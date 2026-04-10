@@ -22,54 +22,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchRole = async (userId: string): Promise<UserRole> => {
-    // Check if user has an internal role
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
+  // Fetch role in a separate effect — never inside onAuthStateChange
+  useEffect(() => {
+    let cancelled = false;
 
-    if (roles && roles.length > 0) {
-      // Return highest role
-      if (roles.some((r: any) => r.role === "admin")) return "admin";
-      if (roles.some((r: any) => r.role === "manager")) return "manager";
-      if (roles.some((r: any) => r.role === "viewer")) return "viewer";
+    const fetchRole = async (userId: string) => {
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+
+      if (cancelled) return;
+
+      if (roles && roles.length > 0) {
+        if (roles.some((r: any) => r.role === "admin")) { setRole("admin"); setIsLoading(false); return; }
+        if (roles.some((r: any) => r.role === "manager")) { setRole("manager"); setIsLoading(false); return; }
+        if (roles.some((r: any) => r.role === "viewer")) { setRole("viewer"); setIsLoading(false); return; }
+      }
+
+      const { data: client } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("portal_user_id", userId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (client) { setRole("client"); } else { setRole(null); }
+      setIsLoading(false);
+    };
+
+    if (user) {
+      setIsLoading(true);
+      fetchRole(user.id);
+    } else {
+      setRole(null);
+      setIsLoading(false);
     }
 
-    // Check if user is a client portal user
-    const { data: client } = await supabase
-      .from("clients")
-      .select("id")
-      .eq("portal_user_id", userId)
-      .maybeSingle();
+    return () => { cancelled = true; };
+  }, [user]);
 
-    if (client) return "client";
-    return null;
-  };
-
+  // Auth listener — synchronous only, no awaits
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        if (session?.user) {
-          const userRole = await fetchRole(session.user.id);
-          setRole(userRole);
-        } else {
-          setRole(null);
-        }
-        setIsLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // Restore session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        const userRole = await fetchRole(session.user.id);
-        setRole(userRole);
-      }
-      setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();
