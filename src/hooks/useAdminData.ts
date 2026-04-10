@@ -167,6 +167,21 @@ export function useOrganization() {
   });
 }
 
+export function useUnlinkedLocations() {
+  return useQuery({
+    queryKey: ["unlinked-locations"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*")
+        .is("client_id", null)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useRecentActivity(limit = 10) {
   return useQuery({
     queryKey: ["admin-activity", limit],
