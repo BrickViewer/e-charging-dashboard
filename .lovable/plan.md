@@ -1,18 +1,14 @@
 
 
-# Kleine gauges iets groter maken
+# Admin sidebar logo kleiner maken
 
-## Wijziging in `src/components/portal/GaugeChart.tsx`
+## Wijziging in `src/layouts/AdminLayout.tsx`
 
-Regel 228-232 — SM variant opschalen:
+De `Logo` component in de sidebar krijgt een extra `className` prop om de afbeelding kleiner te renderen. Regel ~56:
 
-| Eigenschap | Nu | Nieuw |
-|---|---|---|
-| `smSvgSize` (sm) | 180 | 210 |
-| `smRadius` (sm) | 70 | 82 |
-| `smStrokeW` (sm) | 2.5 | 2.5 |
-| Value font (sm) | 22px | 26px |
-| Unit font (sm) | 11px | 12px |
+```
+<Logo variant="dark" subtitle="Beheer" className="[&_img]:h-9" />
+```
 
-LG variant blijft ongewijzigd (220/85). Alleen de `sm` variant wordt groter.
+Dit overschrijft de standaard `h-14` naar `h-9` via een Tailwind child selector, zodat het logo alleen in de admin sidebar kleiner wordt. De rest van de app (portal, login) blijft ongewijzigd.
 
