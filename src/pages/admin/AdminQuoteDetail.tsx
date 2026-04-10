@@ -199,6 +199,11 @@ export default function AdminQuoteDetail() {
           <Button variant="outline" onClick={handleExportPDF}>
             <Download className="w-4 h-4 mr-2" />PDF
           </Button>
+          {quote.status === "getekend" && (
+            <Button onClick={handleCreateClientFromQuote} className="bg-primary hover:bg-primary/90">
+              <UserPlus className="w-4 h-4 mr-2" />Klant aanmaken vanuit offerte
+            </Button>
+          )}
         </div>
       </div>
 
