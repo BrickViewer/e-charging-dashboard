@@ -28,7 +28,7 @@ export default function ClientDashboard() {
 
   // Sample fallback: als er geen echte data is, toon demo-waarden
   const kwhValue = kpis.kwhLoaded || 650;
-  const earningsValue = kpis.totalEarned || 1050;
+  const earningsValue = kpis.totalEarned || 1380;
   const avgKwh = kpis.avgKwh;
   const avgEarnings = kpis.avgEarnings;
 
