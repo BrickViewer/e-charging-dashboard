@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Zap } from "lucide-react";
+import logoFullColor from "@/assets/logo-full-color.svg";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -36,12 +36,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4 pb-2">
-          <div className="flex items-center justify-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <Zap className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold text-foreground">E-Charging</span>
-          </div>
+          <img src={logoFullColor} alt="e-Charging" className="h-10 w-auto mx-auto" />
           <p className="text-muted-foreground text-sm">Log in op uw account</p>
         </CardHeader>
         <CardContent>
