@@ -12,7 +12,7 @@ export function Logo({ variant = "light", subtitle, className }: LogoProps) {
 
   return (
     <div className={className}>
-      <img src={src} alt="e-Charging" className="h-10 w-auto" />
+      <img src={src} alt="e-Charging" className="h-14 w-auto" />
       {subtitle && (
         <span className={`text-xs font-medium mt-0.5 block ${variant === "dark" ? "text-gray-400" : "text-muted-foreground"}`}>
           {subtitle}
