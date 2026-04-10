@@ -49,13 +49,19 @@ export default function AdminQuoteDetail() {
     const orgName = org?.name || "E-Charging";
     const company = quote.prospect_company || (quote as any).clients?.company_name || "—";
 
-    // Header
-    doc.setFontSize(20);
-    doc.setTextColor(4, 127, 0);
-    doc.text(orgName, 14, 22);
+    // Header — embed logo
+    try {
+      const logoImg = new Image();
+      logoImg.src = (await import("@/assets/logo-full-color.svg")).default;
+      doc.addImage(logoImg, "SVG", 14, 10, 50, 20);
+    } catch {
+      doc.setFontSize(20);
+      doc.setTextColor(4, 127, 0);
+      doc.text(orgName, 14, 22);
+    }
     doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(org?.address || "", 14, 28);
+    doc.text(org?.address || "", 14, 32);
 
     // Title
     doc.setFontSize(16);

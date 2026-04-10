@@ -1,19 +1,20 @@
+import logoFullColor from "@/assets/logo-full-color.svg";
+import logoBright from "@/assets/logo-bright.svg";
+
 interface LogoProps {
   variant?: "light" | "dark";
   subtitle?: string;
+  className?: string;
 }
 
-export function Logo({ variant = "light", subtitle }: LogoProps) {
-  const isDark = variant === "dark";
+export function Logo({ variant = "light", subtitle, className }: LogoProps) {
+  const src = variant === "dark" ? logoBright : logoFullColor;
 
   return (
-    <div>
-      <div className="text-lg font-semibold leading-tight">
-        <span className="text-primary" style={{ color: '#047F00' }}>e-</span>
-        <span className={isDark ? "text-white" : "text-foreground"}>Charging</span>
-      </div>
+    <div className={className}>
+      <img src={src} alt="e-Charging" className="h-8 w-auto" />
       {subtitle && (
-        <span className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-muted-foreground"}`}>
+        <span className={`text-xs font-medium mt-0.5 block ${variant === "dark" ? "text-gray-400" : "text-muted-foreground"}`}>
           {subtitle}
         </span>
       )}
