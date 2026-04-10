@@ -225,11 +225,11 @@ export function GaugeChart({
   }
 
   // ── SM / LG: Classic needle gauge ──
-  const svgSize = isLarge ? 240 : 180;
+  const svgSize = isLarge ? 240 : 220;
   const cx = svgSize / 2;
-  const cy = isLarge ? 125 : 92;
-  const radius = isLarge ? 90 : 65;
-  const needleLength = isLarge ? 72 : 42;
+  const cy = isLarge ? 125 : 110;
+  const radius = isLarge ? 90 : 80;
+  const needleLength = isLarge ? 72 : 55;
   const strokeW = isLarge ? 3 : 2;
 
   const tickCount = 5;
@@ -358,7 +358,7 @@ export function GaugeChart({
           y={cy + (isLarge ? 24 : 20)}
           textAnchor="middle"
           fill="hsl(var(--foreground))"
-          fontSize={isLarge ? 20 : 16}
+          fontSize={isLarge ? 20 : 18}
           fontWeight="700"
           fontFamily="var(--font-family)"
         >
@@ -370,14 +370,14 @@ export function GaugeChart({
             y={cy + (isLarge ? 40 : 33)}
             textAnchor="middle"
             fill="hsl(var(--muted-foreground))"
-            fontSize={isLarge ? 12 : 11}
+            fontSize={isLarge ? 12 : 12}
             fontFamily="var(--font-family)"
           >
             {unit}
           </text>
         )}
       </svg>
-      <span className="text-xs font-medium text-muted-foreground mt-1">{label}</span>
+      <span className="text-sm font-medium text-muted-foreground mt-1">{label}</span>
     </div>
   );
 }
