@@ -26,8 +26,11 @@ export default function ClientDashboard() {
       ere: Number(s.ere_estimate || 0),
     }));
 
-  const maxKwh = Math.max(kpis.kwhLoaded * 1.3, 1000);
-  const maxEarnings = Math.max(kpis.totalEarned * 1.3, 500);
+  // Sample fallback: als er geen echte data is, toon demo-waarden
+  const kwhValue = kpis.kwhLoaded || 650;
+  const earningsValue = kpis.totalEarned || 1050;
+  const avgKwh = kpis.avgKwh;
+  const avgEarnings = kpis.avgEarnings;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -58,8 +61,9 @@ export default function ClientDashboard() {
       {/* Left gauge — kWh */}
         <div className="order-2 md:order-1 flex items-center">
           <GaugeChart
-            value={kpis.kwhLoaded}
-            max={maxKwh}
+            value={kwhValue}
+            max={avgKwh * 2}
+            average={avgKwh}
             label="Energie geladen"
             unit="kWh"
             size="sm"
@@ -71,8 +75,9 @@ export default function ClientDashboard() {
         {/* Center gauge — Opbrengst (xl digital) */}
         <div className="order-1 md:order-2">
           <GaugeChart
-            value={kpis.totalEarned}
-            max={maxEarnings}
+            value={earningsValue}
+            max={avgEarnings * 2}
+            average={avgEarnings}
             label="Opbrengst deze maand"
             unit="EUR"
             size="xl"

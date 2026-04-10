@@ -8,6 +8,7 @@ interface GaugeChartProps {
   size?: "sm" | "lg" | "xl";
   color?: string;
   formatValue?: (v: number) => string;
+  average?: number;
 }
 
 export function GaugeChart({
@@ -18,17 +19,19 @@ export function GaugeChart({
   size = "sm",
   color = "hsl(var(--primary))",
   formatValue,
+  average,
 }: GaugeChartProps) {
   const [animatedAngle, setAnimatedAngle] = useState(-135);
   const [animatedProgress, setAnimatedProgress] = useState(0);
 
   const isXL = size === "xl";
   const isLarge = size === "lg";
-  const isSmall = size === "sm";
 
-  const clampedValue = Math.min(Math.max(value, 0), max);
-  const targetAngle = max > 0 ? -135 + (clampedValue / max) * 270 : -135;
-  const targetProgress = max > 0 ? clampedValue / max : 0;
+  // When average is set, scale is 0..average*2, with average at top (0°)
+  const effectiveMax = average ? average * 2 : max;
+  const clampedValue = Math.min(Math.max(value, 0), effectiveMax);
+  const targetAngle = effectiveMax > 0 ? -135 + (clampedValue / effectiveMax) * 270 : -135;
+  const targetProgress = effectiveMax > 0 ? clampedValue / effectiveMax : 0;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -52,6 +55,15 @@ export function GaugeChart({
 
   const displayValue = formatValue ? formatValue(clampedValue) : clampedValue.toLocaleString("nl-NL");
 
+  // Determine needle color based on position relative to average
+  const getNeedleColor = () => {
+    if (!average) return color;
+    if (value >= average) return "hsl(var(--primary))"; // green = above average
+    const ratio = value / average;
+    if (ratio >= 0.8) return "hsl(var(--warning, 38 92% 50%))"; // orange-ish
+    return "hsl(var(--destructive))"; // red = far below
+  };
+
   // ── XL: Modern digital display with circular progress arc ──
   if (isXL) {
     const svgSize = 320;
@@ -60,11 +72,8 @@ export function GaugeChart({
     const radius = 130;
     const strokeW = 3;
 
-    // Full circle arc using stroke-dasharray
-    const circumference = 2 * Math.PI * radius;
-    // We use 270deg arc (3/4 circle), gap at bottom
-    const arcLength = circumference * 0.75;
-    const progressLength = arcLength * animatedProgress;
+    // Average marker angle: at 0.5 of the arc (top)
+    const avgAngle = average ? 0 : -1; // 0° = top = middle of 270° arc mapped from -135 to 135
 
     return (
       <div className="flex flex-col items-center">
@@ -87,12 +96,39 @@ export function GaugeChart({
           <path
             d={describeArc(cx, cy, -135, -135 + animatedProgress * 270, radius)}
             fill="none"
-            stroke={color}
+            stroke={getNeedleColor()}
             strokeWidth={strokeW + 1}
             strokeLinecap="round"
             style={{ transition: "all 1.4s cubic-bezier(0.34, 1.2, 0.64, 1)" }}
             opacity={0.7}
           />
+
+          {/* Average marker — small tick at top (0°) */}
+          {average && (() => {
+            const markerOuter = polarToCartesian(cx, cy, radius + 8, avgAngle);
+            const markerInner = polarToCartesian(cx, cy, radius - 8, avgAngle);
+            return (
+              <>
+                <line
+                  x1={markerOuter.x} y1={markerOuter.y}
+                  x2={markerInner.x} y2={markerInner.y}
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeWidth={1.5}
+                  opacity={0.6}
+                />
+                <text
+                  x={cx}
+                  y={cy - radius - 14}
+                  textAnchor="middle"
+                  fill="hsl(var(--muted-foreground))"
+                  fontSize={10}
+                  fontFamily="var(--font-family)"
+                >
+                  gem.
+                </text>
+              </>
+            );
+          })()}
 
           {/* Glow dot at end of progress */}
           {animatedProgress > 0.01 && (() => {
@@ -100,9 +136,9 @@ export function GaugeChart({
             const dot = polarToCartesian(cx, cy, radius, dotAngle);
             return (
               <>
-                <circle cx={dot.x} cy={dot.y} r={5} fill={color} opacity={0.3}
+                <circle cx={dot.x} cy={dot.y} r={5} fill={getNeedleColor()} opacity={0.3}
                   style={{ transition: "all 1.4s cubic-bezier(0.34, 1.2, 0.64, 1)" }} />
-                <circle cx={dot.x} cy={dot.y} r={2.5} fill={color}
+                <circle cx={dot.x} cy={dot.y} r={2.5} fill={getNeedleColor()}
                   style={{ transition: "all 1.4s cubic-bezier(0.34, 1.2, 0.64, 1)" }} />
               </>
             );
@@ -157,6 +193,16 @@ export function GaugeChart({
     return { outer, inner, angle };
   });
 
+  // Average marker at top (0°) when average prop is set
+  const avgMarker = average ? (() => {
+    const angle = 0; // top = middle of arc = average
+    const outer = polarToCartesian(cx, cy, radius + 7, angle);
+    const inner = polarToCartesian(cx, cy, radius - 4, angle);
+    return { outer, inner };
+  })() : null;
+
+  const needleColor = getNeedleColor();
+
   return (
     <div className="flex flex-col items-center">
       <svg
@@ -178,14 +224,14 @@ export function GaugeChart({
         <path
           d={describeArc(cx, cy, -135, Math.min(animatedAngle, 135), radius)}
           fill="none"
-          stroke={color}
+          stroke={needleColor}
           strokeWidth={strokeW}
           strokeLinecap="round"
           style={{ transition: "all 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)" }}
           opacity={0.6}
         />
 
-        {/* Major tick marks only */}
+        {/* Major tick marks */}
         {ticks.map((t, i) => (
           <line
             key={`tick-${i}`}
@@ -199,8 +245,31 @@ export function GaugeChart({
           />
         ))}
 
+        {/* Average marker — prominent tick at top */}
+        {avgMarker && (
+          <>
+            <line
+              x1={avgMarker.outer.x} y1={avgMarker.outer.y}
+              x2={avgMarker.inner.x} y2={avgMarker.inner.y}
+              stroke="hsl(var(--muted-foreground))"
+              strokeWidth={1.5}
+              opacity={0.7}
+            />
+            <text
+              x={cx}
+              y={cy - radius - 10}
+              textAnchor="middle"
+              fill="hsl(var(--muted-foreground))"
+              fontSize={8}
+              fontFamily="var(--font-family)"
+            >
+              gem.
+            </text>
+          </>
+        )}
+
         {/* Center dot */}
-        <circle cx={cx} cy={cy} r={4} fill={color} />
+        <circle cx={cx} cy={cy} r={4} fill={needleColor} />
         <circle cx={cx} cy={cy} r={2} fill="hsl(var(--card))" />
 
         {/* Needle */}
@@ -209,7 +278,7 @@ export function GaugeChart({
           y1={cy}
           x2={cx}
           y2={cy - needleLength}
-          stroke={color}
+          stroke={needleColor}
           strokeWidth={1.5}
           strokeLinecap="round"
           style={{
