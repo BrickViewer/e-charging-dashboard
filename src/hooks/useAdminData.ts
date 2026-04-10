@@ -55,27 +55,103 @@ export function useAllQuotes() {
   });
 }
 
+export function useAllSessions(limit = 1000) {
+  return useQuery({
+    queryKey: ["admin-sessions", limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_sessions")
+        .select("*, clients(company_name), charge_points(name), locations(name)")
+        .order("started_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useOrganization() {
+  return useQuery({
+    queryKey: ["admin-organization"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("organizations")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useRecentActivity(limit = 10) {
+  return useQuery({
+    queryKey: ["admin-activity", limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("activity_log")
+        .select("*, clients(company_name)")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useAdminKPIs() {
   const { data: clients } = useAllClients();
   const { data: settlements } = useAllSettlements();
+  const { data: chargePoints } = useAllChargePoints();
 
   const activeClients = clients?.filter(c => c.status === "actief") || [];
-  const totalChargePoints = clients?.flatMap(c =>
-    (c as any).locations?.flatMap((l: any) => l.charge_points || []) || []
-  ).length || 0;
+  const totalChargePoints = chargePoints?.length || 0;
+  const onlineCPs = chargePoints?.filter((cp: any) => cp.status === "online") || [];
+  const offlineCPs = chargePoints?.filter((cp: any) => cp.status === "offline" || cp.status === "error") || [];
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  // Current & previous month
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+
   const currentSettlements = settlements?.filter(s => s.month?.slice(0, 7) === currentMonth) || [];
+  const prevSettlements = settlements?.filter(s => s.month?.slice(0, 7) === prevMonth) || [];
 
   const mrr = currentSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0);
+  const prevMrr = prevSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0);
   const totalKwh = currentSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0);
-  const avgMargin = activeClients.length > 0 ? mrr / activeClients.length : 0;
+  const prevKwh = prevSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0);
+  const totalRevenue = currentSettlements.reduce((sum, s) => sum + Number(s.gross_revenue || 0), 0);
+
+  const mrrChange = prevMrr > 0 ? ((mrr - prevMrr) / prevMrr) * 100 : 0;
+  const kwhChange = prevKwh > 0 ? ((totalKwh - prevKwh) / prevKwh) * 100 : 0;
+
+  // Monthly revenue data for chart (last 6 months)
+  const monthlyData: { month: string; revenue: number; kwh: number; clients: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const monthSettlements = settlements?.filter(s => s.month?.slice(0, 7) === key) || [];
+    monthlyData.push({
+      month: d.toLocaleDateString("nl-NL", { month: "short" }),
+      revenue: monthSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0),
+      kwh: monthSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0),
+      clients: monthSettlements.length,
+    });
+  }
 
   return {
     activeClients: activeClients.length,
     totalChargePoints,
+    onlineChargePoints: onlineCPs.length,
+    offlineChargePoints: offlineCPs.length,
     mrr,
+    mrrChange,
     totalKwh,
-    avgMargin,
+    kwhChange,
+    totalRevenue,
+    monthlyData,
   };
 }
