@@ -23,8 +23,28 @@ export default function AdminQuoteDetail() {
   const { data: quote, isLoading } = useQuoteById(id);
   const { data: org } = useOrganization();
   const queryClient = useQueryClient();
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const snap = (quote?.calculation_snapshot || {}) as any;
+
+  const handleCreateClientFromQuote = () => {
+    if (!quote) return;
+    navigate("/admin/klanten/nieuw", {
+      state: {
+        fromQuote: true,
+        quoteId: quote.id,
+        prospectCompany: quote.prospect_company || "",
+        prospectContact: quote.prospect_contact || "",
+        prospectEmail: quote.prospect_email || "",
+        numChargePoints: quote.num_charge_points || 0,
+        chargePointType: quote.charge_point_type || "ac",
+        chargeRate: Number(quote.charge_rate_per_kwh || 0.45),
+        energyCost: Number(quote.energy_cost_per_kwh || 0.25),
+        revenueShare: Number(quote.revenue_share_pct || 50),
+        ereRate: Number(quote.ere_rate_per_kwh || 0.10),
+      },
+    });
+  };
 
   const handleStatusChange = async (newStatus: string) => {
     if (!id) return;
