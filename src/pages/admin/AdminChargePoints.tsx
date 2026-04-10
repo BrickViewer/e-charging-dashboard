@@ -97,10 +97,10 @@ export default function AdminChargePoints() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPICard title="Totaal" value={total} icon={<Plug className="w-5 h-5" />} />
-        <KPICard title="Online" value={online} icon={<Zap className="w-5 h-5" />} />
-        <KPICard title="Offline / Storing" value={offlineError} icon={<WifiOff className="w-5 h-5" />} />
-        <KPICard title="In gebruik" value={inUse} icon={<Activity className="w-5 h-5" />} />
+        <KPICard label="Totaal" value={String(total)} icon={<Plug className="w-5 h-5" />} />
+        <KPICard label="Online" value={String(online)} icon={<Zap className="w-5 h-5" />} />
+        <KPICard label="Offline / Storing" value={String(offlineError)} icon={<WifiOff className="w-5 h-5" />} />
+        <KPICard label="In gebruik" value={String(inUse)} icon={<Activity className="w-5 h-5" />} />
       </div>
 
       {/* Filters */}
