@@ -220,10 +220,14 @@ export default function AdminCalculator() {
             </CardContent>
           </Card>
 
-          <Button className="w-full" size="lg" onClick={handleCreateQuote}>
-            <FileText className="w-4 h-4 mr-2" />
-            Maak offerte met deze parameters
-          </Button>
+          <div className="flex gap-3">
+            <Button className="flex-1" size="lg" onClick={handleCreateQuote}>
+              <FileText className="w-4 h-4 mr-2" />Maak offerte
+            </Button>
+            <Button variant="outline" size="lg" onClick={() => navigate("/admin/klanten/nieuw", { state: { fromCalculator: true, chargeRate: effectiveChargeRate, energyCost: effectiveEnergyCost, revenueShare: effectiveRevenueShare, ereRate: effectiveEreRate, numChargePoints: chargePoints, chargePointType: type } })}>
+              <UserPlus className="w-4 h-4 mr-2" />Maak klant aan
+            </Button>
+          </div>
         </div>
       </div>
     </div>
