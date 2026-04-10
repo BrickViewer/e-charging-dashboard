@@ -1,190 +1,116 @@
 
 
-# Plan: Admin Beheerpaneel Ombouw
+# Batch 3: Klanten CRUD — Lijst, Wizard, Detailpagina
 
-Dit is een groot project. Ik stel voor om het in **5 batches** te implementeren, zodat je na elke batch kunt testen.
+## Overzicht
 
----
+Drie pagina's volledig bouwen:
+1. **AdminClients** — herschrijven met statusfilter, debounced zoek, pagination, `created_at` kolom, klikbare rijen
+2. **AdminClientWizard** — 5-staps stepper met formulieren die client + locations + charge_points + tarief aanmaken
+3. **AdminClientDetail** — header met status + 5 tabs (Overzicht, Locaties, Financieel, Documenten, Activiteit)
 
-## Batch 1: Database schema uitbreiden + Design systeem + Sidebar + Routes
-
-### Database migratie
-Kolommen toevoegen aan bestaande tabellen (geen data verwijderen):
-
-**organizations**: `logo_url`, `default_charge_rate_per_kwh`, `default_energy_cost_per_kwh`, `default_revenue_share_pct`, `default_ere_rate_per_kwh`, `default_eflux_cost_ac`, `default_eflux_cost_dc`, `eflux_api_key`, `stripe_secret_key`, `stripe_publishable_key`, `updated_at`
-
-**clients**: `billing_address_street`, `billing_address_postal`, `billing_address_city`, `charge_rate_per_kwh`, `energy_cost_per_kwh`, `ere_rate_per_kwh`, `monthly_platform_surcharge`
-- Update `stripe_onboarding_status` check constraint to include `'not_started'`
-
-**charge_points**: `serial_number`, `eflux_evse_controller_id`, `connectivity_state` (connected/maybe-connected/disconnected/access-denied/unknown/pending-first-connection), `last_heartbeat_at`, `num_connectors`, `max_power`, `updated_at`
-
-**charging_sessions**: `status` (ACTIVE/COMPLETED), `duration_seconds`, `currency`, `external_calculated_price`, `energy_costs`, `time_costs`, `start_costs`, `idle_costs`, `total_price`, `power_type`, `connector_id`, `excluded`, `updated_at`
-
-**quotes**: `num_charge_points`, `charge_point_type`, `estimated_kwh_per_point`, `charge_rate_per_kwh`, `energy_cost_per_kwh`, `revenue_share_pct`, `ere_rate_per_kwh`, `has_solar`, `solar_percentage`, `calculation_snapshot`, `updated_at`
-- Rename `calculation_data` → keep both, use `calculation_snapshot` going forward
-
-**locations**: `latitude`, `longitude`, `updated_at`
-
-**activity_log**: rename `details` to also support `description` + `metadata` columns
-
-**Nieuwe tabel**: `eflux_sync_log` (entity_type, last_synced_at, records_synced, status, error_message)
-
-### Design systeem
-- Update `src/index.css` met de exacte CSS custom properties uit de spec
-- Sidebar variabelen: dark background `#1A1A1E`
-- KPI, typography, component classes per spec
-
-### Sidebar ombouw (`AdminLayout.tsx`)
-- Donkere achtergrond (#1A1A1E), 260px breed
-- Logo: "e-" in groen (#047F00), "Charging" in wit, "Beheer" eronder
-- Nav items met Lucide icons, actief item: `bg-white/10`, `border-left 3px solid primary`
-- Separator voor Instellingen
-- Gebruikersprofiel onderaan (naam uit profiles tabel, rol, uitloggen)
-- Mobile: hamburger menu
-
-### Routes bijwerken (`App.tsx`)
-- `/admin/offertes` als aparte route (los van calculator)
-- `/admin/offertes/nieuw` voor offerte aanmaken
-- `/admin/klanten/nieuw` voor klant wizard
-- `/admin/klanten/:id` voor klantdetail
-
-### Service layers
-- `src/services/eflux.ts` — wrapper rond Supabase queries, klaar voor Road.io API
-- `src/services/stripe.ts` — stub voor Stripe Connect
-- `src/services/calculations.ts` — `calculateMonthly()` functie
+Plus: nieuwe data hooks en een herbruikbaar StepperWizard component.
 
 ---
 
-## Batch 2: Dashboard + Calculator + Financieel
+## 1. Klantenlijst (`AdminClients.tsx`) — herschrijven
 
-### Dashboard (`/admin`)
-- 4 KPI-cards met maand-over-maand vergelijking (▲/▼ %)
-- Klantentabel: Klant | Locaties | Laadpunten | kWh/maand | Marge E-Charging | Status
-- Zoekbalk + statusfilter boven tabel
-- Alerts-sectie: offline laadpunten, openstaande offertes, uitbetalingen gereed
+- Statusfilter dropdown (alle/prospect/offerte/actief/inactief) naast zoekbalk
+- Debounced zoek (300ms) via `useDebouncedValue` hook
+- Kolommen: Bedrijf | Contact | Locaties | Laadpunten | Status | Aangemaakt
+- StatusBadge component voor status kolom
+- Pagination (20 rijen/pagina) met simpele prev/next knoppen
+- Klikbare rijen → navigeer naar `/admin/klanten/:id`
+- Skeleton loader tijdens laden
 
-### Calculator (`/admin/calculator`)
-- Twee-kolom layout: links inputs, rechts live resultaten
-- Input cards: Locatiegegevens (met +/- knoppen, slider), Tarieven, Extra opties (solar toggle)
-- Resultaat cards: klant (groene accent-border), E-Charging, terugverdientijd
-- Knoppen "Maak offerte" en "Maak klant aan" onderaan
+## 2. Stepper component (`src/components/admin/StepperWizard.tsx`) — nieuw
 
-### Financieel (`/admin/financieel`)
-- KPI-rij: MRR totaal, uitbetaald, openstaand, gem. marge
-- Recharts AreaChart 12 maanden (E-Charging marge + klant-uitbetalingen)
-- Afrekenrun card met tabel per klant + totaalrij
-- "Keur alle berekeningen goed" knop
-- Omzet per klant tabel
+- Herbruikbaar component: bolletjes + lijnen, actieve/voltooide/toekomstige states
+- Props: `steps: string[]`, `currentStep: number`
+- Groen voor voltooid, primary ring voor actief, grijs voor toekomstig
 
----
+## 3. Klant Wizard (`AdminClientWizard.tsx`) — volledig bouwen
 
-## Batch 3: Klanten (lijst + wizard + detailpagina)
+5 stappen met state management via `useState`:
 
-### Klantenlijst (`/admin/klanten`)
-- Tabel: Klant | Contactpersoon | Locaties | Laadpunten | Status | Aangemaakt
-- Zoek + statusfilter dropdown
-- "Nieuwe klant" knop → wizard
+**Stap 1 — Klantgegevens:**
+- Bedrijfsnaam*, KVK, Contactpersoon*, E-mail*, Telefoon
+- Factuuradres (straat, postcode, stad) — split fields
 
-### Klant wizard (`/admin/klanten/nieuw`)
-- 5-stap stepper component (bolletjes + lijnen)
-- Stap 1: Klantgegevens (bedrijfsnaam, KVK, contact, adres split)
-- Stap 2: Locaties (meerdere, met pandtype, parkeerplaatsen, EAN, solar)
-- Stap 3: Laadpunten per locatie (tabs, auto-genereer rijen bij aantal)
-- Stap 4: Tariefstructuur (met live preview maandelijks)
-- Stap 5: Overzicht & Bevestigen (samenvatting, wijzig-links, opslaan)
+**Stap 2 — Locaties:**
+- Dynamisch: meerdere locaties toevoegen/verwijderen
+- Per locatie: Naam, Adres, Postcode, Stad, Pandtype (dropdown), Parkeerplaatsen, EAN, Solar toggle + capaciteit
 
-### Klantdetail (`/admin/klanten/:id`)
-- Header met bedrijfsnaam, status badge, bewerken knop
-- 5 tabs: Overzicht | Locaties & Laadpunten | Financieel | Documenten | Activiteit
-- Tab Overzicht: klantgegevens, contractgegevens, Stripe status, quick stats
-- Tab Locaties: uitklapbare cards met laadpunten tabel per locatie
-- Tab Financieel: settlement cards per maand
-- Tab Documenten: upload area (placeholder, storage bucket later)
-- Tab Activiteit: chronologische log
+**Stap 3 — Laadpunten per locatie:**
+- Tabs per locatie
+- Aantal laadpunten input → auto-genereer rijen
+- Per rij: Naam (auto LP-001 etc), Type (AC 11kW/AC 22kW/DC 50kW), Merk, Model
 
----
+**Stap 4 — Tariefstructuur:**
+- Laadtarief/kWh, Energiekost/kWh, Revenue share %, ERE tarief/kWh
+- Live preview: maandelijkse schatting via `calculateMonthly()`
 
-## Batch 4: Offertes + Laadpunten
+**Stap 5 — Overzicht & Bevestigen:**
+- Samenvatting alle data in read-only cards
+- "Wijzig" links per sectie → spring terug naar die stap
+- "Opslaan" knop: insert client → insert locations → insert charge_points → insert tariff_profile
+- Activity log entry aanmaken
+- Na succes: navigeer naar `/admin/klanten/:id`
 
-### Offertes (`/admin/offertes`)
-- Offertelijst tabel: nummer, klant/prospect, laadpunten, bedrag/jaar, status, datum
-- Status badges: concept/verstuurd/getekend/verlopen/afgewezen
+## 4. Klantdetail (`AdminClientDetail.tsx`) — volledig bouwen
 
-### Offerte aanmaken (`/admin/offertes/nieuw`)
-- Prospect/klant selectie (bestaand of nieuw)
-- Configuratie (zelfde als calculator, pre-filled als vanuit calculator)
-- Offerte-instellingen: auto-nummer, geldig tot, notities
-- Preview/opslaan knoppen
+**Header:**
+- Bedrijfsnaam, StatusBadge, "Bewerken" knop (toggle inline edit mode)
+- Terug-link naar klantenlijst
 
-### Offerte detail (`/admin/offertes/:id`)
-- Volledige offerte met berekeningen
-- Status-wijziging knoppen
-- "Maak klant aan vanuit offerte" bij status getekend
+**Nieuwe hooks** in `useAdminData.ts`:
+- `useClientById(id)` — client + locations + charge_points
+- `useClientSettlements(clientId)` — settlements voor deze klant
+- `useClientActivity(clientId)` — activity_log entries
+- `useClientSessions(clientId)` — charging sessions
 
-### Laadpunten (`/admin/laadpunten`)
-- KPI-rij: totaal, online, offline, storing
-- Tabel met connectivity_state indicators (gekleurde bollen)
-- Filters: klant, locatie, status, type
-- Laatste heartbeat kolom
-- Klik → detail (placeholder)
+**5 Tabs:**
 
----
+**Tab 1 — Overzicht:**
+- Klantgegevens card (bedrijf, KVK, contact, adres)
+- Contract card (startdatum, duur, revenue share, status)
+- Stripe status card (onboarding status)
+- Quick stats: totaal kWh, totaal omzet, aantal sessies
 
-## Batch 5: Instellingen + Demo data cleanup + Polish
+**Tab 2 — Locaties & Laadpunten:**
+- Per locatie een uitklapbaar Card (Collapsible)
+- Locatie-info: adres, pandtype, solar, parkeerplaatsen
+- Laadpunten tabel per locatie: naam, type, status (ConnectivityIndicator), laatste heartbeat
+- "Locatie toevoegen" knop
 
-### Instellingen (`/admin/instellingen`)
-- 4 tabs: Bedrijf | Gebruikers | Standaardwaarden | API
-- Bedrijf: edit form voor organisatie
-- Gebruikers: tabel met rollen, "Gebruiker toevoegen"
-- Standaardwaarden: editable default tarieven (uit organizations tabel)
-- API: password fields voor keys, webhook URL readonly, test knop (disabled)
+**Tab 3 — Financieel:**
+- KPI-rij: totaal uitbetaald, lopende maand, gem. marge
+- Settlements tabel per maand met StatusBadge
 
-### Demo data
-- Update bestaande demodata zodat het past bij de nieuwe kolommen
-- Activity log entries (10-15 regels)
-- Seed `eflux_sync_log`
-- Locatienamen aanpassen per spec (Fellenoord 15, Keizersgracht 200, etc.)
+**Tab 4 — Documenten:**
+- Placeholder upload area (geen storage bucket implementatie)
+- "Binnenkort beschikbaar" melding
 
-### Performance & polish
-- React.lazy + Suspense voor alle admin pagina's
-- Skeleton loaders op KPI-cards en tabellen
-- Pagination component (20 rijen/pagina)
-- Debounce op zoek-inputs (300ms)
-- Responsive: tablet sidebar collapse, mobile stacking
+**Tab 5 — Activiteit:**
+- Chronologische lijst uit activity_log gefilterd op client_id
+- Datum, actie, beschrijving per regel
+
+## 5. Debounce hook (`src/hooks/useDebouncedValue.ts`) — nieuw
+
+Simpele hook: `useDebouncedValue<T>(value: T, delay: number): T`
 
 ---
 
-## Bestanden die worden aangemaakt/gewijzigd
+## Bestanden
 
 | Bestand | Actie |
 |---------|-------|
-| `supabase/migrations/...` | Schema uitbreidingen + demodata updates |
-| `src/index.css` | Design tokens bijwerken |
-| `src/layouts/AdminLayout.tsx` | Volledig herschrijven (dark sidebar) |
-| `src/components/Logo.tsx` | "e-" groen + "Charging" wit variant |
-| `src/components/KPICard.tsx` | Design update |
-| `src/App.tsx` | Nieuwe routes toevoegen |
-| `src/pages/admin/AdminDashboard.tsx` | Herschrijven |
+| `src/hooks/useDebouncedValue.ts` | Nieuw |
+| `src/components/admin/StepperWizard.tsx` | Nieuw |
 | `src/pages/admin/AdminClients.tsx` | Herschrijven |
-| `src/pages/admin/AdminClientWizard.tsx` | **Nieuw** |
-| `src/pages/admin/AdminClientDetail.tsx` | **Nieuw** |
-| `src/pages/admin/AdminCalculator.tsx` | Herschrijven |
-| `src/pages/admin/AdminQuotes.tsx` | **Nieuw** |
-| `src/pages/admin/AdminQuoteCreate.tsx` | **Nieuw** |
-| `src/pages/admin/AdminQuoteDetail.tsx` | **Nieuw** |
-| `src/pages/admin/AdminFinancial.tsx` | Herschrijven |
-| `src/pages/admin/AdminChargePoints.tsx` | Herschrijven |
-| `src/pages/admin/AdminSettings.tsx` | Herschrijven |
-| `src/services/eflux.ts` | **Nieuw** |
-| `src/services/stripe.ts` | **Nieuw** |
-| `src/services/calculations.ts` | **Nieuw** |
-| `src/hooks/useAdminData.ts` | Uitbreiden |
-| `src/components/admin/StepperWizard.tsx` | **Nieuw** |
-| `src/components/admin/SettlementCard.tsx` | **Nieuw** |
-| `src/components/admin/StatusBadge.tsx` | **Nieuw** |
-| `src/components/admin/ConnectivityIndicator.tsx` | **Nieuw** |
+| `src/pages/admin/AdminClientWizard.tsx` | Herschrijven |
+| `src/pages/admin/AdminClientDetail.tsx` | Herschrijven |
+| `src/hooks/useAdminData.ts` | Uitbreiden (4 nieuwe hooks) |
 
-Totaal: ~25 bestanden, ~5000-7000 regels nieuwe code, 2-3 database migraties.
-
-Ik begin met Batch 1 na goedkeuring en werk dan per batch door.
+Geen database migraties nodig — alle tabellen en kolommen bestaan al.
 
