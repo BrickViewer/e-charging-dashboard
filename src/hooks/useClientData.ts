@@ -90,6 +90,15 @@ export function useClientKPIs(clientId?: string) {
   const prevKwh = prevSettlement?.total_kwh || 0;
   const kwhChange = Number(prevKwh) > 0 ? ((Number(currentKwh) - Number(prevKwh)) / Number(prevKwh)) * 100 : 0;
 
+  // Bereken gemiddelden uit vorige maanden (excl. huidige maand)
+  const pastSettlements = settlements?.filter(s => s.month?.slice(0, 7) !== currentMonth) || [];
+  const avgEarnings = pastSettlements.length > 0
+    ? pastSettlements.reduce((sum, s) => sum + Number(s.client_payout || 0), 0) / pastSettlements.length
+    : 1200; // fallback sample
+  const avgKwh = pastSettlements.length > 0
+    ? pastSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0) / pastSettlements.length
+    : 800; // fallback sample
+
   return {
     totalEarned: Number(currentEarnings),
     kwhLoaded: Number(currentKwh),
@@ -98,6 +107,8 @@ export function useClientKPIs(clientId?: string) {
     offlineCount: totalCount - onlineCount,
     earningsChange,
     kwhChange,
+    avgEarnings,
+    avgKwh,
     settlements: settlements || [],
   };
 }
