@@ -1,11 +1,11 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuoteById, useOrganization } from "@/hooks/useAdminData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, UserPlus } from "lucide-react";
 import { formatEuro } from "@/services/calculations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -19,10 +19,10 @@ const fmtRound = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractio
 
 export default function AdminQuoteDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data: quote, isLoading } = useQuoteById(id);
   const { data: org } = useOrganization();
   const queryClient = useQueryClient();
-  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const snap = (quote?.calculation_snapshot || {}) as any;
 
