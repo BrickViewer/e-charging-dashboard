@@ -1,29 +1,44 @@
 
 
-# Fix: Wizard Redirect Bug + Financieel Number Formatting
+# Batch 4: Laadpunten Overzicht — Herschrijven
 
-## Twee problemen
+## Overzicht
 
-### 1. Wizard redirect bug
-De `navigate()` call in `AdminClientWizard.tsx` lijn 174 ziet er correct uit: `navigate(\`/admin/klanten/${client.id}\`)`. Het probleem is waarschijnlijk dat de insert via RLS faalt op `.select().single()`, waardoor `client` null is en een error gegooid wordt die door de catch wordt afgevangen — of dat `client.id` undefined is. De fix: extra null-check na insert, en een fallback navigate naar de klantenlijst als het ID niet beschikbaar is. Ook een `console.log` toevoegen voor debugging.
+Herschrijf `AdminChargePoints.tsx` tot een volwaardig monitoring dashboard met KPI-kaarten, extra filters (locatie, klant), connectiviteitsindicatoren, debounced zoek, en pagination.
 
-**Aanpak:**
-- Na de `.select().single()` call, check expliciet of `client?.id` bestaat
-- Als het ID beschikbaar is: navigeer naar `/admin/klanten/${client.id}`
-- Als niet: navigeer naar `/admin/klanten` met een waarschuwing
+## Wijzigingen
 
-### 2. Financieel number formatting
-`fmt()` op lijn 19 van `AdminFinancial.tsx` gebruikt `minimumFractionDigits: 2` maar mist `maximumFractionDigits: 2`. Hierdoor worden getallen als `€63.289,024` weergegeven in plaats van `€63.289,02`.
+### `AdminChargePoints.tsx` — Herschrijven
 
-**Aanpak:**
-- Voeg `maximumFractionDigits: 2` toe aan de `fmt()` functie in `AdminFinancial.tsx`
-- Check en fix dezelfde functie in `AdminDashboard.tsx` (die gebruikt `minimumFractionDigits: 0`, daar ook `maximumFractionDigits: 0` toevoegen)
+**KPI-rij bovenaan (4 kaarten):**
+- Totaal laadpunten
+- Online (groen)
+- Offline/Error (rood)
+- In gebruik (blauw)
+
+Berekend uit de opgehaalde data.
+
+**Filters uitbreiden:**
+- Debounced zoek (hergebruik `useDebouncedValue`)
+- Status filter (bestaand, behouden)
+- Klant filter — dropdown gevuld met unieke `clients.company_name` uit de data
+- Locatie filter — dropdown gevuld met unieke `locations.name`, gefilterd op geselecteerde klant
+
+**Tabel uitbreiden:**
+- Kolommen: Laadpunt | Locatie | Klant | Type | Merk/Model | Connectiviteit | Status
+- Connectiviteit kolom: gebruik `ConnectivityIndicator` component met `connectivity_state`
+- Status kolom: vertaalde labels (online→Online, in_use→In gebruik, offline→Offline, error→Storing)
+- Pagination (20 rijen/pagina) met prev/next knoppen
+- Skeleton loader tijdens laden
+- Lege state met icon en tekst
+
+**Geen nieuwe hooks nodig** — `useAllChargePoints` levert alle data inclusief `locations(name, address, client_id, clients(company_name))`.
 
 ## Bestanden
 
-| Bestand | Wijziging |
-|---------|-----------|
-| `src/pages/admin/AdminClientWizard.tsx` | Null-check op client na insert, fallback navigate |
-| `src/pages/admin/AdminFinancial.tsx` | Fix `fmt()` met `maximumFractionDigits: 2` |
-| `src/pages/admin/AdminDashboard.tsx` | Fix `fmt()` met `maximumFractionDigits: 0` |
+| Bestand | Actie |
+|---------|-------|
+| `src/pages/admin/AdminChargePoints.tsx` | Herschrijven |
+
+Geen database migraties nodig.
 
