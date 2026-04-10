@@ -65,14 +65,8 @@ export function GaugeChart({
       ? (formatValue ? `Gem: ${formatValue(average)}` : `Gem: ${average.toLocaleString("nl-NL")}`)
       : "";
 
-  // Determine needle color based on position relative to average
-  const getNeedleColor = () => {
-    if (!average) return color;
-    if (value >= average) return "hsl(var(--primary))";
-    const ratio = value / average;
-    if (ratio >= 0.8) return "hsl(var(--warning, 38 92% 50%))";
-    return "hsl(var(--destructive))";
-  };
+  // Always use the provided color (primary green)
+  const arcColor = color;
 
   // Shared tooltip renderer (SVG foreignObject for clean rendering)
   const renderAvgTooltip = (cx: number, cy: number, radius: number) => {
@@ -131,12 +125,30 @@ export function GaugeChart({
             strokeLinecap="round"
           />
 
-          {/* Progress arc — stops at correct position */}
-          {animatedProgress > 0.005 && (
+          {/* Progress arc — delta between average and value */}
+          {average && Math.abs(animatedProgress - 0.5) > 0.005 && (() => {
+            const avgAngleDeg = 0; // middle of 270° arc
+            const valueAngleDeg = -135 + animatedProgress * 270;
+            const startA = Math.min(avgAngleDeg, valueAngleDeg);
+            const endA = Math.max(avgAngleDeg, valueAngleDeg);
+            return (
+              <path
+                d={describeArc(cx, cy, startA, endA, radius)}
+                fill="none"
+                stroke={arcColor}
+                strokeWidth={strokeW + 1}
+                strokeLinecap="round"
+                style={{ transition: "all 1.4s cubic-bezier(0.34, 1.2, 0.64, 1)" }}
+                opacity={0.7}
+              />
+            );
+          })()}
+          {/* Progress arc — full from start when no average */}
+          {!average && animatedProgress > 0.005 && (
             <path
               d={describeArc(cx, cy, -135, -135 + animatedProgress * 270, radius)}
               fill="none"
-              stroke={getNeedleColor()}
+              stroke={arcColor}
               strokeWidth={strokeW + 1}
               strokeLinecap="round"
               style={{ transition: "all 1.4s cubic-bezier(0.34, 1.2, 0.64, 1)" }}
@@ -189,9 +201,9 @@ export function GaugeChart({
             const dot = polarToCartesian(cx, cy, radius, dotAngle);
             return (
               <>
-                <circle cx={dot.x} cy={dot.y} r={5} fill={getNeedleColor()} opacity={0.3}
+                <circle cx={dot.x} cy={dot.y} r={5} fill={arcColor} opacity={0.3}
                   style={{ transition: "all 1.4s cubic-bezier(0.34, 1.2, 0.64, 1)" }} />
-                <circle cx={dot.x} cy={dot.y} r={2.5} fill={getNeedleColor()}
+                <circle cx={dot.x} cy={dot.y} r={2.5} fill={arcColor}
                   style={{ transition: "all 1.4s cubic-bezier(0.34, 1.2, 0.64, 1)" }} />
               </>
             );
@@ -254,7 +266,7 @@ export function GaugeChart({
     return { outer, inner };
   })() : null;
 
-  const needleColor = getNeedleColor();
+  const needleColor = arcColor;
 
   // More space below for value text
   const svgHeight = cy + (isLarge ? 48 : 42);
@@ -276,8 +288,25 @@ export function GaugeChart({
           strokeLinecap="round"
         />
 
-        {/* Active arc */}
-        {animatedAngle > -134 && (
+        {/* Active arc — delta between average and value */}
+        {average && Math.abs(animatedProgress - 0.5) > 0.005 && (() => {
+          const avgAngleDeg = 0;
+          const valueAngleDeg = -135 + animatedProgress * 270;
+          const startA = Math.min(avgAngleDeg, valueAngleDeg);
+          const endA = Math.max(avgAngleDeg, valueAngleDeg);
+          return (
+            <path
+              d={describeArc(cx, cy, startA, endA, radius)}
+              fill="none"
+              stroke={needleColor}
+              strokeWidth={strokeW}
+              strokeLinecap="round"
+              style={{ transition: "all 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)" }}
+              opacity={0.5}
+            />
+          );
+        })()}
+        {!average && animatedAngle > -134 && (
           <path
             d={describeArc(cx, cy, -135, Math.min(animatedAngle, 135), radius)}
             fill="none"
