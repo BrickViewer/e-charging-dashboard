@@ -143,4 +143,9 @@
     @apply text-xl font-semibold;
     color: hsl(var(--foreground));
   }
+  .portal-card {
+    @apply rounded-xl border shadow-sm;
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
 }
