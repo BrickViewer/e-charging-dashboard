@@ -1,58 +1,53 @@
 
 
-## Gauge Redesign — Clean & Modern
+## Gauge Redesign — Gemiddelde als referentiepunt
 
-### Wat verandert
+### Concept
 
-**Centrale gauge wordt de Opbrengst (€)** — dit is het belangrijkste getal. Geen traditionele snelheidsmeter maar een **groot digitaal getal** in het midden van een dunne, minimalistische boog. Denk aan een modern EV-display waar de snelheid als groot getal wordt getoond met een subtiele ring eromheen.
-
-**Links (kWh) en rechts (Laadpunten) blijven ronde snelheidsmeters** — maar veel cleaner:
+De snelheidsmeters (sm gauges) werken nu op een nieuw principe: **het maandgemiddelde staat bovenaan (midden)** van de meter. De naald wijst naar links als je onder gemiddeld zit, naar rechts als je erboven zit.
 
 ```text
-    ┌─────────┐     ┌─────────────────┐     ┌─────────┐
-    │  ╭───╮  │     │                 │     │  ╭───╮  │
-    │ ╱  ↑  ╲ │     │    € 1.247      │     │ ╱  ↑  ╲ │
-    │ ╲     ╱ │     │   ───────────   │     │ ╲     ╱ │
-    │  ╰───╯  │     │  subtiele boog  │     │  ╰───╯  │
-    │  342kWh │     │  Opbrengst      │     │  4 / 5  │
-    │         │     │  deze maand     │     │  online │
-    └─────────┘     └─────────────────┘     └─────────┘
+        onder       gemiddeld      boven
+          ╲            ↑            ╱
+           ╲           │           ╱
+            ╰──────────┴──────────╯
 ```
 
-### GaugeChart.tsx — Design cleanup
+- Naald in het midden (boven) = precies op het gemiddelde
+- Naald naar rechts = boven gemiddeld (goed!)
+- Naald naar links = onder gemiddeld
 
-**Wat weg gaat (minder druk):**
-- Minor ticks verwijderd — alleen nog major ticks
-- Minder major ticks (5 in plaats van 6/10)
-- Active arc opacity omhoog (0.3 → 0.6) zodat het krachtiger oogt
-- Tick labels alleen bij de grote gauge
+### Data-aanpak
 
-**Wat cleaner wordt:**
-- Dunnere arc (strokeWidth: lg 4→3, sm 3→2)
-- Dunnere naald (strokeWidth: 1.5 ipv 2/2.5)
-- Kleiner center dot
-- Meer ruimte — minder visuele elementen = meer ademruimte
+Aangezien er nog geen echte data is, gebruiken we **sample data** om het te demonstreren:
 
-### Nieuw: `size="xl"` voor de centrale opbrengst-gauge
+- **kWh geladen deze maand**: huidige waarde uit KPIs, gemiddelde berekend uit de laatste 6 maanden settlements
+- **Opbrengst (XL, midden)**: zelfde logica — huidige maand vs. gemiddelde van vorige maanden
+- Als er geen historische data is → fallback sample values (bijv. gemiddelde kWh = 800, gemiddelde opbrengst = €1.200)
 
-Een derde size variant die geen naald heeft maar een **groot digitaal getal** centraal toont met een dunne voortgangsboog eromheen. Modern EV-stijl.
+### Technische wijzigingen
 
-- Grote circulaire boog (radius ~130)
-- Groot getal in het midden (fontSize 42, bold)
-- Label eronder
-- Subtiele geanimeerde arc die de voortgang toont
-- Geen naald, geen ticks — puur minimalistisch
+**`GaugeChart.tsx`** — Nieuwe prop `average`:
+- Nieuw: `average?: number` prop
+- Als `average` is meegegeven: de gauge schaal loopt van `0` tot `average * 2`, met `average` exact bovenaan (0°)
+- De naald beweegt van links (-135°) naar rechts (+135°), waarbij het midden (0°) = gemiddelde
+- Kleur verandert subtiel: links van midden = oranje/rood tint, rechts = groen
+- Een klein markering/tick bovenaan voor "gemiddelde"
 
-### Dashboard layout aanpassing
+**`ClientDashboard.tsx`**:
+- Berekent gemiddelden uit `kpis.settlements` (laatste 6 maanden)
+- Geeft `average` prop mee aan de sm gauges
+- XL gauge krijgt ook average-logica: het getal toont de huidige waarde, de boog toont positie t.o.v. gemiddelde
+- Fallback sample data als er geen settlements zijn
 
-- Centrale gauge: Opbrengst → `size="xl"` (was kWh `size="lg"`)
-- Links: kWh geladen → `size="sm"` (ronde snelheidsmeter met naald)
-- Rechts: Laadpunten online → `size="sm"` (ronde snelheidsmeter met naald)
+**`useClientData.ts`**:
+- `useClientKPIs` uitbreiden met `avgKwh` en `avgEarnings` (gemiddelde van beschikbare maanden, of fallback)
 
 ### Bestanden
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `src/components/portal/GaugeChart.tsx` | Minor ticks weg, minder major ticks, dunnere lijnen, nieuwe `xl` size variant |
-| `src/pages/portal/ClientDashboard.tsx` | Opbrengst naar midden als `xl`, kWh en laadpunten als `sm` links/rechts |
+| `src/components/portal/GaugeChart.tsx` | Nieuwe `average` prop, schaal herberekening, gemiddelde-markering |
+| `src/pages/portal/ClientDashboard.tsx` | Gemiddelden berekenen en doorgeven, sample data fallback |
+| `src/hooks/useClientData.ts` | `avgKwh` en `avgEarnings` toevoegen aan KPI return |
 
