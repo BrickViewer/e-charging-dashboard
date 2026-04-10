@@ -64,6 +64,7 @@ export default function ClientDashboard() {
             value={kwhValue}
             max={avgKwh * 2}
             average={avgKwh}
+            averageLabel={`Gem: ${avgKwh.toLocaleString("nl-NL")} kWh`}
             label="Energie geladen"
             unit="kWh"
             size="sm"
@@ -78,6 +79,7 @@ export default function ClientDashboard() {
             value={earningsValue}
             max={avgEarnings * 2}
             average={avgEarnings}
+            averageLabel={`Gem: €${avgEarnings.toLocaleString("nl-NL")}`}
             label="Opbrengst deze maand"
             unit="EUR"
             size="xl"
