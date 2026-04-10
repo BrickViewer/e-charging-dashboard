@@ -1,63 +1,73 @@
 
 
-## Probleem
+## Klantdashboard Redesign — Auto-instrumentenpaneel concept
 
-De app hangt op "Laden..." door twee samenhangende issues:
+### Visie
 
-1. **Deadlock in AuthContext**: `fetchRole()` maakt `await` Supabase-calls *binnen* de `onAuthStateChange` callback. Dit blokkeert de Supabase auth event-loop en kan een deadlock veroorzaken waardoor `isLoading` nooit `false` wordt.
+Het klantportaal krijgt een **licht thema** met een uniek **auto-dashboard** design. De centrale metafoor: je kijkt naar het instrumentenpaneel van een elektrische auto. Denk aan een Tesla/Porsche Taycan cockpit — clean, minimalistisch, met ronde meters en subtiele animaties.
 
-2. **Ontbrekende accounts**: De client-gebruiker `info@brickviewer.nl` bestaat nog niet.
+### Kerncomponenten
 
-## Plan
+**1. SVG Gauge-component (nieuw)**
+Een herbruikbare halve-cirkel meter (zoals een snelheidsmeter) gebouwd met SVG. Wordt gebruikt voor:
+- **Huidige kWh-verbruik** — grote centrale gauge, de "snelheidsmeter"
+- **Opbrengst deze maand** — kleinere gauge links
+- **Laadpunten online** — kleinere gauge rechts (bijv. 4/5 = bijna vol)
 
-### Stap 1 — Fix AuthContext deadlock
+Elke gauge heeft een geanimeerde naald die smooth naar de juiste waarde beweegt met CSS transitions.
 
-De `onAuthStateChange` callback mag geen Supabase API-calls awaiten. Oplossing:
-- In `onAuthStateChange`: alleen `setSession` en `setUser` updaten (synchrone state). Geen `fetchRole` aanroepen.
-- `fetchRole` verplaatsen naar een apart `useEffect` dat reageert op veranderingen in `user`.
-- `getSession()` blijft de initiële sessie herstellen en triggert via de user-state het role-fetch effect.
-
+**2. Layout — cockpit-stijl**
 ```text
-onAuthStateChange ──► setSession + setUser (sync only)
-                           │
-                           ▼
-useEffect([user]) ──► fetchRole(user.id) ──► setRole ──► setIsLoading(false)
+┌─────────────────────────────────────────────┐
+│  Welkom, Wessel                    [status] │
+├─────────────────────────────────────────────┤
+│                                             │
+│      ┌───────┐  ┌───────────┐  ┌───────┐   │
+│      │ €     │  │    kWh    │  │  ●/●  │   │
+│      │ gauge │  │   GAUGE   │  │ gauge │   │
+│      │ small │  │   LARGE   │  │ small │   │
+│      └───────┘  └───────────┘  └───────┘   │
+│                                             │
+│  ┌──────────────────────────────────────┐   │
+│  │  Opbrengst per maand (area chart)    │   │
+│  └──────────────────────────────────────┘   │
+│                                             │
+│  ┌─────────────┐  ┌─────────────┐           │
+│  │ Locatie 1   │  │ Locatie 2   │           │
+│  │ status dots │  │ status dots │           │
+│  └─────────────┘  └─────────────┘           │
+│                                             │
+│  Recente sessies (compacte lijst)           │
+└─────────────────────────────────────────────┘
 ```
 
-### Stap 2 — Accounts aanmaken
+**3. Licht thema voor het klantportaal**
+De `dark` class wordt verwijderd van `ClientLayout.tsx`. In plaats daarvan krijgt het portaal een eigen lichte kleurset:
+- Achtergrond: zacht off-white (#F8F9FA)
+- Cards: wit met subtiele schaduw
+- Accenten: e-charging groen (#047F00)
+- Gauge achtergrond: lichtgrijs bogen
 
-Een tijdelijke edge function (`create-test-users`) die via de Supabase Admin API twee gebruikers aanmaakt:
+### Wat wordt aangepast
 
-| Account | Email | Wachtwoord | Rol |
-|---------|-------|------------|-----|
-| Admin | wessel.jonkers@brickviewer.nl | welkom123 | admin (al ingesteld) |
-| Client | info@brickviewer.nl | welkom123 | client (via `portal_user_id`) |
+| Bestand | Wijziging |
+|---------|-----------|
+| `src/components/portal/GaugeChart.tsx` | **Nieuw** — SVG gauge met geanimeerde naald, tick-marks, labels |
+| `src/pages/portal/ClientDashboard.tsx` | Volledig herschreven met cockpit-layout en gauges |
+| `src/layouts/ClientLayout.tsx` | `dark` class verwijderen, licht thema styling |
+| `src/index.css` | Optioneel: `.portal` thema-variant toevoegen voor subtiele kleurverschillen |
+| `src/components/KPICard.tsx` | Niet meer gebruikt op het dashboard (gauges vervangen KPI-cards) |
 
-De edge function:
-- Maakt `info@brickviewer.nl` aan via `supabase.auth.admin.createUser()`
-- Koppelt deze aan demo-client `10000000-0000-0000-0000-000000000001` via `UPDATE clients SET portal_user_id = ...`
-- Reset het wachtwoord van `wessel.jonkers@brickviewer.nl` naar `welkom123` via `supabase.auth.admin.updateUserById()`
+### Design-principes
 
-Na uitvoering wordt de edge function aangeroepen met `curl` en daarna verwijderd.
+- **Uniek**: Geen standaard dashboard-cards. SVG gauges met naald-animatie die je nergens anders ziet
+- **Simpel**: Drie meters, een grafiek, locaties, recente sessies. Geen overbodige elementen
+- **Duidelijk**: Grote getallen in het midden van elke gauge, labels eronder, direct leesbaar
 
-### Stap 3 — Login pagina: redirect als al ingelogd
+### Technisch
 
-Een klein toevoeging aan `Login.tsx`: als de gebruiker al is ingelogd en een rol heeft, direct doorsturen naar het juiste portaal zodat ze niet op de login-pagina blijven hangen.
-
-### Resultaat
-
-- `wessel.jonkers@brickviewer.nl` → login → `/admin` (beheerpaneel)
-- `info@brickviewer.nl` → login → `/portal` (klantportaal)
-- Geen "Laden..." hang meer
-
-### Technische details
-
-**AuthContext.tsx wijzigingen:**
-- `onAuthStateChange` wordt een synchrone callback (geen `async`)
-- Nieuw `useEffect` met dependency `[user]` voor het ophalen van de rol
-- `isLoading` wordt pas `false` gezet nadat de rol is opgehaald (of als er geen user is)
-
-**Edge function `create-test-users`:**
-- Gebruikt `SUPABASE_SERVICE_ROLE_KEY` (al beschikbaar als secret)
-- Idempotent: controleert of gebruikers al bestaan voor aanmaken
+- Gauges zijn pure SVG + CSS transitions (geen externe libraries)
+- De naald animeert met `transition: transform 1s ease-out` bij mount
+- Responsive: op mobiel worden de 3 gauges gestapeld
+- Alle data komt uit dezelfde `useClientKPIs` / `useClientSessions` hooks
 
