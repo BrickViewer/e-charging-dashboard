@@ -1,14 +1,20 @@
 import { useAllChargePoints } from "@/hooks/useAdminData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useMemo, useState } from "react";
-import { Plug, Search, Zap, WifiOff, Activity } from "lucide-react";
+import { Plug, Search, Zap, WifiOff, Activity, Save } from "lucide-react";
 import { KPICard } from "@/components/KPICard";
 import { ConnectivityIndicator } from "@/components/admin/ConnectivityIndicator";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatEuro, formatNumber } from "@/services/calculations";
+import { toast } from "sonner";
 
 const statusLabels: Record<string, string> = {
   online: "Online",
@@ -31,14 +37,64 @@ const statusBadge = (status: string) => {
 
 const PAGE_SIZE = 20;
 
+function useChargePointSessions(cpId: string | null) {
+  return useQuery({
+    queryKey: ["admin-cp-sessions", cpId],
+    enabled: !!cpId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_sessions")
+        .select("*")
+        .eq("charge_point_id", cpId!)
+        .order("started_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export default function AdminChargePoints() {
   const { data: chargePoints, isLoading } = useAllChargePoints();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
   const [page, setPage] = useState(0);
   const debouncedSearch = useDebouncedValue(search, 300);
+
+  // Detail sheet state
+  const [selectedCP, setSelectedCP] = useState<any>(null);
+  const [editEvseIds, setEditEvseIds] = useState({ controller: "", evse: "" });
+  const [savingEvse, setSavingEvse] = useState(false);
+  const { data: cpSessions } = useChargePointSessions(selectedCP?.id || null);
+
+  const openDetail = (cp: any) => {
+    setSelectedCP(cp);
+    setEditEvseIds({
+      controller: cp.eflux_evse_controller_id || "",
+      evse: cp.eflux_evse_id || "",
+    });
+  };
+
+  const handleSaveEvseIds = async () => {
+    if (!selectedCP) return;
+    setSavingEvse(true);
+    try {
+      const { error } = await supabase.from("charge_points").update({
+        eflux_evse_controller_id: editEvseIds.controller || null,
+        eflux_evse_id: editEvseIds.evse || null,
+      }).eq("id", selectedCP.id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["admin-chargepoints"] });
+      toast.success("e-Flux IDs opgeslagen");
+    } catch (err: any) {
+      toast.error(err.message || "Fout bij opslaan");
+    } finally {
+      setSavingEvse(false);
+    }
+  };
 
   // Unique clients & locations for filter dropdowns
   const clients = useMemo(() => {
@@ -88,14 +144,23 @@ export default function AdminChargePoints() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  // Reset page when filters change
   useMemo(() => setPage(0), [debouncedSearch, statusFilter, clientFilter, locationFilter]);
+
+  const relativeTime = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Zojuist";
+    if (mins < 60) return `${mins} min geleden`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} uur geleden`;
+    return `${Math.floor(hours / 24)} dagen geleden`;
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-semibold">Laadpunt Monitoring</h1>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KPICard label="Totaal" value={String(total)} icon={<Plug className="w-5 h-5" />} />
         <KPICard label="Online" value={String(online)} icon={<Zap className="w-5 h-5" />} />
@@ -103,7 +168,6 @@ export default function AdminChargePoints() {
         <KPICard label="In gebruik" value={String(inUse)} icon={<Activity className="w-5 h-5" />} />
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="relative max-w-xs flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -135,7 +199,6 @@ export default function AdminChargePoints() {
         </Select>
       </div>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -169,7 +232,7 @@ export default function AdminChargePoints() {
                   </tr>
                 ) : (
                   paginated.map((cp: any) => (
-                    <tr key={cp.id} className="border-b border-border last:border-0 hover:bg-accent/50">
+                    <tr key={cp.id} className="border-b border-border last:border-0 hover:bg-accent/50 cursor-pointer" onClick={() => openDetail(cp)}>
                       <td className="p-3 font-medium flex items-center gap-2">
                         <Plug className="w-4 h-4 text-muted-foreground shrink-0" />
                         {cp.name || "-"}
@@ -193,7 +256,6 @@ export default function AdminChargePoints() {
             </table>
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between p-3 border-t border-border">
               <span className="text-sm text-muted-foreground">
@@ -207,6 +269,79 @@ export default function AdminChargePoints() {
           )}
         </CardContent>
       </Card>
+
+      {/* Detail Sheet */}
+      <Sheet open={!!selectedCP} onOpenChange={open => { if (!open) setSelectedCP(null); }}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{selectedCP?.name || "Laadpunt"}</SheetTitle>
+          </SheetHeader>
+          {selectedCP && (
+            <div className="space-y-6 mt-4">
+              {/* Details */}
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Locatie</span><span>{selectedCP.locations?.name || "—"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Klant</span><span>{selectedCP.locations?.clients?.company_name || "—"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span className="uppercase">{selectedCP.type?.replace("_", " ") || "—"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Merk / Model</span><span>{[selectedCP.brand, selectedCP.model].filter(Boolean).join(" ") || "—"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Serienummer</span><span className="font-mono text-xs">{selectedCP.serial_number || "—"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">MID-meter</span><span>{selectedCP.has_mid_meter ? "Ja" : "Nee"}</span></div>
+                <div className="flex justify-between items-center"><span className="text-muted-foreground">Connectiviteit</span><ConnectivityIndicator state={selectedCP.connectivity_state || "unknown"} /></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Laatste heartbeat</span><span>{relativeTime(selectedCP.last_heartbeat_at)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Max vermogen</span><span>{selectedCP.max_power ? `${selectedCP.max_power} kW` : "—"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Connectors</span><span>{selectedCP.num_connectors || "—"}</span></div>
+              </div>
+
+              {/* Recent sessions */}
+              <div>
+                <h3 className="font-medium text-sm mb-2">Recente sessies</h3>
+                {(!cpSessions || cpSessions.length === 0) ? (
+                  <p className="text-sm text-muted-foreground">Geen sessies gevonden</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left p-2 font-medium text-muted-foreground">Datum</th>
+                          <th className="text-right p-2 font-medium text-muted-foreground">kWh</th>
+                          <th className="text-right p-2 font-medium text-muted-foreground">Duur</th>
+                          <th className="text-right p-2 font-medium text-muted-foreground">Opbrengst</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cpSessions.map((s: any) => (
+                          <tr key={s.id} className="border-b border-border last:border-0">
+                            <td className="p-2">{new Date(s.started_at).toLocaleDateString("nl-NL", { day: "2-digit", month: "short" })}</td>
+                            <td className="p-2 text-right">{formatNumber(Number(s.kwh_delivered || 0), 1)}</td>
+                            <td className="p-2 text-right">{s.duration_minutes ? `${s.duration_minutes} min` : "—"}</td>
+                            <td className="p-2 text-right">{formatEuro(Number(s.gross_revenue || 0))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* e-Flux IDs */}
+              <div className="space-y-3">
+                <h3 className="font-medium text-sm">e-Flux IDs</h3>
+                <div>
+                  <Label className="text-xs">EVSE Controller ID</Label>
+                  <Input value={editEvseIds.controller} onChange={e => setEditEvseIds(p => ({ ...p, controller: e.target.value }))} className="font-mono text-xs" />
+                </div>
+                <div>
+                  <Label className="text-xs">EVSE ID</Label>
+                  <Input value={editEvseIds.evse} onChange={e => setEditEvseIds(p => ({ ...p, evse: e.target.value }))} className="font-mono text-xs" />
+                </div>
+                <Button size="sm" onClick={handleSaveEvseIds} disabled={savingEvse}>
+                  <Save className="w-3 h-3 mr-1" />{savingEvse ? "Opslaan..." : "Opslaan"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
