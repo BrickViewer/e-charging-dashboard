@@ -1,53 +1,42 @@
 
 
-## Gauge Redesign — Gemiddelde als referentiepunt
+## Gauge Polish — Perfecte Snelheidsmeters
 
-### Concept
+### Problemen die worden opgelost
 
-De snelheidsmeters (sm gauges) werken nu op een nieuw principe: **het maandgemiddelde staat bovenaan (midden)** van de meter. De naald wijst naar links als je onder gemiddeld zit, naar rechts als je erboven zit.
+1. **XL gauge (midden)**: Euro bedrag te klein (fontSize 42 → 56), en de progress arc vult de hele boog — moet stoppen bij de positie t.o.v. gemiddelde
+2. **SM gauges (links/rechts)**: Tekst en waarde lopen over de gauge heen, getallen te klein, naald staat te dicht op het getal
+3. **Hover op gemiddelde**: Geen tooltip — bij hover over het gemiddelde-markering moet je het gemiddelde bedrag/waarde zien
+4. **Arc logica XL fout**: Arc gaat van -135 tot einde, maar moet stoppen bij de juiste positie relatief aan het gemiddelde (net als de sm gauges)
 
-```text
-        onder       gemiddeld      boven
-          ╲            ↑            ╱
-           ╲           │           ╱
-            ╰──────────┴──────────╯
-```
+### Wijzigingen
 
-- Naald in het midden (boven) = precies op het gemiddelde
-- Naald naar rechts = boven gemiddeld (goed!)
-- Naald naar links = onder gemiddeld
+**`src/components/portal/GaugeChart.tsx`**
 
-### Data-aanpak
+**XL gauge fixes:**
+- Euro bedrag fontSize: 42 → 56, nog prominenter
+- Progress arc gebruikt `animatedProgress * 270` correct — maar controleren dat het stopt bij de juiste positie (niet 100% gevuld)
+- SVG viewBox iets groter maken zodat er ruimte is
 
-Aangezien er nog geen echte data is, gebruiken we **sample data** om het te demonstreren:
+**SM gauge fixes:**
+- SVG hoogte vergroten: `cy + 24` → `cy + 40` zodat tekst niet over de gauge loopt
+- Value fontSize: 14 → 16, unit fontSize: 9 → 11
+- Naaldlengte iets korter: 48 → 42 zodat die niet tegen het getal aankomt
+- Value text y-positie naar beneden: meer ruimte tussen naald-center en tekst
 
-- **kWh geladen deze maand**: huidige waarde uit KPIs, gemiddelde berekend uit de laatste 6 maanden settlements
-- **Opbrengst (XL, midden)**: zelfde logica — huidige maand vs. gemiddelde van vorige maanden
-- Als er geen historische data is → fallback sample values (bijv. gemiddelde kWh = 800, gemiddelde opbrengst = €1.200)
+**Hover tooltip op gemiddelde (beide sizes):**
+- Wrappen van de gemiddelde-marker in een `<g>` met een onMouseEnter/onMouseLeave
+- State `showAvgTooltip` toevoegen
+- Bij hover: een klein SVG rect + text tonen met "Gem: €1.200" of "Gem: 800 kWh"
+- Nieuwe prop `averageLabel?: string` voor de tooltip tekst, of automatisch formatteren met de `formatValue` functie
 
-### Technische wijzigingen
-
-**`GaugeChart.tsx`** — Nieuwe prop `average`:
-- Nieuw: `average?: number` prop
-- Als `average` is meegegeven: de gauge schaal loopt van `0` tot `average * 2`, met `average` exact bovenaan (0°)
-- De naald beweegt van links (-135°) naar rechts (+135°), waarbij het midden (0°) = gemiddelde
-- Kleur verandert subtiel: links van midden = oranje/rood tint, rechts = groen
-- Een klein markering/tick bovenaan voor "gemiddelde"
-
-**`ClientDashboard.tsx`**:
-- Berekent gemiddelden uit `kpis.settlements` (laatste 6 maanden)
-- Geeft `average` prop mee aan de sm gauges
-- XL gauge krijgt ook average-logica: het getal toont de huidige waarde, de boog toont positie t.o.v. gemiddelde
-- Fallback sample data als er geen settlements zijn
-
-**`useClientData.ts`**:
-- `useClientKPIs` uitbreiden met `avgKwh` en `avgEarnings` (gemiddelde van beschikbare maanden, of fallback)
+**Dashboard:**
+- `averageLabel` meegeven aan gauges zodat de tooltip weet wat er getoond moet worden
 
 ### Bestanden
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `src/components/portal/GaugeChart.tsx` | Nieuwe `average` prop, schaal herberekening, gemiddelde-markering |
-| `src/pages/portal/ClientDashboard.tsx` | Gemiddelden berekenen en doorgeven, sample data fallback |
-| `src/hooks/useClientData.ts` | `avgKwh` en `avgEarnings` toevoegen aan KPI return |
+| `src/components/portal/GaugeChart.tsx` | XL font groter, SM spacing/sizing fixes, hover tooltip op gemiddelde |
+| `src/pages/portal/ClientDashboard.tsx` | Eventueel `averageLabel` prop meegeven |
 
