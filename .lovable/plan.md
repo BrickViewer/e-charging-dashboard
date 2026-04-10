@@ -1,49 +1,70 @@
 
 
-## Plan: Settlement bedragen opschalen naar ~€1.000 gemiddeld
+## Plan: Alle sample data consistent en realistisch maken
 
-### Probleem
-De `monthly_settlements` tabel bevat voor client `10000000-0000-0000-0000-000000000001` een gemiddelde `client_payout` van €147,29. De berekening in de code is correct, maar de data zelf is te laag.
+### Analyse huidige problemen
+Na de 6.79x schaling zijn de data intern inconsistent:
 
-### Oplossing
-Alle financiele kolommen in `monthly_settlements` voor deze client vermenigvuldigen met factor **6.79** (≈ 1000 / 147.29). Dit betreft:
+| Gegeven | Huidig | Probleem |
+|---------|--------|----------|
+| Settlement `client_payout` | ~€1.000/mnd | OK (doel) |
+| Settlement `gross_revenue` | ~€5.700 | Klopt niet met kWh × €0,45 tarief |
+| Settlement `total_kwh` | ~1.750 | Te laag voor €1.000 opbrengst |
+| Settlement `platform_cost` | €522,83 | Moet €77 zijn (14 × €5,50) |
+| Session financials | Niet geschaald | Matchen niet met settlements |
+| Session `total_sessions` | ~44/mnd | Te laag voor 14 laadpunten |
 
-- `client_payout`
-- `echarging_revenue`
-- `gross_revenue`
-- `net_margin`
-- `ere_estimate`
-- `total_energy_cost`
-- `total_platform_cost`
+### Realistische doelwaarden (14 laadpunten, tarief €0,45/€0,24/€0,10)
 
-`total_kwh` en `total_sessions` blijven ongewijzigd (energie-volumes hoeven niet mee te schalen).
+Om ~€1.000 client payout te halen:
+- **~9.500 kWh/maand** nodig (680 kWh per laadpunt, ~1u laden per dag bij 22kW)
+- **~380 sessies/maand** (~27/dag over 14 punten, ~2 per punt)
+- **Platform cost**: 14 × €5,50 = **€77**
+- gross_revenue = kWh × €0,45, energy_cost = kWh × €0,24
+- net_margin = gross - energy - platform, client_payout = 50%
 
-### SQL (via insert tool)
-```sql
-UPDATE monthly_settlements
-SET
-  client_payout = client_payout * 6.79,
-  echarging_revenue = echarging_revenue * 6.79,
-  gross_revenue = gross_revenue * 6.79,
-  net_margin = net_margin * 6.79,
-  ere_estimate = ere_estimate * 6.79,
-  total_energy_cost = total_energy_cost * 6.79,
-  total_platform_cost = total_platform_cost * 6.79
-WHERE client_id = '10000000-0000-0000-0000-000000000001';
+### Stappen
+
+**1. Monthly settlements herberekenen**
+- `total_kwh`: schalen naar ~8.500-11.000 range (variatie per maand, seizoenspatroon)
+- `total_sessions`: ~300-450 per maand
+- Alle financials herberekenen vanuit kWh × tarieven:
+
+```
+gross_revenue    = total_kwh × 0.45
+total_energy_cost = total_kwh × 0.24
+total_platform_cost = 77.00
+net_margin       = gross - energy - platform
+client_payout    = net_margin × 0.50
+echarging_revenue = net_margin × 0.50
+ere_estimate     = total_kwh × 0.10
 ```
 
+**2. Charging sessions herberekenen**
+- Bestaande 560 sessies: `kwh_delivered` schalen (~5.5x) zodat maandtotaal matcht met settlement kWh
+- Sessie-financials herberekenen vanuit kWh × tarieven:
+
+```
+gross_revenue  = kwh_delivered × 0.45
+energy_cost    = kwh_delivered × 0.24
+net_margin     = gross - energy
+client_share   = net_margin × 0.50
+echarging_share = net_margin × 0.50
+ere_estimate   = kwh_delivered × 0.10
+```
+
+- Per sessie gemiddeld ~100-170 kWh (plausibel voor 22kW werkplek/nachtladen, 5-8 uur)
+
+**3. Code: `useClientData.ts`**
+- `avgEarnings` fallback terugzetten naar dynamische berekening (als dat nog niet is gedaan)
+
 ### Resultaat
-- Gemiddelde `client_payout` wordt ~€1.000/maand
-- De gauge toont correct: halve boog bij gemiddelde, meer bij hogere maanden
-- De opbrengst-grafiek toont realistische bedragen
-- De fallback in `useClientData.ts` kan weer terug naar de dynamische berekening (geen hardcode nodig)
+- Alle getallen kloppen onderling: kWh × tarief = omzet
+- Dashboard gauges tonen correct ~€1.000 gemiddeld
+- Opbrengstgrafiek toont realistische bedragen
+- Sessie-overzicht toont correcte per-sessie bedragen
+- Platform kosten zijn realistisch (€77 i.p.v. €522)
 
-### Ook aanpassen
-- **`src/hooks/useClientData.ts`**: De hardcoded `avgEarnings = 1000` terugzetten naar de originele berekening uit de database, zodat het gemiddelde dynamisch blijft.
-
-### Bestanden
-| Wat | Actie |
-|-----|-------|
-| `monthly_settlements` data | UPDATE financiele kolommen × 6.79 |
-| `src/hooks/useClientData.ts` | `avgEarnings` terug naar dynamische berekening |
+### Uitvoering
+Via SQL UPDATE statements op `monthly_settlements` en `charging_sessions` tabellen.
 
