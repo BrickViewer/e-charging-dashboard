@@ -120,7 +120,7 @@ export default function AdminSettings() {
     if (!org) return;
     setSavingApi(true);
     try {
-      const updateData: Record<string, string | null> = {};
+      const updateData: Partial<{ eflux_api_key: string | null; stripe_secret_key: string | null; stripe_publishable_key: string | null }> = {};
       if (apiKeys.eflux_api_key && apiKeys.eflux_api_key !== "••••••••") updateData.eflux_api_key = apiKeys.eflux_api_key;
       if (apiKeys.stripe_secret_key && apiKeys.stripe_secret_key !== "••••••••") updateData.stripe_secret_key = apiKeys.stripe_secret_key;
       if (apiKeys.stripe_publishable_key && apiKeys.stripe_publishable_key !== "••••••••") updateData.stripe_publishable_key = apiKeys.stripe_publishable_key;
