@@ -205,7 +205,13 @@ export default function AdminClientWizard() {
         description: `Klant ${company.company_name} aangemaakt`,
       });
 
+      // 5. Link quote if created from quote
+      if (prefill.fromQuote && prefill.quoteId) {
+        await supabase.from("quotes").update({ client_id: client.id }).eq("id", prefill.quoteId);
+      }
+
       queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-quotes"] });
       toast.success("Klant succesvol aangemaakt");
       navigate(`/admin/klanten/${client.id}`);
     } catch (err: any) {
