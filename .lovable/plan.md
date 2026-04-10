@@ -1,73 +1,58 @@
 
 
-## Klantdashboard Redesign — Auto-instrumentenpaneel concept
+## Gauge Redesign — Clean & Modern
 
-### Visie
+### Wat verandert
 
-Het klantportaal krijgt een **licht thema** met een uniek **auto-dashboard** design. De centrale metafoor: je kijkt naar het instrumentenpaneel van een elektrische auto. Denk aan een Tesla/Porsche Taycan cockpit — clean, minimalistisch, met ronde meters en subtiele animaties.
+**Centrale gauge wordt de Opbrengst (€)** — dit is het belangrijkste getal. Geen traditionele snelheidsmeter maar een **groot digitaal getal** in het midden van een dunne, minimalistische boog. Denk aan een modern EV-display waar de snelheid als groot getal wordt getoond met een subtiele ring eromheen.
 
-### Kerncomponenten
+**Links (kWh) en rechts (Laadpunten) blijven ronde snelheidsmeters** — maar veel cleaner:
 
-**1. SVG Gauge-component (nieuw)**
-Een herbruikbare halve-cirkel meter (zoals een snelheidsmeter) gebouwd met SVG. Wordt gebruikt voor:
-- **Huidige kWh-verbruik** — grote centrale gauge, de "snelheidsmeter"
-- **Opbrengst deze maand** — kleinere gauge links
-- **Laadpunten online** — kleinere gauge rechts (bijv. 4/5 = bijna vol)
-
-Elke gauge heeft een geanimeerde naald die smooth naar de juiste waarde beweegt met CSS transitions.
-
-**2. Layout — cockpit-stijl**
 ```text
-┌─────────────────────────────────────────────┐
-│  Welkom, Wessel                    [status] │
-├─────────────────────────────────────────────┤
-│                                             │
-│      ┌───────┐  ┌───────────┐  ┌───────┐   │
-│      │ €     │  │    kWh    │  │  ●/●  │   │
-│      │ gauge │  │   GAUGE   │  │ gauge │   │
-│      │ small │  │   LARGE   │  │ small │   │
-│      └───────┘  └───────────┘  └───────┘   │
-│                                             │
-│  ┌──────────────────────────────────────┐   │
-│  │  Opbrengst per maand (area chart)    │   │
-│  └──────────────────────────────────────┘   │
-│                                             │
-│  ┌─────────────┐  ┌─────────────┐           │
-│  │ Locatie 1   │  │ Locatie 2   │           │
-│  │ status dots │  │ status dots │           │
-│  └─────────────┘  └─────────────┘           │
-│                                             │
-│  Recente sessies (compacte lijst)           │
-└─────────────────────────────────────────────┘
+    ┌─────────┐     ┌─────────────────┐     ┌─────────┐
+    │  ╭───╮  │     │                 │     │  ╭───╮  │
+    │ ╱  ↑  ╲ │     │    € 1.247      │     │ ╱  ↑  ╲ │
+    │ ╲     ╱ │     │   ───────────   │     │ ╲     ╱ │
+    │  ╰───╯  │     │  subtiele boog  │     │  ╰───╯  │
+    │  342kWh │     │  Opbrengst      │     │  4 / 5  │
+    │         │     │  deze maand     │     │  online │
+    └─────────┘     └─────────────────┘     └─────────┘
 ```
 
-**3. Licht thema voor het klantportaal**
-De `dark` class wordt verwijderd van `ClientLayout.tsx`. In plaats daarvan krijgt het portaal een eigen lichte kleurset:
-- Achtergrond: zacht off-white (#F8F9FA)
-- Cards: wit met subtiele schaduw
-- Accenten: e-charging groen (#047F00)
-- Gauge achtergrond: lichtgrijs bogen
+### GaugeChart.tsx — Design cleanup
 
-### Wat wordt aangepast
+**Wat weg gaat (minder druk):**
+- Minor ticks verwijderd — alleen nog major ticks
+- Minder major ticks (5 in plaats van 6/10)
+- Active arc opacity omhoog (0.3 → 0.6) zodat het krachtiger oogt
+- Tick labels alleen bij de grote gauge
+
+**Wat cleaner wordt:**
+- Dunnere arc (strokeWidth: lg 4→3, sm 3→2)
+- Dunnere naald (strokeWidth: 1.5 ipv 2/2.5)
+- Kleiner center dot
+- Meer ruimte — minder visuele elementen = meer ademruimte
+
+### Nieuw: `size="xl"` voor de centrale opbrengst-gauge
+
+Een derde size variant die geen naald heeft maar een **groot digitaal getal** centraal toont met een dunne voortgangsboog eromheen. Modern EV-stijl.
+
+- Grote circulaire boog (radius ~130)
+- Groot getal in het midden (fontSize 42, bold)
+- Label eronder
+- Subtiele geanimeerde arc die de voortgang toont
+- Geen naald, geen ticks — puur minimalistisch
+
+### Dashboard layout aanpassing
+
+- Centrale gauge: Opbrengst → `size="xl"` (was kWh `size="lg"`)
+- Links: kWh geladen → `size="sm"` (ronde snelheidsmeter met naald)
+- Rechts: Laadpunten online → `size="sm"` (ronde snelheidsmeter met naald)
+
+### Bestanden
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `src/components/portal/GaugeChart.tsx` | **Nieuw** — SVG gauge met geanimeerde naald, tick-marks, labels |
-| `src/pages/portal/ClientDashboard.tsx` | Volledig herschreven met cockpit-layout en gauges |
-| `src/layouts/ClientLayout.tsx` | `dark` class verwijderen, licht thema styling |
-| `src/index.css` | Optioneel: `.portal` thema-variant toevoegen voor subtiele kleurverschillen |
-| `src/components/KPICard.tsx` | Niet meer gebruikt op het dashboard (gauges vervangen KPI-cards) |
-
-### Design-principes
-
-- **Uniek**: Geen standaard dashboard-cards. SVG gauges met naald-animatie die je nergens anders ziet
-- **Simpel**: Drie meters, een grafiek, locaties, recente sessies. Geen overbodige elementen
-- **Duidelijk**: Grote getallen in het midden van elke gauge, labels eronder, direct leesbaar
-
-### Technisch
-
-- Gauges zijn pure SVG + CSS transitions (geen externe libraries)
-- De naald animeert met `transition: transform 1s ease-out` bij mount
-- Responsive: op mobiel worden de 3 gauges gestapeld
-- Alle data komt uit dezelfde `useClientKPIs` / `useClientSessions` hooks
+| `src/components/portal/GaugeChart.tsx` | Minor ticks weg, minder major ticks, dunnere lijnen, nieuwe `xl` size variant |
+| `src/pages/portal/ClientDashboard.tsx` | Opbrengst naar midden als `xl`, kWh en laadpunten als `sm` links/rechts |
 
