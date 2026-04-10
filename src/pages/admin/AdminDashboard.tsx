@@ -14,7 +14,7 @@ export default function AdminDashboard() {
   const { data: chargePoints } = useAllChargePoints();
   const { data: activity } = useRecentActivity(8);
 
-  const fmt = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 0 })}`;
+  const fmt = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
   const offlineCPs = chargePoints?.filter((cp: any) => cp.status === "offline" || cp.status === "error") || [];
 

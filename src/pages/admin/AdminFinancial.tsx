@@ -16,7 +16,7 @@ export default function AdminFinancial() {
   const [page, setPage] = useState(0);
   const perPage = 20;
 
-  const fmt = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}`;
+  const fmt = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Filter settlements
   const filtered = useMemo(() => {
