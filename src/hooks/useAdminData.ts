@@ -14,6 +14,72 @@ export function useAllClients() {
   });
 }
 
+export function useClientById(id: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-client", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*, locations(*, charge_points(*))")
+        .eq("id", id!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useClientSettlements(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-client-settlements", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("monthly_settlements")
+        .select("*")
+        .eq("client_id", clientId!)
+        .order("month", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useClientActivity(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-client-activity", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("activity_log")
+        .select("*")
+        .eq("client_id", clientId!)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useClientSessions(clientId: string | undefined, limit = 100) {
+  return useQuery({
+    queryKey: ["admin-client-sessions", clientId, limit],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_sessions")
+        .select("*, charge_points(name), locations(name)")
+        .eq("client_id", clientId!)
+        .order("started_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useAllChargePoints() {
   return useQuery({
     queryKey: ["admin-chargepoints"],
@@ -110,7 +176,6 @@ export function useAdminKPIs() {
   const onlineCPs = chargePoints?.filter((cp: any) => cp.status === "online") || [];
   const offlineCPs = chargePoints?.filter((cp: any) => cp.status === "offline" || cp.status === "error") || [];
 
-  // Current & previous month
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -128,7 +193,6 @@ export function useAdminKPIs() {
   const mrrChange = prevMrr > 0 ? ((mrr - prevMrr) / prevMrr) * 100 : 0;
   const kwhChange = prevKwh > 0 ? ((totalKwh - prevKwh) / prevKwh) * 100 : 0;
 
-  // Monthly revenue data for chart (last 6 months)
   const monthlyData: { month: string; revenue: number; kwh: number; clients: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
