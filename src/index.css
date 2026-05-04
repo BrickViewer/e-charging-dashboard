@@ -104,9 +104,11 @@
     /* Windshield/sky gradient — nachtelijk */
     --sky-top: 230 40% 6%;
     --sky-mid: 222 35% 11%;
-    --sky-horizon: 215 30% 17%;
-    --sky-glow: 200 60% 30%;
-    --road-line: 210 12% 35%;
+    --sky-horizon: 215 35% 22%;
+    --sky-glow: 200 60% 35%;
+    --ground-near: 220 22% 10%;
+    --ground-far: 218 28% 16%;
+    --road-line: 210 14% 38%;
     --object-stroke: 210 15% 70%;
     --object-fill: 222 16% 13%;
     --object-glow: 200 100% 64%;
@@ -146,9 +148,11 @@
     /* Windshield/sky gradient — vroege ochtend / dageraad */
     --sky-top: 205 70% 78%;
     --sky-mid: 30 75% 88%;
-    --sky-horizon: 25 60% 92%;
+    --sky-horizon: 25 65% 88%;
     --sky-glow: 35 90% 75%;
-    --road-line: 220 13% 60%;
+    --ground-near: 35 25% 78%;
+    --ground-far: 30 35% 84%;
+    --road-line: 220 13% 55%;
     --object-stroke: 222 25% 25%;
     --object-fill: 0 0% 100%;
     --object-glow: 200 80% 50%;

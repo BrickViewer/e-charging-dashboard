@@ -10,8 +10,11 @@ import { CoinPillar } from "./world/CoinPillar";
 export function Windshield() {
   return (
     <div
-      className="relative w-full overflow-hidden rounded-t-[3rem] border border-b-0 border-border/60"
-      style={{ height: "clamp(280px, 38vh, 420px)" }}
+      className="relative w-full overflow-hidden rounded-t-[3rem]"
+      style={{
+        height: "clamp(300px, 40vh, 440px)",
+        boxShadow: "inset 0 0 0 1px hsl(var(--border) / 0.5), inset 0 -60px 80px -40px hsl(var(--background) / 0.85)",
+      }}
     >
       <SkyBackdrop />
       <HorizonLine />

@@ -59,13 +59,14 @@ export default function ClientDashboard() {
         {/* Zone 1: voorruit met klikbare wereld */}
         <Windshield />
 
-        {/* Zone 2: stuur — overlapt onderkant voorruit (negative margin) */}
-        <div className="relative -mt-16 sm:-mt-20 z-10 px-4 sm:px-12">
+        {/* Zone 2: stuur — overlapt onderkant voorruit, met dropshadow voor 3D-feel */}
+        <div className="relative -mt-24 sm:-mt-28 z-10 px-4 sm:px-12"
+             style={{ filter: "drop-shadow(0 18px 24px hsl(var(--background) / 0.55))" }}>
           <SteeringWheel isLight={isLight} />
         </div>
 
-        {/* Zone 3: cockpit-instrumenten */}
-        <div className="space-y-9 mt-4">
+        {/* Zone 3: cockpit-instrumenten — strak onder het stuur */}
+        <div className="space-y-7 -mt-6">
           {/* Contact-iconen direct onder stuur */}
           <ContactIconBar
             phone={org?.phone}

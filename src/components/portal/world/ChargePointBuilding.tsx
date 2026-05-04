@@ -84,21 +84,10 @@ export function ChargePointBuilding({ className }: { className?: string }) {
           strokeWidth="1.5"
         />
 
-        {/* Typografisch label op de body */}
-        <text
-          x="60" y="120"
-          textAnchor="middle"
-          fill="hsl(var(--object-stroke))"
-          fontSize="6"
-          fontFamily="var(--font-family)"
-          letterSpacing="0.15em"
-          opacity="0.7"
-        >
-          E-CHARGING
-        </text>
-
-        {/* Tweede status-led onderaan */}
-        <circle cx="60" cy="135" r="1.6" fill="hsl(var(--gauge-green))" opacity="0.9" />
+        {/* Status-led op midden body */}
+        <circle cx="60" cy="120" r="2" fill="hsl(var(--gauge-green))" opacity="0.9" />
+        {/* Tweede status-led iets daaronder */}
+        <circle cx="60" cy="138" r="1.6" fill="hsl(var(--gauge-blue))" opacity="0.7" />
       </svg>
     </InteractiveObject>
   );

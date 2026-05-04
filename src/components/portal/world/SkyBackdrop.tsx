@@ -1,9 +1,10 @@
-// Stylized sky-gradient + sterren. Werkt in donker (nachtelijk) en licht
-// (dageraad) thema via --sky-* CSS-variabelen uit index.css.
+// Stylized sky + ground. Tweedeling: bovenste 65% is hemel (gradient + sterren),
+// onderste 35% is grond (gradient + perspectief-streepjes komen van HorizonLine).
 
 import { useMemo } from "react";
 
-const STAR_COUNT = 60;
+const STAR_COUNT = 70;
+const HORIZON_PCT = 65; // % van top waar horizon zit
 
 interface Star {
   cx: number;
@@ -14,7 +15,6 @@ interface Star {
   opacity: number;
 }
 
-// Deterministische pseudo-random voor stabiele star-posities tussen renders
 function seededRandom(seed: number) {
   let s = seed;
   return () => {
@@ -26,12 +26,12 @@ function seededRandom(seed: number) {
 function generateStars(seed = 1234): Star[] {
   const rand = seededRandom(seed);
   return Array.from({ length: STAR_COUNT }, () => ({
-    cx: rand() * 100,            // % horizontaal
-    cy: rand() * 60,             // % verticaal — alleen in bovenste 60% (boven horizon)
-    r: 0.4 + rand() * 0.9,       // 0.4 - 1.3 px
-    delay: rand() * 5,           // 0-5s phase offset
-    duration: 3 + rand() * 4,    // 3-7s
-    opacity: 0.4 + rand() * 0.5, // base opacity
+    cx: rand() * 100,
+    cy: rand() * (HORIZON_PCT - 5), // alleen in hemel-zone
+    r: 0.4 + rand() * 0.9,
+    delay: rand() * 5,
+    duration: 3 + rand() * 4,
+    opacity: 0.4 + rand() * 0.55,
   }));
 }
 
@@ -40,30 +40,48 @@ export function SkyBackdrop() {
 
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {/* Gradient achtergrond */}
+      {/* Sky — bovenste deel */}
       <div
-        className="absolute inset-0"
+        className="absolute top-0 left-0 right-0"
         style={{
+          height: `${HORIZON_PCT}%`,
           background: `linear-gradient(180deg,
             hsl(var(--sky-top)) 0%,
-            hsl(var(--sky-mid)) 55%,
+            hsl(var(--sky-mid)) 60%,
             hsl(var(--sky-horizon)) 100%)`,
         }}
       />
 
-      {/* Subtiele horizon-glow */}
+      {/* Ground — onderste deel, voor grondvlak waar objecten op staan */}
       <div
-        className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[80%] h-32 opacity-50 pointer-events-none"
+        className="absolute left-0 right-0 bottom-0"
         style={{
-          background: `radial-gradient(ellipse at center bottom,
-            hsl(var(--sky-glow) / 0.5) 0%,
+          top: `${HORIZON_PCT}%`,
+          background: `linear-gradient(180deg,
+            hsl(var(--sky-horizon)) 0%,
+            hsl(var(--ground-far)) 35%,
+            hsl(var(--ground-near)) 100%)`,
+        }}
+      />
+
+      {/* Horizon-glow — radial, gecentreerd op horizon-lijn */}
+      <div
+        className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+        style={{
+          top: `${HORIZON_PCT}%`,
+          transform: "translate(-50%, -50%)",
+          width: "75%",
+          height: "120px",
+          background: `radial-gradient(ellipse at center,
+            hsl(var(--sky-glow) / 0.55) 0%,
             transparent 70%)`,
         }}
       />
 
-      {/* Sterren — alleen zichtbaar in donker thema (in licht thema gaan ze verloren in de gradient) */}
+      {/* Sterren in sky-zone */}
       <svg
-        className="absolute inset-0 w-full h-full pointer-events-none"
+        className="absolute top-0 left-0 right-0 pointer-events-none"
+        style={{ height: `${HORIZON_PCT}%` }}
         preserveAspectRatio="none"
         viewBox="0 0 100 100"
       >
@@ -71,8 +89,8 @@ export function SkyBackdrop() {
           <circle
             key={i}
             cx={star.cx}
-            cy={star.cy}
-            r={star.r * 0.18}  // schaal voor 100x100 viewBox
+            cy={(star.cy / HORIZON_PCT) * 100}
+            r={star.r * 0.18}
             fill="white"
             opacity={star.opacity}
             style={{
