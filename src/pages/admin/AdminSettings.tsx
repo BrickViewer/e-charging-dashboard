@@ -12,7 +12,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Save, Building2, Settings2, Users, KeyRound, UserPlus } from "lucide-react";
+import { Save, Building2, Settings2, Users, KeyRound, UserPlus, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+
+interface ConnectionTestResult {
+  status: "ok" | "not_configured" | "road_error" | "error";
+  message: string;
+  credentials?: { id: string; type: string; providerId: string; accountId?: string; permissionsCount: number };
+  statusCode?: number;
+}
 
 export default function AdminSettings() {
   const { user } = useAuth();
@@ -32,8 +39,10 @@ export default function AdminSettings() {
   const [savingDefaults, setSavingDefaults] = useState(false);
 
   // API tab state
-  const [apiKeys, setApiKeys] = useState({ eflux_api_key: "", stripe_secret_key: "", stripe_publishable_key: "" });
+  const [apiKeys, setApiKeys] = useState({ eflux_api_key: "", eflux_provider_id: "", stripe_secret_key: "", stripe_publishable_key: "" });
   const [savingApi, setSavingApi] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
 
   // Users tab
   const { data: profiles, isLoading: profilesLoading } = useQuery({
@@ -71,6 +80,7 @@ export default function AdminSettings() {
     });
     setApiKeys({
       eflux_api_key: org.eflux_api_key ? "••••••••" : "",
+      eflux_provider_id: org.eflux_provider_id || "",
       stripe_secret_key: org.stripe_secret_key ? "••••••••" : "",
       stripe_publishable_key: org.stripe_publishable_key ? "••••••••" : "",
     });
@@ -120,8 +130,9 @@ export default function AdminSettings() {
     if (!org) return;
     setSavingApi(true);
     try {
-      const updateData: Partial<{ eflux_api_key: string | null; stripe_secret_key: string | null; stripe_publishable_key: string | null }> = {};
+      const updateData: Partial<{ eflux_api_key: string | null; eflux_provider_id: string | null; stripe_secret_key: string | null; stripe_publishable_key: string | null }> = {};
       if (apiKeys.eflux_api_key && apiKeys.eflux_api_key !== "••••••••") updateData.eflux_api_key = apiKeys.eflux_api_key;
+      if (apiKeys.eflux_provider_id !== (org.eflux_provider_id || "")) updateData.eflux_provider_id = apiKeys.eflux_provider_id || null;
       if (apiKeys.stripe_secret_key && apiKeys.stripe_secret_key !== "••••••••") updateData.stripe_secret_key = apiKeys.stripe_secret_key;
       if (apiKeys.stripe_publishable_key && apiKeys.stripe_publishable_key !== "••••••••") updateData.stripe_publishable_key = apiKeys.stripe_publishable_key;
       if (Object.keys(updateData).length === 0) { toast.info("Geen wijzigingen"); setSavingApi(false); return; }
@@ -129,10 +140,28 @@ export default function AdminSettings() {
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["admin-organization"] });
       toast.success("API-sleutels opgeslagen");
+      setTestResult(null);
     } catch (err: any) {
       toast.error(err.message || "Fout bij opslaan");
     } finally {
       setSavingApi(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setTestResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke<ConnectionTestResult>("eflux-test-connection");
+      if (error) {
+        setTestResult({ status: "error", message: error.message ?? "Fout bij aanroep" });
+      } else if (data) {
+        setTestResult(data);
+      }
+    } catch (err: any) {
+      setTestResult({ status: "error", message: err.message ?? "Onbekende fout" });
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -263,6 +292,11 @@ export default function AdminSettings() {
                   <Input type="password" value={apiKeys.eflux_api_key} onChange={e => setApiKeys(p => ({ ...p, eflux_api_key: e.target.value }))} placeholder="Vul in na Enterprise activatie" />
                 </div>
                 <div>
+                  <Label>Road Provider ID / slug</Label>
+                  <Input value={apiKeys.eflux_provider_id} onChange={e => setApiKeys(p => ({ ...p, eflux_provider_id: e.target.value }))} placeholder="bijv. NLEFL" />
+                  <p className="text-xs text-muted-foreground mt-1">Provider-header voor elke API-call (slug of ObjectId).</p>
+                </div>
+                <div>
                   <Label>Stripe Secret Key</Label>
                   <Input type="password" value={apiKeys.stripe_secret_key} onChange={e => setApiKeys(p => ({ ...p, stripe_secret_key: e.target.value }))} placeholder="sk_live_..." />
                 </div>
@@ -275,13 +309,37 @@ export default function AdminSettings() {
                 <Button onClick={handleSaveApi} disabled={savingApi}>
                   <Save className="w-4 h-4 mr-2" />{savingApi ? "Opslaan..." : "Opslaan"}
                 </Button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" disabled>Test verbinding</Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Beschikbaar na API activatie</TooltipContent>
-                </Tooltip>
+                <Button variant="outline" onClick={handleTestConnection} disabled={testingConnection}>
+                  {testingConnection
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Testen...</>
+                    : <>Test e-Flux verbinding</>}
+                </Button>
               </div>
+              {testResult && (
+                <div className={`mt-4 p-3 rounded-md border text-sm flex items-start gap-2 ${
+                  testResult.status === "ok" ? "border-primary/30 bg-primary/5 text-foreground" :
+                  testResult.status === "not_configured" ? "border-warning/30 bg-warning/5 text-foreground" :
+                  "border-destructive/30 bg-destructive/5 text-foreground"
+                }`}>
+                  {testResult.status === "ok"
+                    ? <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                    : <AlertCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${testResult.status === "not_configured" ? "text-warning" : "text-destructive"}`} />}
+                  <div className="space-y-1">
+                    <p className="font-medium">{testResult.message}</p>
+                    {testResult.credentials && (
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <p>Credential type: <code className="font-mono">{testResult.credentials.type}</code></p>
+                        <p>Provider: <code className="font-mono">{testResult.credentials.providerId}</code></p>
+                        {testResult.credentials.accountId && <p>Account: <code className="font-mono">{testResult.credentials.accountId}</code></p>}
+                        <p>Permissions: {testResult.credentials.permissionsCount}</p>
+                      </div>
+                    )}
+                    {testResult.statusCode && (
+                      <p className="text-xs text-muted-foreground">HTTP {testResult.statusCode}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
