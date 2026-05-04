@@ -67,7 +67,7 @@
     --sidebar-muted: 0 0% 60%;
   }
 
-  /* Portal — Tesla cockpit dark theme for client dashboard */
+  /* Portal — Tesla cockpit dark theme (default) for client dashboard */
   .portal-theme {
     --background: 222 18% 6%;
     --foreground: 0 0% 98%;
@@ -95,17 +95,49 @@
     --sidebar-border: 222 12% 18%;
     --sidebar-ring: 200 100% 60%;
 
-    /* Cockpit gauge colors */
+    /* Cockpit gauge colors (kleurkeuze blijft identiek tussen licht/donker) */
     --gauge-red: 350 88% 62%;
     --gauge-blue: 200 100% 64%;
     --gauge-green: 140 70% 55%;
     --gauge-track: 222 14% 18%;
   }
 
+  /* Portal — light variant. Behoudt gauge-kleuren, schakelt achtergrond
+     en sidebar naar lichte tinten. Activeer met klasse "portal-theme light". */
+  .portal-theme.light {
+    --background: 0 0% 98%;
+    --foreground: 222 18% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 18% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 18% 12%;
+    --secondary: 220 15% 95%;
+    --secondary-foreground: 222 18% 12%;
+    --muted: 220 15% 95%;
+    --muted-foreground: 220 8% 40%;
+    --accent: 220 15% 95%;
+    --accent-foreground: 222 18% 12%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 200 95% 45%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 18% 12%;
+    --sidebar-primary: 200 95% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 95%;
+    --sidebar-accent-foreground: 222 18% 12%;
+    --sidebar-border: 220 13% 88%;
+    --sidebar-ring: 200 95% 45%;
+
+    --gauge-track: 220 12% 88%;
+  }
+
   /* Portal-specific overrides */
   .portal-theme .portal-card {
-    background: hsl(222 16% 10%);
-    border-color: hsl(222 12% 18%);
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
   }
 
   /* Dark theme (kept for potential future use) */
