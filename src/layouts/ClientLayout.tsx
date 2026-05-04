@@ -3,9 +3,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Logo } from "@/components/Logo";
 import { LayoutDashboard, Activity, Wallet, User, Bell, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/portal/ThemeToggle";
-import { PortalThemeProvider, usePortalTheme } from "@/contexts/PortalThemeContext";
 
 const navItems = [
   { to: "/portal", icon: LayoutDashboard, label: "Dashboard" },
@@ -15,11 +14,20 @@ const navItems = [
   { to: "/portal/berichten", icon: Bell, label: "Berichten" },
 ];
 
-function ClientLayoutInner() {
+const THEME_KEY = "portal-theme-mode";
+
+export default function ClientLayout() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
-  const { isLight, toggle } = usePortalTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isLight, setIsLight] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(THEME_KEY) === "light";
+  });
+
+  useEffect(() => {
+    localStorage.setItem(THEME_KEY, isLight ? "light" : "dark");
+  }, [isLight]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -66,7 +74,7 @@ function ClientLayoutInner() {
             ))}
           </nav>
           <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border space-y-1">
-            <ThemeToggle isLight={isLight} onToggle={toggle} />
+            <ThemeToggle isLight={isLight} onToggle={() => setIsLight((v) => !v)} />
             <button
               onClick={handleSignOut}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent w-full transition-colors"
@@ -90,13 +98,5 @@ function ClientLayoutInner() {
         <div className="fixed inset-0 bg-background/80 z-30 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
     </div>
-  );
-}
-
-export default function ClientLayout() {
-  return (
-    <PortalThemeProvider>
-      <ClientLayoutInner />
-    </PortalThemeProvider>
   );
 }
