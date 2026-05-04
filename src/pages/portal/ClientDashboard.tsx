@@ -3,7 +3,9 @@ import { useOrganization } from "@/hooks/useAdminData";
 import { CockpitGauge, niceGaugeMax } from "@/components/portal/CockpitGauge";
 import { ContactIconBar } from "@/components/portal/ContactIconBar";
 import { ChargePointStatus } from "@/components/portal/ChargePointStatus";
-import { CockpitArc } from "@/components/portal/CockpitArc";
+import { Windshield } from "@/components/portal/Windshield";
+import { SteeringWheel } from "@/components/portal/SteeringWheel";
+import { usePortalTheme } from "@/contexts/PortalThemeContext";
 import { Fuel, Euro, Leaf } from "lucide-react";
 import { useMemo } from "react";
 
@@ -16,6 +18,7 @@ export default function ClientDashboard() {
   const { data: org } = useOrganization();
   const kpis = useClientKPIs(client?.id);
   const { data: locations } = useClientLocations(client?.id);
+  const { isLight } = usePortalTheme();
 
   const mapsUrl = useMemo(() => {
     if (!locations || locations.length === 0) return null;
@@ -41,8 +44,8 @@ export default function ClientDashboard() {
 
   return (
     <div className="animate-fade-in">
-      {/* Header */}
-      <div className="text-center sm:text-left mb-2">
+      {/* Welkom-header */}
+      <div className="text-center sm:text-left mb-4">
         <h1 className="text-2xl font-semibold">
           Welkom{client?.contact_name ? `, ${client.contact_name}` : ""}
         </h1>
@@ -51,13 +54,19 @@ export default function ClientDashboard() {
         </p>
       </div>
 
-      {/* Cockpit-frame: arc bovenaan, gauges + iconen + status binnen het frame */}
-      <div className="relative mt-10 mx-auto max-w-5xl">
-        {/* Bovenste boog — windshield */}
-        <CockpitArc className="absolute -top-6 left-0 right-0 h-20 sm:h-24" />
+      {/* DRIE-ZONES COCKPIT */}
+      <div className="relative mx-auto max-w-5xl">
+        {/* Zone 1: voorruit met klikbare wereld */}
+        <Windshield />
 
-        <div className="space-y-10 pt-6">
-          {/* Contact-iconen, gecentreerd onder de boog */}
+        {/* Zone 2: stuur — overlapt onderkant voorruit (negative margin) */}
+        <div className="relative -mt-16 sm:-mt-20 z-10 px-4 sm:px-12">
+          <SteeringWheel isLight={isLight} />
+        </div>
+
+        {/* Zone 3: cockpit-instrumenten */}
+        <div className="space-y-9 mt-4">
+          {/* Contact-iconen direct onder stuur */}
           <ContactIconBar
             phone={org?.phone}
             email={org?.email}
@@ -65,9 +74,8 @@ export default function ClientDashboard() {
             mapsUrl={mapsUrl}
           />
 
-          {/* Vijf gauges in 3-kolomslayout */}
+          {/* Vijf gauges */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-10 items-center">
-            {/* Linker kolom — rood (energie) */}
             <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:order-1">
               <CockpitGauge
                 value={kpis.ttmKwh}
@@ -91,7 +99,6 @@ export default function ClientDashboard() {
               />
             </div>
 
-            {/* Centraal — blauw (totaal-uitbetaling) */}
             <div className="lg:col-span-6 flex justify-center lg:order-2">
               <CockpitGauge
                 value={kpis.ttmPayout}
@@ -105,7 +112,6 @@ export default function ClientDashboard() {
               />
             </div>
 
-            {/* Rechter kolom — groen (ERE / duurzaamheid) */}
             <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:order-3">
               <CockpitGauge
                 value={kpis.ttmEreCo2}
@@ -130,7 +136,7 @@ export default function ClientDashboard() {
             </div>
           </div>
 
-          {/* Status indicators — geen separator-lijn boven, gewoon onder de gauges */}
+          {/* Status indicators */}
           <ChargePointStatus
             onlineCount={kpis.chargePointsOnline}
             offlineCount={kpis.offlineCount}
