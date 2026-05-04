@@ -285,7 +285,7 @@ export default function AdminChargePoints() {
                 <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span className="uppercase">{selectedCP.type?.replace("_", " ") || "—"}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Merk / Model</span><span>{[selectedCP.brand, selectedCP.model].filter(Boolean).join(" ") || "—"}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Serienummer</span><span className="font-mono text-xs">{selectedCP.serial_number || "—"}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">MID-meter</span><span>{selectedCP.has_mid_meter ? "Ja" : "Nee"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">MID-gecertificeerd</span><span>{selectedCP.is_mid_certified ? "Ja" : "Nee"}</span></div>
                 <div className="flex justify-between items-center"><span className="text-muted-foreground">Connectiviteit</span><ConnectivityIndicator state={selectedCP.connectivity_state || "unknown"} /></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Laatste heartbeat</span><span>{relativeTime(selectedCP.last_heartbeat_at)}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Max vermogen</span><span>{selectedCP.max_power ? `${selectedCP.max_power} kW` : "—"}</span></div>

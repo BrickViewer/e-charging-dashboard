@@ -18,10 +18,10 @@ export default function ClientDashboard() {
   }
 
   const chartData = kpis.settlements
-    .slice(0, 12)
+    .slice(0, 8)
     .reverse()
     .map(s => ({
-      month: s.month ? format(new Date(s.month), "MMM", { locale: nl }) : "",
+      period: `Q${s.quarter} '${String(s.year).slice(2)}`,
       marge: Number(s.client_payout || 0),
       ere: Number(s.ere_estimate || 0),
     }));
@@ -80,7 +80,7 @@ export default function ClientDashboard() {
             max={avgEarnings * 2}
             average={avgEarnings}
             averageLabel={`Gem: €${avgEarnings.toLocaleString("nl-NL")}`}
-            label="Opbrengst deze maand"
+            label="Opbrengst dit kwartaal"
             unit="EUR"
             size="xl"
             color="hsl(var(--primary))"
@@ -105,7 +105,7 @@ export default function ClientDashboard() {
       {chartData.length > 0 && (
         <Card className="portal-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold text-foreground">Opbrengst per maand</CardTitle>
+            <CardTitle className="text-base font-semibold text-foreground">Opbrengst per kwartaal</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
@@ -116,7 +116,7 @@ export default function ClientDashboard() {
                     <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `€${v}`} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={{

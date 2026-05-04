@@ -1,6 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+function getCurrentQuarter() {
+  const now = new Date();
+  return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
+}
+
+function shiftQuarter({ year, quarter }: { year: number; quarter: number }, delta: number) {
+  const total = year * 4 + (quarter - 1) + delta;
+  return { year: Math.floor(total / 4), quarter: (total % 4) + 1 };
+}
+
 export function useAllClients() {
   return useQuery({
     queryKey: ["admin-clients"],
@@ -36,10 +46,11 @@ export function useClientSettlements(clientId: string | undefined) {
     enabled: !!clientId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("monthly_settlements")
+        .from("quarterly_settlements")
         .select("*")
         .eq("client_id", clientId!)
-        .order("month", { ascending: false });
+        .order("year", { ascending: false })
+        .order("quarter", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -98,9 +109,10 @@ export function useAllSettlements() {
     queryKey: ["admin-settlements"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("monthly_settlements")
+        .from("quarterly_settlements")
         .select("*, clients(company_name)")
-        .order("month", { ascending: false });
+        .order("year", { ascending: false })
+        .order("quarter", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -185,6 +197,7 @@ export function useUnlinkedLocations() {
 export function useRecentActivity(limit = 10) {
   return useQuery({
     queryKey: ["admin-activity", limit],
+    enabled: true,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("activity_log")
@@ -207,33 +220,30 @@ export function useAdminKPIs() {
   const onlineCPs = chargePoints?.filter((cp: any) => cp.status === "online") || [];
   const offlineCPs = chargePoints?.filter((cp: any) => cp.status === "offline" || cp.status === "error") || [];
 
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+  const cur = getCurrentQuarter();
+  const prev = shiftQuarter(cur, -1);
 
-  const currentSettlements = settlements?.filter(s => s.month?.slice(0, 7) === currentMonth) || [];
-  const prevSettlements = settlements?.filter(s => s.month?.slice(0, 7) === prevMonth) || [];
+  const currentSettlements = settlements?.filter(s => s.year === cur.year && s.quarter === cur.quarter) || [];
+  const prevSettlements = settlements?.filter(s => s.year === prev.year && s.quarter === prev.quarter) || [];
 
-  const mrr = currentSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0);
-  const prevMrr = prevSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0);
+  const quarterRevenue = currentSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0);
+  const prevQuarterRevenue = prevSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0);
   const totalKwh = currentSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0);
   const prevKwh = prevSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0);
   const totalRevenue = currentSettlements.reduce((sum, s) => sum + Number(s.gross_revenue || 0), 0);
 
-  const mrrChange = prevMrr > 0 ? ((mrr - prevMrr) / prevMrr) * 100 : 0;
+  const revenueChange = prevQuarterRevenue > 0 ? ((quarterRevenue - prevQuarterRevenue) / prevQuarterRevenue) * 100 : 0;
   const kwhChange = prevKwh > 0 ? ((totalKwh - prevKwh) / prevKwh) * 100 : 0;
 
-  const monthlyData: { month: string; revenue: number; kwh: number; clients: number }[] = [];
+  const quarterlyData: { period: string; revenue: number; kwh: number; clients: number }[] = [];
   for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const monthSettlements = settlements?.filter(s => s.month?.slice(0, 7) === key) || [];
-    monthlyData.push({
-      month: d.toLocaleDateString("nl-NL", { month: "short" }),
-      revenue: monthSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0),
-      kwh: monthSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0),
-      clients: monthSettlements.length,
+    const q = shiftQuarter(cur, -i);
+    const periodSettlements = settlements?.filter(s => s.year === q.year && s.quarter === q.quarter) || [];
+    quarterlyData.push({
+      period: `Q${q.quarter} '${String(q.year).slice(2)}`,
+      revenue: periodSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0),
+      kwh: periodSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0),
+      clients: periodSettlements.length,
     });
   }
 
@@ -242,11 +252,12 @@ export function useAdminKPIs() {
     totalChargePoints,
     onlineChargePoints: onlineCPs.length,
     offlineChargePoints: offlineCPs.length,
-    mrr,
-    mrrChange,
+    quarterRevenue,
+    revenueChange,
     totalKwh,
     kwhChange,
     totalRevenue,
-    monthlyData,
+    quarterlyData,
+    currentQuarter: cur,
   };
 }

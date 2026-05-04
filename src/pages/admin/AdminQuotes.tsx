@@ -38,7 +38,7 @@ export default function AdminQuotes() {
 
   const getYearlyTotal = (q: any) => {
     const snap = q.calculation_snapshot as any;
-    if (snap?.clientTotalYear) return snap.clientTotalYear;
+    if (snap?.clientPayoutYear) return snap.clientPayoutYear;
     if (snap?.grossRevenueYear) return snap.grossRevenueYear;
     return null;
   };

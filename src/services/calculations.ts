@@ -3,54 +3,96 @@ export interface CalculationParams {
   kwhPerPointPerMonth: number;
   chargeRatePerKwh: number;
   energyCostPerKwh: number;
-  revenueSharePct: number; // klant percentage
+  revenueSharePct: number;
   efluxCostPerSocket: number;
   ereRatePerKwh: number;
-  hasSolar: boolean;
-  solarPercentage: number;
+  ereCommissionRate?: number;
+  transactionFeePct?: number;
+  transactionFeeFixed?: number;
+  averageSessionsPerMonth?: number;
+  hasSolar?: boolean;
+  solarPercentage?: number;
 }
 
 export interface CalculationResult {
   totalKwh: number;
   grossRevenue: number;
   energyCost: number;
-  efluxCost: number;
+  efluxPlatformFee: number;
+  transactionFees: number;
+  netLaadmarge: number;
+  grossEre: number;
+  ereCommission: number;
+  netEre: number;
   netMargin: number;
-  clientShare: number;
-  echargingShare: number;
-  ereEstimate: number;
-  totalClientIncome: number;
-  totalEchargingIncome: number;
+  clientPayout: number;
+  echargingRevenue: number;
 }
 
 export function calculateMonthly(params: CalculationParams): CalculationResult {
   const totalKwh = params.numChargePoints * params.kwhPerPointPerMonth;
+
   const grossRevenue = totalKwh * params.chargeRatePerKwh;
   const energyCost = totalKwh * params.energyCostPerKwh;
-  const efluxCost = params.numChargePoints * params.efluxCostPerSocket;
-  const netMargin = grossRevenue - energyCost - efluxCost;
-  const clientShare = netMargin * (params.revenueSharePct / 100);
-  const echargingShare = netMargin - clientShare;
+  const efluxPlatformFee = params.numChargePoints * params.efluxCostPerSocket;
 
-  // ERE: standaard hernieuwbaar aandeel 50.5%
-  let ereMultiplier = 0.505;
-  if (params.hasSolar && params.solarPercentage > 0) {
-    ereMultiplier = Math.min(1, 0.505 + (params.solarPercentage / 100) * 0.495);
-  }
-  const ereEstimate = totalKwh * params.ereRatePerKwh;
+  const transactionFeePct = params.transactionFeePct ?? 0;
+  const transactionFeeFixed = params.transactionFeeFixed ?? 0;
+  const sessions = params.averageSessionsPerMonth ?? 0;
+  const transactionFees = (grossRevenue * transactionFeePct) + (sessions * transactionFeeFixed);
+
+  const netLaadmarge = grossRevenue - energyCost - efluxPlatformFee - transactionFees;
+
+  const grossEre = totalKwh * params.ereRatePerKwh;
+  const ereCommissionRate = params.ereCommissionRate ?? 0.10;
+  const ereCommission = grossEre * ereCommissionRate;
+  const netEre = grossEre - ereCommission;
+
+  const netMargin = netLaadmarge + netEre;
+
+  const clientShareRatio = params.revenueSharePct / 100;
+  const clientPayout = netMargin * clientShareRatio;
+  const echargingRevenue = netMargin - clientPayout;
 
   return {
     totalKwh,
     grossRevenue,
     energyCost,
-    efluxCost,
+    efluxPlatformFee,
+    transactionFees,
+    netLaadmarge,
+    grossEre,
+    ereCommission,
+    netEre,
     netMargin,
-    clientShare,
-    echargingShare,
-    ereEstimate,
-    totalClientIncome: clientShare + ereEstimate,
-    totalEchargingIncome: echargingShare + efluxCost,
+    clientPayout,
+    echargingRevenue,
   };
+}
+
+function scaleResult(result: CalculationResult, factor: number): CalculationResult {
+  return {
+    totalKwh: result.totalKwh * factor,
+    grossRevenue: result.grossRevenue * factor,
+    energyCost: result.energyCost * factor,
+    efluxPlatformFee: result.efluxPlatformFee * factor,
+    transactionFees: result.transactionFees * factor,
+    netLaadmarge: result.netLaadmarge * factor,
+    grossEre: result.grossEre * factor,
+    ereCommission: result.ereCommission * factor,
+    netEre: result.netEre * factor,
+    netMargin: result.netMargin * factor,
+    clientPayout: result.clientPayout * factor,
+    echargingRevenue: result.echargingRevenue * factor,
+  };
+}
+
+export function calculateQuarterly(params: CalculationParams): CalculationResult {
+  return scaleResult(calculateMonthly(params), 3);
+}
+
+export function calculateYearly(params: CalculationParams): CalculationResult {
+  return scaleResult(calculateMonthly(params), 12);
 }
 
 export function formatEuro(amount: number): string {

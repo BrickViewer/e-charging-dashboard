@@ -44,13 +44,13 @@ export default function AdminDashboard() {
             alert={kpis.offlineChargePoints > 0 ? `${kpis.offlineChargePoints} offline` : undefined}
           />
           <KPICard
-            label="MRR E-Charging"
-            value={fmt(kpis.mrr)}
+            label="Omzet huidige kwartaal"
+            value={fmt(kpis.quarterRevenue)}
             icon={<TrendingUp className="w-5 h-5" />}
-            change={kpis.mrrChange}
+            change={kpis.revenueChange}
           />
           <KPICard
-            label="kWh deze maand"
+            label="kWh huidige kwartaal"
             value={kpis.totalKwh.toLocaleString("nl-NL")}
             icon={<Zap className="w-5 h-5" />}
             change={kpis.kwhChange}
@@ -73,14 +73,14 @@ export default function AdminDashboard() {
         {/* Revenue chart */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Omzet laatste 6 maanden</CardTitle>
+            <CardTitle className="text-base">Omzet laatste 6 kwartalen</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={kpis.monthlyData} barSize={32}>
+                <BarChart data={kpis.quarterlyData} barSize={32}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <XAxis dataKey="period" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
                   <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" tickFormatter={v => `€${v}`} />
                   <Tooltip
                     contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}

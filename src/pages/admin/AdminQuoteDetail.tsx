@@ -17,6 +17,19 @@ import logoFullColorSvg from "@/assets/logo-full-color.svg";
 
 const fmtRound = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
+interface CalcSnapshot {
+  grossRevenueYear?: number;
+  energyCostYear?: number;
+  efluxCostYear?: number;
+  netLaadmargeYear?: number;
+  grossEreYear?: number;
+  ereCommissionYear?: number;
+  netEreYear?: number;
+  netMarginYear?: number;
+  clientPayoutYear?: number;
+  echargingRevenueYear?: number;
+}
+
 export default function AdminQuoteDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -25,7 +38,8 @@ export default function AdminQuoteDetail() {
   const queryClient = useQueryClient();
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  const snap = (quote?.calculation_snapshot || {}) as any;
+  const snap: CalcSnapshot = (quote?.calculation_snapshot || {}) as CalcSnapshot;
+  const revenueSharePct = quote?.revenue_share_pct || 75;
 
   const handleCreateClientFromQuote = () => {
     if (!quote) return;
@@ -38,9 +52,9 @@ export default function AdminQuoteDetail() {
         prospectEmail: quote.prospect_email || "",
         numChargePoints: quote.num_charge_points || 0,
         chargePointType: quote.charge_point_type || "ac",
-        chargeRate: Number(quote.charge_rate_per_kwh || 0.45),
+        chargeRate: Number(quote.charge_rate_per_kwh || 0.55),
         energyCost: Number(quote.energy_cost_per_kwh || 0.25),
-        revenueShare: Number(quote.revenue_share_pct || 50),
+        revenueShare: Number(quote.revenue_share_pct || 75),
         ereRate: Number(quote.ere_rate_per_kwh || 0.10),
       },
     });
@@ -70,7 +84,6 @@ export default function AdminQuoteDetail() {
     const orgName = org?.name || "E-Charging";
     const company = quote.prospect_company || (quote as any).clients?.company_name || "—";
 
-    // Header — logo
     const logoImg = new Image();
     logoImg.src = logoFullColorSvg;
     try {
@@ -84,12 +97,10 @@ export default function AdminQuoteDetail() {
     doc.setTextColor(100);
     doc.text(org?.address || "", 14, 32);
 
-    // Title
     doc.setFontSize(16);
     doc.setTextColor(0);
     doc.text(`Offerte ${quote.quote_number || ""}`, 14, 44);
 
-    // Prospect info
     doc.setFontSize(10);
     doc.setTextColor(80);
     doc.text(`Bedrijf: ${company}`, 14, 56);
@@ -98,7 +109,6 @@ export default function AdminQuoteDetail() {
     doc.text(`Datum: ${new Date(quote.created_at).toLocaleDateString("nl-NL")}`, 14, 74);
     if (quote.valid_until) doc.text(`Geldig tot: ${new Date(quote.valid_until).toLocaleDateString("nl-NL")}`, 14, 80);
 
-    // Parameters table
     autoTable(doc, {
       startY: 90,
       head: [["Parameter", "Waarde"]],
@@ -107,34 +117,31 @@ export default function AdminQuoteDetail() {
         ["Type", (quote.charge_point_type || "ac").toUpperCase()],
         ["kWh/punt/maand", String(quote.estimated_kwh_per_point || "—")],
         ["Laadtarief (€/kWh)", formatEuro(Number(quote.charge_rate_per_kwh || 0))],
-        ["Energiekost (€/kWh)", formatEuro(Number(quote.energy_cost_per_kwh || 0))],
-        ["Klantaandeel", `${quote.revenue_share_pct || 50}%`],
+        ["Stroominkoop (€/kWh)", formatEuro(Number(quote.energy_cost_per_kwh || 0))],
+        ["Klantaandeel", `${revenueSharePct}%`],
         ["ERE-tarief (€/kWh)", formatEuro(Number(quote.ere_rate_per_kwh || 0))],
-        ["Zonnepanelen", quote.has_solar ? `Ja (${quote.solar_percentage}%)` : "Nee"],
       ],
       theme: "grid",
       headStyles: { fillColor: [4, 127, 0] },
     });
 
-    // Calculation results
     const calcY = (doc as any).lastAutoTable?.finalY + 10 || 180;
     autoTable(doc, {
       startY: calcY,
       head: [["Berekening (jaarbasis)", "Bedrag"]],
       body: [
         ["Bruto laadopbrengst", fmtRound(snap.grossRevenueYear || 0)],
-        ["Stroomkosten", `-${fmtRound(snap.energyCostYear || 0)}`],
-        ["Platformkosten", `-${fmtRound(snap.efluxCostYear || 0)}`],
-        ["Netto marge", fmtRound(snap.netMarginYear || 0)],
-        [`Klantaandeel (${quote.revenue_share_pct || 50}%)`, fmtRound(snap.clientShareYear || 0)],
-        ["ERE-schatting", fmtRound(snap.ereEstimateYear || 0)],
-        ["Totaal klant/jaar", fmtRound(snap.clientTotalYear || 0)],
+        ["Stroominkoop", `-${fmtRound(snap.energyCostYear || 0)}`],
+        ["e-Flux platformkosten", `-${fmtRound(snap.efluxCostYear || 0)}`],
+        ["Laadbeloning commissie", `-${fmtRound(snap.ereCommissionYear || 0)}`],
+        ["Netto opbrengst", fmtRound(snap.netMarginYear || 0)],
+        [`Klant ontvangt (${revenueSharePct}%)`, fmtRound(snap.clientPayoutYear || 0)],
+        [`E-Charging (${100 - revenueSharePct}%)`, fmtRound(snap.echargingRevenueYear || 0)],
       ],
       theme: "grid",
       headStyles: { fillColor: [4, 127, 0] },
     });
 
-    // Notes
     if (quote.notes) {
       const notesY = (doc as any).lastAutoTable?.finalY + 10 || 260;
       doc.setFontSize(10);
@@ -208,7 +215,6 @@ export default function AdminQuoteDetail() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Details */}
         <div className="space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-base">Prospect</CardTitle></CardHeader>
@@ -228,10 +234,9 @@ export default function AdminQuoteDetail() {
               <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span>{(quote.charge_point_type || "ac").toUpperCase()}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">kWh/punt/maand</span><span>{quote.estimated_kwh_per_point}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Laadtarief</span><span>{formatEuro(Number(quote.charge_rate_per_kwh || 0))}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Energiekost</span><span>{formatEuro(Number(quote.energy_cost_per_kwh || 0))}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Klantaandeel</span><span>{quote.revenue_share_pct}%</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Stroominkoop</span><span>{formatEuro(Number(quote.energy_cost_per_kwh || 0))}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Klantaandeel</span><span>{revenueSharePct}%</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">ERE-tarief</span><span>{formatEuro(Number(quote.ere_rate_per_kwh || 0))}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Zonnepanelen</span><span>{quote.has_solar ? `Ja (${quote.solar_percentage}%)` : "Nee"}</span></div>
             </CardContent>
           </Card>
 
@@ -243,7 +248,6 @@ export default function AdminQuoteDetail() {
           )}
         </div>
 
-        {/* Right: Calculation */}
         <div className="space-y-4">
           <Card className="border-primary/30">
             <CardHeader className="pb-2">
@@ -251,16 +255,14 @@ export default function AdminQuoteDetail() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between"><span>Bruto laadopbrengst</span><span>{fmtRound(snap.grossRevenueYear || 0)}</span></div>
-              <div className="flex justify-between"><span>Stroomkosten</span><span className="text-destructive">-{fmtRound(snap.energyCostYear || 0)}</span></div>
-              <div className="flex justify-between"><span>Platformkosten</span><span className="text-destructive">-{fmtRound(snap.efluxCostYear || 0)}</span></div>
+              <div className="flex justify-between"><span>Stroominkoop</span><span className="text-destructive">-{fmtRound(snap.energyCostYear || 0)}</span></div>
+              <div className="flex justify-between"><span>e-Flux platformkosten</span><span className="text-destructive">-{fmtRound(snap.efluxCostYear || 0)}</span></div>
+              <div className="flex justify-between"><span>Laadbeloning commissie</span><span className="text-destructive">-{fmtRound(snap.ereCommissionYear || 0)}</span></div>
               <div className="border-t border-border my-2" />
-              <div className="flex justify-between font-medium"><span>Netto marge</span><span>{fmtRound(snap.netMarginYear || 0)}</span></div>
-              <div className="border-t border-border my-2" />
-              <div className="flex justify-between font-semibold"><span>Klantaandeel ({quote.revenue_share_pct || 50}%)</span><span>{fmtRound(snap.clientShareYear || 0)}</span></div>
-              <div className="flex justify-between"><span>ERE-schatting</span><span>{fmtRound(snap.ereEstimateYear || 0)}</span></div>
+              <div className="flex justify-between font-medium"><span>Netto opbrengst</span><span>{fmtRound(snap.netMarginYear || 0)}</span></div>
               <div className="border-t border-border my-2" />
               <div className="flex justify-between text-lg font-bold text-primary">
-                <span>Totaal klant/jaar</span><span>{fmtRound(snap.clientTotalYear || 0)}</span>
+                <span>Klant ontvangt ({revenueSharePct}%)</span><span>{fmtRound(snap.clientPayoutYear || 0)}</span>
               </div>
             </CardContent>
           </Card>
@@ -270,10 +272,7 @@ export default function AdminQuoteDetail() {
               <CardTitle className="text-base">E-Charging resultaat</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between"><span>E-Charging marge</span><span>{fmtRound(snap.echargingShareYear || 0)}</span></div>
-              <div className="flex justify-between"><span>Platformkosten</span><span>{fmtRound(snap.efluxCostYear || 0)}</span></div>
-              <div className="border-t border-border my-2" />
-              <div className="flex justify-between font-bold"><span>E-Charging omzet/jaar</span><span>{fmtRound(snap.echargingTotalYear || 0)}</span></div>
+              <div className="flex justify-between font-bold"><span>E-Charging omzet ({100 - revenueSharePct}%)</span><span>{fmtRound(snap.echargingRevenueYear || 0)}</span></div>
             </CardContent>
           </Card>
         </div>

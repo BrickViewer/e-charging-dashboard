@@ -10,8 +10,6 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { FinancialKPIs } from "@/components/admin/financial/FinancialKPIs";
 import { FinancialCharts } from "@/components/admin/financial/FinancialCharts";
 import { SettlementDetailRow } from "@/components/admin/financial/SettlementDetailRow";
-import { format } from "date-fns";
-import { nl } from "date-fns/locale";
 import { ChevronDown, ChevronRight, CheckCircle, CreditCard } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,60 +17,68 @@ import { createTransfer } from "@/services/stripe";
 import { toast } from "sonner";
 
 const fmt = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const periodLabel = (year: number, quarter: number) => `Q${quarter} ${year}`;
 
 export default function AdminFinancial() {
   const { data: settlements, isLoading } = useAllSettlements();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [monthFilter, setMonthFilter] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const perPage = 20;
 
-  // Unique months for filter
-  const uniqueMonths = useMemo(() => {
+  const uniquePeriods = useMemo(() => {
     if (!settlements?.length) return [];
-    const months = new Set<string>();
-    settlements.forEach((s: any) => { if (s.month) months.add(s.month.slice(0, 7)); });
-    return Array.from(months).sort().reverse();
+    const periods = new Set<string>();
+    settlements.forEach((s: any) => {
+      if (s.year && s.quarter) periods.add(`${s.year}-${s.quarter}`);
+    });
+    return Array.from(periods).sort().reverse();
   }, [settlements]);
 
-  // Filter
   const filtered = useMemo(() => {
     let result = settlements || [];
     if (statusFilter !== "all") result = result.filter((s: any) => s.status === statusFilter);
-    if (monthFilter !== "all") result = result.filter((s: any) => s.month?.startsWith(monthFilter));
+    if (periodFilter !== "all") {
+      const [y, q] = periodFilter.split("-").map(Number);
+      result = result.filter((s: any) => s.year === y && s.quarter === q);
+    }
     if (search) result = result.filter((s: any) => s.clients?.company_name?.toLowerCase().includes(search.toLowerCase()));
     return result;
-  }, [settlements, statusFilter, monthFilter, search]);
+  }, [settlements, statusFilter, periodFilter, search]);
 
   const paginated = filtered.slice(page * perPage, (page + 1) * perPage);
   const totalPages = Math.ceil(filtered.length / perPage);
 
-  // Chart data
   const chartData = useMemo(() => {
     if (!settlements?.length) return [];
-    const byMonth: Record<string, { month: string; gross: number; net: number; echarging: number; client: number; kwh: number; count: number }> = {};
+    const byPeriod: Record<string, { period: string; gross: number; net: number; echarging: number; client: number; kwh: number; count: number; sortKey: string }> = {};
     settlements.forEach((s: any) => {
-      const key = s.month?.slice(0, 7);
-      if (!key) return;
-      if (!byMonth[key]) {
-        const d = new Date(s.month);
-        byMonth[key] = { month: d.toLocaleDateString("nl-NL", { month: "short", year: "2-digit" }), gross: 0, net: 0, echarging: 0, client: 0, kwh: 0, count: 0 };
+      if (!s.year || !s.quarter) return;
+      const key = `${s.year}-${s.quarter}`;
+      if (!byPeriod[key]) {
+        byPeriod[key] = {
+          period: `Q${s.quarter} '${String(s.year).slice(2)}`,
+          gross: 0, net: 0, echarging: 0, client: 0, kwh: 0, count: 0,
+          sortKey: key,
+        };
       }
-      byMonth[key].gross += Number(s.gross_revenue || 0);
-      byMonth[key].net += Number(s.net_margin || 0);
-      byMonth[key].echarging += Number(s.echarging_revenue || 0);
-      byMonth[key].client += Number(s.client_payout || 0);
-      byMonth[key].kwh += Number(s.total_kwh || 0);
-      byMonth[key].count += 1;
+      byPeriod[key].gross += Number(s.gross_revenue || 0);
+      byPeriod[key].net += Number(s.net_margin || 0);
+      byPeriod[key].echarging += Number(s.echarging_revenue || 0);
+      byPeriod[key].client += Number(s.client_payout || 0);
+      byPeriod[key].kwh += Number(s.total_kwh || 0);
+      byPeriod[key].count += 1;
     });
-    return Object.entries(byMonth).sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([, v]) => v);
+    return Object.values(byPeriod)
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+      .slice(-8)
+      .map(({ sortKey, ...rest }) => rest);
   }, [settlements]);
 
-  // Totals
   const totals = useMemo(() => {
     const all = settlements || [];
     return {
@@ -83,7 +89,6 @@ export default function AdminFinancial() {
     };
   }, [settlements]);
 
-  // Selection helpers
   const selectedItems = useMemo(() => (settlements || []).filter((s: any) => selected.has(s.id)), [settlements, selected]);
   const canApprove = selectedItems.filter((s: any) => s.status === "calculated");
   const canMarkPaid = selectedItems.filter((s: any) => s.status === "approved");
@@ -104,11 +109,10 @@ export default function AdminFinancial() {
     }
   };
 
-  // Mutations
   const approveMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       const { error } = await supabase
-        .from("monthly_settlements")
+        .from("quarterly_settlements")
         .update({ status: "approved" })
         .in("id", ids);
       if (error) throw error;
@@ -125,16 +129,15 @@ export default function AdminFinancial() {
     mutationFn: async (items: any[]) => {
       const ids = items.map((s: any) => s.id);
       const { error } = await supabase
-        .from("monthly_settlements")
+        .from("quarterly_settlements")
         .update({ status: "paid", paid_at: new Date().toISOString() })
         .in("id", ids);
       if (error) throw error;
-      // Call Stripe stub for each
       for (const item of items) {
         await createTransfer({
           amount: Number(item.client_payout || 0),
           destinationAccountId: item.clients?.stripe_connected_account_id || "unknown",
-          description: `Payout ${item.clients?.company_name} - ${item.month}`,
+          description: `Payout ${item.clients?.company_name} - ${periodLabel(item.year, item.quarter)}`,
         });
       }
     },
@@ -153,12 +156,11 @@ export default function AdminFinancial() {
       <FinancialKPIs isLoading={isLoading} totals={totals} />
       <FinancialCharts chartData={chartData} />
 
-      {/* Settlements table */}
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <CardTitle className="text-base">Afrekeningen</CardTitle>
+              <CardTitle className="text-base">Kwartaalafrekeningen</CardTitle>
               <div className="flex items-center gap-2 flex-wrap">
                 <Input
                   placeholder="Zoek klant..."
@@ -166,13 +168,13 @@ export default function AdminFinancial() {
                   onChange={e => { setSearch(e.target.value); setPage(0); }}
                   className="w-48"
                 />
-                <Select value={monthFilter} onValueChange={v => { setMonthFilter(v); setPage(0); }}>
+                <Select value={periodFilter} onValueChange={v => { setPeriodFilter(v); setPage(0); }}>
                   <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle maanden</SelectItem>
-                    {uniqueMonths.map(m => {
-                      const d = new Date(m + "-01");
-                      return <SelectItem key={m} value={m}>{format(d, "MMM yyyy", { locale: nl })}</SelectItem>;
+                    <SelectItem value="all">Alle kwartalen</SelectItem>
+                    {uniquePeriods.map(p => {
+                      const [y, q] = p.split("-").map(Number);
+                      return <SelectItem key={p} value={p}>{periodLabel(y, q)}</SelectItem>;
                     })}
                   </SelectContent>
                 </Select>
@@ -183,12 +185,13 @@ export default function AdminFinancial() {
                     <SelectItem value="calculated">Berekend</SelectItem>
                     <SelectItem value="approved">Goedgekeurd</SelectItem>
                     <SelectItem value="paid">Betaald</SelectItem>
+                    <SelectItem value="overdue">Achterstallig</SelectItem>
+                    <SelectItem value="charged_back">Geïncasseerd</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* Bulk actions bar */}
             {selected.size > 0 && (
               <div className="flex items-center gap-3 bg-muted/50 rounded-lg px-4 py-2">
                 <span className="text-sm font-medium">{selected.size} geselecteerd</span>
@@ -226,7 +229,7 @@ export default function AdminFinancial() {
                     />
                   </th>
                   <th className="w-8 p-3" />
-                  <th className="text-left p-3 font-medium text-muted-foreground">Maand</th>
+                  <th className="text-left p-3 font-medium text-muted-foreground">Kwartaal</th>
                   <th className="text-left p-3 font-medium text-muted-foreground">Klant</th>
                   <th className="text-right p-3 font-medium text-muted-foreground">kWh</th>
                   <th className="text-right p-3 font-medium text-muted-foreground">Bruto</th>
@@ -263,7 +266,7 @@ export default function AdminFinancial() {
                             ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
                             : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
                         </td>
-                        <td className="p-3">{s.month ? format(new Date(s.month), "MMM yyyy", { locale: nl }) : "-"}</td>
+                        <td className="p-3">{periodLabel(s.year, s.quarter)}</td>
                         <td className="p-3 font-medium">{s.clients?.company_name || "-"}</td>
                         <td className="p-3 text-right">{Number(s.total_kwh || 0).toLocaleString("nl-NL")}</td>
                         <td className="p-3 text-right">{fmt(Number(s.gross_revenue))}</td>

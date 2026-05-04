@@ -4,8 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useAdminData";
 import { useAuth } from "@/contexts/AuthContext";
-import { calculateMonthly } from "@/services/calculations";
-import { formatEuro } from "@/services/calculations";
+import { calculateMonthly, formatEuro } from "@/services/calculations";
 import { StepperWizard } from "@/components/admin/StepperWizard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Plus, Trash2, Pencil } from "lucide-react";
 
-const STEPS = ["Klantgegevens", "Locaties", "Laadpunten", "Tarieven", "Bevestigen"];
+const STEPS = ["Klantgegevens", "Locaties", "Laadpunten", "Tarieven & Contract", "Bevestigen"];
 
 interface LocationData {
   name: string; address: string; postal_code: string; city: string;
@@ -38,6 +37,8 @@ const emptyLocation = (): LocationData => ({
   ],
 });
 
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
 export default function AdminClientWizard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,13 +48,12 @@ export default function AdminClientWizard() {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // Pre-fill state from calculator or quote
   const prefill = (location.state as any) || {};
 
-  // Step 1
   const [company, setCompany] = useState({
     company_name: prefill.prospectCompany || "",
     kvk: "",
+    btw_number: "",
     contact_name: prefill.prospectContact || "",
     contact_email: prefill.prospectEmail || "",
     contact_phone: "",
@@ -62,18 +62,24 @@ export default function AdminClientWizard() {
     billing_city: "",
   });
 
-  // Step 2
   const [locations, setLocations] = useState<LocationData[]>([emptyLocation()]);
 
-  // Step 4
   const [tariff, setTariff] = useState({
-    charge_rate: prefill.chargeRate ? String(prefill.chargeRate) : "0.45",
+    charge_rate: prefill.chargeRate ? String(prefill.chargeRate) : "0.55",
     energy_cost: prefill.energyCost ? String(prefill.energyCost) : "0.25",
-    revenue_share: prefill.revenueShare ? String(prefill.revenueShare) : "50",
+    revenue_share: prefill.revenueShare ? String(prefill.revenueShare) : "75",
     ere_rate: prefill.ereRate ? String(prefill.ereRate) : "0.10",
+    idle_tariff: "0.10",
+    start_tariff: "0.50",
   });
 
-  // Pre-fill charge points from calculator/quote
+  const [contract, setContract] = useState({
+    start_date: todayISO(),
+    duration_months: "12",
+    auto_renew: true,
+    notice_period_months: "3",
+  });
+
   useEffect(() => {
     if (prefill.numChargePoints && prefill.numChargePoints > 0) {
       const n = Number(prefill.numChargePoints);
@@ -111,19 +117,33 @@ export default function AdminClientWizard() {
     }));
   };
 
-  // Calculation preview
   const totalCPs = locations.reduce((s, l) => s + l.chargePoints.length, 0);
   const calc = calculateMonthly({
     numChargePoints: totalCPs,
     kwhPerPointPerMonth: 500,
-    chargeRatePerKwh: parseFloat(tariff.charge_rate) || 0.45,
+    chargeRatePerKwh: parseFloat(tariff.charge_rate) || 0.55,
     energyCostPerKwh: parseFloat(tariff.energy_cost) || 0.25,
-    revenueSharePct: parseFloat(tariff.revenue_share) || 50,
+    revenueSharePct: parseFloat(tariff.revenue_share) || 75,
     efluxCostPerSocket: 5.50,
     ereRatePerKwh: parseFloat(tariff.ere_rate) || 0.10,
-    hasSolar: locations.some(l => l.has_solar),
-    solarPercentage: 0,
   });
+
+  const contractEndDate = (() => {
+    if (!contract.start_date) return null;
+    const start = new Date(contract.start_date);
+    const months = parseInt(contract.duration_months) || 12;
+    start.setMonth(start.getMonth() + months);
+    start.setDate(start.getDate() - 1);
+    return start.toISOString().slice(0, 10);
+  })();
+
+  const noticeDeadline = (() => {
+    if (!contractEndDate) return null;
+    const end = new Date(contractEndDate);
+    const months = parseInt(contract.notice_period_months) || 3;
+    end.setMonth(end.getMonth() - months);
+    return end.toISOString().slice(0, 10);
+  })();
 
   const canNext = () => {
     if (step === 0) return company.company_name.trim() && company.contact_name.trim() && company.contact_email.trim();
@@ -135,21 +155,25 @@ export default function AdminClientWizard() {
     if (!org) { toast.error("Organisatie niet gevonden"); return; }
     setSaving(true);
     try {
-      // 1. Insert client
       const { data: client, error: clientErr } = await supabase.from("clients").insert({
         organization_id: org.id,
         company_name: company.company_name,
         kvk: company.kvk || null,
+        btw_number: company.btw_number || null,
         contact_name: company.contact_name,
         contact_email: company.contact_email,
         contact_phone: company.contact_phone || null,
         billing_address_street: company.billing_street || null,
         billing_address_postal: company.billing_postal || null,
         billing_address_city: company.billing_city || null,
-        charge_rate_per_kwh: parseFloat(tariff.charge_rate) || 0.45,
+        charge_rate_per_kwh: parseFloat(tariff.charge_rate) || 0.55,
         energy_cost_per_kwh: parseFloat(tariff.energy_cost) || 0.25,
-        revenue_share_percentage: parseFloat(tariff.revenue_share) || 50,
+        revenue_share_percentage: parseFloat(tariff.revenue_share) || 75,
         ere_rate_per_kwh: parseFloat(tariff.ere_rate) || 0.10,
+        contract_start_date: contract.start_date || null,
+        contract_duration_months: parseInt(contract.duration_months) || 12,
+        auto_renew: contract.auto_renew,
+        notice_period_months: parseInt(contract.notice_period_months) || 3,
         status: "prospect",
       }).select().single();
       if (clientErr) throw clientErr;
@@ -159,7 +183,6 @@ export default function AdminClientWizard() {
         return;
       }
 
-      // 2. Insert locations + charge_points
       for (const loc of locations) {
         const { data: locData, error: locErr } = await supabase.from("locations").insert({
           client_id: client.id,
@@ -188,15 +211,15 @@ export default function AdminClientWizard() {
         }
       }
 
-      // 3. Insert tariff profile
       await supabase.from("tariff_profiles").insert({
         client_id: client.id,
-        charge_rate_per_kwh: parseFloat(tariff.charge_rate) || 0.45,
+        charge_rate_per_kwh: parseFloat(tariff.charge_rate) || 0.55,
         energy_cost_per_kwh: parseFloat(tariff.energy_cost) || 0.25,
         ere_rate_per_kwh: parseFloat(tariff.ere_rate) || 0.10,
+        idle_tariff_per_min: parseFloat(tariff.idle_tariff) || 0,
+        start_tariff: parseFloat(tariff.start_tariff) || 0,
       });
 
-      // 4. Activity log
       await supabase.from("activity_log").insert({
         client_id: client.id,
         organization_id: org.id,
@@ -205,7 +228,6 @@ export default function AdminClientWizard() {
         description: `Klant ${company.company_name} aangemaakt`,
       });
 
-      // 5. Link quote if created from quote
       if (prefill.fromQuote && prefill.quoteId) {
         await supabase.from("quotes").update({ client_id: client.id }).eq("id", prefill.quoteId);
       }
@@ -240,6 +262,7 @@ export default function AdminClientWizard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div><Label>Bedrijfsnaam *</Label><Input value={company.company_name} onChange={e => setCompany(p => ({ ...p, company_name: e.target.value }))} /></div>
               <div><Label>KVK-nummer</Label><Input value={company.kvk} onChange={e => setCompany(p => ({ ...p, kvk: e.target.value }))} /></div>
+              <div><Label>BTW-nummer</Label><Input value={company.btw_number} onChange={e => setCompany(p => ({ ...p, btw_number: e.target.value }))} placeholder="NL123456789B01" /></div>
               <div><Label>Contactpersoon *</Label><Input value={company.contact_name} onChange={e => setCompany(p => ({ ...p, contact_name: e.target.value }))} /></div>
               <div><Label>E-mail *</Label><Input type="email" value={company.contact_email} onChange={e => setCompany(p => ({ ...p, contact_email: e.target.value }))} /></div>
               <div><Label>Telefoon</Label><Input value={company.contact_phone} onChange={e => setCompany(p => ({ ...p, contact_phone: e.target.value }))} /></div>
@@ -369,33 +392,69 @@ export default function AdminClientWizard() {
         </Card>
       )}
 
-      {/* Step 4: Tarieven */}
+      {/* Step 4: Tarieven & Contract */}
       {step === 3 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader><CardTitle>Tariefstructuur</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div><Label>Laadtarief per kWh (€)</Label><Input type="number" step="0.01" value={tariff.charge_rate} onChange={e => setTariff(p => ({ ...p, charge_rate: e.target.value }))} /></div>
-              <div><Label>Energiekost per kWh (€)</Label><Input type="number" step="0.01" value={tariff.energy_cost} onChange={e => setTariff(p => ({ ...p, energy_cost: e.target.value }))} /></div>
-              <div><Label>Revenue share klant (%)</Label><Input type="number" step="1" value={tariff.revenue_share} onChange={e => setTariff(p => ({ ...p, revenue_share: e.target.value }))} /></div>
-              <div><Label>ERE-tarief per kWh (€)</Label><Input type="number" step="0.01" value={tariff.ere_rate} onChange={e => setTariff(p => ({ ...p, ere_rate: e.target.value }))} /></div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>Maandelijkse schatting</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p className="text-muted-foreground">Op basis van {totalCPs} laadpunten × 500 kWh/mnd</p>
-              <div className="space-y-2">
-                <div className="flex justify-between"><span>Bruto omzet</span><span className="font-medium">{formatEuro(calc.grossRevenue)}</span></div>
-                <div className="flex justify-between"><span>Energiekosten</span><span className="font-medium text-destructive">-{formatEuro(calc.energyCost)}</span></div>
-                <div className="flex justify-between"><span>e-Flux kosten</span><span className="font-medium text-destructive">-{formatEuro(calc.efluxCost)}</span></div>
-                <div className="border-t border-border pt-2 flex justify-between font-medium"><span>Nettomarge</span><span>{formatEuro(calc.netMargin)}</span></div>
-                <div className="flex justify-between"><span>Klantdeel ({tariff.revenue_share}%)</span><span className="font-medium">{formatEuro(calc.clientShare)}</span></div>
-                <div className="flex justify-between"><span>e-Charging deel</span><span className="font-medium">{formatEuro(calc.echargingShare)}</span></div>
-                <div className="flex justify-between"><span>ERE-schatting</span><span className="font-medium">{formatEuro(calc.ereEstimate)}</span></div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Tariefstructuur</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div><Label>Laadtarief per kWh (€)</Label><Input type="number" step="0.01" value={tariff.charge_rate} onChange={e => setTariff(p => ({ ...p, charge_rate: e.target.value }))} /></div>
+                <div><Label>Stroominkoop per kWh (€)</Label><Input type="number" step="0.01" value={tariff.energy_cost} onChange={e => setTariff(p => ({ ...p, energy_cost: e.target.value }))} /></div>
+                <div><Label>Revenue share klant (%)</Label><Input type="number" step="1" value={tariff.revenue_share} onChange={e => setTariff(p => ({ ...p, revenue_share: e.target.value }))} /></div>
+                <div><Label>ERE-tarief per kWh (€)</Label><Input type="number" step="0.01" value={tariff.ere_rate} onChange={e => setTariff(p => ({ ...p, ere_rate: e.target.value }))} /></div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">Aanvullende tarieven</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>Blokkeertarief per minuut (€)</Label>
+                  <Input type="number" step="0.01" value={tariff.idle_tariff} onChange={e => setTariff(p => ({ ...p, idle_tariff: e.target.value }))} />
+                  <p className="text-xs text-muted-foreground mt-1">Na einde laadsessie — stimuleert doorstroming</p>
+                </div>
+                <div>
+                  <Label>Starttarief per sessie (€)</Label>
+                  <Input type="number" step="0.01" value={tariff.start_tariff} onChange={e => setTariff(p => ({ ...p, start_tariff: e.target.value }))} />
+                  <p className="text-xs text-muted-foreground mt-1">Vast bedrag bij elke sessie</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Contractvoorwaarden</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div><Label>Startdatum</Label><Input type="date" value={contract.start_date} onChange={e => setContract(p => ({ ...p, start_date: e.target.value }))} /></div>
+                <div><Label>Looptijd (maanden)</Label><Input type="number" value={contract.duration_months} onChange={e => setContract(p => ({ ...p, duration_months: e.target.value }))} /></div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={contract.auto_renew} onCheckedChange={v => setContract(p => ({ ...p, auto_renew: v }))} />
+                  <Label>Automatisch verlengen met 1 jaar</Label>
+                </div>
+                <div><Label>Opzegtermijn (maanden)</Label><Input type="number" value={contract.notice_period_months} onChange={e => setContract(p => ({ ...p, notice_period_months: e.target.value }))} /></div>
+                {contractEndDate && (
+                  <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                    <p>Initiële einddatum: <strong className="text-foreground">{new Date(contractEndDate).toLocaleDateString("nl-NL")}</strong></p>
+                    {noticeDeadline && <p>Opzeggen vóór: <strong className="text-foreground">{new Date(noticeDeadline).toLocaleDateString("nl-NL")}</strong></p>}
+                    {contract.auto_renew && <p className="text-warning">Anders: automatisch +1 jaar</p>}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">Maandelijkse schatting</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p className="text-muted-foreground text-xs">Op basis van {totalCPs} laadpunten × 500 kWh/mnd</p>
+                <div className="flex justify-between"><span>Bruto omzet</span><span>{formatEuro(calc.grossRevenue)}</span></div>
+                <div className="flex justify-between"><span>Stroominkoop</span><span className="text-destructive">-{formatEuro(calc.energyCost)}</span></div>
+                <div className="flex justify-between"><span>e-Flux platformkosten</span><span className="text-destructive">-{formatEuro(calc.efluxPlatformFee)}</span></div>
+                <div className="flex justify-between"><span>Laadbeloning commissie</span><span className="text-destructive">-{formatEuro(calc.ereCommission)}</span></div>
+                <div className="border-t border-border pt-2 flex justify-between font-medium"><span>Netto opbrengst</span><span>{formatEuro(calc.netMargin)}</span></div>
+                <div className="flex justify-between"><span>Klant ({tariff.revenue_share}%)</span><span className="font-medium">{formatEuro(calc.clientPayout)}</span></div>
+                <div className="flex justify-between"><span>E-Charging ({100 - parseFloat(tariff.revenue_share || "75")}%)</span><span className="font-medium">{formatEuro(calc.echargingRevenue)}</span></div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -411,6 +470,7 @@ export default function AdminClientWizard() {
               <p><span className="text-muted-foreground">Bedrijf:</span> {company.company_name}</p>
               <p><span className="text-muted-foreground">Contact:</span> {company.contact_name} — {company.contact_email}</p>
               {company.kvk && <p><span className="text-muted-foreground">KVK:</span> {company.kvk}</p>}
+              {company.btw_number && <p><span className="text-muted-foreground">BTW:</span> {company.btw_number}</p>}
             </CardContent>
           </Card>
 
@@ -436,15 +496,30 @@ export default function AdminClientWizard() {
             </CardHeader>
             <CardContent className="text-sm grid grid-cols-2 gap-2">
               <p><span className="text-muted-foreground">Laadtarief:</span> €{tariff.charge_rate}/kWh</p>
-              <p><span className="text-muted-foreground">Energiekost:</span> €{tariff.energy_cost}/kWh</p>
+              <p><span className="text-muted-foreground">Stroominkoop:</span> €{tariff.energy_cost}/kWh</p>
               <p><span className="text-muted-foreground">Revenue share:</span> {tariff.revenue_share}%</p>
               <p><span className="text-muted-foreground">ERE-tarief:</span> €{tariff.ere_rate}/kWh</p>
+              <p><span className="text-muted-foreground">Blokkeertarief:</span> €{tariff.idle_tariff}/min</p>
+              <p><span className="text-muted-foreground">Starttarief:</span> €{tariff.start_tariff}/sessie</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Contract</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setStep(3)}><Pencil className="w-3 h-3 mr-1" />Wijzig</Button>
+            </CardHeader>
+            <CardContent className="text-sm space-y-1">
+              <p><span className="text-muted-foreground">Looptijd:</span> {contract.duration_months} maanden vanaf {contract.start_date ? new Date(contract.start_date).toLocaleDateString("nl-NL") : "-"}</p>
+              {contractEndDate && <p><span className="text-muted-foreground">Initiële einddatum:</span> {new Date(contractEndDate).toLocaleDateString("nl-NL")}</p>}
+              <p><span className="text-muted-foreground">Verlenging:</span> {contract.auto_renew ? "automatisch met 1 jaar" : "uitsluitend handmatig"}</p>
+              <p><span className="text-muted-foreground">Opzegtermijn:</span> {contract.notice_period_months} maanden</p>
+              {noticeDeadline && contract.auto_renew && <p><span className="text-muted-foreground">Opzegdeadline 1e termijn:</span> {new Date(noticeDeadline).toLocaleDateString("nl-NL")}</p>}
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* Navigation */}
       <div className="flex justify-between pt-2">
         <Button variant="outline" onClick={() => setStep(s => s - 1)} disabled={step === 0}>
           <ArrowLeft className="w-4 h-4 mr-1" />Vorige

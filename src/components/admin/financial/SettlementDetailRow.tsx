@@ -18,7 +18,11 @@ export function SettlementDetailRow({ settlement }: { settlement: any }) {
             </div>
             <div>
               <p className="text-muted-foreground mb-1">Platformkosten</p>
-              <p className="font-medium">{fmt(Number(settlement.total_platform_cost || 0))}</p>
+              <p className="font-medium">{fmt(Number(settlement.total_platform_fee || 0))}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground mb-1">Laadbeloning commissie</p>
+              <p className="font-medium">{fmt(Number(settlement.ere_commission || 0))}</p>
             </div>
             <div>
               <p className="text-muted-foreground mb-1">ERE schatting</p>

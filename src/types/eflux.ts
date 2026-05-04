@@ -268,6 +268,6 @@ export function mapRoadEVSEToInternal(evse: RoadEVSEController, locationId: stri
     last_heartbeat_at: evse.heartbeatReceivedAt,
     num_connectors: evse.numConnectors,
     max_power: evse.maxPower,
-    has_mid_meter: true,
+    is_mid_certified: false,
   };
 }

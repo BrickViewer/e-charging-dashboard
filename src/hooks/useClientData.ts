@@ -2,6 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
+function getCurrentQuarter() {
+  const now = new Date();
+  return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
+}
+
+function getPreviousQuarter() {
+  const { year, quarter } = getCurrentQuarter();
+  if (quarter === 1) return { year: year - 1, quarter: 4 };
+  return { year, quarter: quarter - 1 };
+}
+
 export function useClientProfile() {
   const { user } = useAuth();
   return useQuery({
@@ -57,10 +68,11 @@ export function useClientSettlements(clientId?: string) {
     queryKey: ["client-settlements", clientId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("monthly_settlements")
+        .from("quarterly_settlements")
         .select("*")
         .eq("client_id", clientId!)
-        .order("month", { ascending: false });
+        .order("year", { ascending: false })
+        .order("quarter", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -72,36 +84,35 @@ export function useClientKPIs(clientId?: string) {
   const { data: settlements } = useClientSettlements(clientId);
   const { data: locations } = useClientLocations(clientId);
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const prevMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 7);
+  const cur = getCurrentQuarter();
+  const prev = getPreviousQuarter();
 
-  const currentSettlement = settlements?.find(s => s.month?.slice(0, 7) === currentMonth);
-  const prevSettlement = settlements?.find(s => s.month?.slice(0, 7) === prevMonth);
+  const currentSettlement = settlements?.find(s => s.year === cur.year && s.quarter === cur.quarter);
+  const prevSettlement = settlements?.find(s => s.year === prev.year && s.quarter === prev.quarter);
 
   const allChargePoints = locations?.flatMap(l => (l as any).charge_points || []) || [];
   const onlineCount = allChargePoints.filter((cp: any) => cp.status === "online" || cp.status === "in_use").length;
   const totalCount = allChargePoints.length;
 
-  const currentEarnings = currentSettlement?.client_payout || 0;
-  const prevEarnings = prevSettlement?.client_payout || 0;
-  const earningsChange = prevEarnings > 0 ? ((Number(currentEarnings) - Number(prevEarnings)) / Number(prevEarnings)) * 100 : 0;
+  const currentEarnings = Number(currentSettlement?.client_payout || 0);
+  const prevEarnings = Number(prevSettlement?.client_payout || 0);
+  const earningsChange = prevEarnings > 0 ? ((currentEarnings - prevEarnings) / prevEarnings) * 100 : 0;
 
-  const currentKwh = currentSettlement?.total_kwh || 0;
-  const prevKwh = prevSettlement?.total_kwh || 0;
-  const kwhChange = Number(prevKwh) > 0 ? ((Number(currentKwh) - Number(prevKwh)) / Number(prevKwh)) * 100 : 0;
+  const currentKwh = Number(currentSettlement?.total_kwh || 0);
+  const prevKwh = Number(prevSettlement?.total_kwh || 0);
+  const kwhChange = prevKwh > 0 ? ((currentKwh - prevKwh) / prevKwh) * 100 : 0;
 
-  // Bereken gemiddelden uit vorige maanden (excl. huidige maand)
-  const pastSettlements = settlements?.filter(s => s.month?.slice(0, 7) !== currentMonth) || [];
+  const pastSettlements = settlements?.filter(s => !(s.year === cur.year && s.quarter === cur.quarter)) || [];
   const avgEarnings = pastSettlements.length > 0
     ? pastSettlements.reduce((sum, s) => sum + Number(s.client_payout || 0), 0) / pastSettlements.length
-    : 1000; // fallback sample
+    : 1000;
   const avgKwh = pastSettlements.length > 0
     ? pastSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0) / pastSettlements.length
-    : 3000; // fallback sample
+    : 3000;
 
   return {
-    totalEarned: Number(currentEarnings),
-    kwhLoaded: Number(currentKwh),
+    totalEarned: currentEarnings,
+    kwhLoaded: currentKwh,
     chargePointsOnline: onlineCount,
     chargePointsTotal: totalCount,
     offlineCount: totalCount - onlineCount,
@@ -110,5 +121,6 @@ export function useClientKPIs(clientId?: string) {
     avgEarnings,
     avgKwh,
     settlements: settlements || [],
+    currentQuarter: cur,
   };
 }

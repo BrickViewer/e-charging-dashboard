@@ -72,8 +72,8 @@ export type Database = {
           created_at: string
           eflux_evse_controller_id: string | null
           eflux_evse_id: string | null
-          has_mid_meter: boolean | null
           id: string
+          is_mid_certified: boolean
           last_heartbeat_at: string | null
           location_id: string
           max_power: number | null
@@ -92,8 +92,8 @@ export type Database = {
           created_at?: string
           eflux_evse_controller_id?: string | null
           eflux_evse_id?: string | null
-          has_mid_meter?: boolean | null
           id?: string
+          is_mid_certified?: boolean
           last_heartbeat_at?: string | null
           location_id: string
           max_power?: number | null
@@ -112,8 +112,8 @@ export type Database = {
           created_at?: string
           eflux_evse_controller_id?: string | null
           eflux_evse_id?: string | null
-          has_mid_meter?: boolean | null
           id?: string
+          is_mid_certified?: boolean
           last_heartbeat_at?: string | null
           location_id?: string
           max_power?: number | null
@@ -166,6 +166,7 @@ export type Database = {
           status: string | null
           time_costs: number | null
           total_price: number | null
+          transaction_fee: number
           updated_at: string | null
         }
         Insert: {
@@ -197,6 +198,7 @@ export type Database = {
           status?: string | null
           time_costs?: number | null
           total_price?: number | null
+          transaction_fee?: number
           updated_at?: string | null
         }
         Update: {
@@ -228,6 +230,7 @@ export type Database = {
           status?: string | null
           time_costs?: number | null
           total_price?: number | null
+          transaction_fee?: number
           updated_at?: string | null
         }
         Relationships: [
@@ -256,10 +259,12 @@ export type Database = {
       }
       clients: {
         Row: {
+          auto_renew: boolean
           billing_address: string | null
           billing_address_city: string | null
           billing_address_postal: string | null
           billing_address_street: string | null
+          btw_number: string | null
           charge_rate_per_kwh: number | null
           company_name: string
           contact_email: string | null
@@ -268,12 +273,14 @@ export type Database = {
           contract_duration_months: number | null
           contract_start_date: string | null
           created_at: string
+          eflux_account_id: string | null
           energy_cost_per_kwh: number | null
           ere_rate_per_kwh: number | null
           id: string
           kvk: string | null
           monthly_platform_surcharge: number | null
           notes: string | null
+          notice_period_months: number
           organization_id: string
           portal_user_id: string | null
           revenue_share_percentage: number | null
@@ -283,10 +290,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_renew?: boolean
           billing_address?: string | null
           billing_address_city?: string | null
           billing_address_postal?: string | null
           billing_address_street?: string | null
+          btw_number?: string | null
           charge_rate_per_kwh?: number | null
           company_name: string
           contact_email?: string | null
@@ -295,12 +304,14 @@ export type Database = {
           contract_duration_months?: number | null
           contract_start_date?: string | null
           created_at?: string
+          eflux_account_id?: string | null
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           id?: string
           kvk?: string | null
           monthly_platform_surcharge?: number | null
           notes?: string | null
+          notice_period_months?: number
           organization_id: string
           portal_user_id?: string | null
           revenue_share_percentage?: number | null
@@ -310,10 +321,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_renew?: boolean
           billing_address?: string | null
           billing_address_city?: string | null
           billing_address_postal?: string | null
           billing_address_street?: string | null
+          btw_number?: string | null
           charge_rate_per_kwh?: number | null
           company_name?: string
           contact_email?: string | null
@@ -322,12 +335,14 @@ export type Database = {
           contract_duration_months?: number | null
           contract_start_date?: string | null
           created_at?: string
+          eflux_account_id?: string | null
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           id?: string
           kvk?: string | null
           monthly_platform_surcharge?: number | null
           notes?: string | null
+          notice_period_months?: number
           organization_id?: string
           portal_user_id?: string | null
           revenue_share_percentage?: number | null
@@ -444,71 +459,6 @@ export type Database = {
           },
         ]
       }
-      monthly_settlements: {
-        Row: {
-          client_id: string
-          client_payout: number | null
-          created_at: string
-          echarging_revenue: number | null
-          ere_estimate: number | null
-          gross_revenue: number | null
-          id: string
-          month: string
-          net_margin: number | null
-          paid_at: string | null
-          status: string | null
-          stripe_transfer_id: string | null
-          total_energy_cost: number | null
-          total_kwh: number | null
-          total_platform_cost: number | null
-          total_sessions: number | null
-        }
-        Insert: {
-          client_id: string
-          client_payout?: number | null
-          created_at?: string
-          echarging_revenue?: number | null
-          ere_estimate?: number | null
-          gross_revenue?: number | null
-          id?: string
-          month: string
-          net_margin?: number | null
-          paid_at?: string | null
-          status?: string | null
-          stripe_transfer_id?: string | null
-          total_energy_cost?: number | null
-          total_kwh?: number | null
-          total_platform_cost?: number | null
-          total_sessions?: number | null
-        }
-        Update: {
-          client_id?: string
-          client_payout?: number | null
-          created_at?: string
-          echarging_revenue?: number | null
-          ere_estimate?: number | null
-          gross_revenue?: number | null
-          id?: string
-          month?: string
-          net_margin?: number | null
-          paid_at?: string | null
-          status?: string | null
-          stripe_transfer_id?: string | null
-          total_energy_cost?: number | null
-          total_kwh?: number | null
-          total_platform_cost?: number | null
-          total_sessions?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "monthly_settlements_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       notifications: {
         Row: {
           created_at: string
@@ -550,6 +500,8 @@ export type Database = {
           default_ere_rate_per_kwh: number | null
           default_revenue_share_pct: number | null
           eflux_api_key: string | null
+          eflux_master_account_id: string | null
+          eflux_provider_id: string | null
           email: string | null
           id: string
           kvk: string | null
@@ -571,6 +523,8 @@ export type Database = {
           default_ere_rate_per_kwh?: number | null
           default_revenue_share_pct?: number | null
           eflux_api_key?: string | null
+          eflux_master_account_id?: string | null
+          eflux_provider_id?: string | null
           email?: string | null
           id?: string
           kvk?: string | null
@@ -592,6 +546,8 @@ export type Database = {
           default_ere_rate_per_kwh?: number | null
           default_revenue_share_pct?: number | null
           eflux_api_key?: string | null
+          eflux_master_account_id?: string | null
+          eflux_provider_id?: string | null
           email?: string | null
           id?: string
           kvk?: string | null
@@ -633,6 +589,92 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quarterly_settlements: {
+        Row: {
+          client_id: string
+          client_payout: number
+          created_at: string
+          echarging_revenue: number
+          ere_commission: number
+          ere_estimate: number
+          gross_revenue: number
+          id: string
+          net_margin: number
+          paid_at: string | null
+          period_end: string
+          period_start: string
+          quarter: number
+          status: string
+          stripe_charge_id: string | null
+          stripe_transfer_id: string | null
+          total_energy_cost: number
+          total_kwh: number
+          total_platform_fee: number
+          total_sessions: number
+          total_transaction_fees: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          client_id: string
+          client_payout?: number
+          created_at?: string
+          echarging_revenue?: number
+          ere_commission?: number
+          ere_estimate?: number
+          gross_revenue?: number
+          id?: string
+          net_margin?: number
+          paid_at?: string | null
+          period_end: string
+          period_start: string
+          quarter: number
+          status?: string
+          stripe_charge_id?: string | null
+          stripe_transfer_id?: string | null
+          total_energy_cost?: number
+          total_kwh?: number
+          total_platform_fee?: number
+          total_sessions?: number
+          total_transaction_fees?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          client_id?: string
+          client_payout?: number
+          created_at?: string
+          echarging_revenue?: number
+          ere_commission?: number
+          ere_estimate?: number
+          gross_revenue?: number
+          id?: string
+          net_margin?: number
+          paid_at?: string | null
+          period_end?: string
+          period_start?: string
+          quarter?: number
+          status?: string
+          stripe_charge_id?: string | null
+          stripe_transfer_id?: string | null
+          total_energy_cost?: number
+          total_kwh?: number
+          total_platform_fee?: number
+          total_sessions?: number
+          total_transaction_fees?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quarterly_settlements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -756,7 +798,9 @@ export type Database = {
           energy_cost_per_kwh: number | null
           ere_rate_per_kwh: number | null
           id: string
+          idle_tariff_per_min: number
           location_id: string | null
+          start_tariff: number
           valid_from: string | null
         }
         Insert: {
@@ -766,7 +810,9 @@ export type Database = {
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           id?: string
+          idle_tariff_per_min?: number
           location_id?: string | null
+          start_tariff?: number
           valid_from?: string | null
         }
         Update: {
@@ -776,7 +822,9 @@ export type Database = {
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           id?: string
+          idle_tariff_per_min?: number
           location_id?: string | null
+          start_tariff?: number
           valid_from?: string | null
         }
         Relationships: [

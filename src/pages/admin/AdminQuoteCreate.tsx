@@ -6,10 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Save, Calculator } from "lucide-react";
 import { useOrganization, useAllClients } from "@/hooks/useAdminData";
-import { calculateMonthly, formatEuro } from "@/services/calculations";
+import { calculateYearly, formatEuro } from "@/services/calculations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -21,22 +20,18 @@ export default function AdminQuoteCreate() {
   const { data: clients } = useAllClients();
   const [saving, setSaving] = useState(false);
 
-  // Prospect fields
   const [prospectCompany, setProspectCompany] = useState("");
   const [prospectContact, setProspectContact] = useState("");
   const [prospectEmail, setProspectEmail] = useState("");
   const [linkedClientId, setLinkedClientId] = useState<string>("none");
 
-  // Parameters from URL or defaults
   const [chargePoints, setChargePoints] = useState(Number(params.get("cp")) || 10);
   const [kwhPerMonth, setKwhPerMonth] = useState(Number(params.get("kwh")) || 500);
-  const [chargeRate, setChargeRate] = useState(Number(params.get("rate")) || Number(org?.default_charge_rate_per_kwh || 0.45));
+  const [chargeRate, setChargeRate] = useState(Number(params.get("rate")) || Number(org?.default_charge_rate_per_kwh || 0.55));
   const [energyCost, setEnergyCost] = useState(Number(params.get("energy")) || Number(org?.default_energy_cost_per_kwh || 0.25));
   const [cpType, setCpType] = useState<string>(params.get("type") || "ac");
-  const [revenueShare, setRevenueShare] = useState(Number(params.get("share")) || Number(org?.default_revenue_share_pct || 50));
+  const [revenueShare, setRevenueShare] = useState(Number(params.get("share")) || Number(org?.default_revenue_share_pct || 75));
   const [ereRate, setEreRate] = useState(Number(params.get("ere")) || Number(org?.default_ere_rate_per_kwh || 0.10));
-  const [hasSolar, setHasSolar] = useState(Number(params.get("solar")) > 0);
-  const [solarPct, setSolarPct] = useState(Number(params.get("solar")) || 30);
   const [notes, setNotes] = useState("");
   const [validUntil, setValidUntil] = useState(() => {
     const d = new Date();
@@ -46,31 +41,15 @@ export default function AdminQuoteCreate() {
 
   const platformCost = cpType === "ac" ? Number(org?.default_eflux_cost_ac || 5.50) : Number(org?.default_eflux_cost_dc || 10.40);
 
-  const calc = useMemo(() => {
-    const monthly = calculateMonthly({
-      numChargePoints: chargePoints,
-      kwhPerPointPerMonth: kwhPerMonth,
-      chargeRatePerKwh: chargeRate,
-      energyCostPerKwh: energyCost,
-      revenueSharePct: revenueShare,
-      efluxCostPerSocket: platformCost,
-      ereRatePerKwh: ereRate,
-      hasSolar,
-      solarPercentage: solarPct,
-    });
-    return {
-      ...monthly,
-      grossRevenueYear: monthly.grossRevenue * 12,
-      energyCostYear: monthly.energyCost * 12,
-      efluxCostYear: monthly.efluxCost * 12,
-      netMarginYear: monthly.netMargin * 12,
-      clientShareYear: monthly.clientShare * 12,
-      echargingShareYear: monthly.echargingShare * 12,
-      ereEstimateYear: monthly.ereEstimate * 12,
-      clientTotalYear: monthly.totalClientIncome * 12,
-      echargingTotalYear: monthly.totalEchargingIncome * 12,
-    };
-  }, [chargePoints, kwhPerMonth, chargeRate, energyCost, revenueShare, platformCost, ereRate, hasSolar, solarPct]);
+  const calc = useMemo(() => calculateYearly({
+    numChargePoints: chargePoints,
+    kwhPerPointPerMonth: kwhPerMonth,
+    chargeRatePerKwh: chargeRate,
+    energyCostPerKwh: energyCost,
+    revenueSharePct: revenueShare,
+    efluxCostPerSocket: platformCost,
+    ereRatePerKwh: ereRate,
+  }), [chargePoints, kwhPerMonth, chargeRate, energyCost, revenueShare, platformCost, ereRate]);
 
   const fmt = (v: number) => formatEuro(v);
   const fmtRound = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -106,21 +85,20 @@ export default function AdminQuoteCreate() {
         energy_cost_per_kwh: energyCost,
         revenue_share_pct: revenueShare,
         ere_rate_per_kwh: ereRate,
-        has_solar: hasSolar,
-        solar_percentage: hasSolar ? solarPct : 0,
         notes: notes || null,
         valid_until: validUntil,
         status: "concept",
         calculation_snapshot: {
-          grossRevenueYear: calc.grossRevenueYear,
-          energyCostYear: calc.energyCostYear,
-          efluxCostYear: calc.efluxCostYear,
-          netMarginYear: calc.netMarginYear,
-          clientShareYear: calc.clientShareYear,
-          echargingShareYear: calc.echargingShareYear,
-          ereEstimateYear: calc.ereEstimateYear,
-          clientTotalYear: calc.clientTotalYear,
-          echargingTotalYear: calc.echargingTotalYear,
+          grossRevenueYear: calc.grossRevenue,
+          energyCostYear: calc.energyCost,
+          efluxCostYear: calc.efluxPlatformFee,
+          netLaadmargeYear: calc.netLaadmarge,
+          grossEreYear: calc.grossEre,
+          ereCommissionYear: calc.ereCommission,
+          netEreYear: calc.netEre,
+          netMarginYear: calc.netMargin,
+          clientPayoutYear: calc.clientPayout,
+          echargingRevenueYear: calc.echargingRevenue,
         },
       }).select().single();
 
@@ -205,7 +183,7 @@ export default function AdminQuoteCreate() {
                   <Input type="number" step="0.01" value={chargeRate} onChange={e => setChargeRate(Number(e.target.value))} />
                 </div>
                 <div>
-                  <Label>Energiekost (€/kWh)</Label>
+                  <Label>Stroominkoop (€/kWh)</Label>
                   <Input type="number" step="0.01" value={energyCost} onChange={e => setEnergyCost(Number(e.target.value))} />
                 </div>
               </div>
@@ -225,20 +203,9 @@ export default function AdminQuoteCreate() {
                   <Input type="number" value={revenueShare} onChange={e => setRevenueShare(Number(e.target.value))} min={0} max={100} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>ERE-tarief (€/kWh)</Label>
-                  <Input type="number" step="0.01" value={ereRate} onChange={e => setEreRate(Number(e.target.value))} />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Switch checked={hasSolar} onCheckedChange={setHasSolar} />
-                    <Label>Zonnepanelen</Label>
-                  </div>
-                  {hasSolar && (
-                    <Input type="number" value={solarPct} onChange={e => setSolarPct(Number(e.target.value))} min={0} max={100} placeholder="%" />
-                  )}
-                </div>
+              <div>
+                <Label>ERE-tarief (€/kWh)</Label>
+                <Input type="number" step="0.01" value={ereRate} onChange={e => setEreRate(Number(e.target.value))} />
               </div>
             </CardContent>
           </Card>
@@ -265,20 +232,18 @@ export default function AdminQuoteCreate() {
               <CardTitle className="text-primary text-base">Berekening — Jaarbasis</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between"><span>Bruto laadopbrengst</span><span>{fmtRound(calc.grossRevenueYear)}</span></div>
-              <div className="flex justify-between"><span>Stroomkosten</span><span className="text-destructive">-{fmtRound(calc.energyCostYear)}</span></div>
-              <div className="flex justify-between"><span>Platformkosten</span><span className="text-destructive">-{fmtRound(calc.efluxCostYear)}</span></div>
+              <div className="flex justify-between"><span>Bruto laadopbrengst</span><span>{fmtRound(calc.grossRevenue)}</span></div>
+              <div className="flex justify-between"><span>Stroominkoop</span><span className="text-destructive">-{fmtRound(calc.energyCost)}</span></div>
+              <div className="flex justify-between"><span>e-Flux platformkosten</span><span className="text-destructive">-{fmtRound(calc.efluxPlatformFee)}</span></div>
+              <div className="flex justify-between"><span>Laadbeloning commissie</span><span className="text-destructive">-{fmtRound(calc.ereCommission)}</span></div>
               <div className="border-t border-border my-2" />
-              <div className="flex justify-between font-medium"><span>Netto marge</span><span>{fmtRound(calc.netMarginYear)}</span></div>
-              <div className="border-t border-border my-2" />
-              <div className="flex justify-between font-semibold"><span>Klantaandeel ({revenueShare}%)</span><span>{fmtRound(calc.clientShareYear)}</span></div>
-              <div className="flex justify-between"><span>ERE-schatting</span><span>{fmtRound(calc.ereEstimateYear)}</span></div>
+              <div className="flex justify-between font-medium"><span>Netto opbrengst</span><span>{fmtRound(calc.netMargin)}</span></div>
               <div className="border-t border-border my-2" />
               <div className="flex justify-between text-lg font-bold text-primary">
-                <span>Totaal klant/jaar</span><span>{fmtRound(calc.clientTotalYear)}</span>
+                <span>Klant ontvangt ({revenueShare}%)</span><span>{fmtRound(calc.clientPayout)}</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
-                <span>Per maand</span><span>{fmt(calc.clientTotalYear / 12)}</span>
+                <span>Per kwartaal</span><span>{fmt(calc.clientPayout / 4)}</span>
               </div>
             </CardContent>
           </Card>
@@ -288,10 +253,10 @@ export default function AdminQuoteCreate() {
               <CardTitle className="text-base">E-Charging resultaat</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between"><span>E-Charging marge ({100 - revenueShare}%)</span><span>{fmtRound(calc.echargingShareYear)}</span></div>
-              <div className="flex justify-between"><span>Platformkosten doorbelasting</span><span>{fmtRound(calc.efluxCostYear)}</span></div>
-              <div className="border-t border-border my-2" />
-              <div className="flex justify-between font-bold"><span>E-Charging omzet/jaar</span><span>{fmtRound(calc.echargingTotalYear)}</span></div>
+              <div className="flex justify-between font-bold"><span>E-Charging omzet ({100 - revenueShare}%)</span><span>{fmtRound(calc.echargingRevenue)}</span></div>
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Per maand</span><span>{fmt(calc.echargingRevenue / 12)}</span>
+              </div>
             </CardContent>
           </Card>
 
