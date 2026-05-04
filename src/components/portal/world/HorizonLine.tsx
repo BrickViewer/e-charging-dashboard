@@ -1,7 +1,5 @@
-// Horizonlijn op 65% en perspectief-streepjes naar verdwijnpunt — versterkt
-// het "weg vooruit"-gevoel zodat objecten op een coherent grondvlak staan.
-
-const HORIZON_Y = 65;
+// Horizon-lijn op ~70% van het uitzicht, met enkele perspectief-streepjes
+// die richting verdwijnpunt convergeren — geeft een subtiele "weg vooruit"-feel.
 
 export function HorizonLine() {
   return (
@@ -13,41 +11,45 @@ export function HorizonLine() {
       <defs>
         <linearGradient id="horizon-gradient" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="hsl(var(--road-line))" stopOpacity="0" />
-          <stop offset="20%" stopColor="hsl(var(--road-line))" stopOpacity="0.6" />
-          <stop offset="50%" stopColor="hsl(var(--road-line))" stopOpacity="0.95" />
-          <stop offset="80%" stopColor="hsl(var(--road-line))" stopOpacity="0.6" />
+          <stop offset="20%" stopColor="hsl(var(--road-line))" stopOpacity="0.7" />
+          <stop offset="50%" stopColor="hsl(var(--road-line))" stopOpacity="1" />
+          <stop offset="80%" stopColor="hsl(var(--road-line))" stopOpacity="0.7" />
           <stop offset="100%" stopColor="hsl(var(--road-line))" stopOpacity="0" />
         </linearGradient>
       </defs>
 
-      {/* Horizonlijn */}
+      {/* De horizonlijn zelf */}
       <line
-        x1="0" y1={HORIZON_Y}
-        x2="100" y2={HORIZON_Y}
+        x1="0"
+        y1="68"
+        x2="100"
+        y2="68"
         stroke="url(#horizon-gradient)"
         strokeWidth="0.3"
         vectorEffect="non-scaling-stroke"
       />
 
-      {/* Perspectief-streepjes — convergeren naar verdwijnpunt op horizon */}
+      {/* Perspectief-lijnen vanuit horizon naar bottom — dunne streepjes */}
       {[
-        { angle: -28 }, { angle: -18 }, { angle: -9 },
-        { angle: 9 }, { angle: 18 }, { angle: 28 },
+        { angle: -22 }, { angle: -14 }, { angle: -7 },
+        { angle: 7 }, { angle: 14 }, { angle: 22 },
       ].map(({ angle }, i) => {
         const startX = 50;
-        const startY = HORIZON_Y;
-        const length = 40;
+        const startY = 68;
+        const length = 32; // tot bottom area
         const endX = startX + Math.sin((angle * Math.PI) / 180) * length;
         const endY = startY + Math.cos((angle * Math.PI) / 180) * length;
         return (
           <line
             key={i}
-            x1={startX} y1={startY}
-            x2={endX} y2={endY}
+            x1={startX}
+            y1={startY}
+            x2={endX}
+            y2={endY}
             stroke="hsl(var(--road-line))"
-            strokeWidth="0.2"
-            strokeDasharray="0.6 1.2"
-            opacity="0.45"
+            strokeWidth="0.15"
+            strokeDasharray="0.8 1.5"
+            opacity="0.35"
             vectorEffect="non-scaling-stroke"
           />
         );
