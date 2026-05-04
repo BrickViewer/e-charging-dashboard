@@ -26,8 +26,8 @@ export default function ClientLayout() {
   return (
     <div className="portal-theme min-h-screen bg-background text-foreground">
       {/* Mobile header */}
-      <header className="lg:hidden flex items-center justify-between p-4 border-b border-border">
-        <Logo />
+      <header className="lg:hidden flex items-center justify-between p-4 border-b border-sidebar-border bg-sidebar">
+        <Logo variant="dark" />
         <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </Button>
@@ -35,9 +35,9 @@ export default function ClientLayout() {
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className={`${mobileOpen ? "block" : "hidden"} lg:block fixed lg:sticky top-0 left-0 z-40 w-64 h-screen bg-card border-r border-border flex-shrink-0 shadow-sm`}>
+        <aside className={`${mobileOpen ? "block" : "hidden"} lg:block fixed lg:sticky top-0 left-0 z-40 w-64 h-screen bg-sidebar border-r border-sidebar-border flex-shrink-0`}>
           <div className="p-6 hidden lg:block">
-            <Logo />
+            <Logo variant="dark" />
           </div>
           <nav className="px-3 space-y-1">
             {navItems.map((item) => (

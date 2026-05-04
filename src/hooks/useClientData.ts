@@ -80,9 +80,14 @@ export function useClientSettlements(clientId?: string) {
   });
 }
 
+// 1 ERE = 1 kg vermeden CO2; 1 kWh ≈ 0.306 ERE op netgemiddelde 46.4% groen
+// (1 kWh × 0.464 × 183 g/MJ × 3.6 MJ/kWh ÷ 1000 ≈ 0.306 kg CO2)
+const ERE_KG_PER_KWH = 0.306;
+
 export function useClientKPIs(clientId?: string) {
   const { data: settlements } = useClientSettlements(clientId);
   const { data: locations } = useClientLocations(clientId);
+  const { data: profile } = useClientProfile();
 
   const cur = getCurrentQuarter();
   const prev = getPreviousQuarter();
@@ -93,6 +98,7 @@ export function useClientKPIs(clientId?: string) {
   const allChargePoints = locations?.flatMap(l => (l as any).charge_points || []) || [];
   const onlineCount = allChargePoints.filter((cp: any) => cp.status === "online" || cp.status === "in_use").length;
   const totalCount = allChargePoints.length;
+  const offlineCount = allChargePoints.filter((cp: any) => cp.status === "offline" || cp.status === "error").length;
 
   const currentEarnings = Number(currentSettlement?.client_payout || 0);
   const prevEarnings = Number(prevSettlement?.client_payout || 0);
@@ -101,6 +107,23 @@ export function useClientKPIs(clientId?: string) {
   const currentKwh = Number(currentSettlement?.total_kwh || 0);
   const prevKwh = Number(prevSettlement?.total_kwh || 0);
   const kwhChange = prevKwh > 0 ? ((currentKwh - prevKwh) / prevKwh) * 100 : 0;
+
+  // Aggregaties over laatste 4 kwartalen (= laatste 12 maanden)
+  const sortedSettlements = (settlements ?? [])
+    .slice()
+    .sort((a, b) => (b.year * 4 + b.quarter) - (a.year * 4 + a.quarter));
+  const last4 = sortedSettlements.slice(0, 4);
+
+  const ttmKwh = last4.reduce((s, q) => s + Number(q.total_kwh || 0), 0);
+  const ttmGross = last4.reduce((s, q) => s + Number(q.gross_revenue || 0), 0);
+  const ttmPayout = last4.reduce((s, q) => s + Number(q.client_payout || 0), 0);
+  const ttmEreEstimate = last4.reduce((s, q) => s + Number(q.ere_estimate || 0), 0);
+  const ttmEreCommission = last4.reduce((s, q) => s + Number(q.ere_commission || 0), 0);
+
+  const ttmEreCo2 = ttmKwh * ERE_KG_PER_KWH;
+
+  const revShareRatio = (Number(profile?.revenue_share_percentage ?? 75)) / 100;
+  const ttmEreClientRevenue = (ttmEreEstimate - ttmEreCommission) * revShareRatio;
 
   const pastSettlements = settlements?.filter(s => !(s.year === cur.year && s.quarter === cur.quarter)) || [];
   const avgEarnings = pastSettlements.length > 0
@@ -115,12 +138,19 @@ export function useClientKPIs(clientId?: string) {
     kwhLoaded: currentKwh,
     chargePointsOnline: onlineCount,
     chargePointsTotal: totalCount,
-    offlineCount: totalCount - onlineCount,
+    offlineCount,
     earningsChange,
     kwhChange,
     avgEarnings,
     avgKwh,
     settlements: settlements || [],
     currentQuarter: cur,
+
+    // Cockpit-gauges over de laatste 12 maanden (4 kwartalen)
+    ttmKwh,
+    ttmGross,
+    ttmPayout,
+    ttmEreCo2,
+    ttmEreClientRevenue,
   };
 }
