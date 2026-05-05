@@ -25,3 +25,13 @@ dist-ssr
 
 # Claude Code (per-developer)
 .claude/
+
+# Local environment — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# Pentest tracking files (per audit, niet in repo)
+.sb-pentest-context.json
+.sb-pentest-audit.log
+.sb-pentest-evidence/
