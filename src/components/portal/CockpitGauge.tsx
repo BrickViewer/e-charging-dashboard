@@ -1,11 +1,10 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState } from "react";
 
 interface CockpitGaugeProps {
   value: number;
   max: number;
   label: string;
   sublabel?: string;
-  icon?: ReactNode;
   color?: "red" | "blue" | "green";
   size?: "md" | "xl";
   formatValue?: (v: number) => string;
@@ -41,7 +40,6 @@ export function CockpitGauge({
   max,
   label,
   sublabel,
-  icon,
   color = "blue",
   size = "md",
   formatValue,
@@ -50,14 +48,17 @@ export function CockpitGauge({
   const id = useId();
   const isXl = size === "xl";
 
-  const svgSize = isXl ? 380 : 240;
+  const svgSize = isXl ? 440 : 250;
   const cx = svgSize / 2;
   const cy = svgSize / 2;
-  const radius = isXl ? 150 : 95;
-  const strokeWidth = isXl ? 5 : 3;
-  const tickInner = radius - (isXl ? 14 : 10);
-  const tickOuter = radius + (isXl ? 6 : 4);
-  const labelRadius = radius + (isXl ? 22 : 18);
+  const radius = isXl ? 175 : 100;
+  const renderWidth = isXl
+    ? "clamp(480px, 72vh, 1320px)"
+    : "clamp(220px, 30vh, 480px)";
+  const strokeWidth = isXl ? 6 : 3;
+  const tickInner = radius - (isXl ? 16 : 10);
+  const tickOuter = radius + (isXl ? 7 : 4);
+  const labelRadius = radius + (isXl ? 26 : 18);
 
   const [animatedProgress, setAnimatedProgress] = useState(0);
   const clamped = Math.min(Math.max(value, 0), max);
@@ -84,9 +85,12 @@ export function CockpitGauge({
   return (
     <div className="flex flex-col items-center select-none">
       <svg
-        width={svgSize}
-        height={svgSize * 0.78}
+        style={{
+          width: renderWidth,
+          height: `calc(${renderWidth} * 0.78)`,
+        }}
         viewBox={`0 0 ${svgSize} ${svgSize * 0.82}`}
+        preserveAspectRatio="xMidYMid meet"
         className="overflow-visible"
       >
         <defs>
@@ -174,28 +178,14 @@ export function CockpitGauge({
           );
         })()}
 
-        {/* Icon (top-center inside arc) */}
-        {icon && (
-          <foreignObject
-            x={cx - (isXl ? 22 : 16)}
-            y={cy - (isXl ? 78 : 50)}
-            width={isXl ? 44 : 32}
-            height={isXl ? 44 : 32}
-          >
-            <div className="w-full h-full flex items-center justify-center text-muted-foreground/70">
-              {icon}
-            </div>
-          </foreignObject>
-        )}
-
         {/* Central value */}
         <text
           x={cx}
-          y={cy + (isXl ? 6 : 4)}
+          y={cy + (isXl ? 8 : 4)}
           textAnchor="middle"
           dominantBaseline="middle"
           fill="hsl(var(--foreground))"
-          fontSize={isXl ? 64 : 36}
+          fontSize={isXl ? 72 : 38}
           fontWeight="700"
           fontFamily="var(--font-family)"
           letterSpacing={isXl ? "0.02em" : "0.01em"}
@@ -208,10 +198,10 @@ export function CockpitGauge({
         {sublabel && (
           <text
             x={cx}
-            y={cy + (isXl ? 44 : 28)}
+            y={cy + (isXl ? 50 : 30)}
             textAnchor="middle"
             fill="hsl(var(--muted-foreground))"
-            fontSize={isXl ? 14 : 11}
+            fontSize={isXl ? 15 : 11}
             fontFamily="var(--font-family)"
             letterSpacing="0.08em"
           >
@@ -220,8 +210,8 @@ export function CockpitGauge({
         )}
       </svg>
       <span
-        className="text-xs font-medium uppercase tracking-wider text-muted-foreground/80 mt-1 text-center px-2"
-        style={{ letterSpacing: "0.12em" }}
+        className={`${isXl ? "text-sm mt-6" : "text-xs mt-5"} font-medium uppercase tracking-wider text-muted-foreground/85 text-center px-2`}
+        style={{ letterSpacing: "0.14em" }}
       >
         {label}
       </span>

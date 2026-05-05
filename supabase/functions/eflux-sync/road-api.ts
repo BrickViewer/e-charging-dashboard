@@ -77,6 +77,20 @@ export interface RoadCostSetting {
   pricePerKwh: number;
 }
 
+export interface RoadConnector {
+  id?: string;
+  connectorId: number;
+  evseId?: string;
+  maxPower?: number;
+  amperage?: number;
+  standard?: string;
+  format?: string;
+  powerType?: string;
+  maxVoltage?: number;
+  maxAmperage?: number;
+  status?: string;
+}
+
 export interface RoadEVSEController {
   id: string;
   providerId: string;
@@ -84,14 +98,42 @@ export interface RoadEVSEController {
   locationId: string;
   evseId: string;
   ocppIdentity: string;
+  name?: string;
   serialNumber?: string;
+  modelNumber?: string;
+  vendorName?: string;
   numConnectors?: number;
   maxPower?: number;
   isDisabled?: boolean;
   connectivityState?: "connected" | "maybe-connected" | "disconnected" | "access-denied" | "unknown" | "pending-first-connection";
   heartbeatReceivedAt?: string;
   costSettings?: RoadCostSetting[];
+  connectors?: RoadConnector[];
+  firmwareVersion?: string;
+  tariffProfileId?: string;
+  evseOperationalStatusId?: string;
+  evseOperationalStatus?: { canonicalStatus?: string; billingStatus?: string; label?: string };
   createdAt?: string;
+}
+
+export interface RoadLocation {
+  id: string;
+  providerId?: string;
+  accountId?: string;
+  name?: string;
+  address?: string;
+  street?: string;
+  houseNumber?: string;
+  postalCode?: string;
+  city?: string;
+  province?: string;
+  country?: string;
+  countryCode?: string;
+  coordinates?: { latitude?: number; longitude?: number };
+  latitude?: number;
+  longitude?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateEvseBody {
@@ -123,8 +165,26 @@ export interface RoadCPOSession {
   status?: "ACTIVE" | "COMPLETED";
   powerType?: "ac" | "dc";
   excluded?: boolean;
+  currency?: string;
+  tokenInfraProviderId?: string;
+  tokenUid?: string;
+  tokenIssuerName?: string;
+  paymentFlow?: string;
+  isRoaming?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface RoadReimbursement {
+  sessionId: string;
+  total?: number;        // wat de location-eigenaar krijgt (excl. BTW)
+  currency?: string;
+  breakdown?: Array<{
+    accountId?: string;
+    userId?: string;
+    amount?: number;
+    type?: string;       // "energy" / "time" / "fixed" / etc.
+  }>;
 }
 
 export interface SearchAccountsParams { skip?: number; limit?: number; searchPhrase?: string; }
@@ -227,6 +287,20 @@ export class RoadClient {
   }
   getCpoSession(id: string): Promise<RoadCPOSession> {
     return this.request("GET", `/2/sessions/cpo/${id}`);
+  }
+
+  // Authoritative payout-breakdown per sessie. Wordt gebruikt om
+  // reimbursement_amount te zetten op charging_sessions, zodat onze
+  // settlements 1:1 matchen met Road's self-billing PDF.
+  getReimbursements(sessionId: string): Promise<RoadReimbursement> {
+    return this.request("GET", `/2/sessions/cpo/${sessionId}/reimbursements`);
+  }
+
+  // Locations: er staat geen locations-search in de publieke spec.
+  // GET /1/locations/{id} is empirisch te valideren — gebruiken we
+  // best-effort tijdens sync. Kan 404 geven; caller moet dat opvangen.
+  getLocation(id: string): Promise<RoadLocation> {
+    return this.request("GET", `/1/locations/${id}`);
   }
 }
 

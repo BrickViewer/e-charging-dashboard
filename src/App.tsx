@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import ClientLayout from "./layouts/ClientLayout";
 import AdminLayout from "./layouts/AdminLayout";
 import NotFound from "./pages/NotFound";
+import InviteAccept from "./pages/InviteAccept";
 
 // Client portal pages
 const ClientDashboard = lazy(() => import("./pages/portal/ClientDashboard"));
@@ -24,12 +25,9 @@ const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminClients = lazy(() => import("./pages/admin/AdminClients"));
 const AdminClientWizard = lazy(() => import("./pages/admin/AdminClientWizard"));
 const AdminClientDetail = lazy(() => import("./pages/admin/AdminClientDetail"));
-const AdminCalculator = lazy(() => import("./pages/admin/AdminCalculator"));
-const AdminQuotes = lazy(() => import("./pages/admin/AdminQuotes"));
-const AdminQuoteCreate = lazy(() => import("./pages/admin/AdminQuoteCreate"));
-const AdminQuoteDetail = lazy(() => import("./pages/admin/AdminQuoteDetail"));
 const AdminFinancial = lazy(() => import("./pages/admin/AdminFinancial"));
-const AdminChargePoints = lazy(() => import("./pages/admin/AdminChargePoints"));
+const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
+const AdminLocationDetail = lazy(() => import("./pages/admin/AdminLocationDetail"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 
 const queryClient = new QueryClient();
@@ -70,6 +68,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<AuthRedirect />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/uitnodiging/:token" element={<InviteAccept />} />
 
               {/* Client Portal */}
               <Route path="/portal" element={
@@ -95,12 +94,9 @@ const App = () => (
                 <Route path="klanten" element={<AdminClients />} />
                 <Route path="klanten/nieuw" element={<AdminClientWizard />} />
                 <Route path="klanten/:id" element={<AdminClientDetail />} />
-                <Route path="offertes" element={<AdminQuotes />} />
-                <Route path="offertes/nieuw" element={<AdminQuoteCreate />} />
-                <Route path="offertes/:id" element={<AdminQuoteDetail />} />
-                <Route path="calculator" element={<AdminCalculator />} />
+                <Route path="locaties" element={<AdminLocations />} />
+                <Route path="locaties/:id" element={<AdminLocationDetail />} />
                 <Route path="financieel" element={<AdminFinancial />} />
-                <Route path="laadpunten" element={<AdminChargePoints />} />
                 <Route path="instellingen" element={<AdminSettings />} />
               </Route>
 

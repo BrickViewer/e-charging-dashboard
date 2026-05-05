@@ -5,12 +5,59 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Mail, MailCheck, MailWarning, MailX } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const PAGE_SIZE = 20;
+
+function PortalStatus({ client }: { client: any }) {
+  // Hover-tooltip via title-attribute, kleine icoon zonder tekst (compact)
+  if (client.portal_user_id) {
+    return (
+      <span title="Account actief — klant kan inloggen" className="inline-flex">
+        <MailCheck className="w-4 h-4 text-primary" />
+      </span>
+    );
+  }
+  const inv = client.latest_invitation;
+  if (!inv) {
+    return (
+      <span title="Nog geen uitnodiging verstuurd" className="inline-flex">
+        <MailX className="w-4 h-4 text-muted-foreground" />
+      </span>
+    );
+  }
+  const isExpired =
+    inv.status === "pending" && new Date(inv.expires_at).getTime() < Date.now();
+  if (inv.status === "accepted") {
+    return (
+      <span title="Uitnodiging geaccepteerd" className="inline-flex">
+        <MailCheck className="w-4 h-4 text-primary" />
+      </span>
+    );
+  }
+  if (inv.status === "expired" || isExpired) {
+    return (
+      <span title="Uitnodiging verlopen — stuur opnieuw" className="inline-flex">
+        <MailWarning className="w-4 h-4 text-destructive" />
+      </span>
+    );
+  }
+  if (inv.status === "revoked") {
+    return (
+      <span title="Uitnodiging ingetrokken" className="inline-flex">
+        <MailX className="w-4 h-4 text-muted-foreground" />
+      </span>
+    );
+  }
+  return (
+    <span title={`Uitnodiging verstuurd, vervalt ${new Date(inv.expires_at).toLocaleDateString("nl-NL")}`} className="inline-flex">
+      <Mail className="w-4 h-4 text-warning" />
+    </span>
+  );
+}
 
 export default function AdminClients() {
   const { data: clients, isLoading } = useAllClients();
@@ -74,13 +121,14 @@ export default function AdminClients() {
                   <th className="text-right p-3 font-medium text-muted-foreground">Locaties</th>
                   <th className="text-right p-3 font-medium text-muted-foreground">Laadpunten</th>
                   <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
+                  <th className="text-center p-3 font-medium text-muted-foreground">Portal</th>
                   <th className="text-left p-3 font-medium text-muted-foreground">Aangemaakt</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b border-border">
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <td key={j} className="p-3"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
@@ -99,6 +147,7 @@ export default function AdminClients() {
                       <td className="p-3 text-right">{locs.length}</td>
                       <td className="p-3 text-right">{cps.length}</td>
                       <td className="p-3"><StatusBadge status={c.status || "prospect"} /></td>
+                      <td className="p-3 text-center"><PortalStatus client={c} /></td>
                       <td className="p-3 text-muted-foreground">
                         {new Date(c.created_at).toLocaleDateString("nl-NL")}
                       </td>
@@ -106,7 +155,7 @@ export default function AdminClients() {
                   );
                 })}
                 {!isLoading && filtered.length === 0 && (
-                  <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Geen klanten gevonden</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Geen klanten gevonden</td></tr>
                 )}
               </tbody>
             </table>

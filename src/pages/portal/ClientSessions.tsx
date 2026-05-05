@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, subDays, subMonths } from "date-fns";
 import { nl } from "date-fns/locale";
-import { Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Download, ChevronLeft, ChevronRight, Zap, Euro, BatteryCharging } from "lucide-react";
 import { useState, useMemo } from "react";
 
 const PAGE_SIZE = 20;
@@ -37,7 +37,6 @@ export default function ClientSessions() {
   const [chargePointFilter, setChargePointFilter] = useState("all");
   const [page, setPage] = useState(0);
 
-  // Get all charge points from locations for the filter dropdown
   const allChargePoints = useMemo(() => {
     if (!locations) return [];
     return locations.flatMap((l: any) => (l.charge_points || []).map((cp: any) => ({
@@ -65,7 +64,6 @@ export default function ClientSessions() {
     enabled: !!client?.id,
   });
 
-  // Reset page on filter change
   const filtered = useMemo(() => {
     const result = sessions?.filter((s: any) =>
       (s.charge_points?.name || "").toLowerCase().includes(search.toLowerCase())
@@ -73,12 +71,11 @@ export default function ClientSessions() {
     return result;
   }, [sessions, search]);
 
-  // Pagination
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  // Totals
   const totals = useMemo(() => ({
+    sessions: filtered.length,
     kwh: filtered.reduce((s, r: any) => s + Number(r.kwh_delivered || 0), 0),
     gross: filtered.reduce((s, r: any) => s + Number(r.gross_revenue || 0), 0),
     share: filtered.reduce((s, r: any) => s + Number(r.client_share || 0), 0),
@@ -100,24 +97,72 @@ export default function ClientSessions() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Laadsessies</h1>
-        <Button variant="outline" size="sm" onClick={exportCSV}>
-          <Download className="w-4 h-4 mr-2" />
-          CSV Export
-        </Button>
+      {/* Snapshot KPI's voor het huidige filter */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="portal-card">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <BatteryCharging className="w-4 h-4 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="cockpit-section-label">Sessies</p>
+                <p className="text-base font-semibold tabular-nums mt-0.5">{totals.sessions}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="portal-card">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                <Zap className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="cockpit-section-label">kWh geleverd</p>
+                <p className="text-base font-semibold tabular-nums mt-0.5">{totals.kwh.toFixed(1)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="portal-card">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-muted/50 border border-border flex items-center justify-center">
+                <Euro className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0">
+                <p className="cockpit-section-label">Bruto omzet</p>
+                <p className="text-base font-semibold tabular-nums mt-0.5">€{totals.gross.toFixed(2)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="portal-card">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <Euro className="w-4 h-4 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="cockpit-section-label">Uw opbrengst</p>
+                <p className="text-base font-semibold text-primary tabular-nums mt-0.5">€{totals.share.toFixed(2)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      {/* Filters + export — cockpit control row */}
+      <div className="flex flex-wrap items-center justify-center gap-3">
         <Input
           placeholder="Zoek op laadpunt..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          className="max-w-[200px]"
+          className="w-full sm:w-[220px] portal-card"
         />
         <Select value={dateRange} onValueChange={(v) => { setDateRange(v); setPage(0); }}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] portal-card">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -127,7 +172,7 @@ export default function ClientSessions() {
           </SelectContent>
         </Select>
         <Select value={chargePointFilter} onValueChange={(v) => { setChargePointFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-[200px] portal-card">
             <SelectValue placeholder="Alle laadpunten" />
           </SelectTrigger>
           <SelectContent>
@@ -137,44 +182,40 @@ export default function ClientSessions() {
             ))}
           </SelectContent>
         </Select>
+        <Button variant="outline" size="sm" onClick={exportCSV} className="portal-card">
+          <Download className="w-4 h-4 mr-2" />
+          CSV Export
+        </Button>
       </div>
 
-      <Card>
+      {/* Sessietabel */}
+      <Card className="portal-card">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left p-3 text-muted-foreground font-medium">Datum</th>
-                  <th className="text-left p-3 text-muted-foreground font-medium">Laadpunt</th>
-                  <th className="text-right p-3 text-muted-foreground font-medium">Duur</th>
-                  <th className="text-right p-3 text-muted-foreground font-medium">kWh</th>
-                  <th className="text-right p-3 text-muted-foreground font-medium">Bruto</th>
-                  <th className="text-right p-3 text-muted-foreground font-medium">Uw opbrengst</th>
+                  <th className="text-left p-3 cockpit-section-label">Datum</th>
+                  <th className="text-left p-3 cockpit-section-label">Laadpunt</th>
+                  <th className="text-right p-3 cockpit-section-label">Duur</th>
+                  <th className="text-right p-3 cockpit-section-label">kWh</th>
+                  <th className="text-right p-3 cockpit-section-label">Bruto</th>
+                  <th className="text-right p-3 cockpit-section-label">Uw opbrengst</th>
                 </tr>
               </thead>
               <tbody>
                 {paged.map((s: any) => (
-                  <tr key={s.id} className="border-b border-border last:border-0 hover:bg-accent/50">
+                  <tr key={s.id} className="border-b border-border last:border-0 hover:bg-accent/40 transition-colors">
                     <td className="p-3">{s.started_at ? format(new Date(s.started_at), "d MMM yyyy HH:mm", { locale: nl }) : "-"}</td>
                     <td className="p-3">{s.charge_points?.name || "-"}</td>
-                    <td className="p-3 text-right">{s.duration_minutes ? `${Math.floor(s.duration_minutes / 60)}u ${s.duration_minutes % 60}m` : "-"}</td>
-                    <td className="p-3 text-right">{Number(s.kwh_delivered || 0).toFixed(1)}</td>
-                    <td className="p-3 text-right">€{Number(s.gross_revenue || 0).toFixed(2)}</td>
-                    <td className="p-3 text-right text-primary font-medium">€{Number(s.client_share || 0).toFixed(2)}</td>
+                    <td className="p-3 text-right tabular-nums">{s.duration_minutes ? `${Math.floor(s.duration_minutes / 60)}u ${s.duration_minutes % 60}m` : "-"}</td>
+                    <td className="p-3 text-right tabular-nums">{Number(s.kwh_delivered || 0).toFixed(1)}</td>
+                    <td className="p-3 text-right tabular-nums">€{Number(s.gross_revenue || 0).toFixed(2)}</td>
+                    <td className="p-3 text-right text-primary font-medium tabular-nums">€{Number(s.client_share || 0).toFixed(2)}</td>
                   </tr>
                 ))}
                 {filtered.length === 0 && !isLoading && (
-                  <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Geen sessies gevonden</td></tr>
-                )}
-                {/* Totals row */}
-                {filtered.length > 0 && (
-                  <tr className="bg-muted/50 font-medium">
-                    <td className="p-3" colSpan={3}>Totaal ({filtered.length} sessies)</td>
-                    <td className="p-3 text-right">{totals.kwh.toFixed(1)}</td>
-                    <td className="p-3 text-right">€{totals.gross.toFixed(2)}</td>
-                    <td className="p-3 text-right text-primary">€{totals.share.toFixed(2)}</td>
-                  </tr>
+                  <tr><td colSpan={6} className="p-12 text-center text-muted-foreground">Geen sessies gevonden</td></tr>
                 )}
               </tbody>
             </table>
@@ -182,17 +223,17 @@ export default function ClientSessions() {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
+      {/* Paginering */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
             Pagina {page + 1} van {totalPages}
           </p>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)} className="portal-card">
               <ChevronLeft className="w-4 h-4 mr-1" /> Vorige
             </Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+            <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="portal-card">
               Volgende <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>

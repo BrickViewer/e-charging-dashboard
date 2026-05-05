@@ -21,20 +21,16 @@ export function SettlementDetailRow({ settlement }: { settlement: any }) {
               <p className="font-medium">{fmt(Number(settlement.total_platform_fee || 0))}</p>
             </div>
             <div>
-              <p className="text-muted-foreground mb-1">Laadbeloning commissie</p>
-              <p className="font-medium">{fmt(Number(settlement.ere_commission || 0))}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-1">ERE schatting</p>
-              <p className="font-medium">{fmt(Number(settlement.ere_estimate || 0))}</p>
-            </div>
-            <div>
               <p className="text-muted-foreground mb-1">Stripe transfer</p>
               <p className="font-medium">{settlement.stripe_transfer_id || "—"}</p>
             </div>
             <div>
               <p className="text-muted-foreground mb-1">Betaald op</p>
               <p className="font-medium">{settlement.paid_at ? new Date(settlement.paid_at).toLocaleDateString("nl-NL") : "—"}</p>
+            </div>
+            <div className="md:col-span-3">
+              <p className="text-muted-foreground mb-1">Geschatte ERE-opbrengst (via Laadbeloning, niet via ons)</p>
+              <p className="font-medium text-green-700 dark:text-green-400">~{fmt(Number(settlement.ere_estimate || 0))} <span className="text-xs text-muted-foreground font-normal">indicatief</span></p>
             </div>
           </div>
         </div>

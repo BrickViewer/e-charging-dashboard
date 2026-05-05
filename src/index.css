@@ -205,6 +205,36 @@
     border-color: hsl(var(--border));
   }
 
+  /* Cockpit-titel — gecentreerde paginalabel die in de cockpit-arc zweeft.
+     Lichte weight, ruime tracking voor een dashboard/cockpit-gevoel. */
+  .cockpit-title {
+    font-family: var(--font-family);
+    font-size: clamp(1.0625rem, 2.5vh, 1.75rem);
+    font-weight: 300;
+    color: hsl(0 0% 96%);
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    user-select: none;
+    text-shadow: 0 2px 14px hsl(0 0% 0% / 0.55);
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  /* Subtiel accentlijntje onder de cockpit-titel — optioneel onderscheidsteken */
+  .cockpit-title-accent {
+    height: 1px;
+    width: clamp(40px, 6vh, 72px);
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.25), transparent);
+  }
+
+  /* Section-label — uppercase tracking voor secties binnen pagina's, past bij cockpit-stijl */
+  .cockpit-section-label {
+    @apply uppercase text-muted-foreground;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+  }
+
   /* Status badges */
   .badge-actief {
     @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;

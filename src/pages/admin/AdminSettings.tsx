@@ -27,7 +27,7 @@ export default function AdminSettings() {
   const queryClient = useQueryClient();
 
   // Company tab state
-  const [company, setCompany] = useState({ name: "", kvk: "", address: "", phone: "", email: "", logo_url: "" });
+  const [company, setCompany] = useState({ name: "", kvk: "", address: "", phone: "", email: "", logo_url: "", dashboard_url: "" });
   const [savingCompany, setSavingCompany] = useState(false);
 
   // Defaults tab state
@@ -69,6 +69,7 @@ export default function AdminSettings() {
     setCompany({
       name: org.name || "", kvk: org.kvk || "", address: org.address || "",
       phone: org.phone || "", email: org.email || "", logo_url: org.logo_url || "",
+      dashboard_url: (org as any).dashboard_url || "http://localhost:8080",
     });
     setDefaults({
       default_charge_rate_per_kwh: String(org.default_charge_rate_per_kwh ?? "0.45"),
@@ -93,6 +94,7 @@ export default function AdminSettings() {
       const { error } = await supabase.from("organizations").update({
         name: company.name, kvk: company.kvk || null, address: company.address || null,
         phone: company.phone || null, email: company.email || null, logo_url: company.logo_url || null,
+        dashboard_url: company.dashboard_url || null,
       }).eq("id", org.id);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["admin-organization"] });
@@ -198,6 +200,18 @@ export default function AdminSettings() {
                 <div><Label>Telefoon</Label><Input value={company.phone} onChange={e => setCompany(p => ({ ...p, phone: e.target.value }))} /></div>
                 <div><Label>E-mail</Label><Input type="email" value={company.email} onChange={e => setCompany(p => ({ ...p, email: e.target.value }))} /></div>
                 <div><Label>Logo URL</Label><Input value={company.logo_url} onChange={e => setCompany(p => ({ ...p, logo_url: e.target.value }))} placeholder="https://..." /></div>
+              </div>
+              <div className="pt-4 border-t border-border">
+                <Label>Dashboard-URL <span className="text-xs text-muted-foreground font-normal">(voor invitatie-links in mails)</span></Label>
+                <Input
+                  value={company.dashboard_url}
+                  onChange={e => setCompany(p => ({ ...p, dashboard_url: e.target.value }))}
+                  placeholder="https://app.e-charging.nl"
+                  className="mt-1.5"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Bepaalt waar invitatie-links naartoe wijzen. In dev: <code className="text-xs px-1 py-0.5 rounded bg-muted">http://localhost:8080</code>. In productie: jouw publieke domein.
+                </p>
               </div>
               <Button onClick={handleSaveCompany} disabled={savingCompany}>
                 <Save className="w-4 h-4 mr-2" />{savingCompany ? "Opslaan..." : "Opslaan"}

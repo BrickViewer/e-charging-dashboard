@@ -17,9 +17,21 @@ export function useAllClients() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("*, locations(*, charge_points(*))");
+        .select(
+          "*, locations(*, charge_points(*)), client_invitations(id, status, invited_at, expires_at)",
+        );
       if (error) throw error;
-      return data;
+      // Pak de meest recente invitation per klant (Supabase select geeft array)
+      return (data ?? []).map((c: any) => {
+        const invites = (c.client_invitations ?? []) as any[];
+        const latest = invites
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(b.invited_at).getTime() - new Date(a.invited_at).getTime(),
+          )[0];
+        return { ...c, latest_invitation: latest ?? null };
+      });
     },
   });
 }
@@ -119,36 +131,6 @@ export function useAllSettlements() {
   });
 }
 
-export function useAllQuotes() {
-  return useQuery({
-    queryKey: ["admin-quotes"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("quotes")
-        .select("*, clients(company_name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-}
-
-export function useQuoteById(id: string | undefined) {
-  return useQuery({
-    queryKey: ["admin-quote", id],
-    enabled: !!id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("quotes")
-        .select("*, clients(company_name)")
-        .eq("id", id!)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
-}
-
 export function useAllSessions(limit = 1000) {
   return useQuery({
     queryKey: ["admin-sessions", limit],
@@ -191,6 +173,89 @@ export function useUnlinkedLocations() {
       if (error) throw error;
       return data;
     },
+  });
+}
+
+// Alle locaties met laadpunten + klant-info — voor de admin Locaties-pagina.
+export function useAllLocations() {
+  return useQuery({
+    queryKey: ["admin-locations"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*, charge_points(id, status, connectivity_state), clients(id, company_name, status)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useLocationById(id: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-location", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*, charge_points(*), clients(id, company_name, status, contact_name, contact_email)")
+        .eq("id", id!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useLocationSessions(locationId: string | undefined, limit = 50) {
+  return useQuery({
+    queryKey: ["admin-location-sessions", locationId, limit],
+    enabled: !!locationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_sessions")
+        .select("*, charge_points(name), clients(company_name)")
+        .eq("location_id", locationId!)
+        .order("started_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+// Laatste invitation per klant — voor status-indicator + "opnieuw versturen"-knop.
+export function useClientInvitation(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-client-invitation", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_invitations")
+        .select("*")
+        .eq("client_id", clientId!)
+        .order("invited_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error && error.code !== "PGRST116") throw error;
+      return data;
+    },
+  });
+}
+
+export function useLatestEfluxSync() {
+  return useQuery({
+    queryKey: ["admin-latest-sync"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("eflux_sync_log")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 60_000, // 1 min
   });
 }
 

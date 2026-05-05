@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useClientById, useClientSettlements, useClientActivity, useClientSessions, useUnlinkedLocations } from "@/hooks/useAdminData";
+import { useClientById, useClientSettlements, useClientActivity, useClientSessions, useClientInvitation } from "@/hooks/useAdminData";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { ConnectivityIndicator } from "@/components/admin/ConnectivityIndicator";
 import { formatEuro, formatNumber } from "@/services/calculations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,18 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, ChevronDown, MapPin, Zap, FileText, Activity, Building2, Upload, Pencil, Save, X, Link, Unlink } from "lucide-react";
+import {
+  ArrowLeft, MapPin, Zap, FileText, Activity, Building2, Upload, Pencil, Save, X,
+  Mail, MailCheck, MailWarning, RefreshCw, Loader2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { updateLocation } from "@/services/locations";
-import { updateChargePoint } from "@/services/chargePoints";
+import { format } from "date-fns";
+import { nl } from "date-fns/locale";
 
 export default function AdminClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -32,27 +30,38 @@ export default function AdminClientDetail() {
   const { data: settlements } = useClientSettlements(id);
   const { data: activity } = useClientActivity(id);
   const { data: sessions } = useClientSessions(id);
-  const { data: unlinkedLocations } = useUnlinkedLocations();
+  const { data: invitation } = useClientInvitation(id);
 
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
+  const [sendingInvite, setSendingInvite] = useState(false);
 
-  // Link location dialog state
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [linkTab, setLinkTab] = useState<"existing" | "new">("existing");
-  const [selectedUnlinkedId, setSelectedUnlinkedId] = useState<string>("");
-  const [linkSaving, setLinkSaving] = useState(false);
-
-  // New location form state
-  const [newLoc, setNewLoc] = useState({
-    name: "", address: "", postal_code: "", city: "",
-    property_type: "kantoor", parking_spots: "",
-    ean_code: "", has_solar: false, solar_capacity_kwp: "",
-  });
-
-  // eFlux inline edit state
-  const [efluxEdits, setEfluxEdits] = useState<Record<string, string>>({});
+  const handleSendInvitation = async (isResend = false) => {
+    if (!id) return;
+    setSendingInvite(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-client-invitation", {
+        body: { client_id: id, resend: isResend },
+      });
+      if (error) throw error;
+      if (data?.status === "sent") {
+        toast.success(`Uitnodiging verstuurd naar ${data.to}`);
+      } else if (data?.status === "not_configured") {
+        toast.error("Resend nog niet geconfigureerd. Voeg RESEND_API_KEY toe in Supabase secrets.");
+      } else if (data?.status === "already_linked") {
+        toast.info("Klant heeft al een actief portal-account");
+      } else {
+        toast.error(data?.message || "Versturen mislukt");
+      }
+      queryClient.invalidateQueries({ queryKey: ["admin-client-invitation", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
+    } catch (err: any) {
+      toast.error(err.message || "Versturen mislukt");
+    } finally {
+      setSendingInvite(false);
+    }
+  };
 
   const startEditing = () => {
     if (!client) return;
@@ -116,95 +125,6 @@ export default function AdminClientDetail() {
     }
   };
 
-  const invalidateLocationQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
-    queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
-    queryClient.invalidateQueries({ queryKey: ["unlinked-locations"] });
-    queryClient.invalidateQueries({ queryKey: ["admin-chargepoints"] });
-  };
-
-  const handleLinkExisting = async () => {
-    if (!selectedUnlinkedId || !id) return;
-    setLinkSaving(true);
-    try {
-      const { error } = await supabase.from("locations").update({ client_id: id }).eq("id", selectedUnlinkedId);
-      if (error) throw error;
-      invalidateLocationQueries();
-      toast.success("Locatie gekoppeld aan deze klant");
-      setLinkDialogOpen(false);
-      setSelectedUnlinkedId("");
-    } catch (err: any) {
-      toast.error(err.message || "Fout bij koppelen");
-    } finally {
-      setLinkSaving(false);
-    }
-  };
-
-  const handleCreateNewLocation = async () => {
-    if (!id || !newLoc.name) return;
-    setLinkSaving(true);
-    try {
-      const { error } = await supabase.from("locations").insert({
-        client_id: id,
-        name: newLoc.name,
-        address: newLoc.address || null,
-        postal_code: newLoc.postal_code || null,
-        city: newLoc.city || null,
-        property_type: newLoc.property_type || "kantoor",
-        parking_spots: newLoc.parking_spots ? Number(newLoc.parking_spots) : null,
-        ean_code: newLoc.ean_code || null,
-        has_solar: newLoc.has_solar,
-        solar_capacity_kwp: newLoc.has_solar && newLoc.solar_capacity_kwp ? Number(newLoc.solar_capacity_kwp) : null,
-      });
-      if (error) throw error;
-      invalidateLocationQueries();
-      toast.success("Nieuwe locatie aangemaakt en gekoppeld");
-      setLinkDialogOpen(false);
-      setNewLoc({ name: "", address: "", postal_code: "", city: "", property_type: "kantoor", parking_spots: "", ean_code: "", has_solar: false, solar_capacity_kwp: "" });
-    } catch (err: any) {
-      toast.error(err.message || "Fout bij aanmaken");
-    } finally {
-      setLinkSaving(false);
-    }
-  };
-
-  const handleUnlinkLocation = async (locId: string) => {
-    try {
-      const { error } = await supabase.from("locations").update({ client_id: null }).eq("id", locId);
-      if (error) throw error;
-      invalidateLocationQueries();
-      toast.success("Locatie ontkoppeld");
-    } catch (err: any) {
-      toast.error(err.message || "Fout bij ontkoppelen");
-    }
-  };
-
-  const handleSaveEfluxLocation = async (locId: string) => {
-    const value = efluxEdits[`loc_${locId}`];
-    if (value === undefined) return;
-    try {
-      const { error } = await updateLocation(locId, { eflux_location_id: value || null });
-      if (error) throw error;
-      invalidateLocationQueries();
-      toast.success("e-Flux Location ID opgeslagen");
-    } catch (err: any) {
-      toast.error(err.message || "Fout bij opslaan");
-    }
-  };
-
-  const handleSaveEfluxCP = async (cpId: string) => {
-    const value = efluxEdits[`cp_${cpId}`];
-    if (value === undefined) return;
-    try {
-      const { error } = await updateChargePoint(cpId, { eflux_evse_controller_id: value || null });
-      if (error) throw error;
-      invalidateLocationQueries();
-      toast.success("e-Flux EVSE ID opgeslagen");
-    } catch (err: any) {
-      toast.error(err.message || "Fout bij opslaan");
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -258,6 +178,110 @@ export default function AdminClientDetail() {
           </>
         )}
       </div>
+
+      {/* Invitatie / portal-account paneel */}
+      <Card>
+        <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
+          {(client as any).portal_user_id ? (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                  <MailCheck className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Portal-account actief</p>
+                  <p className="text-xs text-muted-foreground">
+                    {client.contact_email} kan inloggen op /portal
+                  </p>
+                </div>
+              </div>
+            </>
+          ) : invitation && invitation.status === "pending" ? (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-warning/10 border border-warning/20 flex items-center justify-center">
+                  <Mail className="w-4 h-4 text-warning" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Uitnodiging verstuurd</p>
+                  <p className="text-xs text-muted-foreground">
+                    {invitation.email} —{" "}
+                    {invitation.last_resend_at
+                      ? `${invitation.resend_count + 1}× verstuurd, laatst ${format(new Date(invitation.last_resend_at), "d MMM HH:mm", { locale: nl })}`
+                      : `verstuurd ${format(new Date(invitation.invited_at), "d MMM HH:mm", { locale: nl })}`}
+                    {" "}· vervalt {format(new Date(invitation.expires_at), "d MMM yyyy", { locale: nl })}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSendInvitation(true)}
+                disabled={sendingInvite}
+              >
+                {sendingInvite ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Opnieuw versturen
+              </Button>
+            </>
+          ) : invitation && invitation.status === "expired" ? (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center justify-center">
+                  <MailWarning className="w-4 h-4 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Uitnodiging verlopen</p>
+                  <p className="text-xs text-muted-foreground">
+                    Verlopen op {format(new Date(invitation.expires_at), "d MMM yyyy", { locale: nl })} — stuur een nieuwe
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => handleSendInvitation(false)}
+                disabled={sendingInvite}
+              >
+                {sendingInvite ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4 mr-2" />
+                )}
+                Nieuwe uitnodiging
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-muted border border-border flex items-center justify-center">
+                  <Mail className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Geen portal-account</p>
+                  <p className="text-xs text-muted-foreground">
+                    Stuur de klant een uitnodiging om toegang te krijgen tot het portaal
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => handleSendInvitation(false)}
+                disabled={sendingInvite || !client.contact_email}
+              >
+                {sendingInvite ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4 mr-2" />
+                )}
+                Stuur uitnodiging
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="overzicht">
         <TabsList>
@@ -333,127 +357,74 @@ export default function AdminClientDetail() {
           </div>
         </TabsContent>
 
-        {/* Tab 2: Locaties & Laadpunten */}
+        {/* Tab 2: Locaties & Laadpunten — read-only, koppelen gebeurt via /admin/locaties */}
         <TabsContent value="locaties" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-medium">Locaties ({(client.locations || []).length})</h3>
-            <Button onClick={() => { setLinkDialogOpen(true); setLinkTab("existing"); }}>
-              <Link className="w-4 h-4 mr-1" />Locatie koppelen
+            <Button variant="outline" onClick={() => navigate("/admin/locaties?filter=unlinked")}>
+              <MapPin className="w-4 h-4 mr-1" />
+              Naar Locaties-overzicht
             </Button>
           </div>
 
           {(client.locations || []).length === 0 && (
-            <p className="text-muted-foreground text-center py-8">Geen locaties gekoppeld aan deze klant</p>
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                Geen locaties gekoppeld aan deze klant. Koppel een locatie via het{" "}
+                <button
+                  onClick={() => navigate("/admin/locaties")}
+                  className="text-primary hover:underline"
+                >
+                  Locaties-overzicht
+                </button>
+                .
+              </CardContent>
+            </Card>
           )}
-          {(client.locations || []).map((loc: any) => (
-            <Collapsible key={loc.id} defaultOpen>
-              <Card>
-                <CollapsibleTrigger className="w-full">
-                  <CardHeader className="flex flex-row items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <CardTitle className="text-base">{loc.name || "Locatie"}</CardTitle>
-                      <span className="text-sm text-muted-foreground">— {loc.address}{loc.city ? `, ${loc.city}` : ""}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Unlink className="w-4 h-4 mr-1" />Ontkoppelen
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Locatie ontkoppelen</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Weet je zeker dat je "{loc.name || "deze locatie"}" wilt ontkoppelen van deze klant?
-                              De locatie en laadpunten blijven bestaan maar zijn niet meer aan deze klant gekoppeld.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Annuleren</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleUnlinkLocation(loc.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                              Ontkoppelen
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                      <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="space-y-3">
-                    <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                      <span>Pandtype: {loc.property_type}</span>
-                      {loc.parking_spots && <span>Parkeerplaatsen: {loc.parking_spots}</span>}
-                      {loc.has_solar && <span>Solar: {loc.solar_capacity_kwp} kWp</span>}
-                      {loc.ean_code && <span>EAN: {loc.ean_code}</span>}
-                    </div>
 
-                    {/* eFlux Location ID */}
-                    <div className="flex items-center gap-2 p-2 rounded bg-muted/50">
-                      <Label className="text-xs text-muted-foreground whitespace-nowrap">e-Flux Location ID</Label>
-                      <Input
-                        className="h-7 text-xs max-w-xs"
-                        placeholder="Niet ingesteld"
-                        defaultValue={loc.eflux_location_id || ""}
-                        onChange={(e) => setEfluxEdits(prev => ({ ...prev, [`loc_${loc.id}`]: e.target.value }))}
-                      />
-                      {efluxEdits[`loc_${loc.id}`] !== undefined && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleSaveEfluxLocation(loc.id)}>
-                          <Save className="w-3 h-3 mr-1" />Opslaan
-                        </Button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {(client.locations || []).map((loc: any) => {
+              const cps = loc.charge_points || [];
+              const onlineCount = cps.filter(
+                (cp: any) => cp.status === "online" || cp.status === "in_use",
+              ).length;
+              return (
+                <Card
+                  key={loc.id}
+                  className="cursor-pointer hover:border-primary/40 transition-colors"
+                  onClick={() => navigate(`/admin/locaties/${loc.id}`)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                        <p className="font-medium text-sm truncate">
+                          {loc.name || loc.address || "Locatie"}
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                        {onlineCount}/{cps.length} online
+                      </span>
+                    </div>
+                    {loc.address && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {loc.address}
+                        {loc.city ? `, ${loc.city}` : ""}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-3 mt-3 text-xs text-muted-foreground">
+                      {loc.property_type && <span>Type: {loc.property_type}</span>}
+                      {loc.eflux_location_id && (
+                        <span className="font-mono">
+                          {loc.eflux_location_id.slice(0, 8)}…
+                        </span>
                       )}
                     </div>
-
-                    {(loc.charge_points || []).length > 0 && (
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-left p-2 font-medium text-muted-foreground">Naam</th>
-                            <th className="text-left p-2 font-medium text-muted-foreground">Type</th>
-                            <th className="text-left p-2 font-medium text-muted-foreground">Status</th>
-                            <th className="text-left p-2 font-medium text-muted-foreground">e-Flux EVSE ID</th>
-                            <th className="text-left p-2 font-medium text-muted-foreground">Laatste heartbeat</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(loc.charge_points || []).map((cp: any) => (
-                            <tr key={cp.id} className="border-b border-border last:border-0">
-                              <td className="p-2 font-medium">{cp.name}</td>
-                              <td className="p-2">{cp.type}</td>
-                              <td className="p-2"><ConnectivityIndicator state={cp.connectivity_state || "unknown"} /></td>
-                              <td className="p-2">
-                                <div className="flex items-center gap-1">
-                                  <Input
-                                    className="h-7 text-xs max-w-[180px]"
-                                    placeholder="Niet ingesteld"
-                                    defaultValue={cp.eflux_evse_controller_id || ""}
-                                    onChange={(e) => setEfluxEdits(prev => ({ ...prev, [`cp_${cp.id}`]: e.target.value }))}
-                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveEfluxCP(cp.id); }}
-                                    onBlur={() => { if (efluxEdits[`cp_${cp.id}`] !== undefined) handleSaveEfluxCP(cp.id); }}
-                                  />
-                                </div>
-                              </td>
-                              <td className="p-2 text-muted-foreground">
-                                {cp.last_heartbeat_at ? new Date(cp.last_heartbeat_at).toLocaleString("nl-NL") : "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
                   </CardContent>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
-          ))}
+                </Card>
+              );
+            })}
+          </div>
         </TabsContent>
 
         {/* Tab 3: Financieel */}
@@ -535,84 +506,6 @@ export default function AdminClientDetail() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Link Location Dialog */}
-      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Locatie koppelen</DialogTitle>
-          </DialogHeader>
-          <Tabs value={linkTab} onValueChange={(v) => setLinkTab(v as "existing" | "new")}>
-            <TabsList className="w-full">
-              <TabsTrigger value="existing" className="flex-1">Bestaande locatie</TabsTrigger>
-              <TabsTrigger value="new" className="flex-1">Nieuwe locatie</TabsTrigger>
-            </TabsList>
-            <TabsContent value="existing" className="space-y-4 pt-2">
-              {(!unlinkedLocations || unlinkedLocations.length === 0) ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Geen niet-gekoppelde locaties beschikbaar</p>
-              ) : (
-                <Select value={selectedUnlinkedId} onValueChange={setSelectedUnlinkedId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecteer een locatie..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {unlinkedLocations.map((loc) => (
-                      <SelectItem key={loc.id} value={loc.id}>
-                        {loc.name || "Naamloos"} — {loc.address || "Geen adres"}{loc.city ? `, ${loc.city}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Annuleren</Button>
-                <Button onClick={handleLinkExisting} disabled={!selectedUnlinkedId || linkSaving}>
-                  {linkSaving ? "Koppelen..." : "Koppelen"}
-                </Button>
-              </DialogFooter>
-            </TabsContent>
-            <TabsContent value="new" className="space-y-3 pt-2">
-              <div><Label>Naam *</Label><Input value={newLoc.name} onChange={e => setNewLoc(p => ({ ...p, name: e.target.value }))} /></div>
-              <div><Label>Adres</Label><Input value={newLoc.address} onChange={e => setNewLoc(p => ({ ...p, address: e.target.value }))} /></div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><Label>Postcode</Label><Input value={newLoc.postal_code} onChange={e => setNewLoc(p => ({ ...p, postal_code: e.target.value }))} /></div>
-                <div><Label>Plaats</Label><Input value={newLoc.city} onChange={e => setNewLoc(p => ({ ...p, city: e.target.value }))} /></div>
-              </div>
-              <div>
-                <Label>Type pand</Label>
-                <Select value={newLoc.property_type} onValueChange={v => setNewLoc(p => ({ ...p, property_type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="kantoor">Kantoor</SelectItem>
-                    <SelectItem value="bedrijfspand">Bedrijfspand</SelectItem>
-                    <SelectItem value="winkel">Winkel</SelectItem>
-                    <SelectItem value="woning">Woning</SelectItem>
-                    <SelectItem value="parkeergarage">Parkeergarage</SelectItem>
-                    <SelectItem value="overig">Overig</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><Label>Parkeerplaatsen</Label><Input type="number" value={newLoc.parking_spots} onChange={e => setNewLoc(p => ({ ...p, parking_spots: e.target.value }))} /></div>
-                <div><Label>EAN-code</Label><Input value={newLoc.ean_code} onChange={e => setNewLoc(p => ({ ...p, ean_code: e.target.value }))} /></div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch checked={newLoc.has_solar} onCheckedChange={v => setNewLoc(p => ({ ...p, has_solar: v }))} />
-                <Label>Eigen opwek (solar)</Label>
-                {newLoc.has_solar && (
-                  <Input type="number" step="0.1" placeholder="kWp" className="w-24" value={newLoc.solar_capacity_kwp} onChange={e => setNewLoc(p => ({ ...p, solar_capacity_kwp: e.target.value }))} />
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Annuleren</Button>
-                <Button onClick={handleCreateNewLocation} disabled={!newLoc.name || linkSaving}>
-                  {linkSaving ? "Aanmaken..." : "Aanmaken & koppelen"}
-                </Button>
-              </DialogFooter>
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

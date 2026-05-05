@@ -4,10 +4,8 @@ import { Logo } from "@/components/Logo";
 import {
   LayoutDashboard,
   Users,
-  FileText,
-  Calculator,
   Wallet,
-  Plug,
+  MapPin,
   Settings,
   LogOut,
   Menu,
@@ -20,10 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 const mainNavItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
   { to: "/admin/klanten", icon: Users, label: "Klanten" },
-  { to: "/admin/offertes", icon: FileText, label: "Offertes" },
-  { to: "/admin/calculator", icon: Calculator, label: "Calculator" },
+  { to: "/admin/locaties", icon: MapPin, label: "Locaties" },
   { to: "/admin/financieel", icon: Wallet, label: "Financieel" },
-  { to: "/admin/laadpunten", icon: Plug, label: "Laadpunten" },
 ];
 
 export default function AdminLayout() {

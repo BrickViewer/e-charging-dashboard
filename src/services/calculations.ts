@@ -1,3 +1,6 @@
+// ERE-stroom: Laadbeloning boekt ERE's in en betaalt direct aan klant.
+// Loopt NIET via E-Charging cashflow. Wij rekenen alleen een schatting voor
+// transparantie naar de klant — geen onderdeel van clientPayout/echargingRevenue.
 export interface CalculationParams {
   numChargePoints: number;
   kwhPerPointPerMonth: number;
@@ -6,7 +9,6 @@ export interface CalculationParams {
   revenueSharePct: number;
   efluxCostPerSocket: number;
   ereRatePerKwh: number;
-  ereCommissionRate?: number;
   transactionFeePct?: number;
   transactionFeeFixed?: number;
   averageSessionsPerMonth?: number;
@@ -20,13 +22,10 @@ export interface CalculationResult {
   energyCost: number;
   efluxPlatformFee: number;
   transactionFees: number;
-  netLaadmarge: number;
-  grossEre: number;
-  ereCommission: number;
-  netEre: number;
-  netMargin: number;
-  clientPayout: number;
-  echargingRevenue: number;
+  netMargin: number;          // alleen laad-margin, ERE telt NIET mee
+  clientPayout: number;       // 75% × netMargin (E-Charging stroom naar klant)
+  echargingRevenue: number;   // 25% × netMargin (onze 25% fee)
+  ereEstimate: number;        // schatting wat klant via Laadbeloning krijgt — informatief
 }
 
 export function calculateMonthly(params: CalculationParams): CalculationResult {
@@ -41,18 +40,15 @@ export function calculateMonthly(params: CalculationParams): CalculationResult {
   const sessions = params.averageSessionsPerMonth ?? 0;
   const transactionFees = (grossRevenue * transactionFeePct) + (sessions * transactionFeeFixed);
 
-  const netLaadmarge = grossRevenue - energyCost - efluxPlatformFee - transactionFees;
-
-  const grossEre = totalKwh * params.ereRatePerKwh;
-  const ereCommissionRate = params.ereCommissionRate ?? 0.10;
-  const ereCommission = grossEre * ereCommissionRate;
-  const netEre = grossEre - ereCommission;
-
-  const netMargin = netLaadmarge + netEre;
+  // Netto laadmarge — ERE telt NIET mee in onze cashflow.
+  const netMargin = grossRevenue - energyCost - efluxPlatformFee - transactionFees;
 
   const clientShareRatio = params.revenueSharePct / 100;
   const clientPayout = netMargin * clientShareRatio;
   const echargingRevenue = netMargin - clientPayout;
+
+  // Indicatieve ERE-opbrengst voor klant — Laadbeloning regelt uitbetaling separaat.
+  const ereEstimate = totalKwh * params.ereRatePerKwh;
 
   return {
     totalKwh,
@@ -60,13 +56,10 @@ export function calculateMonthly(params: CalculationParams): CalculationResult {
     energyCost,
     efluxPlatformFee,
     transactionFees,
-    netLaadmarge,
-    grossEre,
-    ereCommission,
-    netEre,
     netMargin,
     clientPayout,
     echargingRevenue,
+    ereEstimate,
   };
 }
 
@@ -77,13 +70,10 @@ function scaleResult(result: CalculationResult, factor: number): CalculationResu
     energyCost: result.energyCost * factor,
     efluxPlatformFee: result.efluxPlatformFee * factor,
     transactionFees: result.transactionFees * factor,
-    netLaadmarge: result.netLaadmarge * factor,
-    grossEre: result.grossEre * factor,
-    ereCommission: result.ereCommission * factor,
-    netEre: result.netEre * factor,
     netMargin: result.netMargin * factor,
     clientPayout: result.clientPayout * factor,
     echargingRevenue: result.echargingRevenue * factor,
+    ereEstimate: result.ereEstimate * factor,
   };
 }
 

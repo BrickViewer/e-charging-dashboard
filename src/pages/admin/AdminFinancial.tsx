@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { FinancialKPIs } from "@/components/admin/financial/FinancialKPIs";
 import { FinancialCharts } from "@/components/admin/financial/FinancialCharts";
 import { SettlementDetailRow } from "@/components/admin/financial/SettlementDetailRow";
-import { ChevronDown, ChevronRight, CheckCircle, CreditCard } from "lucide-react";
+import { ChevronDown, ChevronRight, CheckCircle, CreditCard, RefreshCw, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { createTransfer } from "@/services/stripe";
@@ -28,7 +28,40 @@ export default function AdminFinancial() {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [recomputing, setRecomputing] = useState(false);
   const perPage = 20;
+
+  const handleRecompute = async () => {
+    setRecomputing(true);
+    try {
+      let body: any = {};
+      // Als gefilterd op een specifieke periode, alleen die herberekenen
+      if (periodFilter !== "all") {
+        const [y, q] = periodFilter.split("-").map(Number);
+        body = { year: y, quarter: q };
+      }
+      const { data, error } = await supabase.functions.invoke("aggregate-settlements", { body });
+      if (error) throw error;
+      const totals = (data?.results || []).reduce(
+        (acc: any, r: any) => ({
+          computed: acc.computed + (r.computed || 0),
+          skipped: acc.skipped + (r.skipped || 0),
+          errors: acc.errors + (r.errors || 0),
+        }),
+        { computed: 0, skipped: 0, errors: 0 },
+      );
+      if (totals.errors > 0) {
+        toast.warning(`${totals.computed} herberekend, ${totals.skipped} overgeslagen, ${totals.errors} fouten`);
+      } else {
+        toast.success(`${totals.computed} afrekening(en) herberekend, ${totals.skipped} overgeslagen (al goedgekeurd/betaald)`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
+    } catch (err: any) {
+      toast.error("Herberekenen mislukt: " + (err.message || "Onbekende fout"));
+    } finally {
+      setRecomputing(false);
+    }
+  };
 
   const uniquePeriods = useMemo(() => {
     if (!settlements?.length) return [];
@@ -151,7 +184,27 @@ export default function AdminFinancial() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <h1 className="text-2xl font-semibold">Financieel overzicht</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-2xl font-semibold">Financieel overzicht</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRecompute}
+          disabled={recomputing}
+        >
+          {recomputing ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="w-4 h-4 mr-2" />
+          )}
+          {periodFilter === "all"
+            ? "Recompute (huidig + vorig kwartaal)"
+            : (() => {
+                const [y, q] = periodFilter.split("-").map(Number);
+                return `Recompute ${periodLabel(y, q)}`;
+              })()}
+        </Button>
+      </div>
 
       <FinancialKPIs isLoading={isLoading} totals={totals} />
       <FinancialCharts chartData={chartData} />

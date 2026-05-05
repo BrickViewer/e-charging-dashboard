@@ -84,6 +84,11 @@ export function useClientSettlements(clientId?: string) {
 // (1 kWh × 0.464 × 183 g/MJ × 3.6 MJ/kWh ÷ 1000 ≈ 0.306 kg CO2)
 const ERE_KG_PER_KWH = 0.306;
 
+// ERE-opbrengsten lopen NIET via e-charging. Laadbeloning boekt ERE's in,
+// houdt z'n commissie en betaalt de klant direct uit. Wij tonen alleen
+// een indicatie van wat de klant mag verwachten — geen onderdeel van
+// onze revenue-share-cashflow.
+
 export function useClientKPIs(clientId?: string) {
   const { data: settlements } = useClientSettlements(clientId);
   const { data: locations } = useClientLocations(clientId);
@@ -116,14 +121,15 @@ export function useClientKPIs(clientId?: string) {
 
   const ttmKwh = last4.reduce((s, q) => s + Number(q.total_kwh || 0), 0);
   const ttmGross = last4.reduce((s, q) => s + Number(q.gross_revenue || 0), 0);
+  // ttmPayout = wat e-charging zelf uitbetaalt (75% × laad-margin, EXCL. ERE).
   const ttmPayout = last4.reduce((s, q) => s + Number(q.client_payout || 0), 0);
-  const ttmEreEstimate = last4.reduce((s, q) => s + Number(q.ere_estimate || 0), 0);
-  const ttmEreCommission = last4.reduce((s, q) => s + Number(q.ere_commission || 0), 0);
 
   const ttmEreCo2 = ttmKwh * ERE_KG_PER_KWH;
 
-  const revShareRatio = (Number(profile?.revenue_share_percentage ?? 75)) / 100;
-  const ttmEreClientRevenue = (ttmEreEstimate - ttmEreCommission) * revShareRatio;
+  // Geschat ERE-bedrag dat klant via Laadbeloning mag verwachten.
+  // Puur indicatief — Laadbeloning regelt de daadwerkelijke uitbetaling.
+  const ttmEreEstimate = last4.reduce((s, q) => s + Number(q.ere_estimate || 0), 0);
+  const ttmEreClientEstimate = ttmEreEstimate;
 
   const pastSettlements = settlements?.filter(s => !(s.year === cur.year && s.quarter === cur.quarter)) || [];
   const avgEarnings = pastSettlements.length > 0
@@ -151,6 +157,8 @@ export function useClientKPIs(clientId?: string) {
     ttmGross,
     ttmPayout,
     ttmEreCo2,
-    ttmEreClientRevenue,
+    // Indicatieve ERE-opbrengst — wordt door Laadbeloning rechtstreeks aan klant uitbetaald,
+    // loopt niet via e-charging cashflow.
+    ttmEreClientEstimate,
   };
 }

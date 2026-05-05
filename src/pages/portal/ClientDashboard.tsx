@@ -1,7 +1,6 @@
 import { useClientProfile, useClientKPIs } from "@/hooks/useClientData";
 import { CockpitGauge, niceGaugeMax } from "@/components/portal/CockpitGauge";
-import { ChargePointStatus } from "@/components/portal/ChargePointStatus";
-import { Fuel, Euro, Leaf } from "lucide-react";
+import { WarningLight } from "@/components/portal/WarningLight";
 
 const fmtKwh = (v: number) => Math.round(v).toLocaleString("nl-NL");
 const fmtEuro = (v: number) => Math.round(v).toLocaleString("nl-NL");
@@ -19,29 +18,29 @@ export default function ClientDashboard() {
   const grossMax = niceGaugeMax(kpis.ttmGross);
   const payoutMax = niceGaugeMax(kpis.ttmPayout);
   const ereCo2Max = niceGaugeMax(kpis.ttmEreCo2);
-  const ereRevMax = niceGaugeMax(kpis.ttmEreClientRevenue);
+  const ereRevMax = niceGaugeMax(kpis.ttmEreClientEstimate);
 
   return (
-    <div className="animate-fade-in">
-      {/* Welkom-tekst */}
-      <div className="text-center sm:text-left mb-10">
-        <h1 className="text-2xl font-semibold">
-          Welkom{client?.contact_name ? `, ${client.contact_name}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Uw cockpit — laatste 12 maanden
-        </p>
+    <div className="animate-fade-in h-full flex flex-col overflow-hidden">
+      {/* Storinglampjes — op desktop fixed gepositioneerd in de gap tussen XL en small gauges.
+          Op mobile worden ze inline gerenderd binnen de XL wrapper (zie verderop) */}
+      <div className="hidden lg:block">
+        <div className="fixed top-[22vh] left-[calc(37.5vw_-_14vh_+_32px)] -translate-x-1/2 -translate-y-1/2 z-10">
+          <WarningLight count={kpis.offlineCount} variant="offline" />
+        </div>
+        <div className="fixed top-[22vh] left-[calc(62.5vw_+_14vh_-_32px)] -translate-x-1/2 -translate-y-1/2 z-10">
+          <WarningLight count={kpis.chargePointsOnline} variant="online" />
+        </div>
       </div>
 
-      {/* Vijf gauges */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-10 items-center mb-10">
-        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:order-1">
+      {/* Vijf gauges — XL center, zij-kolommen links/rechts */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-x-6 gap-y-4 items-center min-h-0">
+        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:order-1 lg:fixed lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:left-[calc(25vw_-_clamp(480px,_72vh,_1320px)/5)]">
           <CockpitGauge
             value={kpis.ttmKwh}
             max={kwhMax}
             label="Energie geleverd via laadpalen"
             sublabel="kWh"
-            icon={<Fuel className="w-7 h-7" strokeWidth={1.6} />}
             color="red"
             size="md"
             formatValue={fmtKwh}
@@ -51,43 +50,53 @@ export default function ClientDashboard() {
             max={grossMax}
             label="Bruto laadopbrengsten"
             sublabel="EUR"
-            icon={<Euro className="w-7 h-7" strokeWidth={1.6} />}
             color="red"
             size="md"
             formatValue={fmtEuro}
           />
         </div>
 
-        <div className="lg:col-span-6 flex justify-center lg:order-2">
-          <CockpitGauge
-            value={kpis.ttmPayout}
-            max={payoutMax}
-            label="Uw opbrengsten — laatste 12 maanden"
-            sublabel="EUR"
-            icon={<Euro className="w-9 h-9" strokeWidth={1.5} />}
-            color="blue"
-            size="xl"
-            formatValue={fmtEuro}
-          />
+        <div className="lg:col-span-6 flex flex-col items-center justify-center lg:order-2">
+          <div className="relative w-fit pt-12 lg:fixed lg:top-[calc(50%-53px)] lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:z-10">
+            <div className="absolute top-[27px] left-[8%] z-10 lg:hidden">
+              <WarningLight
+                count={kpis.offlineCount}
+                variant="offline"
+              />
+            </div>
+            <div className="absolute top-[27px] right-[8%] z-10 lg:hidden">
+              <WarningLight
+                count={kpis.chargePointsOnline}
+                variant="online"
+              />
+            </div>
+            <CockpitGauge
+              value={kpis.ttmPayout}
+              max={payoutMax}
+              label="Uw opbrengsten — laatste 12 maanden"
+              sublabel="EUR"
+              color="blue"
+              size="xl"
+              formatValue={fmtEuro}
+            />
+          </div>
         </div>
 
-        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:order-3">
+        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:order-3 lg:fixed lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:left-[calc(75vw_+_clamp(480px,_72vh,_1320px)/5)]">
           <CockpitGauge
             value={kpis.ttmEreCo2}
             max={ereCo2Max}
             label="± kg CO₂ vermeden"
             sublabel="ERE's"
-            icon={<Leaf className="w-7 h-7" strokeWidth={1.6} />}
             color="green"
             size="md"
             formatValue={fmtKg}
           />
           <CockpitGauge
-            value={kpis.ttmEreClientRevenue}
+            value={kpis.ttmEreClientEstimate}
             max={ereRevMax}
-            label="Opbrengsten ERE-s"
-            sublabel="EUR"
-            icon={<Euro className="w-7 h-7" strokeWidth={1.6} />}
+            label="Geschatte ERE — via Laadbeloning"
+            sublabel="EUR (indicatief)"
             color="green"
             size="md"
             formatValue={fmtEuro}
@@ -95,12 +104,6 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* Status indicators */}
-      <ChargePointStatus
-        onlineCount={kpis.chargePointsOnline}
-        offlineCount={kpis.offlineCount}
-        totalCount={kpis.chargePointsTotal}
-      />
     </div>
   );
 }

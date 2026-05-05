@@ -1,10 +1,10 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MapPin, Sun, Zap } from "lucide-react";
+import { ArrowLeft, Sun, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 
@@ -41,11 +41,11 @@ export default function ClientLocationDetail() {
   });
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64 text-muted-foreground">Laden...</div>;
+    return <div className="flex items-center justify-center py-16 text-muted-foreground">Laden...</div>;
   }
 
   if (!location) {
-    return <div className="text-center py-12 text-muted-foreground">Locatie niet gevonden</div>;
+    return <div className="text-center py-16 text-muted-foreground">Locatie niet gevonden</div>;
   }
 
   const chargePoints = (location as any).charge_points || [];
@@ -70,68 +70,73 @@ export default function ClientLocationDetail() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
+      {/* Header met terug-knop en locatie-naam */}
       <div className="flex items-center gap-3">
         <Link to="/portal">
-          <Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon" className="rounded-full hover:bg-accent/40">
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
         </Link>
-        <div>
-          <h1 className="text-2xl font-semibold">{location.name || location.address}</h1>
-          <p className="text-sm text-muted-foreground">{location.address}, {location.postal_code} {location.city}</p>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-semibold truncate">{location.name || location.address}</h2>
+          <p className="text-xs text-muted-foreground truncate">
+            {location.address}, {location.postal_code} {location.city}
+          </p>
         </div>
       </div>
 
-      {/* Location info */}
+      {/* Locatie-info — cockpit tegels */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="portal-card">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Type</p>
-            <p className="font-medium text-sm capitalize">{location.property_type || "-"}</p>
+            <p className="cockpit-section-label">Type</p>
+            <p className="font-semibold text-sm capitalize mt-1">{location.property_type || "-"}</p>
           </CardContent>
         </Card>
         <Card className="portal-card">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Laadpunten</p>
-            <p className="font-medium text-sm">{online} / {chargePoints.length} online</p>
+            <p className="cockpit-section-label">Laadpunten</p>
+            <p className="font-semibold text-sm mt-1 tabular-nums">{online} / {chargePoints.length} online</p>
           </CardContent>
         </Card>
         <Card className="portal-card">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Zonnepanelen</p>
-            <div className="flex items-center justify-center gap-1">
+            <p className="cockpit-section-label">Zonnepanelen</p>
+            <div className="flex items-center justify-center gap-1 mt-1">
               {location.has_solar ? <Sun className="w-3.5 h-3.5 text-yellow-500" /> : null}
-              <p className="font-medium text-sm">{location.has_solar ? `${location.solar_capacity_kwp || "?"} kWp` : "Nee"}</p>
+              <p className="font-semibold text-sm">{location.has_solar ? `${location.solar_capacity_kwp || "?"} kWp` : "Nee"}</p>
             </div>
           </CardContent>
         </Card>
         <Card className="portal-card">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Parkeerplaatsen</p>
-            <p className="font-medium text-sm">{location.parking_spots || "-"}</p>
+            <p className="cockpit-section-label">Parkeerplaatsen</p>
+            <p className="font-semibold text-sm mt-1 tabular-nums">{location.parking_spots || "-"}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charge points */}
+      {/* Laadpunten */}
       <div className="space-y-3">
-        <h2 className="text-base font-semibold">Laadpunten</h2>
+        <h3 className="cockpit-section-label tracking-[0.28em] text-foreground/90 px-1">Laadpunten</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {chargePoints.map((cp: any) => (
             <Card key={cp.id} className="portal-card">
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
                       <Zap className="w-4 h-4 text-primary" />
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">{cp.name || cp.serial_number || "Laadpunt"}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{cp.name || cp.serial_number || "Laadpunt"}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {cp.brand} {cp.model} · {cp.type?.toUpperCase()} · {cp.max_power || "?"}kW
                       </p>
                     </div>
                   </div>
-                  <Badge className={statusColor(cp.status)}>{statusLabel(cp.status)}</Badge>
+                  <Badge className={`${statusColor(cp.status)} flex-shrink-0`}>{statusLabel(cp.status)}</Badge>
                 </div>
               </CardContent>
             </Card>
@@ -139,32 +144,32 @@ export default function ClientLocationDetail() {
         </div>
       </div>
 
-      {/* Recent sessions */}
+      {/* Recente sessies */}
       <div className="space-y-3">
-        <h2 className="text-base font-semibold">Recente sessies</h2>
+        <h3 className="cockpit-section-label tracking-[0.28em] text-foreground/90 px-1">Recente sessies</h3>
         <Card className="portal-card">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left p-3 text-muted-foreground font-medium">Datum</th>
-                    <th className="text-left p-3 text-muted-foreground font-medium">Laadpunt</th>
-                    <th className="text-right p-3 text-muted-foreground font-medium">kWh</th>
-                    <th className="text-right p-3 text-muted-foreground font-medium">Opbrengst</th>
+                    <th className="text-left p-3 cockpit-section-label">Datum</th>
+                    <th className="text-left p-3 cockpit-section-label">Laadpunt</th>
+                    <th className="text-right p-3 cockpit-section-label">kWh</th>
+                    <th className="text-right p-3 cockpit-section-label">Opbrengst</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sessions?.map((s: any) => (
-                    <tr key={s.id} className="border-b border-border last:border-0 hover:bg-accent/50">
+                    <tr key={s.id} className="border-b border-border last:border-0 hover:bg-accent/40 transition-colors">
                       <td className="p-3">{s.started_at ? format(new Date(s.started_at), "d MMM yyyy HH:mm", { locale: nl }) : "-"}</td>
                       <td className="p-3">{s.charge_points?.name || "-"}</td>
-                      <td className="p-3 text-right">{Number(s.kwh_delivered || 0).toFixed(1)}</td>
-                      <td className="p-3 text-right text-primary font-medium">€{Number(s.client_share || 0).toFixed(2)}</td>
+                      <td className="p-3 text-right tabular-nums">{Number(s.kwh_delivered || 0).toFixed(1)}</td>
+                      <td className="p-3 text-right text-primary font-medium tabular-nums">€{Number(s.client_share || 0).toFixed(2)}</td>
                     </tr>
                   ))}
                   {(!sessions || sessions.length === 0) && (
-                    <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Geen sessies gevonden</td></tr>
+                    <tr><td colSpan={4} className="p-12 text-center text-muted-foreground">Geen sessies gevonden</td></tr>
                   )}
                 </tbody>
               </table>
