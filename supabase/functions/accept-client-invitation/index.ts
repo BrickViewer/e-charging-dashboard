@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+type SupabaseClient = ReturnType<typeof createClient>;
+
 // Accept-client-invitation — valideert token, maakt user-account aan,
 // koppelt portal_user_id aan client, marker invite als accepted.
 //
@@ -16,6 +18,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
+
+function bytesToHex(bytes: Uint8Array) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function sha256Hex(value: string) {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return bytesToHex(new Uint8Array(digest));
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -55,15 +67,20 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function handleGet(supabase: any, token: string) {
+async function handleGet(supabase: SupabaseClient, token: string) {
+  const tokenHash = await sha256Hex(token);
   const { data: invite, error } = await supabase
     .from("client_invitations")
-    .select("id, client_id, email, status, expires_at, clients(company_name, contact_name)")
-    .eq("token", token)
+    .select("id, client_id, email, status, expires_at, clients(client_number, company_name, contact_name, portal_user_id)")
+    .eq("token_hash", tokenHash)
     .maybeSingle();
 
   if (error) throw error;
   if (!invite) return json({ status: "not_found", message: "Uitnodiging niet gevonden" }, 404);
+
+  if (invite.clients?.portal_user_id) {
+    return json({ status: "already_accepted", message: "Deze klant heeft al een actief portal-account. Log in via /login." });
+  }
 
   if (invite.status === "accepted") {
     return json({ status: "already_accepted", message: "Deze uitnodiging is al gebruikt. Log in via /login." });
@@ -82,17 +99,19 @@ async function handleGet(supabase: any, token: string) {
   return json({
     status: "valid",
     email: invite.email,
+    client_number: invite.clients?.client_number,
     company_name: invite.clients?.company_name,
     contact_name: invite.clients?.contact_name,
     expires_at: invite.expires_at,
   });
 }
 
-async function handlePost(supabase: any, token: string, password: string) {
+async function handlePost(supabase: SupabaseClient, token: string, password: string) {
+  const tokenHash = await sha256Hex(token);
   const { data: invite, error } = await supabase
     .from("client_invitations")
     .select("id, client_id, email, status, expires_at")
-    .eq("token", token)
+    .eq("token_hash", tokenHash)
     .maybeSingle();
 
   if (error) throw error;
@@ -112,7 +131,6 @@ async function handlePost(supabase: any, token: string, password: string) {
   // Check of er al een user met deze email bestaat (edge case)
   // We gebruiken admin.listUsers met een filter, of admin.getUserByEmail (niet bestaand) — alternatief:
   // probeer createUser; als 'User already registered', vang dit op
-  let userId: string;
   const { data: createdUser, error: createErr } = await supabase.auth.admin.createUser({
     email: invite.email,
     password,
@@ -137,50 +155,25 @@ async function handlePost(supabase: any, token: string, password: string) {
     throw createErr;
   }
 
-  userId = createdUser.user!.id;
+  const userId = createdUser.user!.id;
 
-  // Wijs 'client' rol toe
-  const { error: roleErr } = await supabase
-    .from("user_roles")
-    .insert({
-      user_id: userId,
-      role: "client",
-    });
-  if (roleErr && !roleErr.message?.includes("duplicate")) {
-    console.error("user_roles insert failed:", roleErr.message);
-  }
-
-  // Koppel portal_user_id op client
-  const { error: linkErr } = await supabase
-    .from("clients")
-    .update({ portal_user_id: userId })
-    .eq("id", invite.client_id);
-  if (linkErr) throw linkErr;
-
-  // Marker invite as accepted
-  const { error: acceptErr } = await supabase
-    .from("client_invitations")
-    .update({
-      status: "accepted",
-      accepted_at: new Date().toISOString(),
-    })
-    .eq("id", invite.id);
-  if (acceptErr) console.error("invitation accept update failed:", acceptErr.message);
-
-  // Activity log
-  await supabase.from("activity_log").insert({
-    client_id: invite.client_id,
-    user_id: userId,
-    action: "invitation_accepted",
-    description: `Klant heeft uitnodiging geaccepteerd en account aangemaakt`,
-    metadata: { invitation_id: invite.id, email: invite.email },
+  const { error: claimErr } = await supabase.rpc("accept_client_invitation", {
+    invitation_token_hash: tokenHash,
+    accepted_user_id: userId,
   });
+
+  if (claimErr) {
+    await supabase.auth.admin.deleteUser(userId).catch((deleteErr: Error) => {
+      console.error("delete orphan invite user failed:", deleteErr.message);
+    });
+    throw claimErr;
+  }
 
   return json({
     status: "accepted",
     user_id: userId,
     email: invite.email,
-    redirect: "/portal",
+    redirect: "/portal/gegevens?welkom=1",
   });
 }
 

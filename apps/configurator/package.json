@@ -1,0 +1,16 @@
+{
+  "name": "@echarging/configurator",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 8081",
+    "build": "vite build",
+    "preview": "vite preview --port 4181"
+  },
+  "dependencies": {
+    "@echarging/api-client": "0.0.0",
+    "@echarging/pricing-engine": "0.0.0",
+    "@echarging/ui-kit": "0.0.0"
+  }
+}

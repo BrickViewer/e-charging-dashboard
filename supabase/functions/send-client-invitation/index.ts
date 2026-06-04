@@ -1,11 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { getEmailHeroV1Bytes, getEmailHeroV2Bytes, getEmailLogoBytes } from "./email-logo.ts";
 import { renderInviteEmail } from "./email-template.ts";
 
 // Send-client-invitation — verstuurt e-charging-branded uitnodiging via Resend.
 // Body: { client_id: string, resend?: boolean }
 //   - client_id: voor welke klant de uitnodiging is
-//   - resend: true → bestaande pending invite hergebruiken (zelfde token), counter++
+//   - resend: true → oude pending invite intrekken en verse single-use token mailen
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,11 +16,64 @@ const corsHeaders = {
 
 const RESEND_API = "https://api.resend.com/emails";
 
+function bytesToHex(bytes: Uint8Array) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function generateToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return bytesToHex(bytes);
+}
+
+async function sha256Hex(value: string) {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+function imageHeaders(filename: string) {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "Content-Disposition": `inline; filename="${filename}"`,
+    "Content-Type": "image/png",
+    "X-Content-Type-Options": "nosniff",
+  };
+}
+
 Deno.serve(async (req: Request) => {
+  if (req.method === "GET" || req.method === "HEAD") {
+    const path = new URL(req.url).pathname;
+    if (path.endsWith("/logo-v3.png") || path.endsWith("/logo.png")) {
+      const logoBytes = getEmailLogoBytes();
+      return new Response(req.method === "HEAD" ? null : logoBytes, {
+        headers: imageHeaders("e-charging-logo-bright.png"),
+      });
+    }
+
+    if (path.endsWith("/hero-mobile-v2.png") || path.endsWith("/hero-v2.png")) {
+      const heroBytes = getEmailHeroV2Bytes();
+      return new Response(req.method === "HEAD" ? null : heroBytes, {
+        headers: imageHeaders("e-charging-invite-hero-v2.png"),
+      });
+    }
+
+    if (path.endsWith("/hero-mobile-v1.png") || path.endsWith("/hero-v1.png")) {
+      const heroBytes = getEmailHeroV1Bytes();
+      return new Response(req.method === "HEAD" ? null : heroBytes, {
+        headers: imageHeaders("e-charging-invite-hero-v1.png"),
+      });
+    }
+
+    return json({ status: "not_found" }, 404);
+  }
+
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
   const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
+    supabaseUrl,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } },
   );
@@ -32,7 +86,7 @@ Deno.serve(async (req: Request) => {
 
     const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
     const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
-    const PUBLIC_URL = Deno.env.get("PUBLIC_APP_URL") ?? "https://e-charging.nl";
+    const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://e-charging.nl").replace(/\/+$/, "");
 
     const body = await req.json().catch(() => ({}));
     const { client_id, resend: isResend } = body;
@@ -66,7 +120,7 @@ Deno.serve(async (req: Request) => {
     // Klant ophalen
     const { data: client, error: clientErr } = await supabase
       .from("clients")
-      .select("id, company_name, contact_name, contact_email, portal_user_id")
+      .select("id, client_number, company_name, contact_name, contact_email, portal_user_id")
       .eq("id", client_id)
       .maybeSingle();
     if (clientErr) throw clientErr;
@@ -78,58 +132,45 @@ Deno.serve(async (req: Request) => {
       return json({ status: "error", message: "Klant heeft geen e-mailadres" }, 400);
     }
 
-    // Bestaande pending invite hergebruiken bij resend, anders nieuwe maken
-    let invitation;
-    if (isResend) {
-      const { data: existing } = await supabase
-        .from("client_invitations")
-        .select("*")
-        .eq("client_id", client_id)
-        .eq("status", "pending")
-        .order("invited_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      invitation = existing;
-    }
+    const { data: latestPending } = await supabase
+      .from("client_invitations")
+      .select("id, resend_count")
+      .eq("client_id", client_id)
+      .eq("status", "pending")
+      .order("invited_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (!invitation) {
-      // Nieuwe invite — markeer eventuele oude pending invites als revoked
-      await supabase
-        .from("client_invitations")
-        .update({ status: "revoked" })
-        .eq("client_id", client_id)
-        .eq("status", "pending");
+    // Oude pending invites worden ongeldig bij elke nieuwe verzending. Daardoor hoeft
+    // de raw token nooit in de database bewaard te blijven voor "resend".
+    await supabase
+      .from("client_invitations")
+      .update({ status: "revoked" })
+      .eq("client_id", client_id)
+      .eq("status", "pending");
 
-      const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+    const token = generateToken();
+    const tokenHash = await sha256Hex(token);
+    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
-      const { data: newInvite, error: createErr } = await supabase
-        .from("client_invitations")
-        .insert({
-          client_id,
-          email: client.contact_email,
-          token,
-          status: "pending",
-          invited_by: user.id,
-          expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .select()
-        .single();
-      if (createErr) throw createErr;
-      invitation = newInvite;
-    } else {
-      // Resend: counter++, verleng expiry
-      const { error: updErr } = await supabase
-        .from("client_invitations")
-        .update({
-          resend_count: (invitation.resend_count ?? 0) + 1,
-          last_resend_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .eq("id", invitation.id);
-      if (updErr) throw updErr;
-    }
+    const { data: invitation, error: createErr } = await supabase
+      .from("client_invitations")
+      .insert({
+        client_id,
+        email: client.contact_email,
+        token_hash: tokenHash,
+        token_last4: token.slice(-4),
+        status: "pending",
+        invited_by: user.id,
+        resend_count: isResend ? Number(latestPending?.resend_count ?? 0) + 1 : 0,
+        last_resend_at: isResend ? new Date().toISOString() : null,
+        expires_at: expiresAt,
+      })
+      .select("id, expires_at")
+      .single();
+    if (createErr) throw createErr;
 
-    const inviteUrl = `${PUBLIC_URL}/uitnodiging/${invitation.token}`;
+    const inviteUrl = `${PUBLIC_URL}/uitnodiging/${token}`;
     const expiresInDays = Math.ceil(
       (new Date(invitation.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
     );
@@ -140,6 +181,8 @@ Deno.serve(async (req: Request) => {
       inviteUrl,
       expiresInDays: Math.max(expiresInDays, 1),
       fromName: FROM_NAME,
+      heroUrl: `${supabaseUrl}/functions/v1/send-client-invitation/hero-mobile-v2.png`,
+      clientNumber: client.client_number,
     });
 
     // Send via Resend API
@@ -187,6 +230,7 @@ Deno.serve(async (req: Request) => {
         invitation_id: invitation.id,
         resend_id: resendData.id,
         email: client.contact_email,
+        client_number: client.client_number,
       },
     });
 

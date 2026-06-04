@@ -120,18 +120,43 @@ export interface RoadLocation {
   id: string;
   providerId?: string;
   accountId?: string;
+  userId?: string;
   name?: string;
   address?: string;
-  street?: string;
-  houseNumber?: string;
-  postalCode?: string;
+  // Road API gebruikt snake_case voor postal_code (gevalideerd 2026-05-15)
+  postal_code?: string;
   city?: string;
-  province?: string;
-  country?: string;
-  countryCode?: string;
-  coordinates?: { latitude?: number; longitude?: number };
-  latitude?: number;
-  longitude?: number;
+  country?: string;  // ISO 3-letter code (NLD, etc.)
+  geoLocation?: { type?: string; coordinates?: [number, number] };  // [longitude, latitude]
+  status?: string;
+  evseIds?: string[];
+  connectorTypes?: string[];
+  accessPolicy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface RoadDataWrapper<T> {
+  data: T;
+}
+
+export interface RoadInvoice {
+  id: string;
+  billingRunId?: string;
+  identifier?: string;
+  providerId?: string;
+  accountId?: string;
+  currency?: string;
+  isPaid?: boolean;
+  isReady?: boolean;
+  hasError?: boolean;
+  totalAmountWithVat?: number;
+  totalCreditAmountWithVat?: number;
+  type?: string;
+  month?: number;
+  year?: number;
+  account?: { id?: string; name?: string };
+  provider?: { id?: string; name?: string };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -169,8 +194,26 @@ export interface RoadCPOSession {
   tokenInfraProviderId?: string;
   tokenUid?: string;
   tokenIssuerName?: string;
+  tokenType?: string;
   paymentFlow?: string;
   isRoaming?: boolean;
+  reimbursementAmount?: number;
+  externalCalculatedPrice?: number;
+  vatInfo?: { vatPercentage?: number };
+  // Authoritative bedragen + BTW per sessie (gevalideerd 2026-05-15, sectie GEDETAILEERD).
+  priceWithFX?: {
+    originalCurrency?: string;
+    originalAmount?: number;                       // gross excl BTW
+    originalAmountWithVAT?: number;                // gross incl BTW
+    originalReimbursementAmount?: number;          // wat Account-houder krijgt (excl BTW)
+    originalReimbursementAmountWithVAT?: number;   // idem incl BTW
+    originalTotalCost?: number;                    // CPO-payout aan provider (excl BTW)
+    originalTotalCostWithVAT?: number;             // idem incl BTW
+    targetAmount?: number;
+    targetReimbursementAmount?: number;
+  };
+  location?: { name?: string; accessPolicy?: string };
+  evseController?: { ocppIdentity?: string };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -266,8 +309,10 @@ export class RoadClient {
   searchEvseControllers(params: SearchEvseParams = {}): Promise<RoadSearchResult<RoadEVSEController>> {
     return this.request("POST", "/1/evse-controllers/search/fast", params);
   }
-  getEvseController(id: string): Promise<RoadEVSEController> {
-    return this.request("GET", `/1/evse-controllers/${id}`);
+  // GET singular retourneert { data: RoadEVSEController } — unwrap, conform Road conventie.
+  async getEvseController(id: string): Promise<RoadEVSEController> {
+    const resp = await this.request<RoadDataWrapper<RoadEVSEController>>("GET", `/1/evse-controllers/${id}`);
+    return resp.data;
   }
   createEvseController(body: CreateEvseBody): Promise<RoadEVSEController> {
     return this.request("POST", "/1/evse-controllers", body);
@@ -285,6 +330,10 @@ export class RoadClient {
   searchCpoSessions(params: SearchSessionsParams = {}): Promise<RoadSearchResult<RoadCPOSession>> {
     return this.request("POST", "/2/sessions/cpo/search/fast", params);
   }
+
+  searchInvoices(params: { skip?: number; limit?: number } = {}): Promise<RoadSearchResult<RoadInvoice>> {
+    return this.request("POST", "/1/invoices/search/fast", params);
+  }
   getCpoSession(id: string): Promise<RoadCPOSession> {
     return this.request("GET", `/2/sessions/cpo/${id}`);
   }
@@ -296,21 +345,21 @@ export class RoadClient {
     return this.request("GET", `/2/sessions/cpo/${sessionId}/reimbursements`);
   }
 
-  // Locations: er staat geen locations-search in de publieke spec.
-  // GET /1/locations/{id} is empirisch te valideren — gebruiken we
-  // best-effort tijdens sync. Kan 404 geven; caller moet dat opvangen.
-  getLocation(id: string): Promise<RoadLocation> {
-    return this.request("GET", `/1/locations/${id}`);
+  // Locations: GET /1/locations/{id} retourneert { data: RoadLocation } — unwrap.
+  async getLocation(id: string): Promise<RoadLocation> {
+    const resp = await this.request<RoadDataWrapper<RoadLocation>>("GET", `/1/locations/${id}`);
+    return resp.data;
   }
 }
 
-export function clientFromOrg(org: { eflux_api_key?: string | null; eflux_provider_id?: string | null }): RoadClient | null {
-  if (!org.eflux_api_key || !org.eflux_provider_id) return null;
-  return new RoadClient({ apiKey: org.eflux_api_key, providerId: org.eflux_provider_id });
+export function clientFromEnvAndOrg(org: { eflux_provider_id?: string | null }): RoadClient | null {
+  const apiKey = Deno.env.get("EFLUX_API_KEY");
+  if (!apiKey || !org.eflux_provider_id) return null;
+  return new RoadClient({ apiKey, providerId: org.eflux_provider_id });
 }
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };

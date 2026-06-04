@@ -1,14 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { requireAdminOrInternal } from "../_shared/auth.ts";
 import {
   RoadApiError,
-  clientFromOrg,
+  clientFromEnvAndOrg,
   RoadClient,
   RoadEVSEController,
   RoadCPOSession,
   RoadLocation,
+  RoadInvoice,
   corsHeaders,
 } from "./road-api.ts";
+
+type SupabaseClient = ReturnType<typeof createClient>;
 
 // E-Flux/Road sync — view-only.
 // Bron-of-truth: Road. Wij lezen, upserten in Supabase, schrijven nooit terug.
@@ -21,8 +25,8 @@ import {
 //   4. CPO sessions ophalen sinds laatste sync-watermark, paginated
 //   5. Upsert sessions met client_id afgeleid uit charge_point.location.client_id
 
-const PAGE = 500;
-const SESSION_PAGE = 500;
+const PAGE = 100;
+const SESSION_PAGE = 100;
 
 interface SyncSummary {
   fetched: number;
@@ -34,6 +38,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST") return json({ status: "error", message: "Method not allowed" }, 405);
 
   const startedAt = new Date().toISOString();
   const supabase = createClient(
@@ -43,20 +48,23 @@ Deno.serve(async (req: Request) => {
   );
 
   try {
+    const auth = await requireAdminOrInternal(req, supabase, corsHeaders);
+    if (!auth.ok) return auth.response;
+
     const { data: org, error: orgErr } = await supabase
       .from("organizations")
-      .select("id, eflux_api_key, eflux_provider_id, eflux_master_account_id")
+      .select("id, eflux_provider_id, eflux_master_account_id")
       .limit(1)
       .maybeSingle();
     if (orgErr) throw orgErr;
     if (!org) return json({ status: "error", message: "Organisatie niet gevonden" }, 404);
 
-    const client = clientFromOrg(org);
+    const client = clientFromEnvAndOrg(org);
     if (!client) {
       await logSync(supabase, "config", "failed", 0, "eflux niet geconfigureerd");
       return json({
         status: "not_configured",
-        message: "Vul eflux_api_key en eflux_provider_id in via instellingen",
+        message: "EFLUX_API_KEY ontbreekt in Supabase secrets of eflux_provider_id is leeg in de instellingen",
       });
     }
 
@@ -65,12 +73,22 @@ Deno.serve(async (req: Request) => {
     // 1. EVSE-controllers + locations + charge_points
     const evseResult = await syncEvsesAndLocations(client, supabase, accountId);
 
-    // 2. Sessions sinds laatste sync
+    // 2. Sessions sinds laatste sync (inclusief reimbursement_amount + client_share
+    //    via priceWithFX.originalReimbursementAmount — geen aparte call meer nodig)
     const sessionResult = await syncSessions(client, supabase, accountId);
 
-    // 3. Reimbursement per sessie (authoritative payout — overschrijft de
-    //    voorlopige client_share/net_margin uit stap 2)
-    const reimbursementResult = await syncReimbursements(client, supabase);
+    // 3. Invoices (self-billing facturen van Road aan E-Group BV)
+    const invoiceResult = await syncInvoices(client, supabase);
+
+    // 4. Trigger aggregate-settlements voor huidig + vorig kwartaal.
+    //    Best-effort: failures breken de sync-response niet.
+    let aggregateResult: unknown = null;
+    try {
+      aggregateResult = await invokeAggregateSettlements({});
+    } catch (e) {
+      console.warn("aggregate-settlements chain failed:", (e as Error).message);
+      aggregateResult = { error: (e as Error).message };
+    }
 
     return json({
       status: "ok",
@@ -79,7 +97,8 @@ Deno.serve(async (req: Request) => {
       locations: evseResult.locations,
       chargePoints: evseResult.chargePoints,
       sessions: sessionResult,
-      reimbursements: reimbursementResult,
+      invoices: invoiceResult,
+      aggregate: aggregateResult,
     });
   } catch (err) {
     if (err instanceof RoadApiError) {
@@ -92,20 +111,54 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+async function invokeAggregateSettlements(body: Record<string, unknown>) {
+  const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET");
+  if (!internalSecret) throw new Error("INTERNAL_FUNCTION_SECRET ontbreekt");
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  if (!supabaseUrl) throw new Error("SUPABASE_URL ontbreekt");
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-internal-secret": internalSecret,
+  };
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (anonKey) headers.apikey = anonKey;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/aggregate-settlements`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  const text = await res.text();
+  let payload: unknown = null;
+  try { payload = text ? JSON.parse(text) : null; } catch (_) { payload = text; }
+
+  if (!res.ok) {
+    const message = typeof payload === "object" && payload && "message" in payload
+      ? String((payload as { message?: unknown }).message)
+      : `aggregate-settlements returned ${res.status}`;
+    throw new Error(message);
+  }
+
+  return { triggered: true, response: payload };
+}
+
 // =====================================================================
 // EVSE + Locations + Charge Points
 // =====================================================================
 
 async function syncEvsesAndLocations(
   client: RoadClient,
-  supabase: any,
+  supabase: SupabaseClient,
   accountId?: string,
 ): Promise<{ locations: SyncSummary; chargePoints: SyncSummary }> {
   const locSummary: SyncSummary = { fetched: 0, upserted: 0, errors: 0 };
   const cpSummary: SyncSummary = { fetched: 0, upserted: 0, errors: 0 };
 
-  // 1.1 — paginated fetch alle EVSEs
-  const allEvses: RoadEVSEController[] = [];
+  // 1.1 — paginated fetch alle EVSEs (search/fast — beknopte response, zonder costSettings)
+  const searchResult: RoadEVSEController[] = [];
   let skip = 0;
   while (true) {
     const result = await client.searchEvseControllers({
@@ -113,12 +166,27 @@ async function syncEvsesAndLocations(
       limit: PAGE,
       skip,
     });
-    allEvses.push(...result.data);
+    searchResult.push(...result.data);
     if (result.data.length < PAGE) break;
     skip += PAGE;
     if (skip > 50_000) break; // safety circuit
   }
-  cpSummary.fetched = allEvses.length;
+  cpSummary.fetched = searchResult.length;
+
+  // 1.1b — Verrijk elke EVSE met costSettings via GET singular.
+  //         Road's search/fast laat costSettings + tariffProfileId weg; voor tarief-display
+  //         per paal moeten we het detail-endpoint aanroepen.
+  const allEvses: RoadEVSEController[] = [];
+  for (const stub of searchResult) {
+    try {
+      const detail = await client.getEvseController(stub.id);
+      // Merge: stub heeft connectivity-info, detail heeft costSettings
+      allEvses.push({ ...stub, ...detail });
+    } catch (err) {
+      console.warn(`getEvseController ${stub.id} failed:`, (err as Error).message);
+      allEvses.push(stub); // fallback: gebruik stub zonder costSettings
+    }
+  }
 
   // 1.2 — distill unieke locationIds
   const locationIds = [...new Set(allEvses.map((e) => e.locationId).filter(Boolean))];
@@ -197,23 +265,24 @@ function mapRoadLocationToRow(eflux_location_id: string, detail: RoadLocation | 
   if (!detail) {
     return {
       eflux_location_id,
-      // name is een placeholder — wordt later overschreven als detail wel beschikbaar komt
       name: `Locatie ${eflux_location_id.slice(0, 8)}`,
     };
   }
 
-  const street = detail.street ?? detail.address ?? "";
-  const number = detail.houseNumber ?? "";
-  const fullAddress = [street, number].filter(Boolean).join(" ").trim() || detail.address || null;
+  // geoLocation.coordinates is [longitude, latitude] (GeoJSON-conventie)
+  const coords = detail.geoLocation?.coordinates;
+  const longitude = Array.isArray(coords) && coords.length === 2 ? coords[0] : null;
+  const latitude = Array.isArray(coords) && coords.length === 2 ? coords[1] : null;
 
   return {
     eflux_location_id,
-    name: detail.name ?? fullAddress ?? `Locatie ${eflux_location_id.slice(0, 8)}`,
-    address: fullAddress,
+    name: detail.name ?? detail.address ?? `Locatie ${eflux_location_id.slice(0, 8)}`,
+    address: detail.address ?? null,
     city: detail.city ?? null,
-    postal_code: detail.postalCode ?? null,
-    latitude: detail.coordinates?.latitude ?? detail.latitude ?? null,
-    longitude: detail.coordinates?.longitude ?? detail.longitude ?? null,
+    postal_code: detail.postal_code ?? null,
+    country_code: detail.country ?? null,
+    latitude,
+    longitude,
   };
 }
 
@@ -265,7 +334,7 @@ function mapRoadEvseToRow(evse: RoadEVSEController, internalLocationId: string) 
 
 async function syncSessions(
   client: RoadClient,
-  supabase: any,
+  supabase: SupabaseClient,
   accountId?: string,
 ): Promise<SyncSummary> {
   const summary: SyncSummary = { fetched: 0, upserted: 0, errors: 0 };
@@ -284,7 +353,7 @@ async function syncSessions(
         cpMap.set(cp.eflux_evse_controller_id, {
           cp_id: cp.id,
           location_id: cp.location_id,
-          client_id: (cp as any).locations?.client_id ?? null,
+          client_id: (cp as { locations?: { client_id?: string | null } }).locations?.client_id ?? null,
         });
       }
     }
@@ -294,7 +363,7 @@ async function syncSessions(
   let skip = 0;
   let totalFetched = 0;
   while (true) {
-    const params: any = {
+    const params: Record<string, unknown> = {
       accountId,
       limit: SESSION_PAGE,
       skip,
@@ -344,12 +413,17 @@ function mapRoadSessionToRow(
   s: RoadCPOSession,
   cpInfo: { cp_id: string; location_id: string; client_id: string | null },
 ) {
+  // Road's search response bevat alle bedragen direct — geen aparte reimbursement-call nodig.
+  // Bron: GET /2/sessions/cpo/search/fast retourneert priceWithFX + reimbursementAmount per sessie.
   const energyCost = Number(s.energyCosts ?? 0);
-  const totalPrice = Number(s.totalPrice ?? 0);
-
-  // Voorlopige client_share-schatting; wordt later overschreven door reimbursement-call
-  // (zie syncReimbursementsForRecentSessions). Dit is alleen een fallback voor net-aangekomen sessies.
-  const provisionalNet = totalPrice - energyCost;
+  const grossRevenue = Number(s.priceWithFX?.originalAmount ?? s.totalPrice ?? 0);
+  const reimbursementAmount = Number(
+    s.priceWithFX?.originalReimbursementAmount ?? s.reimbursementAmount ?? 0
+  );
+  // Client/echarging-share worden op kwartaal-niveau berekend in aggregate-settlements
+  // (na aftrek stroominkoop + abonnementskosten). Per sessie zetten we ze op 0.
+  const clientShare = 0;
+  const echargingShare = 0;
 
   return {
     charge_point_id: cpInfo.cp_id,
@@ -361,16 +435,19 @@ function mapRoadSessionToRow(
     duration_minutes: s.durationSeconds ? Math.round(s.durationSeconds / 60) : null,
     duration_seconds: s.durationSeconds ?? null,
     kwh_delivered: s.kwh ?? 0,
-    gross_revenue: totalPrice,
+    gross_revenue: grossRevenue,
     energy_cost: energyCost,
     energy_costs: energyCost,
     time_costs: s.timeCosts ?? 0,
     start_costs: s.startCosts ?? 0,
     idle_costs: s.idleCosts ?? 0,
-    total_price: totalPrice,
-    net_margin: provisionalNet,
-    client_share: provisionalNet * 0.75,
-    echarging_share: provisionalNet * 0.25,
+    total_price: grossRevenue,
+    external_calculated_price: s.externalCalculatedPrice ?? null,
+    reimbursement_amount: reimbursementAmount,
+    reimbursement_synced_at: new Date().toISOString(),
+    net_margin: reimbursementAmount,
+    client_share: clientShare,
+    echarging_share: echargingShare,
     status: s.status ?? "COMPLETED",
     power_type: s.powerType ?? null,
     connector_id: s.connectorId ?? null,
@@ -385,81 +462,59 @@ function mapRoadSessionToRow(
 }
 
 // =====================================================================
-// Reimbursements — authoritative payout per session
+// Invoices — self-billing facturen van Road
 // =====================================================================
 
-const REIMB_BATCH = 50; // max sessies per sync-run om Road-rate-limits te respecteren
-
-async function syncReimbursements(
-  client: RoadClient,
-  supabase: any,
-): Promise<SyncSummary> {
+async function syncInvoices(client: RoadClient, supabase: SupabaseClient): Promise<SyncSummary> {
   const summary: SyncSummary = { fetched: 0, upserted: 0, errors: 0 };
 
-  // Pak sessies die wél in onze DB staan, completed zijn, en nog geen
-  // reimbursement-data hebben gekregen. Beperk tot REIMB_BATCH per run
-  // zodat één sync-cyclus niet rate-limited wordt op N+1 calls.
-  const { data: pending, error } = await supabase
-    .from("charging_sessions")
-    .select("id, eflux_session_id, client_id, kwh_delivered")
-    .not("eflux_session_id", "is", null)
-    .is("reimbursement_synced_at", null)
-    .eq("status", "COMPLETED")
-    .order("started_at", { ascending: false })
-    .limit(REIMB_BATCH);
-
-  if (error) throw error;
-  if (!pending || pending.length === 0) {
-    await logSync(supabase, "reimbursements", "success", 0);
-    return summary;
+  const allInvoices: RoadInvoice[] = [];
+  let skip = 0;
+  while (true) {
+    const result = await client.searchInvoices({ limit: PAGE, skip });
+    allInvoices.push(...result.data);
+    if (result.data.length < PAGE) break;
+    skip += PAGE;
+    if (skip > 10_000) break; // safety
   }
+  summary.fetched = allInvoices.length;
 
-  summary.fetched = pending.length;
+  for (const inv of allInvoices) {
+    const row = {
+      eflux_invoice_id: inv.id,
+      eflux_account_id: inv.accountId ?? null,
+      identifier: inv.identifier ?? null,
+      billing_run_id: inv.billingRunId ?? null,
+      currency: inv.currency ?? "EUR",
+      is_paid: inv.isPaid ?? false,
+      is_ready: inv.isReady ?? false,
+      has_error: inv.hasError ?? false,
+      total_amount_with_vat: inv.totalAmountWithVat ?? null,
+      total_credit_amount_with_vat: inv.totalCreditAmountWithVat ?? null,
+      type: inv.type ?? null,
+      month: inv.month ?? null,
+      year: inv.year ?? null,
+      account_name: inv.account?.name ?? null,
+      raw_data: inv as unknown,
+      road_created_at: inv.createdAt ?? null,
+      road_updated_at: inv.updatedAt ?? null,
+      synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
-  for (const sess of pending) {
-    try {
-      const reimb = await client.getReimbursements(sess.eflux_session_id!);
-      const total = Number(reimb.total ?? 0);
+    const { error } = await supabase
+      .from("eflux_invoices")
+      .upsert(row, { onConflict: "eflux_invoice_id", ignoreDuplicates: false });
 
-      // 75/25 verdeling toepassen op authoritative bedrag
-      const clientShare = total * 0.75;
-      const echargingShare = total * 0.25;
-
-      const { error: upErr } = await supabase
-        .from("charging_sessions")
-        .update({
-          reimbursement_amount: total,
-          net_margin: total,
-          client_share: clientShare,
-          echarging_share: echargingShare,
-          reimbursement_synced_at: new Date().toISOString(),
-        })
-        .eq("id", sess.id);
-
-      if (upErr) {
-        console.error(`update reimbursement for ${sess.id} failed:`, upErr.message);
-        summary.errors++;
-      } else {
-        summary.upserted++;
-      }
-    } catch (err) {
-      // 404 of andere fout — markeer als "geprobeerd" door synced_at te zetten,
-      // anders blijft elke run dezelfde sessie opnieuw proberen.
-      if (err instanceof RoadApiError && err.status === 404) {
-        await supabase
-          .from("charging_sessions")
-          .update({ reimbursement_synced_at: new Date().toISOString() })
-          .eq("id", sess.id);
-        summary.errors++;
-      } else {
-        console.error(`reimbursement fetch ${sess.eflux_session_id} failed:`, (err as Error).message);
-        summary.errors++;
-        // Blijft retry-eligible bij volgende sync
-      }
+    if (error) {
+      console.error("upsert invoice failed:", error.message);
+      summary.errors++;
+    } else {
+      summary.upserted++;
     }
   }
 
-  await logSync(supabase, "reimbursements", "success", summary.upserted);
+  await logSync(supabase, "invoices", "success", summary.upserted);
   return summary;
 }
 
@@ -467,7 +522,7 @@ async function syncReimbursements(
 // Helpers
 // =====================================================================
 
-async function getLastSync(supabase: any, entityType: string): Promise<string | null> {
+async function getLastSync(supabase: SupabaseClient, entityType: string): Promise<string | null> {
   const { data } = await supabase
     .from("eflux_sync_log")
     .select("last_synced_at")
@@ -480,7 +535,7 @@ async function getLastSync(supabase: any, entityType: string): Promise<string | 
 }
 
 async function logSync(
-  supabase: any,
+  supabase: SupabaseClient,
   entityType: string,
   status: "running" | "success" | "failed" | "pending",
   recordsSynced: number,
