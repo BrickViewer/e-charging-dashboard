@@ -1,58 +1,69 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { requireAdminOrInternal } from "../_shared/auth.ts";
 
-// Settlement-aggregator — bouwt quarterly_settlements rows op uit charging_sessions.
+type SupabaseClient = ReturnType<typeof createClient>;
+
+// Settlement-aggregator — bouwt settlements (maandelijks) op uit charging_sessions.
+//
+// Service-fee model (vervangt revenue-share):
+//   echarging_revenue = echarging_fee_per_kwh * total_kwh   (default 0.10, GEEN minimum)
+//   client_payout     = gross_revenue - echarging_revenue
+// Geen energie-doorbelasting, geen platform-fee, geen opstartkosten, geen 75/25-split.
+//
+// LET OP: de fee is 0.10 = TIEN CENT per kWh. NIET 0.001.
 //
 // Logic:
-//   - Groepeer sessies per (client_id, year, quarter) — afgeleid uit started_at
-//   - Sla NULL client_id over (ongekoppelde sessies tellen niet)
-//   - Sla excluded sessions over
-//   - Per quartaal: sum kwh, gross, reimbursement, client_share, echarging_share
-//   - UPSERT in quarterly_settlements met status='calculated'
-//   - Sla quarters over die al status='approved'/'paid'/'overdue' hebben — niet overschrijven
+//   - Groepeer sessies per (client_id, year, month) — afgeleid uit started_at
+//   - Sla NULL client_id over (ongekoppelde sessies tellen niet) + excluded sessies
+//   - UPSERT in settlements; status 'live' (lopende maand) of 'calculated' (afgelopen)
+//   - Sla rijen met definitieve status (approved/paid/invoice_*/charged_back) over
 //
-// Trigger:
-//   - Dagelijks via cron (02:00 UTC)
-//   - Of handmatig via POST naar deze function (admin "Recompute settlements"-knop)
+// Trigger: dagelijks via cron + chaining vanuit eflux-sync, of handmatig POST.
 //
 // Body (optioneel):
-//   { "year": 2026, "quarter": 1 }    → alleen dit kwartaal
-//   { "fromYear": 2026, "fromQuarter": 1, "toYear": 2026, "toQuarter": 4 }
-//   {}                                  → huidig + vorig kwartaal (default)
+//   { "year": 2026, "month": 5 }                                  → alleen die maand
+//   { "fromYear": 2026, "fromMonth": 1, "toYear": 2026, "toMonth": 6 }
+//   {}                                                             → huidige + vorige maand
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface Range { fromYear: number; fromQuarter: number; toYear: number; toQuarter: number; }
+const DEFAULT_ECHARGING_FEE_PER_KWH = 0.10; // tien cent per kWh — NIET 0.001
 
-function currentQuarter(): { year: number; quarter: number } {
-  const now = new Date();
-  return { year: now.getUTCFullYear(), quarter: Math.floor(now.getUTCMonth() / 3) + 1 };
+interface Range { fromYear: number; fromMonth: number; toYear: number; toMonth: number; }
+type AggregateBody = Record<string, unknown>;
+type Aggregation = {
+  client_id: string;
+  total_kwh: number;
+  total_sessions: number;
+  reimbursement_total: number;
+};
+
+function currentMonth(): { year: number; month: number } {
+  // Huidige maand in Europe/Amsterdam (DST-correct) — niet in UTC, zodat de 'live'
+  // maand rond middernacht/jaargrens bij de juiste NL-kalendermaand hoort.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = Number(parts.find((p) => p.type === "year")!.value);
+  const month = Number(parts.find((p) => p.type === "month")!.value);
+  return { year, month };
 }
 
-function prevQuarter(q: { year: number; quarter: number }) {
-  if (q.quarter === 1) return { year: q.year - 1, quarter: 4 };
-  return { year: q.year, quarter: q.quarter - 1 };
+function prevMonth(m: { year: number; month: number }) {
+  if (m.month === 1) return { year: m.year - 1, month: 12 };
+  return { year: m.year, month: m.month - 1 };
 }
 
-function quarterDates(year: number, quarter: number): { start: string; end: string } {
-  const startMonth = (quarter - 1) * 3; // 0,3,6,9
-  const start = new Date(Date.UTC(year, startMonth, 1));
-  const end = new Date(Date.UTC(year, startMonth + 3, 1)); // first of next quarter
-  return {
-    start: start.toISOString(),
-    end: end.toISOString(),
-  };
-}
-
-function quarterDateOnly(year: number, quarter: number): { period_start: string; period_end: string } {
-  const startMonth = (quarter - 1) * 3;
-  const startDate = new Date(Date.UTC(year, startMonth, 1));
-  // Last day of last month in quarter
-  const endDate = new Date(Date.UTC(year, startMonth + 3, 0));
+function monthDateOnly(year: number, month: number): { period_start: string; period_end: string } {
+  const startDate = new Date(Date.UTC(year, month - 1, 1));
+  const endDate = new Date(Date.UTC(year, month, 0)); // laatste dag van de maand
   return {
     period_start: startDate.toISOString().slice(0, 10),
     period_end: endDate.toISOString().slice(0, 10),
@@ -61,6 +72,7 @@ function quarterDateOnly(year: number, quarter: number): { period_start: string;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ status: "error", message: "Method not allowed" }, 405);
 
   const startedAt = new Date().toISOString();
   const supabase = createClient(
@@ -70,45 +82,32 @@ Deno.serve(async (req: Request) => {
   );
 
   try {
-    let body: any = {};
+    const auth = await requireAdminOrInternal(req, supabase, corsHeaders);
+    if (!auth.ok) return auth.response;
+
+    let body: AggregateBody = {};
     try { body = await req.json(); } catch (_) { /* empty body OK */ }
 
-    let range: Range;
-    if (body.year && body.quarter) {
-      range = { fromYear: body.year, fromQuarter: body.quarter, toYear: body.year, toQuarter: body.quarter };
-    } else if (body.fromYear && body.fromQuarter && body.toYear && body.toQuarter) {
-      range = {
-        fromYear: body.fromYear, fromQuarter: body.fromQuarter,
-        toYear: body.toYear, toQuarter: body.toQuarter,
-      };
-    } else {
-      // Default: huidig + vorig kwartaal
-      const cur = currentQuarter();
-      const prev = prevQuarter(cur);
-      range = {
-        fromYear: prev.year, fromQuarter: prev.quarter,
-        toYear: cur.year, toQuarter: cur.quarter,
-      };
-    }
+    const range = parseRange(body);
 
     const results: Array<{
-      year: number; quarter: number; clients: number;
+      year: number; month: number; clients: number;
       computed: number; skipped: number; errors: number;
     }> = [];
 
-    // Itereer over alle quarters in range
-    const quarters: Array<{ year: number; quarter: number }> = [];
-    let y = range.fromYear, q = range.fromQuarter;
-    while (y < range.toYear || (y === range.toYear && q <= range.toQuarter)) {
-      quarters.push({ year: y, quarter: q });
-      q++;
-      if (q > 4) { q = 1; y++; }
-      if (quarters.length > 40) break; // safety
+    // Itereer over alle maanden in range
+    const months: Array<{ year: number; month: number }> = [];
+    let y = range.fromYear, m = range.fromMonth;
+    while (y < range.toYear || (y === range.toYear && m <= range.toMonth)) {
+      months.push({ year: y, month: m });
+      m++;
+      if (m > 12) { m = 1; y++; }
+      if (months.length > 36) break; // safety
     }
 
-    for (const { year, quarter } of quarters) {
-      const result = await aggregateQuarter(supabase, year, quarter);
-      results.push({ year, quarter, ...result });
+    for (const { year, month } of months) {
+      const result = await aggregateMonth(supabase, year, month);
+      results.push({ year, month, ...result });
     }
 
     return json({
@@ -125,33 +124,113 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function aggregateQuarter(supabase: any, year: number, quarter: number) {
-  const { start, end } = quarterDates(year, quarter);
-  const { period_start, period_end } = quarterDateOnly(year, quarter);
+function parseMonth(value: unknown, field: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 12) {
+    throw new Error(`${field} moet een maand tussen 1 en 12 zijn`);
+  }
+  return n;
+}
 
-  // Aggregeer per client uit sessies in dit kwartaal (excl. excluded sessies)
-  const { data: aggs, error } = await supabase.rpc("aggregate_client_sessions_for_quarter", {
-    _start: start,
-    _end: end,
-  });
+function parseYear(value: unknown, field: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 2020 || n > 2100) {
+    throw new Error(`${field} moet een geldig jaar zijn`);
+  }
+  return n;
+}
 
-  // Fallback: als de RPC niet bestaat, doe het in TypeScript
-  let aggregations: Array<{
-    client_id: string;
-    total_kwh: number;
-    total_sessions: number;
-    gross_revenue: number;
-    total_energy_cost: number;
-    reimbursement_total: number;
-    client_share: number;
-    echarging_share: number;
-  }>;
+function rangeLength(range: Range): number {
+  return (range.toYear * 12 + range.toMonth) - (range.fromYear * 12 + range.fromMonth) + 1;
+}
 
-  if (error || !aggs) {
-    // TS-fallback: handmatig groeperen
+function parseRange(body: AggregateBody): Range {
+  if (body.year !== undefined || body.month !== undefined) {
+    if (body.year === undefined || body.month === undefined) {
+      throw new Error("year en month zijn samen verplicht");
+    }
+    const year = parseYear(body.year, "year");
+    const month = parseMonth(body.month, "month");
+    return { fromYear: year, fromMonth: month, toYear: year, toMonth: month };
+  }
+
+  if (
+    body.fromYear !== undefined || body.fromMonth !== undefined
+    || body.toYear !== undefined || body.toMonth !== undefined
+  ) {
+    const range = {
+      fromYear: parseYear(body.fromYear, "fromYear"),
+      fromMonth: parseMonth(body.fromMonth, "fromMonth"),
+      toYear: parseYear(body.toYear, "toYear"),
+      toMonth: parseMonth(body.toMonth, "toMonth"),
+    };
+    const length = rangeLength(range);
+    if (length < 1) throw new Error("Periodebereik is ongeldig");
+    if (length > 24) throw new Error("Periodebereik mag maximaal 24 maanden bevatten");
+    return range;
+  }
+
+  // Default: huidige + vorige maand
+  const cur = currentMonth();
+  const prev = prevMonth(cur);
+  return {
+    fromYear: prev.year,
+    fromMonth: prev.month,
+    toYear: cur.year,
+    toMonth: cur.month,
+  };
+}
+
+async function aggregateMonth(supabase: SupabaseClient, year: number, month: number) {
+  // Maandgrenzen op Europe/Amsterdam-tijd (DST-correct), via de canonieke SQL-functie
+  // amsterdam_month_bounds. Zo telt een sessie op 1 jan 00:30 NL voor januari, niet
+  // voor december (zoals bij UTC-bucketing zou gebeuren).
+  const { data: boundsRows, error: bErr } = await supabase
+    .rpc("amsterdam_month_bounds", { p_year: year, p_month: month });
+  if (bErr) throw bErr;
+  const bounds = (Array.isArray(boundsRows) ? boundsRows[0] : boundsRows) as
+    | { start_ts: string; end_ts: string }
+    | undefined;
+  if (!bounds) throw new Error(`Geen maandgrenzen voor ${year}-${String(month).padStart(2, "0")}`);
+  const start = bounds.start_ts;
+  const end = bounds.end_ts;
+  const { period_start, period_end } = monthDateOnly(year, month);
+
+  // Opruim-pass: bestaande settlements waarvoor de klant geen gekoppelde sessies meer heeft
+  // worden gedelete (alleen live/calculated; definitieve statussen blijven historisch).
+  const { data: existingSettlements } = await supabase
+    .from("settlements")
+    .select("id, client_id, status")
+    .eq("year", year)
+    .eq("month", month);
+
+  const clientsWithSessionsInMonth = new Set<string>();
+  {
+    const { data: ses } = await supabase
+      .from("charging_sessions")
+      .select("client_id")
+      .gte("started_at", start)
+      .lt("started_at", end)
+      .eq("excluded", false)
+      .not("client_id", "is", null);
+    for (const s of ses ?? []) {
+      if (s.client_id) clientsWithSessionsInMonth.add(s.client_id as string);
+    }
+  }
+
+  for (const setl of existingSettlements ?? []) {
+    if ((setl.status === "live" || setl.status === "calculated") && !clientsWithSessionsInMonth.has(setl.client_id as string)) {
+      await supabase.from("settlements").delete().eq("id", setl.id);
+    }
+  }
+
+  // Aggregaten per klant in deze maand (excl. excluded sessies).
+  // reimbursement_amount = Road's "Prijs excl BTW" = bron van waarheid voor inkomsten.
+  let aggregations: Aggregation[];
+  {
     const { data: sessions, error: sErr } = await supabase
       .from("charging_sessions")
-      .select("client_id, kwh_delivered, gross_revenue, energy_cost, reimbursement_amount, net_margin, client_share, echarging_share")
+      .select("client_id, kwh_delivered, reimbursement_amount")
       .gte("started_at", start)
       .lt("started_at", end)
       .eq("excluded", false)
@@ -159,75 +238,96 @@ async function aggregateQuarter(supabase: any, year: number, quarter: number) {
 
     if (sErr) throw sErr;
 
-    const map = new Map<string, any>();
+    const map = new Map<string, Aggregation>();
     for (const s of sessions ?? []) {
       const k = s.client_id as string;
       if (!map.has(k)) {
-        map.set(k, {
-          client_id: k,
-          total_kwh: 0, total_sessions: 0, gross_revenue: 0,
-          total_energy_cost: 0, reimbursement_total: 0,
-          client_share: 0, echarging_share: 0,
-        });
+        map.set(k, { client_id: k, total_kwh: 0, total_sessions: 0, reimbursement_total: 0 });
       }
-      const a = map.get(k);
+      const a = map.get(k)!;
       a.total_kwh += Number(s.kwh_delivered ?? 0);
       a.total_sessions += 1;
-      a.gross_revenue += Number(s.gross_revenue ?? 0);
-      a.total_energy_cost += Number(s.energy_cost ?? 0);
-      // Authoritative reimbursement als beschikbaar, anders fallback op net_margin
-      a.reimbursement_total += Number(s.reimbursement_amount ?? s.net_margin ?? 0);
-      a.client_share += Number(s.client_share ?? 0);
-      a.echarging_share += Number(s.echarging_share ?? 0);
+      a.reimbursement_total += Number(s.reimbursement_amount ?? 0);
     }
     aggregations = Array.from(map.values());
-  } else {
-    aggregations = aggs;
   }
+
+  // Org-default service-fee per kWh
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("default_echarging_fee_per_kwh")
+    .limit(1)
+    .maybeSingle();
+  const orgFeePerKwh = Number(org?.default_echarging_fee_per_kwh ?? DEFAULT_ECHARGING_FEE_PER_KWH);
+
+  // Per-klant override van de fee + BTW-plicht (default: BTW-plichtig).
+  const clientIds = aggregations.map((a) => a.client_id);
+  const clientFee = new Map<string, number>();
+  const clientVatLiable = new Map<string, boolean>();
+  if (clientIds.length > 0) {
+    const { data: clients } = await supabase
+      .from("clients")
+      .select("id, echarging_fee_per_kwh, vat_liable")
+      .in("id", clientIds);
+    for (const c of clients ?? []) {
+      const override = c.echarging_fee_per_kwh;
+      clientFee.set(c.id as string, override === null || override === undefined ? orgFeePerKwh : Number(override));
+      clientVatLiable.set(c.id as string, c.vat_liable !== false); // default BTW-plichtig
+    }
+  }
+
+  // Lopende maand? Dan status 'live'. Anders 'calculated' (admin kan goedkeuren).
+  const isMonthStillRunning = new Date() < new Date(end);
 
   let computed = 0, skipped = 0, errors = 0;
 
   for (const a of aggregations) {
-    // Check of bestaande row voor deze (client, year, quarter) niet 'approved' of 'paid' is
+    const feePerKwh = clientFee.get(a.client_id) ?? orgFeePerKwh;
+    const vatRate = (clientVatLiable.get(a.client_id) ?? true) ? 0.21 : 0; // BTW-plichtig → 21%
+
+    const grossRevenue = a.reimbursement_total;
+    const echargingRevenue = feePerKwh * a.total_kwh; // GEEN minimum
+    const clientPayout = grossRevenue - echargingRevenue;
+
+    // Bestaande rij met definitieve status niet overschrijven
     const { data: existing } = await supabase
-      .from("quarterly_settlements")
+      .from("settlements")
       .select("id, status")
       .eq("client_id", a.client_id)
       .eq("year", year)
-      .eq("quarter", quarter)
+      .eq("month", month)
       .maybeSingle();
 
-    if (existing && (existing.status === "approved" || existing.status === "paid" || existing.status === "charged_back")) {
+    if (existing && ["approved", "paid", "invoice_sent", "invoice_paid", "charged_back"].includes(existing.status as string)) {
       skipped++;
       continue;
     }
 
+    const newStatus = isMonthStillRunning ? "live" : "calculated";
+
     const row = {
       client_id: a.client_id,
       year,
-      quarter,
+      month,
       period_start,
       period_end,
       total_kwh: a.total_kwh,
       total_sessions: a.total_sessions,
-      gross_revenue: a.gross_revenue,
-      total_energy_cost: a.total_energy_cost,
-      total_platform_fee: 0,        // TODO: berekenen op basis van #sockets × maandprijs
-      total_transaction_fees: 0,    // TODO: uit Road's CPO subscription invoice
-      ere_commission: 0,
-      net_margin: a.reimbursement_total,
-      client_payout: a.client_share,
-      echarging_revenue: a.echarging_share,
-      ere_estimate: 0,              // TODO: uit Road of via NEa-rate × kWh
-      status: existing?.status ?? "calculated",
+      gross_revenue: grossRevenue,
+      echarging_fee_per_kwh: feePerKwh, // snapshot
+      echarging_revenue: echargingRevenue,
+      client_payout: clientPayout,
+      vat_rate: vatRate, // BTW-snapshot (0.21 BTW-plichtig, 0 anders)
+      ere_estimate: 0, // informatief; portal toont eigen schatting via Laadbeloning
+      status: newStatus,
     };
 
     const { error: upErr } = await supabase
-      .from("quarterly_settlements")
-      .upsert(row, { onConflict: "client_id,year,quarter", ignoreDuplicates: false });
+      .from("settlements")
+      .upsert(row, { onConflict: "client_id,year,month", ignoreDuplicates: false });
 
     if (upErr) {
-      console.error(`upsert settlement ${a.client_id} Q${quarter} ${year} failed:`, upErr.message);
+      console.error(`upsert settlement ${a.client_id} ${year}-${month} failed:`, upErr.message);
       errors++;
     } else {
       computed++;

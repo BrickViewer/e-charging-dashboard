@@ -1,0 +1,484 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-family: 'Outfit', sans-serif;
+
+    /* E-Charging brand — exact logo-groen #05A500 = rgb(5,165,0) */
+    --primary: 118.2 100% 32.4%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 118 100% 27%;
+    --primary-kpi: 118.2 100% 32.4%;
+    --primary-light: 118 100% 96%;
+    --primary-light-hover: 118 82% 91%;
+    --primary-light-border: 118 59% 83%;
+
+    /* Admin light theme */
+    --background: 0 0% 96%;
+    --foreground: 0 0% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 17%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 17%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 17%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 87%;
+    --input: 0 0% 87%;
+    --ring: 118.2 100% 32.4%;
+    --radius: 0.5rem;
+
+    /* Text hierarchy */
+    --text-secondary: 0 0% 40%;
+    --text-tertiary: 0 0% 60%;
+
+    /* Status colors */
+    --success: 118.2 100% 32.4%;
+    --error: 0 84% 60%;
+    --error-light: 0 86% 97%;
+    --warning: 38 92% 50%;
+    --warning-light: 48 100% 96%;
+    --info: 217 91% 60%;
+    --info-light: 214 100% 97%;
+
+    /* E-Group family */
+    --echeck: 356 93% 44%;
+    --emake: 216 100% 40%;
+    --echarging: 118.2 100% 32.4%;
+
+    /* Admin sidebar */
+    --sidebar-background: 240 5% 12%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 118.2 100% 32.4%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 100% / 0.1;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100% / 0.1;
+    --sidebar-ring: 118.2 100% 32.4%;
+    --sidebar-muted: 0 0% 60%;
+  }
+
+  /* Portal — Tesla cockpit dark theme (default) for client dashboard */
+  .portal-theme {
+    --background: 222 18% 6%;
+    --foreground: 0 0% 98%;
+    --card: 222 16% 10%;
+    --card-foreground: 0 0% 98%;
+    --popover: 222 14% 13%;
+    --popover-foreground: 0 0% 98%;
+    --secondary: 222 14% 14%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 222 12% 16%;
+    --muted-foreground: 222 8% 60%;
+    --accent: 222 14% 14%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 12% 22%;
+    --input: 222 12% 22%;
+    --ring: 200 100% 60%;
+    --sidebar-background: 222 20% 4%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 200 100% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 16% 12%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 222 12% 18%;
+    --sidebar-ring: 200 100% 60%;
+
+    /* Cockpit gauge colors (kleurkeuze blijft identiek tussen licht/donker) */
+    --gauge-red: 350 88% 62%;
+    --gauge-blue: 200 100% 64%;
+    --gauge-green: 140 70% 55%;
+    --gauge-track: 222 14% 18%;
+    --portal-glow-green: 132 72% 18%;
+    --portal-glow-bright: 132 82% 24%;
+    --portal-vignette: 222 26% 2%;
+  }
+
+  /* Portal — light variant. Behoudt gauge-kleuren, schakelt achtergrond
+     en sidebar naar lichte tinten. Activeer met klasse "portal-theme light". */
+  .portal-theme.light {
+    --background: 0 0% 98%;
+    --foreground: 222 18% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 18% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 18% 12%;
+    --secondary: 220 15% 95%;
+    --secondary-foreground: 222 18% 12%;
+    --muted: 220 15% 95%;
+    --muted-foreground: 220 8% 40%;
+    --accent: 220 15% 95%;
+    --accent-foreground: 222 18% 12%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 200 95% 45%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 18% 12%;
+    --sidebar-primary: 200 95% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 95%;
+    --sidebar-accent-foreground: 222 18% 12%;
+    --sidebar-border: 220 13% 88%;
+    --sidebar-ring: 200 95% 45%;
+
+    --gauge-track: 220 12% 88%;
+  }
+
+  /* Portal-specific overrides */
+  .portal-theme.portal-shell {
+    position: relative;
+    isolation: isolate;
+    background:
+      radial-gradient(ellipse at 72% 16%, hsl(var(--portal-glow-green) / 0.09) 0%, hsl(var(--portal-glow-green) / 0.04) 26%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, hsl(var(--portal-glow-green) / 0.045) 0%, transparent 45%),
+      radial-gradient(ellipse at center bottom, hsl(0 0% 0% / 0.36) 0%, transparent 60%),
+      hsl(var(--background));
+  }
+
+  .portal-theme.portal-shell::before,
+  .portal-theme.portal-shell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .portal-theme.portal-shell::before {
+    background:
+      radial-gradient(ellipse at 58% 45%, hsl(var(--portal-glow-bright) / 0.04) 0%, transparent 38%),
+      radial-gradient(ellipse at 78% 30%, hsl(var(--portal-glow-green) / 0.055) 0%, transparent 46%),
+      linear-gradient(180deg, hsl(var(--portal-glow-green) / 0.025) 0%, transparent 42%);
+  }
+
+  .portal-theme.portal-shell::after {
+    background:
+      linear-gradient(180deg, transparent 0%, transparent 56%, hsl(0 0% 0% / 0.16) 86%, hsl(0 0% 0% / 0.34) 100%),
+      radial-gradient(ellipse at center, transparent 58%, hsl(var(--portal-vignette) / 0.34) 100%);
+  }
+
+  .portal-theme.portal-shell > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .portal-theme .portal-card {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+
+  .portal-theme .portal-fixed-nav {
+    position: fixed;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 45;
+    width: max-content;
+    transform: translateX(-50%);
+  }
+
+  .portal-theme .portal-nav-stack {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+  }
+
+  .portal-theme .portal-nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    color: hsl(var(--foreground) / 0.72);
+    outline: none;
+    transition:
+      color 180ms ease,
+      opacity 180ms ease,
+      transform 180ms ease;
+  }
+
+  .portal-theme .portal-nav-icon {
+    color: currentColor;
+    fill: transparent;
+    stroke: currentColor;
+    filter: none;
+    transition:
+      color 200ms ease,
+      filter 200ms ease,
+      transform 200ms ease;
+  }
+
+  .portal-theme .portal-nav-link:hover,
+  .portal-theme .portal-nav-link:focus-visible,
+  .portal-theme .portal-nav-link[data-active="true"] {
+    color: hsl(var(--gauge-green));
+  }
+
+  .portal-theme .portal-nav-link:hover .portal-nav-icon,
+  .portal-theme .portal-nav-link:focus-visible .portal-nav-icon,
+  .portal-theme .portal-nav-link[data-active="true"] .portal-nav-icon {
+    fill: hsl(var(--gauge-green) / 0.055);
+    filter:
+      drop-shadow(0 0 7px hsl(var(--gauge-green) / 0.5))
+      drop-shadow(0 0 2px hsl(var(--gauge-green) / 0.35));
+    transform: translateY(-1px);
+  }
+
+  .portal-theme .portal-nav-link:active {
+    transform: scale(0.94);
+  }
+
+  .portal-theme .portal-back-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 1.75rem;
+    margin: 0.15rem auto 0;
+    color: hsl(var(--foreground) / 0.52);
+    font-size: 1.15rem;
+    font-weight: 500;
+    line-height: 1;
+    transition:
+      color 180ms ease,
+      transform 180ms ease;
+  }
+
+  .portal-theme .portal-back-link:hover,
+  .portal-theme .portal-back-link:focus-visible {
+    color: hsl(var(--gauge-green));
+    transform: translateX(-2px);
+  }
+
+  @media (min-width: 1024px) {
+    .portal-theme .portal-fixed-nav {
+      top: 50%;
+      bottom: auto;
+      left: 0;
+      width: clamp(3.625rem, 4.8vw, 4.75rem);
+      height: clamp(15rem, 34vh, 20rem);
+      transform: translateY(-50%);
+    }
+
+    .portal-theme .portal-fixed-nav::before,
+    .portal-theme .portal-fixed-nav::after {
+      content: "";
+      position: absolute;
+      pointer-events: none;
+    }
+
+    .portal-theme .portal-fixed-nav::before {
+      inset: 0;
+      border-radius: 0 1.6rem 1.6rem 0;
+      background:
+        radial-gradient(ellipse at 92% 22%, hsl(var(--portal-glow-bright) / 0.14) 0%, transparent 34%),
+        radial-gradient(ellipse at 82% 58%, hsl(var(--portal-glow-green) / 0.12) 0%, transparent 52%),
+        linear-gradient(90deg, hsl(222 28% 2% / 0.98) 0%, hsl(222 22% 4% / 0.96) 52%, hsl(128 28% 8% / 0.88) 100%);
+      box-shadow:
+        inset -1px 0 0 hsl(var(--gauge-green) / 0.18),
+        inset -18px 0 42px hsl(var(--portal-glow-green) / 0.055),
+        inset 0 1px 0 hsl(0 0% 100% / 0.05),
+        18px 0 42px hsl(0 0% 0% / 0.32),
+        10px 0 34px hsl(var(--portal-glow-green) / 0.06);
+    }
+
+    .portal-theme .portal-fixed-nav::after {
+      top: 10%;
+      right: 0;
+      bottom: 10%;
+      width: 1px;
+      background: linear-gradient(
+        180deg,
+        transparent 0%,
+        hsl(var(--gauge-green) / 0.12) 18%,
+        hsl(var(--gauge-green) / 0.22) 50%,
+        hsl(var(--gauge-green) / 0.1) 82%,
+        transparent 100%
+      );
+      filter: drop-shadow(0 0 8px hsl(var(--gauge-green) / 0.18));
+    }
+
+    .portal-theme .portal-nav-stack {
+      position: relative;
+      z-index: 1;
+      height: 100%;
+      flex-direction: column;
+      gap: clamp(1rem, 2.1vh, 1.35rem);
+    }
+
+    .portal-theme .portal-nav-link {
+      width: 2.55rem;
+      height: 2.55rem;
+      color: hsl(var(--foreground) / 0.58);
+    }
+
+    .portal-theme .portal-nav-link[data-active="true"]::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -0.55rem;
+      width: 0.22rem;
+      height: 0.9rem;
+      border-radius: 999px;
+      background: hsl(var(--gauge-green));
+      box-shadow:
+        0 0 8px hsl(var(--gauge-green) / 0.62),
+        0 0 18px hsl(var(--gauge-green) / 0.28);
+      transform: translateY(-50%);
+    }
+
+    .portal-theme .portal-nav-link:hover .portal-nav-icon,
+    .portal-theme .portal-nav-link:focus-visible .portal-nav-icon,
+    .portal-theme .portal-nav-link[data-active="true"] .portal-nav-icon {
+      transform: translateX(1px);
+    }
+
+    .portal-theme .portal-back-link {
+      position: absolute;
+      top: calc(100% + 0.55rem);
+      left: 50%;
+      margin: 0;
+      white-space: nowrap;
+      transform: translateX(-50%);
+    }
+
+    .portal-theme .portal-back-link:hover,
+    .portal-theme .portal-back-link:focus-visible {
+      transform: translateX(calc(-50% - 2px));
+    }
+  }
+
+  /* Dark theme (kept for potential future use) */
+  .dark {
+    --background: 240 6% 11%;
+    --foreground: 0 0% 95%;
+    --card: 240 5% 14%;
+    --card-foreground: 0 0% 95%;
+    --popover: 240 5% 14%;
+    --popover-foreground: 0 0% 95%;
+    --secondary: 240 4% 18%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 240 4% 18%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 240 4% 18%;
+    --accent-foreground: 0 0% 95%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 4% 22%;
+    --input: 240 4% 22%;
+    --ring: 118.2 100% 32.4%;
+    --sidebar-background: 240 6% 9%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 118.2 100% 32.4%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 4% 14%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 240 4% 18%;
+    --sidebar-ring: 118.2 100% 32.4%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-family);
+  }
+}
+
+/* KPI specific styles */
+@layer components {
+  .kpi-value {
+    @apply text-3xl font-bold;
+    color: hsl(var(--primary-kpi));
+  }
+  .kpi-label {
+    @apply text-xs font-medium uppercase tracking-wider;
+    color: hsl(var(--text-tertiary));
+    letter-spacing: 0.5px;
+  }
+  .section-heading {
+    @apply text-lg font-semibold;
+    color: hsl(var(--foreground));
+  }
+  .page-title {
+    @apply text-2xl font-semibold;
+    color: hsl(var(--foreground));
+  }
+  .portal-card {
+    @apply rounded-xl border shadow-sm;
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+
+  /* Cockpit-titel — gecentreerde paginalabel die in de cockpit-arc zweeft.
+     Lichte weight, ruime tracking voor een dashboard/cockpit-gevoel. */
+  .cockpit-title {
+    font-family: var(--font-family);
+    font-size: clamp(1.0625rem, 2.5vh, 1.75rem);
+    font-weight: 300;
+    color: hsl(0 0% 96%);
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    user-select: none;
+    text-shadow: 0 2px 14px hsl(0 0% 0% / 0.55);
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  /* Subtiel accentlijntje onder de cockpit-titel — optioneel onderscheidsteken */
+  .cockpit-title-accent {
+    height: 1px;
+    width: clamp(40px, 6vh, 72px);
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.25), transparent);
+  }
+
+  /* Section-label — uppercase tracking voor secties binnen pagina's, past bij cockpit-stijl */
+  .cockpit-section-label {
+    @apply uppercase text-muted-foreground;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+  }
+
+  /* Status badges */
+  .badge-actief {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+    background: hsl(var(--primary-light));
+    color: hsl(var(--primary));
+  }
+  .badge-prospect {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+    background: hsl(var(--info-light));
+    color: hsl(var(--info));
+  }
+  .badge-offerte {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+    background: hsl(var(--warning-light));
+    color: hsl(var(--warning));
+  }
+  .badge-inactief {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500;
+  }
+  .badge-error {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+    background: hsl(var(--error-light));
+    color: hsl(var(--error));
+  }
+}

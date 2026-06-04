@@ -6,7 +6,7 @@
     "noUnusedParameters": false,
     "paths": {
       "@/*": [
-        "./src/*"
+        "./apps/admin/src/*"
       ]
     },
     "skipLibCheck": true,
@@ -15,10 +15,10 @@
   "files": [],
   "references": [
     {
-      "path": "./tsconfig.app.json"
+      "path": "./apps/admin/tsconfig.app.json"
     },
     {
-      "path": "./tsconfig.node.json"
+      "path": "./apps/admin/tsconfig.node.json"
     }
   ]
 }
