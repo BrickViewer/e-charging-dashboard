@@ -175,6 +175,59 @@
     z-index: 1;
   }
 
+  /* Admin-shell — viewport-verankerde ambient gloed, afgestemd op het portaal.
+     De admin-shell SCROLLT (min-h-screen), dus de decoratieve lagen zijn
+     position:fixed (verankerd aan het viewport), anders dan de portal-shell
+     (h-screen) die position:absolute gebruikt. Zet GEEN transform/filter/
+     will-change/contain op .admin-shell zelf — anders verankeren deze fixed
+     lagen aan het (lange) shell-vlak i.p.v. het viewport. */
+  .portal-theme.admin-shell {
+    position: relative;
+    background: hsl(var(--background));
+  }
+
+  .portal-theme.admin-shell::before,
+  .portal-theme.admin-shell::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    will-change: transform; /* promoot tot eigen compositor-laag → geen repaint bij scroll */
+  }
+
+  /* Orbs naar rechts geschoven (76%/82%) zodat de helderste lob in de
+     content-zone landt, rechts van de 240px sidebar — net als het portaal. */
+  .portal-theme.admin-shell::before {
+    background:
+      radial-gradient(ellipse at 76% 18%, hsl(var(--portal-glow-green) / 0.06) 0%, hsl(var(--portal-glow-green) / 0.028) 26%, transparent 50%),
+      radial-gradient(ellipse at 82% 28%, hsl(var(--portal-glow-bright) / 0.028) 0%, transparent 40%),
+      radial-gradient(ellipse at 50% 50%, hsl(var(--portal-glow-green) / 0.03) 0%, transparent 45%),
+      linear-gradient(180deg, hsl(var(--portal-glow-green) / 0.018) 0%, transparent 42%);
+  }
+
+  .portal-theme.admin-shell::after {
+    background:
+      linear-gradient(180deg, transparent 0%, transparent 56%, hsl(0 0% 0% / 0.16) 86%, hsl(0 0% 0% / 0.34) 100%),
+      radial-gradient(ellipse at center, transparent 58%, hsl(var(--portal-vignette) / 0.34) 100%);
+  }
+
+  .portal-theme.admin-shell > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Admin-sidebar — ingetogen groene edge-glow op de rechterrand,
+     zoals de portal nav-rail. Box-shadow staat op de <aside> (niet de
+     overflow-hidden inner div, die zou de buitenste schaduw clippen). */
+  .portal-theme .admin-sidebar {
+    box-shadow:
+      inset -1px 0 0 hsl(var(--gauge-green) / 0.12),
+      inset -16px 0 38px hsl(var(--portal-glow-green) / 0.04),
+      14px 0 38px hsl(0 0% 0% / 0.28),
+      8px 0 26px hsl(var(--portal-glow-green) / 0.05);
+  }
+
   .portal-theme .portal-card {
     background: hsl(var(--card));
     border-color: hsl(var(--border));
