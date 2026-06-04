@@ -39,19 +39,23 @@ export async function resolveClientAccess(
     return { ok: false, response: jsonError(401, "Ongeldige sessie", corsHeaders) };
   }
 
-  const { data: roleRow, error: roleError } = await serviceClient
+  const { data: roleRows, error: roleError } = await serviceClient
     .from("user_roles")
     .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .eq("user_id", user.id);
   if (roleError) throw roleError;
 
-  const role = roleRow?.role;
-  if ((role === "admin" || role === "manager") && requestedClientId) {
-    return { ok: true, userId: user.id, role, clientId: requestedClientId, isAdmin: true };
+  // Eén gebruiker kan meerdere rollen hebben (superadmin = admin + superadmin),
+  // dus geen .maybeSingle(). superadmin telt als admin-niveau.
+  const roles = (roleRows ?? []).map((r) => r.role as string);
+  const isAdminLevel = roles.includes("admin") || roles.includes("superadmin") || roles.includes("manager");
+  const adminRole: "admin" | "manager" =
+    roles.includes("admin") || roles.includes("superadmin") ? "admin" : "manager";
+  if (isAdminLevel && requestedClientId) {
+    return { ok: true, userId: user.id, role: adminRole, clientId: requestedClientId, isAdmin: true };
   }
 
-  if (role === "admin" || role === "manager") {
+  if (isAdminLevel) {
     return { ok: false, response: jsonError(400, "client_id ontbreekt voor adminactie", corsHeaders) };
   }
 

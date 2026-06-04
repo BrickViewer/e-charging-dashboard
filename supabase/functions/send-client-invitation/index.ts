@@ -107,13 +107,13 @@ Deno.serve(async (req: Request) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return json({ status: "unauthorized" }, 401);
 
-    const { data: roleRow } = await supabase
+    const { data: roleRows } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const role = roleRow?.role;
-    if (role !== "admin" && role !== "manager") {
+      .eq("user_id", user.id);
+    const roles = (roleRows ?? []).map((r) => r.role);
+    // superadmin telt als admin-niveau; meerdere rollen mogelijk dus geen .maybeSingle()
+    if (!roles.includes("admin") && !roles.includes("manager") && !roles.includes("superadmin")) {
       return json({ status: "forbidden", message: "Alleen admin/manager mag uitnodigen" }, 403);
     }
 

@@ -21,9 +21,9 @@ interface AuthOptions {
 interface ServiceClient {
   from(table: string): {
     select(columns: string): {
-      eq(column: string, value: string): {
-        maybeSingle(): Promise<{ data: { role?: string } | null; error: Error | null }>;
-      };
+      // Eén gebruiker kan meerdere rollen hebben (bv. superadmin = admin + superadmin),
+      // dus we halen alle rijen op i.p.v. .maybeSingle() (die faalt bij >1 rij).
+      eq(column: string, value: string): Promise<{ data: { role?: string }[] | null; error: Error | null }>;
     };
   };
 }
@@ -89,15 +89,21 @@ export async function requireAdminOrInternal(
     return { ok: false, response: jsonError(401, "Ongeldige sessie", corsHeaders) };
   }
 
-  const { data: roleRow, error: roleError } = await serviceClient
+  const { data: roleRows, error: roleError } = await serviceClient
     .from("user_roles")
     .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .eq("user_id", user.id);
 
   if (roleError) throw roleError;
 
-  const role = roleRow?.role as Role | undefined;
+  const roles = (roleRows ?? []).map((r) => r.role);
+  // superadmin telt als admin-niveau (heeft sowieso volledige beheer-rechten)
+  const role: Role | undefined =
+    roles.includes("admin") || roles.includes("superadmin")
+      ? "admin"
+      : roles.includes("manager")
+      ? "manager"
+      : undefined;
   if (role === "admin" || role === "manager") {
     return { ok: true, kind: "user", userId: user.id, role };
   }

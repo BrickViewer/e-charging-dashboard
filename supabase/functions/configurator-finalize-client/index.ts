@@ -46,13 +46,14 @@ Deno.serve(async (req) => {
       return json({ status: "forbidden", message: "Configuratiesessie verlopen" }, 403);
     }
 
-    const { data: roleRow, error: roleError } = await serviceClient
+    const { data: roleRows, error: roleError } = await serviceClient
       .from("user_roles")
       .select("role")
-      .eq("user_id", session.actor_user_id)
-      .maybeSingle();
+      .eq("user_id", session.actor_user_id);
     if (roleError) throw roleError;
-    if (roleRow?.role !== "admin" && roleRow?.role !== "manager") {
+    const actorRoles = (roleRows ?? []).map((r) => r.role);
+    // superadmin telt als admin-niveau; meerdere rollen mogelijk dus geen .maybeSingle()
+    if (!actorRoles.includes("admin") && !actorRoles.includes("manager") && !actorRoles.includes("superadmin")) {
       return json({ status: "forbidden", message: "Gebruiker mag geen klanten aanmaken" }, 403);
     }
 
