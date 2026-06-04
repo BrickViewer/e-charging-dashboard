@@ -12,7 +12,7 @@ export function SettlementDetailRow({ settlement }: { settlement: AdminSettlemen
   const vatPct = (vat.vatRate * 100).toLocaleString("nl-NL", { maximumFractionDigits: 2 });
   return (
     <tr>
-      <td colSpan={9} className="p-0">
+      <td colSpan={10} className="p-0">
         <div className="bg-muted/30 px-6 py-4 border-b border-border">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>

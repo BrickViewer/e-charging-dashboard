@@ -58,7 +58,7 @@ export default function AdminFinancial() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [recomputing, setRecomputing] = useState(false);
-  const [bankPayConfirmOpen, setBankPayConfirmOpen] = useState(false);
+  const [payTarget, setPayTarget] = useState<AdminSettlement[] | null>(null);
   const [trendYear, setTrendYear] = useState<number | undefined>(undefined);
   const selectedTrendYear = trendYear ?? getCurrentMonth().year;
   const perPage = 20;
@@ -261,12 +261,12 @@ export default function AdminFinancial() {
     [settlements, selected],
   );
   const canApprove = selectedItems.filter((s) => s.status === "calculated");
-  // e-Flux moet ons eerst uitbetalen voordat we de klant uitbetalen (zelfde gate als de RPC).
-  const canEfluxReimbursed = selectedItems.filter((s) => s.status === "approved" && customerCashflow(s) >= 0 && !s.eflux_reimbursed_at);
-  const canBankPay = selectedItems.filter((s) => s.status === "approved" && customerCashflow(s) >= 0 && !!s.eflux_reimbursed_at);
+  // Klant uitbetalen mag zodra goedgekeurd; de e-Flux-ontvangst wordt bij het betalen
+  // in één keer vastgelegd (attestatie in de bevestiging), niet per klant.
+  const canBankPay = selectedItems.filter((s) => s.status === "approved" && customerCashflow(s) >= 0);
   const canSendInvoice = selectedItems.filter((s) => s.status === "approved" && customerCashflow(s) < 0);
   const canMarkInvoicePaid = selectedItems.filter((s) => s.status === "invoice_sent");
-  const bankPayTotalIncl = canBankPay.reduce((a, s) => a + inclAbs(s), 0);
+  const payTotalIncl = (payTarget ?? []).reduce((a, s) => a + inclAbs(s), 0);
 
   const toggleSelect = (id: string) => {
     setSelected(prev => {
@@ -304,35 +304,29 @@ export default function AdminFinancial() {
   const markPaidMutation = useMutation({
     mutationFn: async (items: AdminSettlement[]) => {
       const ids = items.map((s) => s.id);
+      // e-Flux betaalt 1×/maand; we leggen de ontvangst vast op het moment van uitbetalen
+      // (attestatie in de bevestiging), zodat dit niet per klant hoeft. mark_settlements_paid
+      // vereist eflux_reimbursed_at, dus zet die eerst voor wie 'm nog mist.
+      const needEflux = items.filter((s) => !s.eflux_reimbursed_at).map((s) => s.id);
       const rpcClient = supabase as unknown as {
-        rpc(name: "mark_settlements_paid", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
+        rpc(
+          name: "mark_settlements_eflux_reimbursed" | "mark_settlements_paid",
+          args: { settlement_ids: string[] },
+        ): Promise<{ data: unknown; error: Error | null }>;
       };
+      if (needEflux.length > 0) {
+        const { error: efErr } = await rpcClient.rpc("mark_settlements_eflux_reimbursed", { settlement_ids: needEflux });
+        if (efErr) throw efErr;
+      }
       const { error } = await rpcClient.rpc("mark_settlements_paid", { settlement_ids: ids });
       if (error) throw error;
     },
     onSuccess: (_, items) => {
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
       setSelected(new Set());
-      toast.success(`${items.length} afrekening(en) gemarkeerd als bankuitbetaling`);
+      toast.success(`${items.length} afrekening(en) gemarkeerd als betaald`);
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Bankuitbetaling markeren mislukt"),
-  });
-
-  const markEfluxReimbursedMutation = useMutation({
-    mutationFn: async (items: AdminSettlement[]) => {
-      const ids = items.map((s) => s.id);
-      const rpcClient = supabase as unknown as {
-        rpc(name: "mark_settlements_eflux_reimbursed", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-      };
-      const { error } = await rpcClient.rpc("mark_settlements_eflux_reimbursed", { settlement_ids: ids });
-      if (error) throw error;
-    },
-    onSuccess: (_, items) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
-      setSelected(new Set());
-      toast.success(`${items.length} afrekening(en): e-Flux-uitbetaling vastgelegd`);
-    },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "e-Flux-uitbetaling vastleggen mislukt"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Betaling markeren mislukt"),
   });
 
   const markInvoiceSentMutation = useMutation({
@@ -376,7 +370,7 @@ export default function AdminFinancial() {
         <div>
           <h1 className="text-2xl font-semibold">Financieel - cashflow</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Bankbetalingen, factuurflow en maandafrekeningen
+            Maandafrekeningen, factuurflow en uitbetalingen
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -390,11 +384,12 @@ export default function AdminFinancial() {
           Export CSV
         </Button>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={handleRecompute}
           disabled={recomputing}
-          className="portal-card"
+          className="text-muted-foreground hover:text-foreground"
+          title="Her-aggregeert de maandcijfers uit de laadsessies. Gebeurt normaal automatisch via de sync; gebruik dit alleen om een (historische) maand geforceerd bij te werken."
         >
           {recomputing ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -402,10 +397,10 @@ export default function AdminFinancial() {
             <RefreshCw className="w-4 h-4 mr-2" />
           )}
           {periodFilter === "all"
-            ? "Recompute (huidige + vorige maand)"
+            ? "Herbereken"
             : (() => {
                 const [y, mo] = periodFilter.split("-").map(Number);
-                return `Recompute ${periodLabel(y, mo)}`;
+                return `Herbereken ${periodLabel(y, mo)}`;
               })()}
         </Button>
         </div>
@@ -450,11 +445,8 @@ export default function AdminFinancial() {
         />
       </div>
 
-      {/* Bank + factuurflow */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <BankPaymentStatus />
-        <PaymentPipeline pipeline={pipeline} />
-      </div>
+      {/* Betalingsverwerking — volle breedte */}
+      <PaymentPipeline pipeline={pipeline} />
 
       {/* Charts */}
       {chartData.length > 0 && (
@@ -533,20 +525,11 @@ export default function AdminFinancial() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={canEfluxReimbursed.length === 0 || markEfluxReimbursedMutation.isPending}
-                  onClick={() => markEfluxReimbursedMutation.mutate(canEfluxReimbursed)}
-                >
-                  <CheckCircle className="w-4 h-4 mr-1" />
-                  e-Flux betaald ({canEfluxReimbursed.length})
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
                   disabled={canBankPay.length === 0 || markPaidMutation.isPending}
-                  onClick={() => setBankPayConfirmOpen(true)}
+                  onClick={() => setPayTarget(canBankPay)}
                 >
                   <Landmark className="w-4 h-4 mr-1" />
-                  Bankbetaling markeren ({canBankPay.length})
+                  Markeer betaald ({canBankPay.length})
                 </Button>
                 <Button
                   size="sm"
@@ -588,6 +571,7 @@ export default function AdminFinancial() {
                   <th className="text-right p-3 cockpit-section-label">BTW</th>
                   <th className="text-right p-3 cockpit-section-label">Incl. (overboeken)</th>
                   <th className="text-left p-3 cockpit-section-label">Status</th>
+                  <th className="text-right p-3 cockpit-section-label">Actie</th>
                 </tr>
               </thead>
               <tbody>
@@ -603,12 +587,12 @@ export default function AdminFinancial() {
                   ))
                 ) : paginated.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-12 text-center text-muted-foreground">
+                    <td colSpan={10} className="p-12 text-center text-muted-foreground">
                       <Wallet className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
                       <p className="font-medium text-foreground mb-1">Geen afrekeningen</p>
                       <p className="text-sm">
                         {settlements && settlements.length === 0
-                          ? "Run \"Recompute\" om kwartaalafrekeningen te genereren"
+                          ? "De sync genereert de maandafrekeningen automatisch; gebruik anders \"Herbereken\""
                           : "Geen resultaten voor deze filters"}
                       </p>
                     </td>
@@ -655,6 +639,19 @@ export default function AdminFinancial() {
                         <td className="p-3 text-right tabular-nums text-muted-foreground">{fmt(vatInfo(s).vatAmount)}</td>
                         <td className="p-3 text-right tabular-nums font-semibold">{fmt(inclAmount(s))}</td>
                         <td className="p-3"><SettlementStatusBadge settlement={s} /></td>
+                        <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <RowAction
+                            settlement={s}
+                            pending={
+                              approveMutation.isPending || markPaidMutation.isPending ||
+                              markInvoiceSentMutation.isPending || markInvoicePaidMutation.isPending
+                            }
+                            onApprove={() => approveMutation.mutate([s.id])}
+                            onPay={() => setPayTarget([s])}
+                            onSendInvoice={() => markInvoiceSentMutation.mutate([s])}
+                            onInvoicePaid={() => markInvoicePaidMutation.mutate([s])}
+                          />
+                        </td>
                       </tr>
                       {expandedId === s.id && (
                         <SettlementDetailRow settlement={s} />
@@ -672,7 +669,7 @@ export default function AdminFinancial() {
                     <td className="p-3 text-right tabular-nums">{fmt(filteredTotals.net)}</td>
                     <td className="p-3 text-right tabular-nums text-muted-foreground">{fmt(filteredTotals.vat)}</td>
                     <td className="p-3 text-right tabular-nums">{fmt(filteredTotals.incl)}</td>
-                    <td />
+                    <td colSpan={2} />
                   </tr>
                 </tfoot>
               )}
@@ -707,24 +704,24 @@ export default function AdminFinancial() {
       </Card>
 
       {/* Bevestiging vóór een bulk-bankbetaling (veel geld → bewust afvinken). */}
-      <AlertDialog open={bankPayConfirmOpen} onOpenChange={setBankPayConfirmOpen}>
+      <AlertDialog open={payTarget !== null} onOpenChange={(o) => { if (!o) setPayTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Bankbetaling markeren?</AlertDialogTitle>
+            <AlertDialogTitle>Markeren als betaald?</AlertDialogTitle>
             <AlertDialogDescription>
-              Je markeert {canBankPay.length} afrekening(en) als uitbetaald. Boek in je bank het
-              totaalbedrag van <strong>{fmt(bankPayTotalIncl)}</strong> (incl. BTW) over naar de
-              klanten en bevestig daarna hier.
+              Je betaalt <strong>{payTarget?.length ?? 0} afrekening(en)</strong> uit, totaal{" "}
+              <strong>{fmt(payTotalIncl)}</strong> (incl. BTW). Bevestig dat <strong>e-Flux ons voor
+              deze periode heeft betaald</strong> en dat je de bedragen naar de klanten hebt overgeboekt.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={markPaidMutation.isPending}>Annuleren</AlertDialogCancel>
             <Button
               disabled={markPaidMutation.isPending}
-              onClick={() => { markPaidMutation.mutate(canBankPay); setBankPayConfirmOpen(false); }}
+              onClick={() => { if (payTarget) markPaidMutation.mutate(payTarget); setPayTarget(null); }}
             >
               {markPaidMutation.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
-              Markeer als betaald
+              Bevestig betaling
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -779,45 +776,6 @@ function CashKpi({
               <p className={`text-xs mt-1.5 ${subtitleColor}`}>{subtitle}</p>
             )}
           </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function BankPaymentStatus() {
-  return (
-    <Card className="portal-card">
-      <CardContent className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-              <Landmark className="w-4 h-4 text-primary" />
-            </div>
-          <div>
-              <p className="cockpit-section-label">Bankbetalingen</p>
-              <p className="text-base font-semibold mt-0.5 leading-none">E-Group bankrekening</p>
-            </div>
-          </div>
-          <span className="badge-actief">Handmatig</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-lg border border-border bg-muted/20 p-3">
-            <p className="cockpit-section-label">Uitbetaling</p>
-            <p className="text-lg font-semibold mt-1">Bankbatch</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Markeer na verwerking als betaald</p>
-          </div>
-          <div className="rounded-lg border border-border bg-muted/20 p-3">
-            <p className="cockpit-section-label">Negatief saldo</p>
-            <p className="text-lg font-semibold mt-1">Factuur</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Handmatig versturen en opvolgen</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between text-xs pt-1 border-t border-border">
-          <span className="text-muted-foreground">Klantgegevens</span>
-          <span className="text-foreground">Via Mijn gegevens opgeslagen</span>
         </div>
       </CardContent>
     </Card>
@@ -932,4 +890,41 @@ function SettlementStatusBadge({ settlement }: { settlement: AdminSettlement }) 
   }
 
   return <StatusBadge status={settlement.status || "calculated"} />;
+}
+
+// Per-rij "volgende stap" — zo kan finance een afrekening ook los afhandelen,
+// naast de bulk-acties. Toont één duidelijke knop per status.
+function RowAction({
+  settlement,
+  pending,
+  onApprove,
+  onPay,
+  onSendInvoice,
+  onInvoicePaid,
+}: {
+  settlement: AdminSettlement;
+  pending: boolean;
+  onApprove: () => void;
+  onPay: () => void;
+  onSendInvoice: () => void;
+  onInvoicePaid: () => void;
+}) {
+  const payout = customerCashflow(settlement);
+  let action: { label: string; onClick: () => void } | null = null;
+  if (settlement.status === "calculated") action = { label: "Goedkeuren", onClick: onApprove };
+  else if (settlement.status === "approved" && payout >= 0) action = { label: "Markeer betaald", onClick: onPay };
+  else if (settlement.status === "approved" && payout < 0) action = { label: "Factuur verstuurd", onClick: onSendInvoice };
+  else if (settlement.status === "invoice_sent") action = { label: "Factuur voldaan", onClick: onInvoicePaid };
+
+  if (!action) {
+    const done = ["paid", "invoice_paid", "charged_back"].includes(settlement.status ?? "");
+    return done
+      ? <CheckCircle className="w-4 h-4 text-primary/40 inline-block" aria-label="Afgerond" />
+      : <span className="text-xs text-muted-foreground/50">—</span>;
+  }
+  return (
+    <Button size="sm" variant="outline" className="h-7 text-xs whitespace-nowrap" disabled={pending} onClick={action.onClick}>
+      {action.label}
+    </Button>
+  );
 }
