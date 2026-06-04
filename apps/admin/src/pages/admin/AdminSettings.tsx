@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/hooks/useAuth";
 import { useOrganization, useLatestEfluxSync, useCronStatus, useRecentInvitations } from "@/hooks/useAdminData";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Save, Building2, Settings2, Users, KeyRound, UserPlus,
@@ -37,6 +39,12 @@ export default function AdminSettings() {
   const { data: cronJobs, isLoading: cronLoading } = useCronStatus();
   const { data: recentInvites } = useRecentInvitations(1);
   const queryClient = useQueryClient();
+  const { role: currentRole } = useAuth();
+
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteRole, setInviteRole] = useState("manager");
 
   const [company, setCompany] = useState({
     name: "", kvk: "", address: "", phone: "", email: "", logo_url: "", dashboard_url: "",
@@ -45,9 +53,7 @@ export default function AdminSettings() {
   const [savingCompany, setSavingCompany] = useState(false);
 
   const [defaults, setDefaults] = useState({
-    default_charge_rate_per_kwh: "", default_energy_cost_per_kwh: "",
-    default_echarging_fee_per_kwh: "", default_ere_rate_per_kwh: "",
-    default_eflux_cost_ac: "", default_eflux_cost_dc: "",
+    default_echarging_fee_per_kwh: "",
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
 
@@ -85,12 +91,7 @@ export default function AdminSettings() {
       btw_number: org.btw_number || "", iban: org.iban || "", bic: org.bic || "",
     });
     setDefaults({
-      default_charge_rate_per_kwh: String(org.default_charge_rate_per_kwh ?? "0.45"),
-      default_energy_cost_per_kwh: String(org.default_energy_cost_per_kwh ?? "0.25"),
       default_echarging_fee_per_kwh: String(org.default_echarging_fee_per_kwh ?? "0.10"),
-      default_ere_rate_per_kwh: String(org.default_ere_rate_per_kwh ?? "0.10"),
-      default_eflux_cost_ac: String(org.default_eflux_cost_ac ?? "5.50"),
-      default_eflux_cost_dc: String(org.default_eflux_cost_dc ?? "10.40"),
     });
     setApiKeys({
       eflux_provider_id: org.eflux_provider_id || "",
@@ -123,12 +124,7 @@ export default function AdminSettings() {
     setSavingDefaults(true);
     try {
       const { error } = await supabase.from("organizations").update({
-        default_charge_rate_per_kwh: parseFloat(defaults.default_charge_rate_per_kwh) || 0.45,
-        default_energy_cost_per_kwh: parseFloat(defaults.default_energy_cost_per_kwh) || 0.25,
         default_echarging_fee_per_kwh: parseFloat(defaults.default_echarging_fee_per_kwh) || 0.10,
-        default_ere_rate_per_kwh: parseFloat(defaults.default_ere_rate_per_kwh) || 0.10,
-        default_eflux_cost_ac: parseFloat(defaults.default_eflux_cost_ac) || 5.50,
-        default_eflux_cost_dc: parseFloat(defaults.default_eflux_cost_dc) || 10.40,
       }).eq("id", org.id);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["admin-organization"] });
@@ -191,11 +187,33 @@ export default function AdminSettings() {
     return role?.role || "—";
   };
 
-  // Integrations status — API key zit in Supabase secrets (server-side),
-  // dus client weet niet zeker of hij gezet is. Provider_id in DB is wel een hint
-  // dat onboarding is gestart; definitieve check via "Test verbinding"-knop.
-  const efluxConfigured = !!org?.eflux_provider_id && testResult?.status === "ok";
+  const inviteMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("invite-team-member", {
+        body: { email: inviteEmail.trim(), name: inviteName.trim() || undefined, role: inviteRole },
+      });
+      if (error) throw error;
+      const res = data as { status?: string; message?: string; to?: string };
+      if (res?.status === "error") throw new Error(res.message || "Uitnodigen mislukt");
+      return res;
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-recent-invitations"] });
+      setInviteOpen(false);
+      setInviteEmail(""); setInviteName(""); setInviteRole("manager");
+      if (res?.status === "sent_no_email") toast.warning(res.message || "Teamlid aangemaakt; deel de activatielink handmatig.");
+      else toast.success(`Uitnodiging verstuurd naar ${res?.to ?? inviteEmail}`);
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Uitnodigen mislukt"),
+  });
+
+  // Integrations status — de API-key staat server-side (Supabase secret). De echte
+  // signalen dat e-Flux werkt: provider_id gezet ÉN een recente succesvolle sync.
+  // Een handmatige "Test verbinding" is optioneel, geen voorwaarde.
   const lastEfluxSync = syncLogs?.find((l: EfluxSyncLog) => l.status === "success" && l.entity_type === "cpo_sessions");
+  const efluxConfigured = !!org?.eflux_provider_id && (!!lastEfluxSync || testResult?.status === "ok");
   const lastInvite = recentInvites?.[0];
 
   const efluxLastFailed = syncLogs?.[0]?.status === "error";
@@ -346,18 +364,20 @@ export default function AdminSettings() {
           <Card className="portal-card">
             <CardContent className="p-5 space-y-4">
               <div>
-                <h2 className="text-base font-semibold">Standaard tarieven & kosten</h2>
+                <h2 className="text-base font-semibold">Service-fee</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Standaardwaarden voor de calculator en bij aanmaken van nieuwe klanten
+                  De standaard E-Charging-fee per kWh, gebruikt bij het berekenen van de maandafrekeningen
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><Label>Laadtarief per kWh (€)</Label><Input type="number" step="0.01" value={defaults.default_charge_rate_per_kwh} onChange={e => setDefaults(p => ({ ...p, default_charge_rate_per_kwh: e.target.value }))} /></div>
-                <div><Label>Stroominkoop per kWh (€)</Label><Input type="number" step="0.01" value={defaults.default_energy_cost_per_kwh} onChange={e => setDefaults(p => ({ ...p, default_energy_cost_per_kwh: e.target.value }))} /></div>
-                <div><Label>E-Charging fee per kWh (€)</Label><Input type="number" step="0.01" value={defaults.default_echarging_fee_per_kwh} onChange={e => setDefaults(p => ({ ...p, default_echarging_fee_per_kwh: e.target.value }))} /></div>
-                <div><Label>ERE-tarief per kWh (€)</Label><Input type="number" step="0.01" value={defaults.default_ere_rate_per_kwh} onChange={e => setDefaults(p => ({ ...p, default_ere_rate_per_kwh: e.target.value }))} /></div>
-                <div><Label>e-Flux kosten AC (€/socket/maand)</Label><Input type="number" step="0.01" value={defaults.default_eflux_cost_ac} onChange={e => setDefaults(p => ({ ...p, default_eflux_cost_ac: e.target.value }))} /></div>
-                <div><Label>e-Flux kosten DC (€/socket/maand)</Label><Input type="number" step="0.01" value={defaults.default_eflux_cost_dc} onChange={e => setDefaults(p => ({ ...p, default_eflux_cost_dc: e.target.value }))} /></div>
+                <div>
+                  <Label>E-Charging fee per kWh (€)</Label>
+                  <Input type="number" step="0.01" value={defaults.default_echarging_fee_per_kwh} onChange={e => setDefaults(p => ({ ...p, default_echarging_fee_per_kwh: e.target.value }))} />
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Standaard 0,10. Per klant te overschrijven op de klantpagina.</p>
+                </div>
+                <div className="text-xs text-muted-foreground self-center leading-relaxed rounded-md border border-border bg-muted/30 p-3">
+                  <strong className="text-foreground">BTW</strong> is 21% en wordt per klant ingesteld (BTW-plichtig ja/nee) op de klantpagina. De ERE-laadbeloning is een indicatieve schatting in het klantportaal.
+                </div>
               </div>
               <Button onClick={handleSaveDefaults} disabled={savingDefaults}>
                 <Save className="w-4 h-4 mr-2" />{savingDefaults ? "Opslaan…" : "Opslaan"}
@@ -377,14 +397,11 @@ export default function AdminSettings() {
                     Admins en medewerkers met toegang tot dit beheer-portaal
                   </p>
                 </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" disabled>
-                      <UserPlus className="w-4 h-4 mr-2" />Gebruiker uitnodigen
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Binnenkort beschikbaar</TooltipContent>
-                </Tooltip>
+                {currentRole === "admin" && (
+                  <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
+                    <UserPlus className="w-4 h-4 mr-2" />Gebruiker uitnodigen
+                  </Button>
+                )}
               </div>
               <table className="w-full text-sm">
                 <thead>
@@ -425,6 +442,45 @@ export default function AdminSettings() {
               </table>
             </CardContent>
           </Card>
+
+          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Teamlid uitnodigen</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div>
+                  <Label htmlFor="invite-email">E-mailadres</Label>
+                  <Input id="invite-email" type="email" placeholder="naam@bedrijf.nl" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} className="mt-1.5" />
+                </div>
+                <div>
+                  <Label htmlFor="invite-name">Naam (optioneel)</Label>
+                  <Input id="invite-name" value={inviteName} onChange={e => setInviteName(e.target.value)} className="mt-1.5" />
+                </div>
+                <div>
+                  <Label>Rol</Label>
+                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                    <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin — volledige toegang</SelectItem>
+                      <SelectItem value="manager">Manager — beheer &amp; financieel</SelectItem>
+                      <SelectItem value="viewer">Viewer — alleen lezen</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Het teamlid krijgt een e-mail om een wachtwoord in te stellen en kan daarna inloggen op het beheer-portaal.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviteMutation.isPending}>Annuleren</Button>
+                <Button onClick={() => inviteMutation.mutate()} disabled={inviteMutation.isPending || !inviteEmail.includes("@")}>
+                  {inviteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Uitnodiging versturen
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Tab: API */}

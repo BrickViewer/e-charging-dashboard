@@ -119,39 +119,6 @@ export default function AdminLayout() {
         {/* Separator */}
         <div className="my-3 border-t border-white/[0.06]" />
 
-        <NavLink
-          to="/admin/instellingen"
-          onClick={() => setMobileOpen(false)}
-          className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative group ${
-              isActive
-                ? "bg-white/[0.06] text-white shadow-[inset_0_0_0_1px_hsl(118_100%_32%/0.3)]"
-                : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
-            }`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              {isActive && (
-                <span
-                  className="absolute left-0 top-2.5 bottom-2.5 w-[3px] rounded-r-full"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, #05A500 0%, #08c400 100%)",
-                    boxShadow: "0 0 12px hsl(118 100% 40% / 0.5)",
-                  }}
-                />
-              )}
-              <Settings
-                className={`w-[18px] h-[18px] flex-shrink-0 ${
-                  isActive ? "text-primary" : "text-zinc-500 group-hover:text-zinc-300"
-                }`}
-                strokeWidth={1.8}
-              />
-              <span>Instellingen</span>
-            </>
-          )}
-        </NavLink>
         {(role === "admin" || role === "manager") && (
           <NavLink
             to="/admin/instellingen/configurator"
@@ -189,8 +156,42 @@ export default function AdminLayout() {
         )}
       </nav>
 
-      {/* User profile */}
+      {/* Onderaan: Instellingen, direct boven de ingelogde gebruiker */}
       <div className="px-3 py-4 border-t border-white/[0.06]">
+        <NavLink
+          to="/admin/instellingen"
+          onClick={() => setMobileOpen(false)}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative group ${
+              isActive
+                ? "bg-white/[0.06] text-white shadow-[inset_0_0_0_1px_hsl(118_100%_32%/0.3)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && (
+                <span
+                  className="absolute left-0 top-2.5 bottom-2.5 w-[3px] rounded-r-full"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, #05A500 0%, #08c400 100%)",
+                    boxShadow: "0 0 12px hsl(118 100% 40% / 0.5)",
+                  }}
+                />
+              )}
+              <Settings
+                className={`w-[18px] h-[18px] flex-shrink-0 ${
+                  isActive ? "text-primary" : "text-zinc-500 group-hover:text-zinc-300"
+                }`}
+                strokeWidth={1.8}
+              />
+              <span>Instellingen</span>
+            </>
+          )}
+        </NavLink>
+        <div className="my-2 border-t border-white/[0.06]" />
         <div className="px-3 mb-3">
           <p className="text-sm font-medium text-white truncate">
             {profileName || user?.email || "Gebruiker"}
