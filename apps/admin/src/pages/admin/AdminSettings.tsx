@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Save, Building2, Settings2, Users, KeyRound, UserPlus,
   CheckCircle2, AlertCircle, Loader2, Plug, Landmark, Mail,
-  Clock, RefreshCw, Activity, ChevronRight, Hourglass,
+  Clock, RefreshCw, Activity, ChevronRight, Hourglass, Trash2, ShieldCheck,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -39,12 +39,13 @@ export default function AdminSettings() {
   const { data: cronJobs, isLoading: cronLoading } = useCronStatus();
   const { data: recentInvites } = useRecentInvitations(1);
   const queryClient = useQueryClient();
-  const { role: currentRole } = useAuth();
+  const { user, isSuperadmin } = useAuth();
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
-  const [inviteRole, setInviteRole] = useState("manager");
+  const [inviteRole, setInviteRole] = useState("admin");
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
 
   const [company, setCompany] = useState({
     name: "", kvk: "", address: "", phone: "", email: "", logo_url: "", dashboard_url: "",
@@ -81,6 +82,13 @@ export default function AdminSettings() {
       return data;
     },
   });
+
+  // Alleen échte interne gebruikers tonen: profielen mét een interne rol.
+  // De profielentabel bevat ook portal-klanten en ex-admins zonder rol — die horen
+  // hier niet thuis (en mogen niet als 'teamlid' verschijnen).
+  const internalProfiles = ((profiles ?? []) as Profile[]).filter(
+    (p) => (userRoles ?? []).some((r) => r.user_id === p.user_id),
+  );
 
   useEffect(() => {
     if (!org) return;
@@ -183,9 +191,15 @@ export default function AdminSettings() {
   };
 
   const getRoleForUser = (userId: string) => {
-    const role = userRoles?.find(r => r.user_id === userId);
-    return role?.role || "—";
+    const roles = (userRoles ?? []).filter(r => r.user_id === userId).map(r => r.role);
+    if (roles.includes("superadmin")) return "superadmin"; // superadmin wint van admin
+    return roles[0] || "—";
   };
+  const isSuperadminUser = (userId: string) =>
+    (userRoles ?? []).some(r => r.user_id === userId && r.role === "superadmin");
+  // Alleen de superadmin mag verwijderen; nooit zichzelf en nooit een (andere) superadmin.
+  const canDeleteUser = (userId: string) =>
+    isSuperadmin && userId !== user?.id && !isSuperadminUser(userId);
 
   const inviteMutation = useMutation({
     mutationFn: async () => {
@@ -202,11 +216,39 @@ export default function AdminSettings() {
       queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
       queryClient.invalidateQueries({ queryKey: ["admin-recent-invitations"] });
       setInviteOpen(false);
-      setInviteEmail(""); setInviteName(""); setInviteRole("manager");
+      setInviteEmail(""); setInviteName(""); setInviteRole("admin");
       if (res?.status === "sent_no_email") toast.warning(res.message || "Teamlid aangemaakt; deel de activatielink handmatig.");
       else toast.success(`Uitnodiging verstuurd naar ${res?.to ?? inviteEmail}`);
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Uitnodigen mislukt"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke("delete-team-member", {
+        body: { user_id: userId },
+      });
+      if (error) {
+        // Bij een non-2xx geeft supabase-js een generieke fout; lees de echte
+        // boodschap uit de response-body van de edge function.
+        let msg = error.message;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          if (body?.message) msg = body.message;
+        } catch { /* body niet leesbaar — val terug op generieke melding */ }
+        throw new Error(msg);
+      }
+      const res = data as { status?: string; message?: string };
+      if (res?.status !== "deleted") throw new Error(res?.message || "Verwijderen mislukt");
+      return res;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
+      setDeleteTarget(null);
+      toast.success("Teamlid verwijderd");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Verwijderen mislukt"),
   });
 
   // Integrations status — de API-key staat server-side (Supabase secret). De echte
@@ -394,10 +436,12 @@ export default function AdminSettings() {
                 <div>
                   <h2 className="text-base font-semibold">Interne gebruikers</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Admins en medewerkers met toegang tot dit beheer-portaal
+                    {isSuperadmin
+                      ? "Jij (superadmin) beheert het team. Nieuwe leden zijn admin; alleen jij kunt teamleden verwijderen."
+                      : "Admins en medewerkers met toegang tot dit beheer-portaal"}
                   </p>
                 </div>
-                {currentRole === "admin" && (
+                {isSuperadmin && (
                   <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
                     <UserPlus className="w-4 h-4 mr-2" />Gebruiker uitnodigen
                   </Button>
@@ -409,6 +453,7 @@ export default function AdminSettings() {
                     <th className="text-left p-3 cockpit-section-label">Naam</th>
                     <th className="text-left p-3 cockpit-section-label">User ID</th>
                     <th className="text-left p-3 cockpit-section-label">Rol</th>
+                    {isSuperadmin && <th className="text-right p-3 cockpit-section-label">Actie</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -418,25 +463,53 @@ export default function AdminSettings() {
                         <td className="p-3"><Skeleton className="h-4 w-32" /></td>
                         <td className="p-3"><Skeleton className="h-4 w-48" /></td>
                         <td className="p-3"><Skeleton className="h-4 w-16" /></td>
+                        {isSuperadmin && <td className="p-3"><Skeleton className="h-4 w-8 ml-auto" /></td>}
                       </tr>
                     ))
-                  ) : (profiles || []).length === 0 ? (
-                    <tr><td colSpan={3} className="p-8 text-center text-muted-foreground">Geen gebruikers gevonden</td></tr>
+                  ) : internalProfiles.length === 0 ? (
+                    <tr><td colSpan={isSuperadmin ? 4 : 3} className="p-8 text-center text-muted-foreground">Geen gebruikers gevonden</td></tr>
                   ) : (
-                    ((profiles || []) as Profile[]).map((p) => (
+                    internalProfiles.map((p) => {
+                      const userIsSuperadmin = isSuperadminUser(p.user_id);
+                      return (
                       <tr key={p.id} className="border-b border-border last:border-0 hover:bg-accent/40 transition-colors">
-                        <td className="p-3 font-medium">{p.full_name || "—"}</td>
+                        <td className="p-3 font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            {p.full_name || "—"}
+                            {userIsSuperadmin && <ShieldCheck className="w-3.5 h-3.5 text-primary" />}
+                          </span>
+                        </td>
                         <td className="p-3 text-muted-foreground text-xs font-mono">{p.user_id?.slice(0, 8)}…</td>
                         <td className="p-3">
                           <Badge
-                            variant={getRoleForUser(p.user_id) === "admin" ? "default" : "secondary"}
+                            variant={userIsSuperadmin || getRoleForUser(p.user_id) === "admin" ? "default" : "secondary"}
                             className="capitalize"
                           >
                             {getRoleForUser(p.user_id)}
                           </Badge>
                         </td>
+                        {isSuperadmin && (
+                          <td className="p-3 text-right">
+                            {canDeleteUser(p.user_id) ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => setDeleteTarget(p)}
+                                aria-label="Teamlid verwijderen"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground">
+                                {p.user_id === user?.id ? "jij" : userIsSuperadmin ? "beschermd" : ""}
+                              </span>
+                            )}
+                          </td>
+                        )}
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -477,6 +550,34 @@ export default function AdminSettings() {
                 <Button onClick={() => inviteMutation.mutate()} disabled={inviteMutation.isPending || !inviteEmail.includes("@")}>
                   {inviteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Uitnodiging versturen
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Teamlid verwijderen</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 py-2 text-sm">
+                <p>
+                  Weet je zeker dat je{" "}
+                  <strong>{deleteTarget?.full_name || "deze gebruiker"}</strong> wilt verwijderen?
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Het account en alle toegang tot het beheer-portaal worden definitief verwijderd. Dit kan niet ongedaan worden gemaakt.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>Annuleren</Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.user_id)}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Verwijderen
                 </Button>
               </DialogFooter>
             </DialogContent>

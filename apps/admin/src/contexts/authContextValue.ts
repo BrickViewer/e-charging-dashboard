@@ -1,6 +1,8 @@
 import { createContext } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
 
+// role blijft de data-toegangsrol (superadmin houdt 'admin' zodat alle admin-guards
+// blijven werken). De superadmin-status staat los in isSuperadmin.
 type UserRole = "admin" | "manager" | "viewer" | "client" | null;
 
 export interface AuthContextType {
@@ -8,6 +10,7 @@ export interface AuthContextType {
   user: User | null;
   role: UserRole;
   isInternal: boolean;
+  isSuperadmin: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;

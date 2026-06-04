@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // invite-team-member — nodigt een intern teamlid (admin/manager/viewer) uit voor het
-// beheer-portaal. Alleen een admin mag uitnodigen + rollen toekennen.
+// beheer-portaal. Alleen de superadmin mag uitnodigen + rollen toekennen.
+// 'superadmin' kan nooit via een uitnodiging worden toegekend (niet in ALLOWED_ROLES).
 //   1. auth.admin.generateLink({type:'invite'}) maakt de auth-user + actie-link
 //   2. profiel-naam vastleggen + precies één rol zetten (oude rollen wissen)
 //   3. branded uitnodiging mailen via Resend (link → /wachtwoord-herstellen)
@@ -48,7 +49,7 @@ Deno.serve(async (req: Request) => {
   });
 
   try {
-    // Auth: alleen een ingelogde admin mag uitnodigen + rollen toekennen.
+    // Auth: alleen de ingelogde superadmin mag uitnodigen + rollen toekennen.
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ status: "unauthorized" }, 401);
     const userClient = createClient(
@@ -59,8 +60,8 @@ Deno.serve(async (req: Request) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return json({ status: "unauthorized" }, 401);
     const { data: callerRole } = await admin
-      .from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
-    if (!callerRole) return json({ status: "forbidden", message: "Alleen een admin mag teamleden uitnodigen" }, 403);
+      .from("user_roles").select("role").eq("user_id", user.id).eq("role", "superadmin").maybeSingle();
+    if (!callerRole) return json({ status: "forbidden", message: "Alleen de superadmin mag teamleden uitnodigen" }, 403);
 
     const body = await req.json().catch(() => ({}));
     const email = String(body.email ?? "").trim().toLowerCase();

@@ -9,6 +9,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>(null);
+  // Los van role: heeft deze gebruiker de superadmin-rol? (superadmin heeft óók 'admin')
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
 
   // Twee aparte loading-flags voorkomen de witte-scherm-race-condition:
   //  - sessionRestored: pas true als de eerste getSession() of onAuthStateChange klaar is
@@ -47,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!user) {
       setRole(null);
+      setIsSuperadmin(false);
       setRoleResolved(true);
       return;
     }
@@ -62,7 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       if (roles && roles.length > 0) {
-        if (roles.some(r => r.role === "admin")) {
+        // superadmin is een markering bovenop 'admin'; role blijft de data-toegangsrol
+        setIsSuperadmin(roles.some(r => r.role === "superadmin"));
+        if (roles.some(r => r.role === "admin" || r.role === "superadmin")) {
           setRole("admin");
           setRoleResolved(true);
           return;
@@ -77,6 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRoleResolved(true);
           return;
         }
+      } else {
+        setIsSuperadmin(false);
       }
 
       const { data: client } = await supabase
@@ -102,13 +109,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     setRole(null);
+    setIsSuperadmin(false);
   };
 
   const isInternal = role === "admin" || role === "manager" || role === "viewer";
 
   return (
     <AuthContext.Provider
-      value={{ session, user, role, isInternal, isLoading, signIn, signOut }}
+      value={{ session, user, role, isInternal, isSuperadmin, isLoading, signIn, signOut }}
     >
       {children}
     </AuthContext.Provider>
