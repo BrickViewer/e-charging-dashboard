@@ -1,10 +1,10 @@
-# grid-gain-dash — Agent context
+# E-Charging Dashboard — Agent context
 
 This file is the entry point for AI coding agents (Codex, Claude Code, etc.) working on this codebase. Read top-to-bottom before making changes.
 
 ## What this project is
 
-**grid-gain-dash** is the operational management dashboard for **E-Charging**, a Dutch EV-charging service-fee platform.
+**E-Charging Dashboard** is the operational management dashboard for **E-Charging**, a Dutch EV-charging service-fee platform.
 
 E-Charging is a private-label CPO (Charge Point Operator) inside the Road / e-Flux platform (provider slug `echarging`, ID `69df3b6fbae5c5e57fb7d047`, custom domain `echarging.dashboard.e-flux.io`). The dashboard sits **on top of** e-Flux: charge points, sessions and invoices live in Road; we sync them into Supabase and layer our own commercial model on top.
 

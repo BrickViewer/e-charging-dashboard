@@ -2,7 +2,7 @@
 
 **Datum**: 2026-05-05
 **Eigenaar**: E-Group BV (KvK 69153817)
-**Scope**: Supabase project `uuldldhmuanmjlyvnagt` + frontend (`grid-gain-dash`)
+**Scope**: Supabase project `uuldldhmuanmjlyvnagt` + frontend (`e-charging-dashboard`)
 **Auditor**: zelf-audit via `/supabase-pentest` skill (vóór go-live)
 **Autorisatie**: bevestigd (eigen platform, niet-productioneel)
 
@@ -25,7 +25,7 @@
 
 ### P1-A. `.env` is gecommit naar publieke GitHub-repo
 
-**Repository**: `https://github.com/BrickViewer/grid-gain-dash.git`
+**Repository**: `https://github.com/BrickViewer/e-charging-dashboard.git`
 **File**: `.env` is tracked in git én staat NIET in `.gitignore`.
 
 **Wat lekt**:

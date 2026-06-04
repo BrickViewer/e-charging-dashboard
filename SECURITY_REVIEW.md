@@ -1,4 +1,4 @@
-# Security Review — grid-gain-dash
+# Security Review — e-charging-dashboard
 
 This is a prompt-template + checklist for an external AI agent (Codex, etc.) to perform a thorough security audit of this codebase.
 
@@ -10,7 +10,7 @@ This is a prompt-template + checklist for an external AI agent (Codex, etc.) to 
 
 Copy/paste this as the opening prompt for the audit:
 
-> Perform an in-depth security audit of this codebase (grid-gain-dash, a Supabase-backed dashboard for an EV-charging revenue-share platform). Read `AGENTS.md` first for context. Walk through the checklist in `SECURITY_REVIEW.md` and produce a findings report grouped by **severity** (Critical / High / Medium / Low / Info). For each finding include: file path + line numbers, what's wrong, exploit scenario in 1-2 sentences, and a concrete recommended fix (code diff preferred). Do not fix anything yet — produce the report first so I can triage.
+> Perform an in-depth security audit of this codebase (e-charging-dashboard, a Supabase-backed dashboard for an EV-charging revenue-share platform). Read `AGENTS.md` first for context. Walk through the checklist in `SECURITY_REVIEW.md` and produce a findings report grouped by **severity** (Critical / High / Medium / Low / Info). For each finding include: file path + line numbers, what's wrong, exploit scenario in 1-2 sentences, and a concrete recommended fix (code diff preferred). Do not fix anything yet — produce the report first so I can triage.
 
 ---
 
