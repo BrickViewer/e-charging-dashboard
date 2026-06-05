@@ -31,11 +31,14 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
+  const body = await req.json().catch(() => ({}));
+  const leadId = typeof body.lead_id === "string" ? body.lead_id : null;
+
   try {
-    const auth = await requireAdminOrInternal(req, serviceClient, corsHeaders, { allowInternal: false });
+    const auth = await requireAdminOrInternal(req, serviceClient, corsHeaders, { allowInternal: false, allowSales: true });
     if (!auth.ok) return auth.response;
-    if (!auth.userId || (auth.role !== "admin" && auth.role !== "manager")) {
-      return json({ status: "forbidden", message: "Alleen admin/manager mag configuraties starten" }, 403);
+    if (!auth.userId || (auth.role !== "admin" && auth.role !== "manager" && auth.role !== "sales")) {
+      return json({ status: "forbidden", message: "Alleen admin/manager/sales mag configuraties starten" }, 403);
     }
 
     const { data: org, error: orgError } = await serviceClient
@@ -84,6 +87,7 @@ Deno.serve(async (req) => {
         settings_id: settings.id,
         settings_version: settings.version,
         expires_at: expiresAt,
+        lead_id: leadId,
       })
       .select("id, expires_at")
       .single();

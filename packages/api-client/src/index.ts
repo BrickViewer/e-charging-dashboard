@@ -11,9 +11,22 @@ export type SessionStartResponse = {
   expiresAt: string;
 };
 
+export type LeadPrefill = {
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  locationAddress: string;
+  postalCode: string;
+  city: string;
+  locationType: string | null;
+  sockets: number | null;
+};
+
 export type SettingsResponse = {
   version: number;
   settings: ConfiguratorSettings;
+  prefill?: LeadPrefill;
 };
 
 export type DraftSaveResponse = {
@@ -70,7 +83,16 @@ export function createConfiguratorApi(options: RequestOptions = {}) {
         options,
       );
     },
-    finalizeClient(sessionId: string, payload: { input: PricingInput; settingsVersion: number }) {
+    finalizeClient(
+      sessionId: string,
+      payload: {
+        input: PricingInput;
+        settingsVersion: number;
+        ere?: boolean;
+        investmentMinTotal?: number;
+        investmentMaxTotal?: number;
+      },
+    ) {
       return requestJson<FinalizeClientResponse>(
         "/functions/v1/configurator-finalize-client",
         { method: "POST", body: JSON.stringify({ sessionId, ...payload }) },

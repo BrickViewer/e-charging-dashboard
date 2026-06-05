@@ -34,11 +34,15 @@ Deno.serve(async (req) => {
   const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
   const body = await req.json().catch(() => ({}));
   const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
+  // Extra's vastgelegd in de sales-tool (UI-only, niet via de rekenkern):
+  const ereEnabled = body.ere === true;
+  const investmentMinTotal = Number.isFinite(Number(body.investmentMinTotal)) ? Number(body.investmentMinTotal) : null;
+  const investmentMaxTotal = Number.isFinite(Number(body.investmentMaxTotal)) ? Number(body.investmentMaxTotal) : null;
 
   try {
     const { data: session, error: sessionError } = await serviceClient
       .from("configurator_sessions")
-      .select("id, actor_user_id, organization_id, status, expires_at, settings_id, settings_version")
+      .select("id, actor_user_id, organization_id, status, expires_at, settings_id, settings_version, lead_id")
       .eq("id", sessionId)
       .maybeSingle();
     if (sessionError) throw sessionError;
@@ -53,7 +57,12 @@ Deno.serve(async (req) => {
     if (roleError) throw roleError;
     const actorRoles = (roleRows ?? []).map((r) => r.role);
     // superadmin telt als admin-niveau; meerdere rollen mogelijk dus geen .maybeSingle()
-    if (!actorRoles.includes("admin") && !actorRoles.includes("manager") && !actorRoles.includes("superadmin")) {
+    if (
+      !actorRoles.includes("admin") &&
+      !actorRoles.includes("manager") &&
+      !actorRoles.includes("sales") &&
+      !actorRoles.includes("superadmin")
+    ) {
       return json({ status: "forbidden", message: "Gebruiker mag geen klanten aanmaken" }, 403);
     }
 
@@ -74,10 +83,16 @@ Deno.serve(async (req) => {
       return json({ status: "error", message: "Bedrijfsnaam is verplicht", field: "companyName" }, 400);
     }
 
+    // Ruwe berekening voor de snapshot. Een "blocked" status (fee boven max of
+    // negatief rendement) blokkeert NIET het opslaan: dit is een lead-vastlegging;
+    // de exacte prijs wordt later bepaald. De blockingReasons blijven in
+    // pricing_result staan voor interne review.
     const pricing = calculatePricing(input, settings);
-    if (pricing.status === "blocked") {
-      return json({ status: "blocked", message: pricing.blockingReasons.join(" "), reasons: pricing.blockingReasons }, 422);
-    }
+
+    const investNote = investmentMinTotal !== null && investmentMaxTotal !== null
+      ? ` · Investering €${Math.round(investmentMinTotal)}–€${Math.round(investmentMaxTotal)}`
+      : "";
+    const clientNotes = `Aangemaakt vanuit klant-configurator${ereEnabled ? " · ERE-subsidie: aan (€0,10/kWh)" : ""}${investNote}`;
 
     const { data: client, error: clientError } = await serviceClient
       .from("clients")
@@ -96,8 +111,8 @@ Deno.serve(async (req) => {
         revenue_share_percentage: Math.max(0, Math.min(100, (1 - pricing.serviceFeePct) * 100)),
         contract_duration_months: input.contract.durationMonths,
         notice_period_months: input.contract.noticePeriodMonths,
-        status: "offerte",
-        notes: "Aangemaakt vanuit klant-configurator",
+        status: "actief",
+        notes: clientNotes,
       })
       .select("id, client_number")
       .single();
@@ -139,8 +154,36 @@ Deno.serve(async (req) => {
         configuration_id: configuration.id,
         settings_version: settingsRow.version,
         service_fee_pct: pricing.serviceFeePct,
+        pricing_status: pricing.status,
+        ere_enabled: ereEnabled,
+        investment_min_total: investmentMinTotal,
+        investment_max_total: investmentMaxTotal,
       },
     });
+
+    // Configurator gestart vanuit een lead? Koppel de klant terug en zet de
+    // lead op Gewonnen (voorkomt losse/dubbele klanten).
+    if (session.lead_id) {
+      const { data: wonStage } = await serviceClient
+        .from("lead_stages")
+        .select("id")
+        .eq("organization_id", session.organization_id)
+        .eq("is_won", true)
+        .order("position", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const leadPatch: Record<string, unknown> = { converted_client_id: client.id };
+      if (wonStage?.id) leadPatch.stage_id = wonStage.id;
+      await serviceClient.from("leads").update(leadPatch).eq("id", session.lead_id);
+      await serviceClient.from("lead_activities").insert({
+        lead_id: session.lead_id,
+        organization_id: session.organization_id,
+        user_id: session.actor_user_id,
+        type: "converted",
+        description: `Offerte vastgelegd via configurator → klant #${client.client_number ?? client.id}`,
+        metadata: { client_id: client.id, configuration_id: configuration.id },
+      });
+    }
 
     return json({
       clientId: client.id,
