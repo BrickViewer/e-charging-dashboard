@@ -1,6 +1,6 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-type Role = "admin" | "manager" | "viewer";
+type Role = "admin" | "manager" | "viewer" | "sales";
 
 interface AuthOk {
   ok: true;
@@ -16,6 +16,9 @@ interface AuthDenied {
 
 interface AuthOptions {
   allowInternal?: boolean;
+  // Sta ook de 'sales'-rol toe (bv. de configurator-launcher). Default false zodat
+  // overige functies admin/manager-only blijven.
+  allowSales?: boolean;
 }
 
 interface ServiceClient {
@@ -54,7 +57,7 @@ export async function requireAdminOrInternal(
   corsHeaders: Record<string, string>,
   options: AuthOptions = {},
 ): Promise<AuthOk | AuthDenied> {
-  const { allowInternal = true } = options;
+  const { allowInternal = true, allowSales = false } = options;
   const internalSecret = req.headers.get("x-internal-secret") ?? "";
 
   if (internalSecret) {
@@ -103,10 +106,15 @@ export async function requireAdminOrInternal(
       ? "admin"
       : roles.includes("manager")
       ? "manager"
+      : allowSales && roles.includes("sales")
+      ? "sales"
       : undefined;
-  if (role === "admin" || role === "manager") {
+  if (role === "admin" || role === "manager" || role === "sales") {
     return { ok: true, kind: "user", userId: user.id, role };
   }
 
-  return { ok: false, response: jsonError(403, "Alleen admin/manager mag deze actie uitvoeren", corsHeaders) };
+  return {
+    ok: false,
+    response: jsonError(403, `Alleen admin/manager${allowSales ? "/sales" : ""} mag deze actie uitvoeren`, corsHeaders),
+  };
 }

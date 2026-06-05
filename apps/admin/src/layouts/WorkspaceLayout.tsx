@@ -1,41 +1,28 @@
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import logoBright from "@/assets/logo-bright.svg";
-import {
-  LayoutDashboard,
-  Users,
-  Wallet,
-  MapPin,
-  Settings,
-  LogOut,
-  Menu,
-  X,
-  WandSparkles,
-  type LucideIcon,
-} from "lucide-react";
+import { Settings, LogOut, Menu, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  WORKSPACES,
+  workspaceForPath,
+  workspacesForRole,
+  canAccessBeheer,
+} from "@/lib/workspaces";
 
-const mainNavItems = [
-  { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
-  { to: "/admin/klanten", icon: Users, label: "Klanten" },
-  { to: "/admin/locaties", icon: MapPin, label: "Locaties" },
-  { to: "/admin/financieel", icon: Wallet, label: "Financieel" },
-];
-
-// Gedeelde nav-link voor de admin-sidebar. Hybride accent: de massieve
-// active-balk + icoon blijven merkgroen (#05A500), de gloed/halo eromheen
-// gebruikt het portal-emerald (--gauge-green) — zo zijn de accentwaarden
-// op één plek gedefinieerd i.p.v. per nav-item gedupliceerd.
-const adminNavLinkClass = ({ isActive }: { isActive: boolean }) =>
+// Gedeelde nav-link voor de sidebar. Hybride accent: de massieve active-balk +
+// icoon blijven merkgroen (#05A500), de gloed/halo eromheen gebruikt het
+// portal-emerald (--gauge-green).
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative group ${
     isActive
       ? "bg-white/[0.06] text-white shadow-[inset_0_0_0_1px_hsl(140_70%_55%/0.3)]"
       : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
   }`;
 
-function AdminNavLink({
+function SidebarNavLink({
   to,
   icon: Icon,
   label,
@@ -49,7 +36,7 @@ function AdminNavLink({
   onNavigate: () => void;
 }) {
   return (
-    <NavLink to={to} end={end} onClick={onNavigate} className={adminNavLinkClass}>
+    <NavLink to={to} end={end} onClick={onNavigate} className={navLinkClass}>
       {({ isActive }) => (
         <>
           {isActive && (
@@ -74,11 +61,16 @@ function AdminNavLink({
   );
 }
 
-export default function AdminLayout() {
+export default function WorkspaceLayout() {
   const { signOut, role, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileName, setProfileName] = useState<string>("");
+
+  const workspace = workspaceForPath(location.pathname);
+  const accessible = workspacesForRole(role);
+  const activeWorkspace = WORKSPACES[workspace];
 
   useEffect(() => {
     if (user) {
@@ -98,39 +90,62 @@ export default function AdminLayout() {
     navigate("/login");
   };
 
+  const switchWorkspace = (home: string) => {
+    setMobileOpen(false);
+    navigate(home);
+  };
+
   const sidebarContent = (
     <div
       className="flex flex-col h-full relative overflow-hidden"
       style={{
-        background:
-          "linear-gradient(180deg, hsl(222 24% 5%) 0%, hsl(222 22% 7%) 100%)",
+        background: "linear-gradient(180deg, hsl(222 24% 5%) 0%, hsl(222 22% 7%) 100%)",
       }}
     >
       {/* Subtle accent glow top-right — emerald, afgestemd op de portal-gloed */}
       <div
         className="absolute -top-20 -right-20 w-48 h-48 rounded-full pointer-events-none"
         style={{
-          background:
-            "radial-gradient(circle, hsl(var(--gauge-green) / 0.10) 0%, transparent 70%)",
+          background: "radial-gradient(circle, hsl(var(--gauge-green) / 0.10) 0%, transparent 70%)",
         }}
       />
 
-      {/* Brand */}
+      {/* Brand + werkblad-switcher */}
       <div className="relative px-5 py-6 border-b border-white/[0.06]">
-        <img
-          src={logoBright}
-          alt="E-Charging"
-          className="h-8 w-auto max-w-[168px]"
-        />
-        <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 mt-3">
-          Beheer
-        </p>
+        <img src={logoBright} alt="E-Charging" className="h-8 w-auto max-w-[168px]" />
+        {accessible.length > 1 ? (
+          <div className="mt-4 flex gap-1 rounded-xl bg-white/[0.04] p-1">
+            {accessible.map((key) => {
+              const ws = WORKSPACES[key];
+              const isActive = key === workspace;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => switchWorkspace(ws.home)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex-1 rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-colors ${
+                    isActive
+                      ? "bg-white/[0.08] text-white shadow-[inset_0_0_0_1px_hsl(140_70%_55%/0.3)]"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {ws.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 mt-3">
+            {activeWorkspace.label}
+          </p>
+        )}
       </div>
 
-      {/* Main nav */}
+      {/* Werkblad-navigatie */}
       <nav className="flex-1 px-3 py-4 space-y-1 relative">
-        {mainNavItems.map((item) => (
-          <AdminNavLink
+        {activeWorkspace.items.map((item) => (
+          <SidebarNavLink
             key={item.to}
             to={item.to}
             end={item.end}
@@ -139,28 +154,18 @@ export default function AdminLayout() {
             onNavigate={() => setMobileOpen(false)}
           />
         ))}
+      </nav>
 
-        {/* Separator */}
-        <div className="my-3 border-t border-white/[0.06]" />
-
-        {(role === "admin" || role === "manager") && (
-          <AdminNavLink
-            to="/admin/instellingen/configurator"
-            icon={WandSparkles}
-            label="Configuratie"
+      {/* Onderaan: Instellingen (alleen Beheer-toegang) + ingelogde gebruiker */}
+      <div className="px-3 py-4 border-t border-white/[0.06]">
+        {canAccessBeheer(role) && (
+          <SidebarNavLink
+            to="/admin/instellingen"
+            icon={Settings}
+            label="Instellingen"
             onNavigate={() => setMobileOpen(false)}
           />
         )}
-      </nav>
-
-      {/* Onderaan: Instellingen, direct boven de ingelogde gebruiker */}
-      <div className="px-3 py-4 border-t border-white/[0.06]">
-        <AdminNavLink
-          to="/admin/instellingen"
-          icon={Settings}
-          label="Instellingen"
-          onNavigate={() => setMobileOpen(false)}
-        />
         <div className="my-2 border-t border-white/[0.06]" />
         <div className="px-3 mb-3">
           <p className="text-sm font-medium text-white truncate">
@@ -186,16 +191,10 @@ export default function AdminLayout() {
       {/* Mobile header */}
       <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card">
         <div>
-          <img
-            src={logoBright}
-            alt="E-Charging"
-            className="h-7 w-auto max-w-[148px]"
-          />
-          <div>
-            <p className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground mt-1">
-              Beheer
-            </p>
-          </div>
+          <img src={logoBright} alt="E-Charging" className="h-7 w-auto max-w-[148px]" />
+          <p className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground mt-1">
+            {activeWorkspace.label}
+          </p>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

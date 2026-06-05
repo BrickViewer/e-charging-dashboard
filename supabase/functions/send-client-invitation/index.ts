@@ -113,8 +113,8 @@ Deno.serve(async (req: Request) => {
       .eq("user_id", user.id);
     const roles = (roleRows ?? []).map((r) => r.role);
     // superadmin telt als admin-niveau; meerdere rollen mogelijk dus geen .maybeSingle()
-    if (!roles.includes("admin") && !roles.includes("manager") && !roles.includes("superadmin")) {
-      return json({ status: "forbidden", message: "Alleen admin/manager mag uitnodigen" }, 403);
+    if (!roles.includes("admin") && !roles.includes("manager") && !roles.includes("sales") && !roles.includes("superadmin")) {
+      return json({ status: "forbidden", message: "Alleen admin/manager/sales mag uitnodigen" }, 403);
     }
 
     // Klant ophalen

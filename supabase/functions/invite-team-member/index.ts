@@ -16,7 +16,7 @@ const corsHeaders = {
 };
 
 const RESEND_API = "https://api.resend.com/emails";
-const ALLOWED_ROLES = ["admin", "manager", "viewer"];
+const ALLOWED_ROLES = ["admin", "manager", "sales", "viewer"];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

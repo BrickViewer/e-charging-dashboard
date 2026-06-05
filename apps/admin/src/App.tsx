@@ -10,10 +10,11 @@ import { toast } from "sonner";
 
 import Login from "./pages/Login";
 import ClientLayout from "./layouts/ClientLayout";
-import AdminLayout from "./layouts/AdminLayout";
+import WorkspaceLayout from "./layouts/WorkspaceLayout";
 import NotFound from "./pages/NotFound";
 import InviteAccept from "./pages/InviteAccept";
 import ResetPassword from "./pages/ResetPassword";
+import { workspacesForRole } from "@/lib/workspaces";
 
 // Client portal pages
 const ClientDashboard = lazy(() => import("./pages/portal/ClientDashboard"));
@@ -34,6 +35,10 @@ const AdminLocationDetail = lazy(() => import("./pages/admin/AdminLocationDetail
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminConfiguratorSettings = lazy(() => import("./pages/admin/AdminConfiguratorSettings"));
 
+// Sales pages — lazy loaded
+const SalesLeads = lazy(() => import("./pages/sales/SalesLeads"));
+const SalesOffertes = lazy(() => import("./pages/sales/SalesOffertes"));
+
 const queryClient = new QueryClient();
 
 function PageLoader() {
@@ -45,10 +50,12 @@ function PageLoader() {
 }
 
 function AuthRedirect() {
-  const { isLoading, user, role, isInternal } = useAuth();
+  const { isLoading, user, role } = useAuth();
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Laden...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (isInternal) return <Navigate to="/admin" replace />;
+  const workspaces = workspacesForRole(role);
+  if (workspaces.includes("beheer")) return <Navigate to="/admin" replace />;
+  if (workspaces.includes("sales")) return <Navigate to="/sales" replace />;
   if (role === "client") return <Navigate to="/portal" replace />;
   return <Navigate to="/login" replace />;
 }
@@ -107,10 +114,10 @@ const App = () => (
                 <Route path="locatie/:id" element={<ClientLocationDetail />} />
               </Route>
 
-              {/* Admin Panel */}
+              {/* Beheer-werkblad */}
               <Route path="/admin" element={
                 <RequireAuth allowedRoles={["admin", "manager", "viewer"]}>
-                  <AdminLayout />
+                  <WorkspaceLayout />
                 </RequireAuth>
               }>
                 <Route index element={<AdminDashboard />} />
@@ -121,7 +128,20 @@ const App = () => (
                 <Route path="locaties/:id" element={<AdminLocationDetail />} />
                 <Route path="financieel" element={<AdminFinancial />} />
                 <Route path="instellingen" element={<AdminSettings />} />
-                <Route path="instellingen/configurator" element={<AdminConfiguratorSettings />} />
+                {/* Configurator verhuisd naar Sales — oude pad blijft werken via redirect */}
+                <Route path="instellingen/configurator" element={<Navigate to="/sales/configurator" replace />} />
+              </Route>
+
+              {/* Sales-werkblad */}
+              <Route path="/sales" element={
+                <RequireAuth allowedRoles={["admin", "manager", "sales"]}>
+                  <WorkspaceLayout />
+                </RequireAuth>
+              }>
+                <Route index element={<Navigate to="/sales/leads" replace />} />
+                <Route path="leads" element={<SalesLeads />} />
+                <Route path="offertes" element={<SalesOffertes />} />
+                <Route path="configurator" element={<AdminConfiguratorSettings />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

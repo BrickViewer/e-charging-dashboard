@@ -1,9 +1,7 @@
 import { useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { AuthContext } from "@/contexts/authContextValue";
-
-type UserRole = "admin" | "manager" | "viewer" | "client" | null;
+import { AuthContext, type UserRole } from "@/contexts/authContextValue";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -77,6 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRoleResolved(true);
           return;
         }
+        if (roles.some(r => r.role === "sales")) {
+          setRole("sales");
+          setRoleResolved(true);
+          return;
+        }
         if (roles.some(r => r.role === "viewer")) {
           setRole("viewer");
           setRoleResolved(true);
@@ -112,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsSuperadmin(false);
   };
 
-  const isInternal = role === "admin" || role === "manager" || role === "viewer";
+  const isInternal = role === "admin" || role === "manager" || role === "viewer" || role === "sales";
 
   return (
     <AuthContext.Provider
