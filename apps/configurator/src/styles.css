@@ -2,22 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   E-Charging configurator — donker "cockpit"-thema, één-scherms sales-cockpit.
+   Tokens overgenomen uit het klantenportaal (.portal-theme). Vast scherm zonder
+   page-scroll: header + twee kolommen (scène links, instellingen rechts).
+   ============================================================================ */
+
 :root {
-  color: #3f3f3f;
-  background: #f7f8f6;
+  color-scheme: dark;
+  color: hsl(0 0% 98%);
   font-family: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --ec-green: #7ab829;
-  --ec-green-hover: #6ba31f;
-  --ec-green-tint: #f2f8e8;
-  --ec-ink: #1a1a1a;
-  --ec-body: #3f3f3f;
-  --ec-muted: #6b6b6b;
-  --ec-border: #e5e7e0;
-  --ec-canvas: #f7f8f6;
-  --ec-sidebar: #fafbf8;
+
+  --background: 222 18% 6%;
+  --foreground: 0 0% 98%;
+  --card: 222 16% 10%;
+  --card-soft: 222 14% 13%;
+  --card-foreground: 0 0% 98%;
+  --muted-foreground: 222 8% 62%;
+  --border: 222 12% 22%;
+  --border-soft: 222 12% 18%;
+
+  --brand: 118.2 100% 32.4%;
+  --brand-bright: 124 92% 40%;
+
+  --gauge-red: 350 88% 62%;
+  --gauge-blue: 200 100% 64%;
+  --gauge-green: 140 70% 55%;
+  --gauge-track: 222 14% 18%;
+  --portal-glow-green: 132 72% 18%;
+  --portal-glow-bright: 132 82% 24%;
+  --portal-vignette: 222 26% 2%;
 }
 
 * {
@@ -27,10 +44,8 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 16% 12%, rgb(122 184 41 / 0.12), transparent 28rem),
-    linear-gradient(135deg, #f7f8f6 0%, #ffffff 48%, #f3f5ef 100%);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
 button,
@@ -39,54 +54,131 @@ select {
   font: inherit;
 }
 
+/* ----------------------------------------------------------------------------
+   Shell — vast scherm (100dvh), geen page-scroll. Ambient gloed via fixed pseudo's.
+   ---------------------------------------------------------------------------- */
 .configurator-shell {
-  min-height: 100vh;
-  color: var(--ec-body);
-}
-
-.configurator-progress {
-  height: 56px;
-  border-bottom: 1px solid var(--ec-border);
-  background: rgb(255 255 255 / 0.86);
-  backdrop-filter: blur(18px);
-  position: sticky;
-  top: 0;
-  z-index: 30;
-}
-
-.configurator-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 62%) minmax(360px, 38%);
-  min-height: calc(100vh - 56px);
-}
-
-.configurator-main {
-  padding: 32px 48px 120px;
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
+  flex-direction: column;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+}
+
+.configurator-shell::before,
+.configurator-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform;
+}
+
+.configurator-shell::before {
+  background:
+    radial-gradient(ellipse at 62% 12%, hsl(var(--portal-glow-green) / 0.07) 0%, transparent 50%);
+}
+
+.configurator-shell::after {
+  background:
+    linear-gradient(180deg, transparent 0%, transparent 60%, hsl(0 0% 0% / 0.16) 88%, hsl(0 0% 0% / 0.36) 100%),
+    radial-gradient(ellipse at center, transparent 58%, hsl(var(--portal-vignette) / 0.36) 100%);
+}
+
+.configurator-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ----------------------------------------------------------------------------
+   Header
+   ---------------------------------------------------------------------------- */
+.cfg-header {
+  flex: none;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid hsl(var(--border-soft) / 0.5);
+  background: hsl(222 18% 6% / 0.72);
+  backdrop-filter: blur(18px);
+}
+
+/* ----------------------------------------------------------------------------
+   Body — twee kolommen, vult de resterende hoogte
+   ---------------------------------------------------------------------------- */
+.cfg-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 34%, 440px);
+  gap: 32px;
+  padding: 24px;
+}
+
+.cfg-stage {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.cfg-scene {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid hsl(var(--border-soft) / 0.7);
+  background:
+    radial-gradient(ellipse at 50% 38%, hsl(var(--portal-glow-green) / 0.06) 0%, transparent 60%),
+    hsl(222 18% 8% / 0.55);
+  box-shadow: 0 24px 64px hsl(0 0% 0% / 0.35);
+  overflow: hidden;
 }
 
-.configurator-card {
-  width: min(720px, 100%);
-  animation: stepIn 250ms cubic-bezier(0.16, 1, 0.3, 1);
+.cfg-earnings {
+  flex: none;
+  display: flex;
+  flex-direction: column;
 }
 
-.configurator-sidebar {
-  position: sticky;
-  top: 56px;
-  height: calc(100vh - 56px);
-  background: var(--ec-sidebar);
-  box-shadow: -1px 0 0 var(--ec-border);
-  padding: 32px;
-  overflow: auto;
+.cfg-controls {
+  min-height: 0;
+  overflow: auto; /* nette fallback: alleen dit paneel scrollt op zeer korte schermen */
 }
 
+/* ----------------------------------------------------------------------------
+   Cards / panels
+   ---------------------------------------------------------------------------- */
+.panel {
+  background: hsl(var(--card) / 0.86);
+  border: 1px solid hsl(var(--border));
+  border-radius: 18px;
+  box-shadow: 0 16px 40px hsl(0 0% 0% / 0.3), inset 0 1px 0 hsl(0 0% 100% / 0.04);
+}
+
+.panel-soft {
+  background: hsl(var(--card-soft) / 0.7);
+  border: 1px solid hsl(var(--border-soft));
+  border-radius: 14px;
+}
+
+/* ----------------------------------------------------------------------------
+   Form primitives
+   ---------------------------------------------------------------------------- */
 .field-label {
   display: block;
-  color: var(--ec-muted);
-  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
   margin-bottom: 8px;
   text-transform: uppercase;
 }
@@ -95,103 +187,305 @@ select {
 .select-input {
   width: 100%;
   min-height: 46px;
-  border: 1px solid var(--ec-border);
+  border: 1px solid hsl(var(--border));
   border-radius: 12px;
-  background: #fff;
-  color: var(--ec-ink);
+  background: hsl(222 16% 11%);
+  color: hsl(var(--foreground));
   padding: 0 14px;
   outline: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.text-input::placeholder {
+  color: hsl(var(--muted-foreground) / 0.6);
 }
 
 .text-input:focus,
 .select-input:focus {
-  border-color: var(--ec-green);
-  box-shadow: 0 0 0 3px rgb(122 184 41 / 0.3);
+  border-color: hsl(var(--gauge-green));
+  background: hsl(222 16% 13%);
+  box-shadow: 0 0 0 3px hsl(var(--gauge-green) / 0.18);
 }
 
-.card-toggle {
-  min-height: 88px;
+.select-input option {
+  background: hsl(222 16% 11%);
+  color: hsl(var(--foreground));
+}
+
+/* Compacte stepper */
+.stepper-sm {
+  display: grid;
+  grid-template-columns: 34px 60px 34px;
+  align-items: center;
+  gap: 4px;
+  background: hsl(222 16% 11%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.stepper-btn {
+  height: 34px;
+  width: 34px;
+  border-radius: 9px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(222 14% 15%);
+  color: hsl(var(--foreground));
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+
+.stepper-btn:hover {
+  background: hsl(222 14% 18%);
+  border-color: hsl(var(--gauge-green) / 0.5);
+}
+
+.stepper-btn:active {
+  transform: scale(0.94);
+}
+
+.stepper-value {
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  outline: none;
   width: 100%;
-  border: 1px solid var(--ec-border);
-  background: #fff;
-  border-radius: 16px;
-  padding: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Segmented control */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 5px;
+  background: hsl(222 16% 11%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+}
+
+.segmented-item {
+  flex: 1 1 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.segmented-item[data-active="true"] {
+  background: hsl(var(--gauge-green) / 0.16);
+  color: hsl(140 80% 78%);
+  box-shadow: inset 0 0 0 1px hsl(var(--gauge-green) / 0.4);
+}
+
+/* Preset-chips */
+.chip {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  background: hsl(var(--card-soft) / 0.8);
+  box-shadow: inset 0 0 0 1px hsl(var(--border));
+  cursor: pointer;
+  transition: box-shadow 140ms ease;
+}
+
+.chip:hover {
+  box-shadow: inset 0 0 0 1px hsl(var(--gauge-green) / 0.55);
+}
+
+/* Stille "ghost"-rij (Geavanceerd-uitklap + Verkoper-inzicht trigger) */
+.ghost-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid hsl(var(--border-soft) / 0.7);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.ghost-row:hover {
+  border-color: hsl(var(--gauge-green) / 0.4);
+  background: hsl(var(--card-soft) / 0.4);
+}
+
+/* Inline uitklap (Geavanceerd) — animeert grid-rows 0fr -> 1fr */
+.adv-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.adv-wrap[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.adv-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Toggle card (gebruikt in FinalizePanel) */
+.card-toggle {
+  min-height: 64px;
+  width: 100%;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card-soft) / 0.7);
+  border-radius: 14px;
+  padding: 14px 16px;
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 18px;
+  gap: 14px;
   align-items: center;
   text-align: left;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
-.card-toggle:hover,
+.card-toggle:hover {
+  border-color: hsl(var(--gauge-green) / 0.5);
+}
+
 .card-toggle[data-active="true"] {
-  border-color: var(--ec-green);
-  background: var(--ec-green-tint);
+  border-color: hsl(var(--gauge-green) / 0.6);
+  background: hsl(var(--gauge-green) / 0.10);
+  box-shadow: inset 0 0 0 1px hsl(var(--gauge-green) / 0.25);
 }
 
-.card-toggle[data-active="true"] {
-  border-width: 2px;
-  transform: scale(1.005);
-}
-
+/* Switch */
 .switch-track {
-  width: 52px;
-  height: 30px;
+  width: 46px;
+  height: 26px;
   border-radius: 999px;
-  background: #d8dccf;
+  background: hsl(222 12% 26%);
   padding: 3px;
   transition: background 200ms ease;
+  flex: none;
+  border: 0;
+  cursor: pointer;
 }
 
 .switch-track[data-active="true"] {
-  background: var(--ec-green);
+  background: hsl(var(--gauge-green));
+  box-shadow: 0 0 14px hsl(var(--gauge-green) / 0.55);
 }
 
 .switch-thumb {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
   background: #fff;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+  box-shadow: 0 2px 8px hsl(0 0% 0% / 0.4);
   transform: translateX(0);
   transition: transform 200ms ease;
 }
 
 .switch-track[data-active="true"] .switch-thumb {
-  transform: translateX(22px);
+  transform: translateX(20px);
 }
 
+/* Native single-value range */
 .range-input {
   width: 100%;
-  accent-color: var(--ec-green);
+  height: 6px;
+  accent-color: hsl(var(--gauge-green));
+  cursor: pointer;
 }
 
+/* Radix dual-thumb range (investeringsband) */
+.rng-root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 22px;
+  touch-action: none;
+  user-select: none;
+}
+
+.rng-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: hsl(222 12% 24%);
+}
+
+.rng-range {
+  position: absolute;
+  height: 100%;
+  border-radius: 999px;
+  background: hsl(var(--gauge-green));
+}
+
+.rng-thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 8px hsl(0 0% 0% / 0.5), 0 0 0 3px hsl(var(--gauge-green) / 0.35);
+  cursor: grab;
+}
+
+.rng-thumb:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px hsl(var(--gauge-green) / 0.45);
+}
+
+/* Buttons */
 .primary-button,
 .secondary-button {
   min-height: 48px;
   border: 0;
   border-radius: 12px;
   padding: 0 18px;
-  font-weight: 750;
+  font-weight: 700;
   cursor: pointer;
-  transition: transform 160ms ease, background 160ms ease, opacity 160ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 160ms ease, background 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
 }
 
 .primary-button {
-  background: var(--ec-green);
+  background: linear-gradient(180deg, hsl(var(--brand-bright)) 0%, hsl(var(--brand)) 100%);
   color: #fff;
+  box-shadow: 0 0 0 1px hsl(var(--brand) / 0.5), 0 8px 24px hsl(var(--brand) / 0.28), 0 0 26px hsl(var(--gauge-green) / 0.2);
 }
 
 .primary-button:hover {
-  background: var(--ec-green-hover);
+  box-shadow: 0 0 0 1px hsl(var(--brand) / 0.6), 0 10px 30px hsl(var(--brand) / 0.36), 0 0 34px hsl(var(--gauge-green) / 0.3);
 }
 
 .secondary-button {
-  background: #fff;
-  color: var(--ec-ink);
-  box-shadow: inset 0 0 0 1px var(--ec-border);
+  background: hsl(var(--card-soft) / 0.8);
+  color: hsl(var(--foreground));
+  box-shadow: inset 0 0 0 1px hsl(var(--border));
+}
+
+.secondary-button:hover {
+  box-shadow: inset 0 0 0 1px hsl(var(--gauge-green) / 0.5);
 }
 
 .primary-button:active,
@@ -202,7 +496,13 @@ select {
 .primary-button:disabled,
 .secondary-button:disabled {
   cursor: not-allowed;
-  opacity: 0.48;
+  opacity: 0.42;
+  box-shadow: inset 0 0 0 1px hsl(var(--border));
+}
+
+.primary-button:disabled {
+  background: hsl(222 14% 18%);
+  color: hsl(var(--muted-foreground));
 }
 
 .mono {
@@ -210,53 +510,125 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
-.mobile-pricing-bar {
-  display: none;
+/* ----------------------------------------------------------------------------
+   Slide-over (opslaan als klant)
+   ---------------------------------------------------------------------------- */
+.slideover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: hsl(0 0% 0% / 0.55);
+  backdrop-filter: blur(3px);
+  animation: fadeIn 180ms ease;
 }
 
-@keyframes stepIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+.slideover-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 51;
+  width: min(460px, 100vw);
+  background: hsl(222 17% 8%);
+  border-left: 1px solid hsl(var(--border));
+  box-shadow: -24px 0 60px hsl(0 0% 0% / 0.5);
+  overflow: auto;
+  padding: 28px;
+  animation: slideInRight 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ----------------------------------------------------------------------------
+   Animaties
+   ---------------------------------------------------------------------------- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Stromende stroom over de kabels (naadloze loop: dasharray 5 13 → keyframe -18) */
+.energy-flow {
+  stroke-dasharray: 5 13;
+  animation: energy-flow var(--flow-duration, 1.1s) linear infinite;
+}
+
+@keyframes energy-flow {
+  to { stroke-dashoffset: -18; }
+}
+
+.pulse-glow {
+  animation: pulse-glow var(--pulse-duration, 2.4s) ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.node-pulse {
+  animation: node-pulse 3s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes node-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .energy-flow,
+  .pulse-glow,
+  .node-pulse,
+  .slideover-panel,
+  .slideover-backdrop {
+    animation: none !important;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .adv-wrap {
+    transition: none !important;
   }
 }
 
-@media (max-width: 1023px) {
-  .configurator-progress {
-    height: 58px;
+/* ----------------------------------------------------------------------------
+   Scrollbars
+   ---------------------------------------------------------------------------- */
+.cfg-controls::-webkit-scrollbar,
+.slideover-panel::-webkit-scrollbar {
+  width: 10px;
+}
+
+.cfg-controls::-webkit-scrollbar-thumb,
+.slideover-panel::-webkit-scrollbar-thumb {
+  background: hsl(222 12% 22%);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* ----------------------------------------------------------------------------
+   Smal scherm — stapelen + scrollen toestaan (presentatie mikt op breed/fullscreen)
+   ---------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .configurator-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
   }
 
-  .configurator-grid {
-    display: block;
-    min-height: calc(100vh - 58px);
+  .cfg-body {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .configurator-main {
-    padding: 24px 20px 128px;
+  .cfg-scene {
+    min-height: 300px;
   }
 
-  .configurator-sidebar {
-    display: none;
-  }
-
-  .mobile-pricing-bar {
-    display: flex;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 40;
-    min-height: 96px;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 16px 20px;
-    background: #ffffff;
-    border-top: 1px solid var(--ec-border);
-    box-shadow: 0 -12px 32px rgb(26 26 26 / 0.08);
+  .cfg-controls {
+    overflow: visible;
   }
 }

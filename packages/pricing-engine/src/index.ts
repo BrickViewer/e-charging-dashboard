@@ -1,12 +1,14 @@
 import { z } from "zod";
 
-export const locationTypeSchema = z.enum([
-  "workplace",
-  "destination",
-  "fleet",
-  "public",
-  "other",
-]);
+// Locatietype is een vrije string (de "key"). Admins kunnen types toevoegen,
+// verwijderen en hernoemen; de beschikbare types staan in settings.locationTypes.
+export const locationTypeSchema = z.string().trim().min(1);
+
+export const locationTypeEntrySchema = z.object({
+  key: z.string().trim().min(1),
+  // Label niet trimmen/min: anders breekt het typen van spaties in de admin-UI.
+  label: z.string(),
+});
 
 export const targetTierSchema = z.object({
   minNetReturnPerChargePointMonth: z.number().min(0),
@@ -20,6 +22,24 @@ export const locationTypeDefaultsSchema = z.object({
   averageSessionDurationHours: z.number().min(0),
   effectiveChargingPowerKw: z.number().positive(),
 });
+
+// Invoer-/slidergrenzen die de configurator-UI gebruikt (geen invloed op de math).
+export const inputRangesSchema = z.object({
+  chargeTariffMin: z.number().min(0).default(0.39),
+  chargeTariffMax: z.number().min(0).default(0.79),
+  chargeTariffStep: z.number().positive().default(0.01),
+  kwhMin: z.number().min(0).default(0),
+  kwhMax: z.number().min(0).default(900),
+  kwhStep: z.number().positive().default(10),
+  sessionsMin: z.number().min(0).default(0),
+  sessionsMax: z.number().min(0).default(90),
+  sessionsStep: z.number().positive().default(1),
+  socketsMin: z.number().int().min(1).default(1),
+  socketsMax: z.number().int().min(1).default(200),
+  investmentSliderFloor: z.number().min(0).default(6000),
+  investmentSliderStep: z.number().positive().default(500),
+  intensityDivisor: z.number().positive().default(650),
+}).default({});
 
 export const configuratorSettingsSchema = z.object({
   baseTargetNetEchargingPerChargePointMonth: z.number().min(0).default(20),
@@ -38,7 +58,24 @@ export const configuratorSettingsSchema = z.object({
   defaultIdleFeeEnabled: z.boolean().default(true),
   defaultIdleFeePerMinute: z.number().min(0).default(0.05),
   defaultIdleGraceMinutes: z.number().min(0).default(60),
-  locationTypeDefaults: z.record(locationTypeSchema, locationTypeDefaultsSchema),
+  // ERE-subsidie: extra opbrengst per kWh per laadpaal (UI-laag in de configurator).
+  ereSubsidyPerKwh: z.number().min(0).default(0.10),
+  ereEnabledByDefault: z.boolean().default(false),
+  // Investeringsschatting per laadpunt → stuurt de investeringsband + slider-max.
+  investmentPerSocketLow: z.number().min(0).default(1500),
+  investmentPerSocketHigh: z.number().min(0).default(3000),
+  investmentPerSocketMax: z.number().min(0).default(4500),
+  defaultSocketCount: z.number().int().positive().default(8),
+  inputRanges: inputRangesSchema,
+  // Beschikbare locatietypes (volgorde + labels). De eerste is de standaard.
+  locationTypes: z.array(locationTypeEntrySchema).min(1).default([
+    { key: "workplace", label: "Werkplek" },
+    { key: "destination", label: "Bestemming" },
+    { key: "fleet", label: "Vloot" },
+    { key: "public", label: "Publiek" },
+    { key: "other", label: "Anders" },
+  ]),
+  locationTypeDefaults: z.record(z.string(), locationTypeDefaultsSchema),
 });
 
 export const pricingInputSchema = z.object({
@@ -149,6 +186,27 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = configuratorSet
   defaultIdleFeeEnabled: true,
   defaultIdleFeePerMinute: 0.05,
   defaultIdleGraceMinutes: 60,
+  ereSubsidyPerKwh: 0.10,
+  ereEnabledByDefault: false,
+  investmentPerSocketLow: 1500,
+  investmentPerSocketHigh: 3000,
+  investmentPerSocketMax: 4500,
+  defaultSocketCount: 8,
+  inputRanges: {
+    chargeTariffMin: 0.39, chargeTariffMax: 0.79, chargeTariffStep: 0.01,
+    kwhMin: 0, kwhMax: 900, kwhStep: 10,
+    sessionsMin: 0, sessionsMax: 90, sessionsStep: 1,
+    socketsMin: 1, socketsMax: 200,
+    investmentSliderFloor: 6000, investmentSliderStep: 500,
+    intensityDivisor: 650,
+  },
+  locationTypes: [
+    { key: "workplace", label: "Werkplek" },
+    { key: "destination", label: "Bestemming" },
+    { key: "fleet", label: "Vloot" },
+    { key: "public", label: "Publiek" },
+    { key: "other", label: "Anders" },
+  ],
   locationTypeDefaults: {
     workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8 },
     destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10 },

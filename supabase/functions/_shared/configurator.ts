@@ -19,6 +19,29 @@ export type ConfiguratorSettings = {
   defaultIdleFeeEnabled: boolean;
   defaultIdleFeePerMinute: number;
   defaultIdleGraceMinutes: number;
+  ereSubsidyPerKwh: number;
+  ereEnabledByDefault: boolean;
+  investmentPerSocketLow: number;
+  investmentPerSocketHigh: number;
+  investmentPerSocketMax: number;
+  defaultSocketCount: number;
+  inputRanges: {
+    chargeTariffMin: number;
+    chargeTariffMax: number;
+    chargeTariffStep: number;
+    kwhMin: number;
+    kwhMax: number;
+    kwhStep: number;
+    sessionsMin: number;
+    sessionsMax: number;
+    sessionsStep: number;
+    socketsMin: number;
+    socketsMax: number;
+    investmentSliderFloor: number;
+    investmentSliderStep: number;
+    intensityDivisor: number;
+  };
+  locationTypes: Array<{ key: string; label: string }>;
   locationTypeDefaults: Record<string, {
     sessionsPerChargePointMonth: number;
     kwhPerChargePointMonth: number;
@@ -89,6 +112,27 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = {
   defaultIdleFeeEnabled: true,
   defaultIdleFeePerMinute: 0.05,
   defaultIdleGraceMinutes: 60,
+  ereSubsidyPerKwh: 0.10,
+  ereEnabledByDefault: false,
+  investmentPerSocketLow: 1500,
+  investmentPerSocketHigh: 3000,
+  investmentPerSocketMax: 4500,
+  defaultSocketCount: 8,
+  inputRanges: {
+    chargeTariffMin: 0.39, chargeTariffMax: 0.79, chargeTariffStep: 0.01,
+    kwhMin: 0, kwhMax: 900, kwhStep: 10,
+    sessionsMin: 0, sessionsMax: 90, sessionsStep: 1,
+    socketsMin: 1, socketsMax: 200,
+    investmentSliderFloor: 6000, investmentSliderStep: 500,
+    intensityDivisor: 650,
+  },
+  locationTypes: [
+    { key: "workplace", label: "Werkplek" },
+    { key: "destination", label: "Bestemming" },
+    { key: "fleet", label: "Vloot" },
+    { key: "public", label: "Publiek" },
+    { key: "other", label: "Anders" },
+  ],
   locationTypeDefaults: {
     workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8 },
     destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10 },
@@ -108,6 +152,10 @@ export function normalizeSettings(value: unknown): ConfiguratorSettings {
     ...defaultConfiguratorSettings,
     ...raw,
     tiers: Array.isArray(raw.tiers) && raw.tiers.length > 0 ? raw.tiers : defaultConfiguratorSettings.tiers,
+    locationTypes: Array.isArray(raw.locationTypes) && raw.locationTypes.length > 0
+      ? raw.locationTypes
+      : defaultConfiguratorSettings.locationTypes,
+    inputRanges: { ...defaultConfiguratorSettings.inputRanges, ...(raw.inputRanges ?? {}) },
     locationTypeDefaults: {
       ...defaultConfiguratorSettings.locationTypeDefaults,
       ...(raw.locationTypeDefaults ?? {}),

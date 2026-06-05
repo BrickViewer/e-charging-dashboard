@@ -3,7 +3,6 @@ import {
   configuratorSettingsSchema,
   defaultConfiguratorSettings,
   type ConfiguratorSettings,
-  type LocationType,
 } from "@echarging/pricing-engine";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,17 +27,35 @@ type SessionStartResponse = {
   expiresAt: string;
 };
 
-const locationLabels: Record<LocationType, string> = {
-  workplace: "Werkplek/kantoor",
-  destination: "Bestemming",
-  fleet: "Vlootlocatie/depot",
-  public: "Publieke straat",
-  other: "Anders",
+type UsageDefaults = ConfiguratorSettings["locationTypeDefaults"][string];
+
+const FALLBACK_USAGE: UsageDefaults = {
+  sessionsPerChargePointMonth: 12,
+  kwhPerChargePointMonth: 200,
+  averageSessionDurationHours: 6,
+  effectiveChargingPowerKw: 8,
 };
 
 function toNumber(value: string | number, fallback = 0) {
   const parsed = typeof value === "number" ? value : Number(value.replace(",", "."));
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function slugify(value: string) {
+  return (
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "type"
+  );
+}
+
+function uniqueKey(base: string, existing: string[]) {
+  let key = base;
+  let n = 2;
+  while (existing.includes(key)) key = `${base}-${n++}`;
+  return key;
 }
 
 function CurrencyInput({
@@ -53,11 +70,46 @@ function CurrencyInput({
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Input
-        inputMode="decimal"
-        value={String(value)}
-        onChange={(event) => onChange(toNumber(event.target.value, value))}
-      />
+      <Input inputMode="decimal" value={String(value)} onChange={(event) => onChange(toNumber(event.target.value, value))} />
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Input value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function ToggleField({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border p-4">
+      <div>
+        <Label>{label}</Label>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }
@@ -71,7 +123,6 @@ export default function AdminConfiguratorSettings() {
 
   useEffect(() => {
     let cancelled = false;
-
     (async () => {
       setLoading(true);
       try {
@@ -92,7 +143,6 @@ export default function AdminConfiguratorSettings() {
         if (!cancelled) setLoading(false);
       }
     })();
-
     return () => {
       cancelled = true;
     };
@@ -103,9 +153,19 @@ export default function AdminConfiguratorSettings() {
     [settings.tiers],
   );
 
+  // Tolerante update: geldige edits worden genormaliseerd, tussentijdse ongeldige
+  // waarden (bv. leeg label of 0 in een verplicht veld) blijven staan zonder crash.
+  // De harde validatie gebeurt bij Opslaan.
   const updateSettings = (updater: (draft: ConfiguratorSettings) => ConfiguratorSettings) => {
-    setSettings((current) => configuratorSettingsSchema.parse(updater(current)));
+    setSettings((current) => {
+      const next = updater(current);
+      const parsed = configuratorSettingsSchema.safeParse(next);
+      return parsed.success ? parsed.data : next;
+    });
   };
+
+  const setRange = (field: keyof ConfiguratorSettings["inputRanges"], value: number) =>
+    updateSettings((current) => ({ ...current, inputRanges: { ...current.inputRanges, [field]: value } }));
 
   const save = async () => {
     setSaving(true);
@@ -116,7 +176,7 @@ export default function AdminConfiguratorSettings() {
       });
       if (error) throw error;
       if (data) {
-        setSettings(data.settings);
+        setSettings(configuratorSettingsSchema.parse(data.settings));
         setVersion(data.version);
       }
       toast.success("Configurator-instellingen opgeslagen");
@@ -132,11 +192,9 @@ export default function AdminConfiguratorSettings() {
       toast.error("Viewer kan geen configuratie starten");
       return;
     }
-
     try {
       const { data, error } = await supabase.functions.invoke<SessionStartResponse>("configurator-session-start");
       if (error) throw error;
-
       const url = data?.url ?? `http://localhost:8081/s/local-${Date.now()}/stap/1`;
       window.open(url, "_blank", "noopener,noreferrer,width=1400,height=900");
     } catch {
@@ -152,9 +210,7 @@ export default function AdminConfiguratorSettings() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Configuratie</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Beheer de calculator en start klantconfiguraties.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Beheer de calculator en start klantconfiguraties.</p>
           </div>
           {role === "manager" && (
             <Button variant="outline" onClick={handleNewConfiguration}>
@@ -163,7 +219,6 @@ export default function AdminConfiguratorSettings() {
             </Button>
           )}
         </div>
-
         <Card>
           <CardHeader>
             <CardTitle>Calculatorinstellingen</CardTitle>
@@ -190,9 +245,7 @@ export default function AdminConfiguratorSettings() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Configuratie</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Beheer de calculator en start klantconfiguraties.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Volledige controle over de cijfers van de klant-configurator.</p>
           <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Versie {version}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -208,14 +261,17 @@ export default function AdminConfiguratorSettings() {
       </div>
 
       <Tabs defaultValue="defaults">
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
           <TabsTrigger value="defaults">Defaults</TabsTrigger>
           <TabsTrigger value="tiers">Staffel</TabsTrigger>
-          <TabsTrigger value="eflux">E-Flux kosten</TabsTrigger>
+          <TabsTrigger value="eflux">E-Flux</TabsTrigger>
           <TabsTrigger value="locations">Locatietypes</TabsTrigger>
           <TabsTrigger value="tariffs">Tarieven</TabsTrigger>
+          <TabsTrigger value="investment">ERE &amp; investering</TabsTrigger>
+          <TabsTrigger value="ranges">Invoergrenzen</TabsTrigger>
         </TabsList>
 
+        {/* DEFAULTS */}
         <TabsContent value="defaults" className="mt-6">
           <Card>
             <CardHeader>
@@ -223,40 +279,16 @@ export default function AdminConfiguratorSettings() {
               <CardDescription>Basisdoelen en commerciële grenzen.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-5 md:grid-cols-3">
-              <CurrencyInput
-                label="Target basis netto per paal/maand"
-                value={settings.baseTargetNetEchargingPerChargePointMonth}
-                onChange={(value) => updateSettings((current) => ({ ...current, baseTargetNetEchargingPerChargePointMonth: value }))}
-              />
-              <CurrencyInput
-                label="Maximale fee in %"
-                value={settings.maxServiceFeePct * 100}
-                onChange={(value) => updateSettings((current) => ({ ...current, maxServiceFeePct: value / 100 }))}
-              />
-              <CurrencyInput
-                label="Default contractduur"
-                value={settings.defaultContractDurationMonths}
-                onChange={(value) => updateSettings((current) => ({ ...current, defaultContractDurationMonths: Math.round(value) }))}
-              />
-              <CurrencyInput
-                label="Opzegtermijn"
-                value={settings.defaultNoticePeriodMonths}
-                onChange={(value) => updateSettings((current) => ({ ...current, defaultNoticePeriodMonths: Math.round(value) }))}
-              />
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                  <Label>Staffel gebruiken</Label>
-                  <p className="text-xs text-muted-foreground">Uit betekent vast target basis gebruiken.</p>
-                </div>
-                <Switch
-                  checked={settings.useTieredTarget}
-                  onCheckedChange={(checked) => updateSettings((current) => ({ ...current, useTieredTarget: checked }))}
-                />
-              </div>
+              <CurrencyInput label="Target basis netto per paal/maand" value={settings.baseTargetNetEchargingPerChargePointMonth} onChange={(value) => updateSettings((c) => ({ ...c, baseTargetNetEchargingPerChargePointMonth: value }))} />
+              <CurrencyInput label="Maximale fee in %" value={settings.maxServiceFeePct * 100} onChange={(value) => updateSettings((c) => ({ ...c, maxServiceFeePct: Math.min(1, Math.max(0, value / 100)) }))} />
+              <CurrencyInput label="Default contractduur" value={settings.defaultContractDurationMonths} onChange={(value) => updateSettings((c) => ({ ...c, defaultContractDurationMonths: Math.max(1, Math.round(value)) }))} />
+              <CurrencyInput label="Opzegtermijn" value={settings.defaultNoticePeriodMonths} onChange={(value) => updateSettings((c) => ({ ...c, defaultNoticePeriodMonths: Math.max(0, Math.round(value)) }))} />
+              <ToggleField label="Staffel gebruiken" description="Uit betekent vast target basis gebruiken." checked={settings.useTieredTarget} onChange={(checked) => updateSettings((c) => ({ ...c, useTieredTarget: checked }))} />
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* TIERS */}
         <TabsContent value="tiers" className="mt-6">
           <Card>
             <CardHeader>
@@ -266,58 +298,15 @@ export default function AdminConfiguratorSettings() {
             <CardContent className="space-y-4">
               {sortedTiers.map((tier, index) => (
                 <div key={`${tier.minNetReturnPerChargePointMonth}-${index}`} className="grid gap-3 rounded-xl border p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
-                  <CurrencyInput
-                    label="Vanaf netto"
-                    value={tier.minNetReturnPerChargePointMonth}
-                    onChange={(value) => updateSettings((current) => {
-                      const next = [...current.tiers];
-                      next[index] = { ...next[index], minNetReturnPerChargePointMonth: value };
-                      return { ...current, tiers: next };
-                    })}
-                  />
-                  <CurrencyInput
-                    label="Tot netto"
-                    value={tier.maxNetReturnPerChargePointMonth ?? 0}
-                    onChange={(value) => updateSettings((current) => {
-                      const next = [...current.tiers];
-                      next[index] = { ...next[index], maxNetReturnPerChargePointMonth: value <= 0 ? null : value };
-                      return { ...current, tiers: next };
-                    })}
-                  />
-                  <CurrencyInput
-                    label="Target netto"
-                    value={tier.targetNetEchargingPerChargePointMonth}
-                    onChange={(value) => updateSettings((current) => {
-                      const next = [...current.tiers];
-                      next[index] = { ...next[index], targetNetEchargingPerChargePointMonth: value };
-                      return { ...current, tiers: next };
-                    })}
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="self-end"
-                    disabled={settings.tiers.length <= 1}
-                    onClick={() => updateSettings((current) => ({ ...current, tiers: current.tiers.filter((_, tierIndex) => tierIndex !== index) }))}
-                  >
+                  <CurrencyInput label="Vanaf netto" value={tier.minNetReturnPerChargePointMonth} onChange={(value) => updateSettings((c) => { const next = [...c.tiers]; next[index] = { ...next[index], minNetReturnPerChargePointMonth: value }; return { ...c, tiers: next }; })} />
+                  <CurrencyInput label="Tot netto" value={tier.maxNetReturnPerChargePointMonth ?? 0} onChange={(value) => updateSettings((c) => { const next = [...c.tiers]; next[index] = { ...next[index], maxNetReturnPerChargePointMonth: value <= 0 ? null : value }; return { ...c, tiers: next }; })} />
+                  <CurrencyInput label="Target netto" value={tier.targetNetEchargingPerChargePointMonth} onChange={(value) => updateSettings((c) => { const next = [...c.tiers]; next[index] = { ...next[index], targetNetEchargingPerChargePointMonth: value }; return { ...c, tiers: next }; })} />
+                  <Button variant="outline" size="icon" className="self-end" disabled={settings.tiers.length <= 1} onClick={() => updateSettings((c) => ({ ...c, tiers: c.tiers.filter((_, i) => i !== index) }))}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
-              <Button
-                variant="outline"
-                onClick={() => updateSettings((current) => ({
-                  ...current,
-                  tiers: [
-                    ...current.tiers,
-                    {
-                      minNetReturnPerChargePointMonth: 600,
-                      maxNetReturnPerChargePointMonth: null,
-                      targetNetEchargingPerChargePointMonth: 85,
-                    },
-                  ],
-                }))}
-              >
+              <Button variant="outline" onClick={() => updateSettings((c) => ({ ...c, tiers: [...c.tiers, { minNetReturnPerChargePointMonth: 600, maxNetReturnPerChargePointMonth: null, targetNetEchargingPerChargePointMonth: 85 }] }))}>
                 <Plus className="mr-2 h-4 w-4" />
                 Tier toevoegen
               </Button>
@@ -325,6 +314,7 @@ export default function AdminConfiguratorSettings() {
           </Card>
         </TabsContent>
 
+        {/* EFLUX */}
         <TabsContent value="eflux" className="mt-6">
           <Card>
             <CardHeader>
@@ -332,48 +322,155 @@ export default function AdminConfiguratorSettings() {
               <CardDescription>Deze kosten worden meegenomen in de vereiste fee.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-5 md:grid-cols-3">
-              <CurrencyInput label="Abonnement per socket/mnd" value={settings.efluxSubscriptionPerSocketMonth} onChange={(value) => updateSettings((current) => ({ ...current, efluxSubscriptionPerSocketMonth: value }))} />
-              <CurrencyInput label="Opstartkosten per socket" value={settings.efluxSetupPerSocket} onChange={(value) => updateSettings((current) => ({ ...current, efluxSetupPerSocket: value }))} />
-              <CurrencyInput label="Afschrijftermijn in maanden" value={settings.efluxSetupAmortizationMonths} onChange={(value) => updateSettings((current) => ({ ...current, efluxSetupAmortizationMonths: Math.max(1, Math.round(value)) }))} />
+              <CurrencyInput label="Abonnement per socket/mnd" value={settings.efluxSubscriptionPerSocketMonth} onChange={(value) => updateSettings((c) => ({ ...c, efluxSubscriptionPerSocketMonth: value }))} />
+              <CurrencyInput label="Opstartkosten per socket" value={settings.efluxSetupPerSocket} onChange={(value) => updateSettings((c) => ({ ...c, efluxSetupPerSocket: value }))} />
+              <CurrencyInput label="Afschrijftermijn in maanden" value={settings.efluxSetupAmortizationMonths} onChange={(value) => updateSettings((c) => ({ ...c, efluxSetupAmortizationMonths: Math.max(1, Math.round(value)) }))} />
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* LOCATIONS (CRUD) */}
         <TabsContent value="locations" className="mt-6">
           <div className="space-y-4">
-            {(Object.keys(locationLabels) as LocationType[]).map((type) => {
-              const defaults = settings.locationTypeDefaults[type];
+            {settings.locationTypes.map((entry, index) => {
+              const usage = settings.locationTypeDefaults[entry.key] ?? FALLBACK_USAGE;
+              const setUsage = (patch: Partial<UsageDefaults>) =>
+                updateSettings((c) => ({
+                  ...c,
+                  locationTypeDefaults: {
+                    ...c.locationTypeDefaults,
+                    [entry.key]: { ...(c.locationTypeDefaults[entry.key] ?? FALLBACK_USAGE), ...patch },
+                  },
+                }));
               return (
-                <Card key={type}>
+                <Card key={entry.key}>
                   <CardHeader>
-                    <CardTitle>{locationLabels[type]}</CardTitle>
+                    <div className="flex items-end justify-between gap-3">
+                      <div className="flex-1">
+                        <TextField label="Naam locatietype" value={entry.label} onChange={(label) => updateSettings((c) => { const next = [...c.locationTypes]; next[index] = { ...next[index], label }; return { ...c, locationTypes: next }; })} />
+                        <p className="mt-1 text-xs text-muted-foreground">Key: {entry.key}</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={settings.locationTypes.length <= 1}
+                        onClick={() => updateSettings((c) => ({
+                          ...c,
+                          locationTypes: c.locationTypes.filter((_, i) => i !== index),
+                          locationTypeDefaults: Object.fromEntries(Object.entries(c.locationTypeDefaults).filter(([k]) => k !== entry.key)),
+                        }))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent className="grid gap-5 md:grid-cols-4">
-                    <CurrencyInput label="Sessies/paal/mnd" value={defaults.sessionsPerChargePointMonth} onChange={(value) => updateSettings((current) => ({ ...current, locationTypeDefaults: { ...current.locationTypeDefaults, [type]: { ...defaults, sessionsPerChargePointMonth: value } } }))} />
-                    <CurrencyInput label="kWh/paal/mnd" value={defaults.kwhPerChargePointMonth} onChange={(value) => updateSettings((current) => ({ ...current, locationTypeDefaults: { ...current.locationTypeDefaults, [type]: { ...defaults, kwhPerChargePointMonth: value } } }))} />
-                    <CurrencyInput label="Sessieduur uren" value={defaults.averageSessionDurationHours} onChange={(value) => updateSettings((current) => ({ ...current, locationTypeDefaults: { ...current.locationTypeDefaults, [type]: { ...defaults, averageSessionDurationHours: value } } }))} />
-                    <CurrencyInput label="Laadvermogen kW" value={defaults.effectiveChargingPowerKw} onChange={(value) => updateSettings((current) => ({ ...current, locationTypeDefaults: { ...current.locationTypeDefaults, [type]: { ...defaults, effectiveChargingPowerKw: Math.max(0.1, value) } } }))} />
+                    <CurrencyInput label="Sessies/paal/mnd" value={usage.sessionsPerChargePointMonth} onChange={(value) => setUsage({ sessionsPerChargePointMonth: value })} />
+                    <CurrencyInput label="kWh/paal/mnd" value={usage.kwhPerChargePointMonth} onChange={(value) => setUsage({ kwhPerChargePointMonth: value })} />
+                    <CurrencyInput label="Sessieduur uren" value={usage.averageSessionDurationHours} onChange={(value) => setUsage({ averageSessionDurationHours: value })} />
+                    <CurrencyInput label="Laadvermogen kW" value={usage.effectiveChargingPowerKw} onChange={(value) => setUsage({ effectiveChargingPowerKw: Math.max(0.1, value) })} />
                   </CardContent>
                 </Card>
               );
             })}
+            <Button
+              variant="outline"
+              onClick={() => updateSettings((c) => {
+                const key = uniqueKey(slugify("nieuw type"), c.locationTypes.map((t) => t.key));
+                return {
+                  ...c,
+                  locationTypes: [...c.locationTypes, { key, label: "Nieuw type" }],
+                  locationTypeDefaults: { ...c.locationTypeDefaults, [key]: FALLBACK_USAGE },
+                };
+              })}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Locatietype toevoegen
+            </Button>
           </div>
         </TabsContent>
 
+        {/* TARIFFS */}
         <TabsContent value="tariffs" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Standaard tariefdefaults</CardTitle>
               <CardDescription>Startwaarden voor nieuwe configuraties.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-5 md:grid-cols-3">
-              <CurrencyInput label="Laadtarief/kWh" value={settings.defaultChargeTariffPerKwh} onChange={(value) => updateSettings((current) => ({ ...current, defaultChargeTariffPerKwh: value }))} />
-              <CurrencyInput label="Stroom-inkoop/kWh" value={settings.defaultEnergyCostPerKwh} onChange={(value) => updateSettings((current) => ({ ...current, defaultEnergyCostPerKwh: value }))} />
-              <CurrencyInput label="Starttarief" value={settings.defaultStartFeePerSession} onChange={(value) => updateSettings((current) => ({ ...current, defaultStartFeePerSession: value }))} />
-              <CurrencyInput label="Blokkeertarief/min" value={settings.defaultIdleFeePerMinute} onChange={(value) => updateSettings((current) => ({ ...current, defaultIdleFeePerMinute: value }))} />
-              <CurrencyInput label="Grace in minuten" value={settings.defaultIdleGraceMinutes} onChange={(value) => updateSettings((current) => ({ ...current, defaultIdleGraceMinutes: value }))} />
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 md:grid-cols-3">
+                <CurrencyInput label="Laadtarief/kWh" value={settings.defaultChargeTariffPerKwh} onChange={(value) => updateSettings((c) => ({ ...c, defaultChargeTariffPerKwh: value }))} />
+                <CurrencyInput label="Stroom-inkoop/kWh" value={settings.defaultEnergyCostPerKwh} onChange={(value) => updateSettings((c) => ({ ...c, defaultEnergyCostPerKwh: value }))} />
+                <CurrencyInput label="Starttarief/sessie" value={settings.defaultStartFeePerSession} onChange={(value) => updateSettings((c) => ({ ...c, defaultStartFeePerSession: value }))} />
+                <CurrencyInput label="Blokkeertarief/min" value={settings.defaultIdleFeePerMinute} onChange={(value) => updateSettings((c) => ({ ...c, defaultIdleFeePerMinute: value }))} />
+                <CurrencyInput label="Grace in minuten" value={settings.defaultIdleGraceMinutes} onChange={(value) => updateSettings((c) => ({ ...c, defaultIdleGraceMinutes: value }))} />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <ToggleField label="Starttarief standaard aan" checked={settings.defaultStartFeeEnabled} onChange={(checked) => updateSettings((c) => ({ ...c, defaultStartFeeEnabled: checked }))} />
+                <ToggleField label="Blokkeertarief standaard aan" checked={settings.defaultIdleFeeEnabled} onChange={(checked) => updateSettings((c) => ({ ...c, defaultIdleFeeEnabled: checked }))} />
+              </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ERE & INVESTERING */}
+        <TabsContent value="investment" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>ERE &amp; investering</CardTitle>
+              <CardDescription>ERE-subsidie en de investeringsschatting per laadpunt (stuurt de terugverdientijd).</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 md:grid-cols-3">
+                <CurrencyInput label="ERE-subsidie per kWh" value={settings.ereSubsidyPerKwh} onChange={(value) => updateSettings((c) => ({ ...c, ereSubsidyPerKwh: value }))} />
+                <ToggleField label="ERE standaard aan" description="Of ERE bij een nieuwe configuratie al aanstaat." checked={settings.ereEnabledByDefault} onChange={(checked) => updateSettings((c) => ({ ...c, ereEnabledByDefault: checked }))} />
+                <CurrencyInput label="Standaard aantal laadpunten" value={settings.defaultSocketCount} onChange={(value) => updateSettings((c) => ({ ...c, defaultSocketCount: Math.max(1, Math.round(value)) }))} />
+              </div>
+              <div className="grid gap-5 md:grid-cols-3">
+                <CurrencyInput label="Investering per laadpunt — laag" value={settings.investmentPerSocketLow} onChange={(value) => updateSettings((c) => ({ ...c, investmentPerSocketLow: value }))} />
+                <CurrencyInput label="Investering per laadpunt — hoog" value={settings.investmentPerSocketHigh} onChange={(value) => updateSettings((c) => ({ ...c, investmentPerSocketHigh: value }))} />
+                <CurrencyInput label="Investering per laadpunt — slidermax" value={settings.investmentPerSocketMax} onChange={(value) => updateSettings((c) => ({ ...c, investmentPerSocketMax: value }))} />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* INVOERGRENZEN */}
+        <TabsContent value="ranges" className="mt-6">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Slider-grenzen</CardTitle>
+                <CardDescription>Min, max en stapgrootte van de invoer-sliders in de configurator.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-5 md:grid-cols-3">
+                  <CurrencyInput label="Laadtarief min" value={settings.inputRanges.chargeTariffMin} onChange={(v) => setRange("chargeTariffMin", v)} />
+                  <CurrencyInput label="Laadtarief max" value={settings.inputRanges.chargeTariffMax} onChange={(v) => setRange("chargeTariffMax", v)} />
+                  <CurrencyInput label="Laadtarief stap" value={settings.inputRanges.chargeTariffStep} onChange={(v) => setRange("chargeTariffStep", Math.max(0.001, v))} />
+                  <CurrencyInput label="kWh min" value={settings.inputRanges.kwhMin} onChange={(v) => setRange("kwhMin", v)} />
+                  <CurrencyInput label="kWh max" value={settings.inputRanges.kwhMax} onChange={(v) => setRange("kwhMax", v)} />
+                  <CurrencyInput label="kWh stap" value={settings.inputRanges.kwhStep} onChange={(v) => setRange("kwhStep", Math.max(1, v))} />
+                  <CurrencyInput label="Sessies min" value={settings.inputRanges.sessionsMin} onChange={(v) => setRange("sessionsMin", v)} />
+                  <CurrencyInput label="Sessies max" value={settings.inputRanges.sessionsMax} onChange={(v) => setRange("sessionsMax", v)} />
+                  <CurrencyInput label="Sessies stap" value={settings.inputRanges.sessionsStep} onChange={(v) => setRange("sessionsStep", Math.max(1, v))} />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Laadpunten &amp; investering</CardTitle>
+                <CardDescription>Grenzen voor de laadpunt-stepper en de investeringsslider.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 md:grid-cols-3">
+                <CurrencyInput label="Laadpunten min" value={settings.inputRanges.socketsMin} onChange={(v) => setRange("socketsMin", Math.max(1, Math.round(v)))} />
+                <CurrencyInput label="Laadpunten max" value={settings.inputRanges.socketsMax} onChange={(v) => setRange("socketsMax", Math.max(1, Math.round(v)))} />
+                <CurrencyInput label="Investeringsslider — vloer (max)" value={settings.inputRanges.investmentSliderFloor} onChange={(v) => setRange("investmentSliderFloor", v)} />
+                <CurrencyInput label="Investeringsslider — stap" value={settings.inputRanges.investmentSliderStep} onChange={(v) => setRange("investmentSliderStep", Math.max(1, v))} />
+                <CurrencyInput label="Intensiteit-deler (scène-flow)" value={settings.inputRanges.intensityDivisor} onChange={(v) => setRange("intensityDivisor", Math.max(1, v))} />
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
