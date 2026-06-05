@@ -535,3 +535,25 @@
     color: hsl(var(--error));
   }
 }
+
+/* Subtiele e-charging-scrollbalk (o.a. de Leads-Kanban) — dun, transparante
+   baan, groene tint die pas bij hover oplicht. */
+.ec-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+.ec-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.ec-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ec-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+  transition: background 160ms ease;
+}
+.ec-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.55);
+}

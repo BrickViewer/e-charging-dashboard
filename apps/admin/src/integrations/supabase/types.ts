@@ -613,6 +613,216 @@ export type Database = {
           },
         ]
       }
+      configurator_drafts: {
+        Row: {
+          actor_user_id: string
+          archived_at: string | null
+          created_at: string
+          current_step: number
+          draft: Json
+          expires_at: string
+          id: string
+          session_id: string
+          updated_at: string
+        }
+        Insert: {
+          actor_user_id: string
+          archived_at?: string | null
+          created_at?: string
+          current_step?: number
+          draft: Json
+          expires_at?: string
+          id?: string
+          session_id: string
+          updated_at?: string
+        }
+        Update: {
+          actor_user_id?: string
+          archived_at?: string | null
+          created_at?: string
+          current_step?: number
+          draft?: Json
+          expires_at?: string
+          id?: string
+          session_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "configurator_drafts_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "configurator_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      configurator_sessions: {
+        Row: {
+          actor_user_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          last_seen_at: string
+          lead_id: string | null
+          organization_id: string
+          scopes: string[]
+          settings_id: string
+          settings_version: number
+          status: string
+        }
+        Insert: {
+          actor_user_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          last_seen_at?: string
+          lead_id?: string | null
+          organization_id: string
+          scopes?: string[]
+          settings_id: string
+          settings_version: number
+          status?: string
+        }
+        Update: {
+          actor_user_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_seen_at?: string
+          lead_id?: string | null
+          organization_id?: string
+          scopes?: string[]
+          settings_id?: string
+          settings_version?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "configurator_sessions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "configurator_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "configurator_sessions_settings_id_fkey"
+            columns: ["settings_id"]
+            isOneToOne: false
+            referencedRelation: "configurator_settings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      configurator_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          organization_id: string
+          settings: Json
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          settings: Json
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          settings?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "configurator_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_configurations: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          pricing_input: Json
+          pricing_result: Json
+          settings_version: number
+          source_session_id: string | null
+          status: string
+          version: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          pricing_input: Json
+          pricing_result: Json
+          settings_version: number
+          source_session_id?: string | null
+          status?: string
+          version: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          pricing_input?: Json
+          pricing_result?: Json
+          settings_version?: number
+          source_session_id?: string | null
+          status?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_configurations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_configurations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_configurations_source_session_id_fkey"
+            columns: ["source_session_id"]
+            isOneToOne: false
+            referencedRelation: "configurator_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       eflux_invoices: {
         Row: {
           account_name: string | null
@@ -735,6 +945,349 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      lead_activities: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          lead_id: string
+          metadata: Json
+          organization_id: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          lead_id: string
+          metadata?: Json
+          organization_id: string
+          type: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          lead_id?: string
+          metadata?: Json
+          organization_id?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_activities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_stage_tasks: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          position: number
+          stage_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          position?: number
+          stage_id: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          position?: number
+          stage_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_stage_tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_stage_tasks_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "lead_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_stages: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_default: boolean
+          is_lost: boolean
+          is_won: boolean
+          name: string
+          organization_id: string
+          position: number
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          is_lost?: boolean
+          is_won?: boolean
+          name: string
+          organization_id: string
+          position?: number
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          is_lost?: boolean
+          is_won?: boolean
+          name?: string
+          organization_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_stages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_tasks: {
+        Row: {
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          done: boolean
+          due_date: string | null
+          id: string
+          lead_id: string
+          organization_id: string
+          position: number
+          title: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          done?: boolean
+          due_date?: string | null
+          id?: string
+          lead_id: string
+          organization_id: string
+          position?: number
+          title: string
+        }
+        Update: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          done?: boolean
+          due_date?: string | null
+          id?: string
+          lead_id?: string
+          organization_id?: string
+          position?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          address_street: string | null
+          charger_type: string | null
+          city: string | null
+          company_name: string
+          configurator_session_id: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          contact_role: string | null
+          converted_client_id: string | null
+          created_at: string
+          created_by: string | null
+          estimated_charge_points: number | null
+          estimated_kwh_per_month: number | null
+          estimated_value: number | null
+          expected_close_date: string | null
+          grid_notes: string | null
+          has_solar: boolean | null
+          id: string
+          kvk: string | null
+          location_type: string | null
+          lost_reason: string | null
+          notes: string | null
+          organization_id: string
+          owner_user_id: string | null
+          owns_property: boolean | null
+          parking_spaces: number | null
+          position: number
+          postal_code: string | null
+          priority: string
+          quote_id: string | null
+          sector: string | null
+          source: string
+          stage_id: string | null
+          status: string
+          updated_at: string
+          website: string | null
+          won_at: string | null
+        }
+        Insert: {
+          address_street?: string | null
+          charger_type?: string | null
+          city?: string | null
+          company_name: string
+          configurator_session_id?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contact_role?: string | null
+          converted_client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          estimated_charge_points?: number | null
+          estimated_kwh_per_month?: number | null
+          estimated_value?: number | null
+          expected_close_date?: string | null
+          grid_notes?: string | null
+          has_solar?: boolean | null
+          id?: string
+          kvk?: string | null
+          location_type?: string | null
+          lost_reason?: string | null
+          notes?: string | null
+          organization_id: string
+          owner_user_id?: string | null
+          owns_property?: boolean | null
+          parking_spaces?: number | null
+          position?: number
+          postal_code?: string | null
+          priority?: string
+          quote_id?: string | null
+          sector?: string | null
+          source?: string
+          stage_id?: string | null
+          status?: string
+          updated_at?: string
+          website?: string | null
+          won_at?: string | null
+        }
+        Update: {
+          address_street?: string | null
+          charger_type?: string | null
+          city?: string | null
+          company_name?: string
+          configurator_session_id?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contact_role?: string | null
+          converted_client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          estimated_charge_points?: number | null
+          estimated_kwh_per_month?: number | null
+          estimated_value?: number | null
+          expected_close_date?: string | null
+          grid_notes?: string | null
+          has_solar?: boolean | null
+          id?: string
+          kvk?: string | null
+          location_type?: string | null
+          lost_reason?: string | null
+          notes?: string | null
+          organization_id?: string
+          owner_user_id?: string | null
+          owns_property?: boolean | null
+          parking_spaces?: number | null
+          position?: number
+          postal_code?: string | null
+          priority?: string
+          quote_id?: string | null
+          sector?: string | null
+          source?: string
+          stage_id?: string | null
+          status?: string
+          updated_at?: string
+          website?: string | null
+          won_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_converted_client_id_fkey"
+            columns: ["converted_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "lead_stages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       locations: {
         Row: {
@@ -1241,6 +1794,13 @@ export type Database = {
           schedule: string
         }[]
       }
+      amsterdam_month_bounds: {
+        Args: { p_month: number; p_year: number }
+        Returns: {
+          end_ts: string
+          start_ts: string
+        }[]
+      }
       approve_settlements: {
         Args: { settlement_ids: string[] }
         Returns: {
@@ -1282,7 +1842,6 @@ export type Database = {
           co2_kg_avoided: number
           ere_estimate: number
           estimated_client_yield: number
-          gross_revenue: number
           is_final: boolean
           month: number
           period_end: string
@@ -1291,6 +1850,21 @@ export type Database = {
           total_customer_cashflow: number
           total_kwh: number
           year: number
+        }[]
+      }
+      get_portal_invoice_context: {
+        Args: never
+        Returns: {
+          org_address: string
+          org_bic: string
+          org_btw_number: string
+          org_email: string
+          org_iban: string
+          org_kvk: string
+          org_name: string
+          payout_account_holder_name: string
+          payout_bic: string
+          payout_iban: string
         }[]
       }
       get_portal_payment_details: {
@@ -1305,6 +1879,26 @@ export type Database = {
           payout_iban_masked: string
           status: string
           updated_at: string
+        }[]
+      }
+      get_portal_sessions: {
+        Args: {
+          p_charge_point_id?: string
+          p_from?: string
+          p_limit?: number
+          p_location_id?: string
+          p_to?: string
+        }
+        Returns: {
+          charge_point_id: string
+          charge_point_name: string
+          duration_minutes: number
+          ended_at: string
+          id: string
+          kwh_delivered: number
+          location_name: string
+          started_at: string
+          vergoeding: number
         }[]
       }
       invoke_edge_function: {
@@ -1335,6 +1929,8 @@ export type Database = {
           paid_count: number
         }[]
       }
+      move_stage: { Args: { p_dir: number; p_id: string }; Returns: undefined }
+      reorder_leads: { Args: { p_updates: Json }; Returns: undefined }
       set_location_client: {
         Args: { client_id: string; location_id: string }
         Returns: Json
@@ -1359,7 +1955,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "manager" | "viewer"
+      app_role: "admin" | "manager" | "viewer" | "superadmin" | "sales"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1487,7 +2083,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "manager", "viewer"],
+      app_role: ["admin", "manager", "viewer", "superadmin", "sales"],
     },
   },
 } as const
