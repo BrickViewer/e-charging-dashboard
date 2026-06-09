@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   Building2, CalendarClock, Euro, ExternalLink, FileText, MapPin, MoreHorizontal,
@@ -105,19 +106,39 @@ export function LeadDetailSheet({
   const [newNote, setNewNote] = useState("");
   const [apptEditing, setApptEditing] = useState(false);
 
-  const buildForm = (l: LeadWithTasks): Record<string, string | boolean | null> => ({
-    kvk: l.kvk ?? "", website: l.website ?? "", sector: l.sector ?? "",
-    address_street: l.address_street ?? "", postal_code: l.postal_code ?? "", city: l.city ?? "",
-    location_type: l.location_type ?? "",
-    estimated_charge_points: l.estimated_charge_points?.toString() ?? "",
-    estimated_kwh_per_month: l.estimated_kwh_per_month?.toString() ?? "",
-    charger_type: l.charger_type ?? "", parking_spaces: l.parking_spaces?.toString() ?? "",
-    owns_property: l.owns_property ?? false, has_solar: l.has_solar ?? false,
-    estimated_value: l.estimated_value?.toString() ?? "", expected_close_date: l.expected_close_date ?? "",
-    priority: l.priority ?? "medium", notes: l.notes ?? "",
-    appointment_at: l.appointment_at ? toLocalInput(l.appointment_at) : "",
-    appointment_notes: l.appointment_notes ?? "",
-  });
+  const buildForm = (l: LeadWithTasks): Record<string, string | boolean | null> => {
+    const cfg = (l.configuration as unknown as LeadConfig | null) ?? null;
+    const ci = cfg?.pricing_input ?? {};
+    return {
+      kvk: l.kvk ?? "", website: l.website ?? "", sector: l.sector ?? "",
+      address_street: l.address_street ?? "", postal_code: l.postal_code ?? "", city: l.city ?? "",
+      location_type: l.location_type ?? "",
+      estimated_charge_points: l.estimated_charge_points?.toString() ?? "",
+      estimated_kwh_per_month: l.estimated_kwh_per_month?.toString() ?? "",
+      charger_type: l.charger_type ?? "", parking_spaces: l.parking_spaces?.toString() ?? "",
+      owns_property: l.owns_property ?? false, has_solar: l.has_solar ?? false,
+      estimated_value: l.estimated_value?.toString() ?? "", expected_close_date: l.expected_close_date ?? "",
+      priority: l.priority ?? "medium", notes: l.notes ?? "",
+      appointment_at: l.appointment_at ? toLocalInput(l.appointment_at) : "",
+      appointment_notes: l.appointment_notes ?? "",
+      // Configuratie-instellingen (ook bewerkbaar zonder dat er al een configuratie is).
+      cfg_charge_points: ci.hardware?.chargePoints?.toString() ?? "",
+      cfg_sockets: ci.hardware?.socketsPerChargePoint?.toString() ?? "",
+      cfg_location_type: ci.customer?.locationType ?? l.location_type ?? "",
+      cfg_kwh: ci.usage?.kwhPerChargePointMonth?.toString() ?? "",
+      cfg_sessions: ci.usage?.sessionsPerChargePointMonth?.toString() ?? "",
+      cfg_power: ci.usage?.effectiveChargingPowerKw?.toString() ?? "",
+      cfg_charge_tariff: ci.tariffs?.chargeTariffPerKwh?.toString() ?? "",
+      cfg_start_enabled: ci.tariffs?.startFeeEnabled ?? false,
+      cfg_start_fee: ci.tariffs?.startFeePerSession?.toString() ?? "",
+      cfg_idle_enabled: ci.tariffs?.idleFeeEnabled ?? false,
+      cfg_idle_fee: ci.tariffs?.idleFeePerMinute?.toString() ?? "",
+      cfg_idle_grace: ci.tariffs?.idleGraceMinutes?.toString() ?? "",
+      cfg_duration: ci.contract?.durationMonths?.toString() ?? "",
+      cfg_notice: ci.contract?.noticePeriodMonths?.toString() ?? "",
+      cfg_ere: cfg?.ere ?? false,
+    };
+  };
 
   useEffect(() => {
     if (lead) { setForm(buildForm(lead)); setDirty(false); setIsEditing(false); }
@@ -146,6 +167,26 @@ export function LeadDetailSheet({
   const prio = PRIORITY[lead.priority] ?? PRIORITY.medium;
 
   const saveOverview = async () => {
+    const intOf = (k: string) => { const n = num(text(k)); return n == null ? null : Math.round(n); };
+    const numOf = (k: string) => num(text(k));
+    const existingCfg = (lead.configuration as unknown as LeadConfig | null) ?? null;
+    const cfgKeys = ["cfg_charge_points", "cfg_sockets", "cfg_kwh", "cfg_sessions", "cfg_power", "cfg_charge_tariff", "cfg_start_fee", "cfg_idle_fee", "cfg_idle_grace", "cfg_duration", "cfg_notice"];
+    const hasCfg = !!existingCfg || !!form.cfg_ere || !!form.cfg_start_enabled || !!form.cfg_idle_enabled || !!text("cfg_location_type") || cfgKeys.some((k) => text(k).trim() !== "");
+    // Sla de install-instellingen op in lead.configuration (pricing_input); bestaande
+    // configurator-data (pricing_result e.d.) blijft behouden. Zo kun je deze ook
+    // zonder een doorlopen configurator vastleggen.
+    const configuration = hasCfg ? {
+      ...(existingCfg ?? {}),
+      ere: !!form.cfg_ere,
+      pricing_input: {
+        ...(existingCfg?.pricing_input ?? {}),
+        hardware: { ...(existingCfg?.pricing_input?.hardware ?? {}), chargePoints: intOf("cfg_charge_points"), socketsPerChargePoint: intOf("cfg_sockets") },
+        usage: { ...(existingCfg?.pricing_input?.usage ?? {}), kwhPerChargePointMonth: numOf("cfg_kwh"), sessionsPerChargePointMonth: intOf("cfg_sessions"), effectiveChargingPowerKw: numOf("cfg_power") },
+        tariffs: { ...(existingCfg?.pricing_input?.tariffs ?? {}), chargeTariffPerKwh: numOf("cfg_charge_tariff"), startFeeEnabled: !!form.cfg_start_enabled, startFeePerSession: numOf("cfg_start_fee"), idleFeeEnabled: !!form.cfg_idle_enabled, idleFeePerMinute: numOf("cfg_idle_fee"), idleGraceMinutes: intOf("cfg_idle_grace") },
+        contract: { ...(existingCfg?.pricing_input?.contract ?? {}), durationMonths: intOf("cfg_duration"), noticePeriodMonths: intOf("cfg_notice") },
+        customer: { ...(existingCfg?.pricing_input?.customer ?? {}), locationType: text("cfg_location_type") || null },
+      },
+    } : null;
     try {
       await updateLead.mutateAsync({
         id: lead.id,
@@ -162,6 +203,8 @@ export function LeadDetailSheet({
           priority: text("priority") || "medium", notes: text("notes").trim() || null,
           appointment_at: text("appointment_at") ? new Date(text("appointment_at")).toISOString() : null,
           appointment_notes: text("appointment_notes").trim() || null,
+          configuration: configuration as unknown as never,
+          configuration_updated_at: configuration ? new Date().toISOString() : lead.configuration_updated_at,
         },
       });
       setDirty(false); setIsEditing(false);
@@ -358,7 +401,7 @@ export function LeadDetailSheet({
               {/* OVERZICHT */}
               <TabsContent value="overview" className="mt-4 space-y-4">
                 {isEditing ? (
-                  <EditForm lead={lead} form={form} set={set} text={text} updateLead={updateLead} />
+                  <EditForm lead={lead} form={form} set={set} text={text} updateLead={updateLead} onLaunchConfigurator={launchConfigurator} />
                 ) : (
                   <>
                     <InfoCard title="Bedrijf & contact" icon={Building2}>
@@ -614,8 +657,7 @@ function ConfigCard({ config, updatedAt, onEdit }: { config: LeadConfig | null; 
   const locLabel = pi.customer?.locationType ? (LOCATION_TYPES[pi.customer.locationType] ?? pi.customer.locationType) : null;
   return (
     <InfoCard title="Configuratie" icon={WandSparkles}
-      action={<button className="text-xs font-medium text-primary hover:underline" onClick={onEdit}>Bewerken</button>}>
-      <p className="mb-2 text-xs text-muted-foreground">De instellingen waarmee de laadpunten worden geïnstalleerd. Opbrengst/terugverdientijd zie je in de configurator.</p>
+      action={<button className="text-xs font-medium text-primary hover:underline" onClick={onEdit}>Open in configurator</button>}>
       <div className="space-y-2">
         <ConfigGroup label="Hardware">
           <DetailRow label="Laadpunten" value={hw.chargePoints != null ? String(hw.chargePoints) : null} />
@@ -690,91 +732,107 @@ function AppointmentEditor({ leadId, initialAt, initialNotes, updateLead, onClos
   );
 }
 
-// ---- Bewerk-formulier (alleen in bewerkmodus) ------------------------------
-function EditForm({ lead, form, set, text, updateLead }: {
+// ---- Bewerk-formulier in kaart-stijl (zelfde InfoCards als de leesweergave) ----
+function ERow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
+      <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
+      <div className="w-[58%] shrink-0">{children}</div>
+    </div>
+  );
+}
+function EInput({ value, onChange, mode }: { value: string; onChange: (v: string) => void; mode?: "numeric" | "decimal" }) {
+  return <Input className="h-8 text-right" inputMode={mode} value={value} onChange={(e) => onChange(e.target.value)} />;
+}
+function ESelect({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: [string, string][]; placeholder?: string }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-8"><SelectValue placeholder={placeholder} /></SelectTrigger>
+      <SelectContent>{options.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+    </Select>
+  );
+}
+function EToggle({ checked, onChange }: { checked: boolean; onChange: (c: boolean) => void }) {
+  return <div className="flex justify-end"><Switch checked={checked} onCheckedChange={onChange} /></div>;
+}
+
+function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
   lead: LeadWithTasks;
   form: Record<string, string | boolean | null>;
   set: (k: string) => (v: string | boolean) => void;
   text: (k: string) => string;
   updateLead: ReturnType<typeof useUpdateLead>;
+  onLaunchConfigurator: () => void;
 }) {
+  const locOptions = Object.entries(LOCATION_TYPES) as [string, string][];
   return (
     <>
-      <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Bedrijf</p>
-        <CompanyPicker value={lead.company_id} valueLabel={lead.company_name} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { company_id: id } })} />
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Field label="KvK"><Input value={text("kvk")} onChange={(e) => set("kvk")(e.target.value)} /></Field>
-          <Field label="Website"><Input value={text("website")} onChange={(e) => set("website")(e.target.value)} /></Field>
-          <Field label="Sector"><Input value={text("sector")} onChange={(e) => set("sector")(e.target.value)} /></Field>
-        </div>
-      </div>
-      <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Contactpersoon</p>
-        <PersonPicker value={lead.person_id} valueLabel={lead.contact_name} companyId={lead.company_id} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { person_id: id } })} />
-        {(lead.contact_email || lead.contact_phone) && <p className="mt-1.5 text-xs text-muted-foreground">{[lead.contact_email, lead.contact_phone].filter(Boolean).join(" · ")}</p>}
-      </div>
-      <Section title="Locatie">
-        <Field label="Straat"><Input value={text("address_street")} onChange={(e) => set("address_street")(e.target.value)} /></Field>
-        <Field label="Postcode"><Input value={text("postal_code")} onChange={(e) => set("postal_code")(e.target.value)} /></Field>
-        <Field label="Plaats"><Input value={text("city")} onChange={(e) => set("city")(e.target.value)} /></Field>
-        <Field label="Type locatie">
-          <Select value={text("location_type")} onValueChange={set("location_type")}>
-            <SelectTrigger><SelectValue placeholder="Kies…" /></SelectTrigger>
-            <SelectContent>{Object.entries(LOCATION_TYPES).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
-          </Select>
-        </Field>
-      </Section>
-      <Section title="Behoefte">
-        <Field label="Laadpunten"><Input inputMode="numeric" value={text("estimated_charge_points")} onChange={(e) => set("estimated_charge_points")(e.target.value)} /></Field>
-        <Field label="kWh / maand"><Input inputMode="decimal" value={text("estimated_kwh_per_month")} onChange={(e) => set("estimated_kwh_per_month")(e.target.value)} /></Field>
-        <Field label="Type lader (AC/DC)"><Input value={text("charger_type")} onChange={(e) => set("charger_type")(e.target.value)} /></Field>
-        <Field label="Parkeerplaatsen"><Input inputMode="numeric" value={text("parking_spaces")} onChange={(e) => set("parking_spaces")(e.target.value)} /></Field>
-        <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!form.owns_property} onCheckedChange={(c) => set("owns_property")(!!c)} /> Eigenaar van het pand</label>
-        <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!form.has_solar} onCheckedChange={(c) => set("has_solar")(!!c)} /> Zonnepanelen aanwezig</label>
-      </Section>
-      <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Afspraak (bezoek)</p>
-        <div className="space-y-2">
-          <Field label="Datum & tijd"><Input type="datetime-local" value={text("appointment_at")} onChange={(e) => set("appointment_at")(e.target.value)} /></Field>
-          <Field label="Opname / situatie-notities"><Textarea rows={3} value={text("appointment_notes")} onChange={(e) => set("appointment_notes")(e.target.value)} placeholder="Meterkast, aansluiting, bijzonderheden…" /></Field>
-        </div>
-      </div>
-      <Section title="Sales">
-        <Field label="Geschatte waarde (€)"><Input inputMode="decimal" value={text("estimated_value")} onChange={(e) => set("estimated_value")(e.target.value)} /></Field>
-        <Field label="Verwachte sluitdatum"><Input type="date" value={text("expected_close_date")} onChange={(e) => set("expected_close_date")(e.target.value)} /></Field>
-        <Field label="Prioriteit">
-          <Select value={text("priority")} onValueChange={set("priority")}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="low">Laag</SelectItem>
-              <SelectItem value="medium">Gemiddeld</SelectItem>
-              <SelectItem value="high">Hoog</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-      </Section>
-      <div className="space-y-1.5">
-        <Label className="text-xs">Notitie</Label>
-        <Textarea rows={3} value={text("notes")} onChange={(e) => set("notes")(e.target.value)} />
-      </div>
-    </>
-  );
-}
+      <InfoCard title="Bedrijf & contact" icon={Building2}>
+        <ERow label="Bedrijf"><CompanyPicker value={lead.company_id} valueLabel={lead.company_name} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { company_id: id } })} /></ERow>
+        <ERow label="Contactpersoon"><PersonPicker value={lead.person_id} valueLabel={lead.contact_name} companyId={lead.company_id} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { person_id: id } })} /></ERow>
+        <ERow label="KvK"><EInput value={text("kvk")} onChange={set("kvk")} /></ERow>
+        <ERow label="Website"><EInput value={text("website")} onChange={set("website")} /></ERow>
+        <ERow label="Sector"><EInput value={text("sector")} onChange={set("sector")} /></ERow>
+      </InfoCard>
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{title}</p>
-      <div className="grid gap-3 sm:grid-cols-2">{children}</div>
-    </div>
-  );
-}
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
-    </div>
+      <InfoCard title="Locatie & behoefte" icon={MapPin}>
+        <ERow label="Straat"><EInput value={text("address_street")} onChange={set("address_street")} /></ERow>
+        <ERow label="Postcode"><EInput value={text("postal_code")} onChange={set("postal_code")} /></ERow>
+        <ERow label="Plaats"><EInput value={text("city")} onChange={set("city")} /></ERow>
+        <ERow label="Type locatie"><ESelect value={text("location_type")} onChange={set("location_type")} options={locOptions} placeholder="Kies…" /></ERow>
+        <ERow label="Laadpunten"><EInput value={text("estimated_charge_points")} onChange={set("estimated_charge_points")} mode="numeric" /></ERow>
+        <ERow label="kWh / maand"><EInput value={text("estimated_kwh_per_month")} onChange={set("estimated_kwh_per_month")} mode="decimal" /></ERow>
+        <ERow label="Type lader"><EInput value={text("charger_type")} onChange={set("charger_type")} /></ERow>
+        <ERow label="Parkeerplaatsen"><EInput value={text("parking_spaces")} onChange={set("parking_spaces")} mode="numeric" /></ERow>
+        <ERow label="Eigenaar pand"><EToggle checked={!!form.owns_property} onChange={(c) => set("owns_property")(c)} /></ERow>
+        <ERow label="Zonnepanelen"><EToggle checked={!!form.has_solar} onChange={(c) => set("has_solar")(c)} /></ERow>
+      </InfoCard>
+
+      <InfoCard title="Configuratie" icon={WandSparkles} action={<button className="text-xs font-medium text-primary hover:underline" onClick={onLaunchConfigurator}>Open in configurator</button>}>
+        <div className="space-y-2">
+          <ConfigGroup label="Hardware">
+            <ERow label="Laadpunten"><EInput value={text("cfg_charge_points")} onChange={set("cfg_charge_points")} mode="numeric" /></ERow>
+            <ERow label="Sockets per laadpunt"><EInput value={text("cfg_sockets")} onChange={set("cfg_sockets")} mode="numeric" /></ERow>
+          </ConfigGroup>
+          <ConfigGroup label="Locatie & gebruik">
+            <ERow label="Type locatie"><ESelect value={text("cfg_location_type")} onChange={set("cfg_location_type")} options={locOptions} placeholder="Kies…" /></ERow>
+            <ERow label="kWh / laadpunt / maand"><EInput value={text("cfg_kwh")} onChange={set("cfg_kwh")} mode="decimal" /></ERow>
+            <ERow label="Sessies / laadpunt / maand"><EInput value={text("cfg_sessions")} onChange={set("cfg_sessions")} mode="numeric" /></ERow>
+            <ERow label="Laadvermogen (kW)"><EInput value={text("cfg_power")} onChange={set("cfg_power")} mode="decimal" /></ERow>
+          </ConfigGroup>
+          <ConfigGroup label="Tarieven">
+            <ERow label="Laadtarief / kWh"><EInput value={text("cfg_charge_tariff")} onChange={set("cfg_charge_tariff")} mode="decimal" /></ERow>
+            <ERow label="Starttarief actief"><EToggle checked={!!form.cfg_start_enabled} onChange={(c) => set("cfg_start_enabled")(c)} /></ERow>
+            {form.cfg_start_enabled ? <ERow label="Starttarief / sessie"><EInput value={text("cfg_start_fee")} onChange={set("cfg_start_fee")} mode="decimal" /></ERow> : null}
+            <ERow label="Blokkeertarief actief"><EToggle checked={!!form.cfg_idle_enabled} onChange={(c) => set("cfg_idle_enabled")(c)} /></ERow>
+            {form.cfg_idle_enabled ? <ERow label="Blokkeertarief / min"><EInput value={text("cfg_idle_fee")} onChange={set("cfg_idle_fee")} mode="decimal" /></ERow> : null}
+            {form.cfg_idle_enabled ? <ERow label="Gratis minuten"><EInput value={text("cfg_idle_grace")} onChange={set("cfg_idle_grace")} mode="numeric" /></ERow> : null}
+          </ConfigGroup>
+          <ConfigGroup label="Contract">
+            <ERow label="Looptijd (maanden)"><EInput value={text("cfg_duration")} onChange={set("cfg_duration")} mode="numeric" /></ERow>
+            <ERow label="Opzegtermijn (maanden)"><EInput value={text("cfg_notice")} onChange={set("cfg_notice")} mode="numeric" /></ERow>
+            <ERow label="ERE-certificaten"><EToggle checked={!!form.cfg_ere} onChange={(c) => set("cfg_ere")(c)} /></ERow>
+          </ConfigGroup>
+        </div>
+      </InfoCard>
+
+      <InfoCard title="Afspraak (bezoek)" icon={CalendarClock}>
+        <ERow label="Datum & tijd"><Input type="datetime-local" className="h-8" value={text("appointment_at")} onChange={(e) => set("appointment_at")(e.target.value)} /></ERow>
+        <div className="pt-2">
+          <Label className="mb-1 block text-xs text-muted-foreground">Opname / situatie-notities</Label>
+          <Textarea rows={2} value={text("appointment_notes")} onChange={(e) => set("appointment_notes")(e.target.value)} placeholder="Meterkast, aansluiting, bijzonderheden…" />
+        </div>
+      </InfoCard>
+
+      <InfoCard title="Sales" icon={Euro}>
+        <ERow label="Geschatte waarde (€)"><EInput value={text("estimated_value")} onChange={set("estimated_value")} mode="decimal" /></ERow>
+        <ERow label="Verwachte sluitdatum"><Input type="date" className="h-8" value={text("expected_close_date")} onChange={(e) => set("expected_close_date")(e.target.value)} /></ERow>
+        <ERow label="Prioriteit"><ESelect value={text("priority")} onChange={set("priority")} options={[["low", "Laag"], ["medium", "Gemiddeld"], ["high", "Hoog"]]} /></ERow>
+      </InfoCard>
+
+      <InfoCard title="Notitie" icon={FileText}>
+        <Textarea rows={3} value={text("notes")} onChange={(e) => set("notes")(e.target.value)} />
+      </InfoCard>
+    </>
   );
 }
