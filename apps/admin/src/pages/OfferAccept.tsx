@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import logoBright from "@/assets/logo-bright.svg";
+import logoFull from "@/assets/logo-full-color.svg";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData } from "@/services/offerPdf";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -190,7 +190,7 @@ export default function OfferAccept() {
   return (
     <div className="min-h-screen bg-muted/30 px-4 py-10">
       <div className="mx-auto max-w-3xl">
-        <img src={logoBright} alt="E-Charging" className="mx-auto mb-8 h-8" />
+        <img src={logoFull} alt="E-Charging" className="mx-auto mb-8 h-9" />
 
         {loading ? (
           <Skeleton className="h-96 w-full rounded-xl" />

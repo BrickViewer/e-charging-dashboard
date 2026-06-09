@@ -104,10 +104,10 @@ export function useCreateQuoteFromLead() {
 export function useSendQuote() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ quoteId, email }: { quoteId: string; email?: string }) => {
+    mutationFn: async ({ quoteId, email, pdfBase64 }: { quoteId: string; email?: string; pdfBase64?: string }) => {
       const { data, error } = await supabase.functions.invoke<{ status: string; message?: string; acceptUrl?: string }>(
         "quote-send",
-        { body: { quote_id: quoteId, email } },
+        { body: { quote_id: quoteId, email, pdf_base64: pdfBase64 } },
       );
       if (error) throw error;
       if (data?.status && data.status !== "sent") throw new Error(data.message || "Versturen mislukt");

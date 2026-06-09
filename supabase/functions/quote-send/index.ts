@@ -1,9 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
+import { renderOfferEmail } from "../_shared/offer-email.ts";
 
 // Verstuurt een offerte via Resend met een beveiligde akkoord-link (token).
-// Body: { quote_id, email? }
+// Body: { quote_id, email?, pdf_base64? } — de offerte-PDF gaat altijd als bijlage mee.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +19,6 @@ function json(body: unknown, status = 200) {
 function bytesToHex(b: Uint8Array) { return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(""); }
 function generateToken() { const b = new Uint8Array(32); crypto.getRandomValues(b); return bytesToHex(b); }
 async function sha256Hex(v: string) { return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))); }
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -40,6 +40,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const quoteId = typeof body.quote_id === "string" ? body.quote_id : "";
+    const pdfBase64 = typeof body.pdf_base64 === "string" ? body.pdf_base64.replace(/^data:[^,]+,/, "") : "";
     if (!quoteId) return json({ status: "error", message: "quote_id ontbreekt" }, 400);
 
     const { data: quote, error: qErr } = await serviceClient.from("quotes").select("*").eq("id", quoteId).maybeSingle();
@@ -68,36 +69,21 @@ Deno.serve(async (req) => {
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
 
     if (RESEND_API_KEY) {
-      // Branded, één prijs (totale investering). Géén uitsplitsing, géén maandbedrag.
-      const html = `<!doctype html><html><body style="margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#0b1220;padding:32px 16px">
-<div style="max-width:560px;margin:auto;background:#0f1629;border:1px solid rgba(255,255,255,.08);border-radius:18px;overflow:hidden">
-  <div style="padding:30px 34px 0"><div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-.01em">e<span style="color:#05A500">-</span>charging</div></div>
-  <div style="padding:22px 34px 34px">
-    <p style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#05A500;font-weight:700;margin:0 0 6px">Offerte ${quote.quote_number}</p>
-    <h1 style="font-size:24px;line-height:1.25;color:#fff;margin:0 0 6px">Wij plaatsen uw laadpalen.<br><span style="color:#9aa4b2;font-weight:500">U verdient eraan.</span></h1>
-    <p style="color:#9aa4b2;font-size:14px;margin:6px 0 22px">Voor ${quote.prospect_company ?? "uw organisatie"}</p>
-    <div style="background:rgba(5,165,0,.10);border:1px solid rgba(5,165,0,.30);border-radius:14px;padding:18px 20px;margin:0 0 24px">
-      <p style="margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7dd87a;font-weight:700">Eenmalige investering</p>
-      <p style="margin:4px 0 0;font-size:30px;font-weight:800;color:#fff">${euro(total)} <span style="font-size:13px;font-weight:500;color:#9aa4b2">excl. BTW</span></p>
-      <p style="margin:6px 0 0;font-size:12px;color:#9aa4b2">Voor de complete oplevering — hardware, montage, aansluiting, NEN-keuring en activatie.</p>
-    </div>
-    <a href="${acceptUrl}" style="display:block;text-align:center;background:#05A500;color:#fff;text-decoration:none;padding:15px 22px;border-radius:12px;font-weight:700;font-size:15px">Offerte bekijken &amp; tekenen</a>
-    <p style="color:#6b7280;font-size:12px;margin:18px 0 0;text-align:center">Open de offerte om alle voorwaarden te lezen en digitaal te ondertekenen.<br>Deze link is 30 dagen geldig${quote.valid_until ? ` (t/m ${quote.valid_until})` : ""}.</p>
-    <p style="color:#6b7280;font-size:11px;margin:14px 0 0;text-align:center">De Algemene Voorwaarden en Verwerkersovereenkomst E-Charging horen bij deze offerte.</p>
-  </div>
-  <div style="padding:16px 34px;border-top:1px solid rgba(255,255,255,.06);color:#6b7280;font-size:11px;text-align:center">E-Charging · Dwarsweg 8, 5301 KT Zaltbommel · info@e-charging.nl</div>
-</div></body></html>`;
-      const text = `Offerte ${quote.quote_number} — voor ${quote.prospect_company ?? "uw organisatie"}\n\nEenmalige investering: ${euro(total)} excl. BTW (complete oplevering).\n\nBekijk de offerte en teken digitaal: ${acceptUrl}\n(30 dagen geldig${quote.valid_until ? `, t/m ${quote.valid_until}` : ""})\n\nDe Algemene Voorwaarden en Verwerkersovereenkomst E-Charging horen bij deze offerte.`;
+      const { html, text } = renderOfferEmail({
+        supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
+        contact: quote.prospect_contact, total, acceptUrl, validUntil: quote.valid_until,
+      });
       const res = await fetch(RESEND_API, {
         method: "POST",
         headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: `${FROM_NAME} <${FROM_EMAIL}>`,
           to: [recipient],
-          subject: `Offerte ${quote.quote_number} — e-Charging laadpalen`,
+          subject: `Uw offerte ${quote.quote_number} — E-Charging`,
           html, text,
           reply_to: "info@e-charging.nl",
           tags: [{ name: "type", value: "quote_offer" }],
+          ...(pdfBase64 ? { attachments: [{ filename: `offerte-${quote.quote_number}.pdf`, content: pdfBase64 }] } : {}),
         }),
       });
       if (!res.ok) {

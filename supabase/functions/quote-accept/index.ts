@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { renderSignedConfirmation, renderInternalSignedNotice } from "../_shared/offer-email.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
 // offerte-samenvatting (genoeg om de PDF te renderen). POST accordeert: slaat de
@@ -43,8 +44,6 @@ async function sendEmail(opts: { to: string; subject: string; html: string; text
     });
   } catch (_e) { /* mail mag de acceptatie niet blokkeren */ }
 }
-
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -224,30 +223,13 @@ Deno.serve(async (req) => {
     const attach = signedPdfB64 ? [{ filename: `offerte-${quote.quote_number}.pdf`, content: signedPdfB64.replace(/^data:[^,]+,/, "") }] : undefined;
     const recipient = (quote.prospect_email ?? lead?.contact_email) as string | null;
     if (recipient) {
-      await sendEmail({
-        to: recipient,
-        subject: `Bevestiging — offerte ${quote.quote_number} getekend`,
-        html: `<!doctype html><html><body style="margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#0b1220;padding:32px 16px">
-<div style="max-width:560px;margin:auto;background:#0f1629;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:30px 34px">
-  <div style="font-size:20px;font-weight:800;color:#fff">e<span style="color:#05A500">-</span>charging</div>
-  <h1 style="font-size:22px;color:#fff;margin:18px 0 6px">Bedankt — uw offerte is getekend</h1>
-  <p style="color:#9aa4b2;font-size:14px;line-height:1.6;margin:0 0 14px">Beste ${signerName},<br><br>Hartelijk dank voor uw akkoord op offerte <strong style="color:#fff">${quote.quote_number}</strong> (eenmalige investering ${euro(total)} excl. BTW). De getekende offerte vindt u als bijlage bij deze e-mail.</p>
-  <p style="color:#9aa4b2;font-size:14px;line-height:1.6;margin:0">Wij nemen contact met u op voor de planning van de installatie. Heeft u vragen? Mail ons gerust via info@e-charging.nl.</p>
-  <div style="margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06);color:#6b7280;font-size:11px">E-Charging · Dwarsweg 8, 5301 KT Zaltbommel · info@e-charging.nl</div>
-</div></body></html>`,
-        text: `Beste ${signerName},\n\nBedankt voor uw akkoord op offerte ${quote.quote_number} (eenmalige investering ${euro(total)} excl. BTW). De getekende offerte zit als bijlage bij deze e-mail.\n\nWij nemen contact op voor de planning van de installatie.\n\nE-Charging · info@e-charging.nl`,
-        attachments: attach,
-      });
+      const m = renderSignedConfirmation({ supabaseUrl, quoteNumber: quote.quote_number, signerName, total });
+      await sendEmail({ to: recipient, subject: `Bevestiging — offerte ${quote.quote_number} getekend`, html: m.html, text: m.text, attachments: attach });
     }
-    await sendEmail({
-      to: "info@e-charging.nl",
-      subject: `✅ Offerte ${quote.quote_number} getekend — ${quote.prospect_company ?? ""}`,
-      html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">
-  <p><strong>${quote.prospect_company ?? "Onbekend bedrijf"}</strong> heeft offerte <strong>${quote.quote_number}</strong> digitaal getekend.</p>
-  <ul><li>Getekend door: ${signerName}</li><li>Investering: ${euro(total)} excl. BTW</li><li>Een klantaccount en installatie-order zijn automatisch aangemaakt.</li></ul></div>`,
-      text: `${quote.prospect_company ?? "Onbekend bedrijf"} heeft offerte ${quote.quote_number} getekend door ${signerName}. Investering ${euro(total)} excl. BTW. Klantaccount + installatie-order aangemaakt.`,
-      attachments: attach,
-    });
+    {
+      const m = renderInternalSignedNotice({ supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company, signerName, total });
+      await sendEmail({ to: "info@e-charging.nl", subject: `Offerte ${quote.quote_number} getekend — ${quote.prospect_company ?? ""}`, html: m.html, text: m.text, attachments: attach });
+    }
 
     return json({ status: "accepted", quote: { ...summary, status: "getekend", acceptanceStatus: "accepted" } });
   } catch (err) {

@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Eye, Plus, Send, Trash2 } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
-import { offerPdfBlob, type OfferPdfData } from "@/services/offerPdf";
+import { offerPdfBlob, offerPdfBase64, type OfferPdfData } from "@/services/offerPdf";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
@@ -106,7 +106,8 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
     if (isConcept) await save();
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
     try {
-      await send.mutateAsync({ quoteId: quote.id, email: email.trim() });
+      const pdfBase64 = await offerPdfBase64(pdfData());
+      await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64 });
       toast.success(`Offerte verstuurd naar ${email.trim()}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
   };
