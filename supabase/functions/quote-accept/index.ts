@@ -221,14 +221,15 @@ Deno.serve(async (req) => {
 
     // Mails: klant-bevestiging (met getekende PDF) + interne melding.
     const attach = signedPdfB64 ? [{ filename: `offerte-${quote.quote_number}.pdf`, content: signedPdfB64.replace(/^data:[^,]+,/, "") }] : undefined;
+    const hasAttachment = !!attach;
     const recipient = (quote.prospect_email ?? lead?.contact_email) as string | null;
     if (recipient) {
-      const m = renderSignedConfirmation({ supabaseUrl, quoteNumber: quote.quote_number, signerName, total });
-      await sendEmail({ to: recipient, subject: `Bevestiging — offerte ${quote.quote_number} getekend`, html: m.html, text: m.text, attachments: attach });
+      const m = renderSignedConfirmation({ supabaseUrl, quoteNumber: quote.quote_number, signerName, total, hasAttachment });
+      await sendEmail({ to: recipient, subject: `E-Charging · Offerte ${quote.quote_number} ondertekend`, html: m.html, text: m.text, attachments: attach });
     }
     {
       const m = renderInternalSignedNotice({ supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company, signerName, total });
-      await sendEmail({ to: "info@e-charging.nl", subject: `Offerte ${quote.quote_number} getekend — ${quote.prospect_company ?? ""}`, html: m.html, text: m.text, attachments: attach });
+      await sendEmail({ to: "info@e-charging.nl", subject: `Offerte ${quote.quote_number} ondertekend${quote.prospect_company ? ` — ${quote.prospect_company}` : ""}`, html: m.html, text: m.text, attachments: attach });
     }
 
     return json({ status: "accepted", quote: { ...summary, status: "getekend", acceptanceStatus: "accepted" } });

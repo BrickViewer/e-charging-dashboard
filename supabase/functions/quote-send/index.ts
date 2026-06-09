@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
   const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
-  const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://e-charging.nl").replace(/\/+$/, "");
+  const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://dashboard.e-charging.nl").replace(/\/+$/, "");
 
   try {
     const auth = await requireAdminOrInternal(req, serviceClient, corsHeaders, { allowInternal: false, allowSales: true });
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
     const token = generateToken();
     const tokenHash = await sha256Hex(token);
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
     const { error: aErr } = await serviceClient.from("quote_acceptances").insert({
       quote_id: quoteId,
       organization_id: quote.organization_id,
@@ -72,6 +72,7 @@ Deno.serve(async (req) => {
       const { html, text } = renderOfferEmail({
         supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
         contact: quote.prospect_contact, total, acceptUrl, validUntil: quote.valid_until,
+        hasAttachment: !!pdfBase64,
       });
       const res = await fetch(RESEND_API, {
         method: "POST",
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           from: `${FROM_NAME} <${FROM_EMAIL}>`,
           to: [recipient],
-          subject: `Uw offerte ${quote.quote_number} — E-Charging`,
+          subject: `E-Charging · Uw offerte ${quote.quote_number}`,
           html, text,
           reply_to: "info@e-charging.nl",
           tags: [{ name: "type", value: "quote_offer" }],
@@ -92,7 +93,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    await serviceClient.from("quotes").update({ status: "verstuurd", sent_at: new Date().toISOString() }).eq("id", quoteId);
+    // Bewaar het werkelijke verzendadres als bron-van-waarheid (bevestiging gaat hierheen).
+    await serviceClient.from("quotes").update({ status: "verstuurd", sent_at: new Date().toISOString(), prospect_email: recipient }).eq("id", quoteId);
 
     // Lead naar fase "Offerte verstuurd".
     if (quote.lead_id) {

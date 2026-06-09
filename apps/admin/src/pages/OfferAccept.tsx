@@ -11,6 +11,7 @@ import logoFull from "@/assets/logo-full-color.svg";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData } from "@/services/offerPdf";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
+const fmtNlDate = (iso?: string | null) => { if (!iso) return "—"; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }); };
 
 type QuoteSummary = {
   quoteNumber: string;
@@ -253,7 +254,7 @@ export default function OfferAccept() {
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Akkoord &amp; tekenen
               </Button>
-              <p className="text-center text-[11px] text-muted-foreground">Geldig tot {quote.validUntil || "—"}.</p>
+              <p className="text-center text-[11px] text-muted-foreground">Deze offerte is geldig t/m {fmtNlDate(quote.validUntil)}.</p>
             </CardContent></Card>
           </div>
         ) : null}

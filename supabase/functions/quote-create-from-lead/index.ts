@@ -82,7 +82,8 @@ Deno.serve(async (req) => {
       lineItems = [{ description: `Levering & installatie laadpunten${estPoints ? ` — ${Math.round(estPoints)} stuks` : ""}`, qty, unit_price: 0, total: 0 }];
     }
 
-    const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // 2 maanden geldig — consistent met de offerte-PDF en de ondertekenlink.
+    const validUntil = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     const { data: quote, error } = await serviceClient
       .from("quotes")
