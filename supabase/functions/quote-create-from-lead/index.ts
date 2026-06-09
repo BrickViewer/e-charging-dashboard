@@ -113,6 +113,11 @@ Deno.serve(async (req) => {
       .single();
     if (error) throw error;
 
+    // De waarde van een lead wordt bepaald door de offerte (verkoopprijs van de palen).
+    await serviceClient.from("leads")
+      .update({ estimated_value: Math.round(hardwareTotal + installationTotal) })
+      .eq("id", lead.id);
+
     return json({ quoteId: quote.id, quoteNumber: quote.quote_number });
   } catch (err) {
     return json({ status: "error", message: err instanceof Error ? err.message : "Offerte aanmaken mislukt" }, 500);

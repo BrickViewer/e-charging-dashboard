@@ -92,7 +92,8 @@ Deno.serve(async (req) => {
         location_type: input.customer.locationType || null,
         estimated_charge_points: input.hardware.chargePoints,
         estimated_kwh_per_month: input.usage.kwhPerChargePointMonth,
-        estimated_value: Math.round(pricing.totals.customerPerYear),
+        // Géén estimated_value uit de configuratie: de waarde van een lead wordt
+        // pas bepaald bij het maken van een offerte (verkoopprijs van de palen).
         configuration,
         configuration_updated_at: savedAt,
       })

@@ -611,25 +611,15 @@ function ConfigCard({ config, updatedAt, onEdit }: { config: LeadConfig | null; 
   }
   const pi = config.pricing_input;
   const hw = pi.hardware ?? {}, usage = pi.usage ?? {}, tar = pi.tariffs ?? {}, con = pi.contract ?? {};
-  const totals = config.pricing_result?.totals ?? {};
   const locLabel = pi.customer?.locationType ? (LOCATION_TYPES[pi.customer.locationType] ?? pi.customer.locationType) : null;
   return (
     <InfoCard title="Configuratie" icon={WandSparkles}
       action={<button className="text-xs font-medium text-primary hover:underline" onClick={onEdit}>Bewerken</button>}>
-      {totals.customerPerMonth != null && (
-        <div className="mb-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-          <p className="cockpit-section-label">Maandbedrag klant</p>
-          <p className="mt-0.5 text-lg font-extrabold tabular-nums text-foreground">
-            {euro(totals.customerPerMonth)}<span className="text-sm font-medium text-muted-foreground"> / maand</span>
-          </p>
-          {totals.customerPerYear != null && <p className="text-xs tabular-nums text-muted-foreground">{euro(totals.customerPerYear)} per jaar</p>}
-        </div>
-      )}
+      <p className="mb-2 text-xs text-muted-foreground">De instellingen waarmee de laadpunten worden geïnstalleerd. Opbrengst/terugverdientijd zie je in de configurator.</p>
       <div className="space-y-2">
         <ConfigGroup label="Hardware">
           <DetailRow label="Laadpunten" value={hw.chargePoints != null ? String(hw.chargePoints) : null} />
           <DetailRow label="Sockets per laadpunt" value={hw.socketsPerChargePoint != null ? String(hw.socketsPerChargePoint) : null} />
-          <DetailRow label="Investering hardware" value={euro(hw.hardwareInvestment)} />
         </ConfigGroup>
         <ConfigGroup label="Locatie & gebruik">
           <DetailRow label="Type locatie" value={locLabel} />
