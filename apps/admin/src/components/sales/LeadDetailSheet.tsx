@@ -401,9 +401,14 @@ export function LeadDetailSheet({
                       ) : <p className="py-1 text-sm text-muted-foreground">Nog geen afspraak gepland.</p>}
                     </InfoCard>
 
+                    <ConfigCard
+                      config={lead.configuration as unknown as LeadConfig | null}
+                      updatedAt={lead.configuration_updated_at}
+                      onEdit={launchConfigurator}
+                    />
+
                     <InfoCard title="Voorstel" icon={FileText} action={<button className="text-xs font-medium text-primary hover:underline" onClick={makeOffer}>+ Offerte</button>}>
-                      <DetailRow label="Configuratie" value={hasConfiguration ? `Opgeslagen${lead.configuration_updated_at ? ` · ${new Date(lead.configuration_updated_at).toLocaleDateString("nl-NL")}` : ""}` : "Nog niet"} />
-                      <div className="space-y-1.5 pt-2">
+                      <div className="space-y-1.5">
                         {(quotes.data ?? []).map((q) => {
                           const st = QUOTE_STATUS[q.status] ?? { label: q.status, cls: "bg-muted text-muted-foreground" };
                           const total = (Number(q.total_hardware_cost) || 0) + (Number(q.total_installation_cost) || 0);
@@ -567,6 +572,84 @@ function Stat({ icon: Icon, label, value }: { icon: typeof Euro; label: string; 
       <div className="flex items-center gap-1.5 text-muted-foreground"><Icon className="h-3.5 w-3.5" /><span className="text-[11px]">{label}</span></div>
       <p className="mt-0.5 text-base font-bold tabular-nums text-foreground">{value}</p>
     </div>
+  );
+}
+
+// ---- Configuratie-blok (toont de opgeslagen configurator-instellingen) ----
+type LeadConfig = {
+  ere?: boolean;
+  pricing_input?: {
+    usage?: { kwhPerChargePointMonth?: number; effectiveChargingPowerKw?: number; sessionsPerChargePointMonth?: number };
+    tariffs?: { idleFeeEnabled?: boolean; startFeeEnabled?: boolean; idleFeePerMinute?: number; idleGraceMinutes?: number; chargeTariffPerKwh?: number; startFeePerSession?: number };
+    contract?: { durationMonths?: number; noticePeriodMonths?: number };
+    customer?: { locationType?: string };
+    hardware?: { chargePoints?: number; hardwareInvestment?: number; socketsPerChargePoint?: number };
+  };
+  pricing_result?: { totals?: { customerPerMonth?: number; customerPerYear?: number } };
+};
+
+const eur2 = (n: number | null | undefined) =>
+  n == null ? null : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+function ConfigGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-border/60 pt-2 first:border-0 first:pt-0">
+      <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground/70">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function ConfigCard({ config, updatedAt, onEdit }: { config: LeadConfig | null; updatedAt: string | null | undefined; onEdit: () => void }) {
+  if (!config?.pricing_input) {
+    return (
+      <InfoCard title="Configuratie" icon={WandSparkles}
+        action={<button className="text-xs font-medium text-primary hover:underline" onClick={onEdit}>Start configurator</button>}>
+        <p className="py-1 text-sm text-muted-foreground">Nog geen configuratie samengesteld. Start de configurator om de laadoplossing voor deze klant te configureren.</p>
+      </InfoCard>
+    );
+  }
+  const pi = config.pricing_input;
+  const hw = pi.hardware ?? {}, usage = pi.usage ?? {}, tar = pi.tariffs ?? {}, con = pi.contract ?? {};
+  const totals = config.pricing_result?.totals ?? {};
+  const locLabel = pi.customer?.locationType ? (LOCATION_TYPES[pi.customer.locationType] ?? pi.customer.locationType) : null;
+  return (
+    <InfoCard title="Configuratie" icon={WandSparkles}
+      action={<button className="text-xs font-medium text-primary hover:underline" onClick={onEdit}>Bewerken</button>}>
+      {totals.customerPerMonth != null && (
+        <div className="mb-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+          <p className="cockpit-section-label">Maandbedrag klant</p>
+          <p className="mt-0.5 text-lg font-extrabold tabular-nums text-foreground">
+            {euro(totals.customerPerMonth)}<span className="text-sm font-medium text-muted-foreground"> / maand</span>
+          </p>
+          {totals.customerPerYear != null && <p className="text-xs tabular-nums text-muted-foreground">{euro(totals.customerPerYear)} per jaar</p>}
+        </div>
+      )}
+      <div className="space-y-2">
+        <ConfigGroup label="Hardware">
+          <DetailRow label="Laadpunten" value={hw.chargePoints != null ? String(hw.chargePoints) : null} />
+          <DetailRow label="Sockets per laadpunt" value={hw.socketsPerChargePoint != null ? String(hw.socketsPerChargePoint) : null} />
+          <DetailRow label="Investering hardware" value={euro(hw.hardwareInvestment)} />
+        </ConfigGroup>
+        <ConfigGroup label="Locatie & gebruik">
+          <DetailRow label="Type locatie" value={locLabel} />
+          <DetailRow label="kWh / laadpunt / maand" value={usage.kwhPerChargePointMonth != null ? String(usage.kwhPerChargePointMonth) : null} />
+          <DetailRow label="Sessies / laadpunt / maand" value={usage.sessionsPerChargePointMonth != null ? String(usage.sessionsPerChargePointMonth) : null} />
+          <DetailRow label="Laadvermogen" value={usage.effectiveChargingPowerKw != null ? `${usage.effectiveChargingPowerKw} kW` : null} />
+        </ConfigGroup>
+        <ConfigGroup label="Tarieven">
+          <DetailRow label="Laadtarief" value={tar.chargeTariffPerKwh != null ? `${eur2(tar.chargeTariffPerKwh)} / kWh` : null} />
+          {tar.startFeeEnabled && <DetailRow label="Starttarief" value={tar.startFeePerSession != null ? `${eur2(tar.startFeePerSession)} / sessie` : null} />}
+          {tar.idleFeeEnabled && <DetailRow label="Blokkeertarief" value={tar.idleFeePerMinute != null ? `${eur2(tar.idleFeePerMinute)} / min na ${tar.idleGraceMinutes ?? 0} min` : null} />}
+        </ConfigGroup>
+        <ConfigGroup label="Contract">
+          <DetailRow label="Looptijd" value={con.durationMonths != null ? `${con.durationMonths} maanden` : null} />
+          <DetailRow label="Opzegtermijn" value={con.noticePeriodMonths != null ? `${con.noticePeriodMonths} maanden` : null} />
+          <DetailRow label="ERE-certificaten" value={config.ere ? "Ja" : "Nee"} />
+        </ConfigGroup>
+      </div>
+      {updatedAt && <p className="mt-2 text-[11px] text-muted-foreground">Laatst opgeslagen · {new Date(updatedAt).toLocaleDateString("nl-NL")}</p>}
+    </InfoCard>
   );
 }
 
