@@ -3,7 +3,7 @@ import type { AuthError, Session, User } from "@supabase/supabase-js";
 
 // role blijft de data-toegangsrol (superadmin houdt 'admin' zodat alle admin-guards
 // blijven werken). De superadmin-status staat los in isSuperadmin.
-export type UserRole = "admin" | "manager" | "viewer" | "sales" | "client" | null;
+export type UserRole = "admin" | "manager" | "viewer" | "sales" | "marketing" | "client" | null;
 
 export interface AuthContextType {
   session: Session | null;

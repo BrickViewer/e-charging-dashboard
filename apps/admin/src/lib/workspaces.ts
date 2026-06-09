@@ -6,6 +6,9 @@ import {
   Target,
   FileText,
   WandSparkles,
+  Contact,
+  Wrench,
+  Newspaper,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/contexts/authContextValue";
@@ -13,7 +16,7 @@ import type { UserRole } from "@/contexts/authContextValue";
 // Top-level werkbladen (Beheer / Sales). Eén bron van waarheid voor zowel de
 // navigatie als de rol-gebaseerde toegang + de switcher.
 
-export type WorkspaceKey = "beheer" | "sales";
+export type WorkspaceKey = "beheer" | "sales" | "marketing";
 
 export type NavItem = { to: string; icon: LucideIcon; label: string; end?: boolean };
 
@@ -35,6 +38,7 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
       { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
       { to: "/admin/klanten", icon: Users, label: "Klanten" },
       { to: "/admin/locaties", icon: MapPin, label: "Locaties" },
+      { to: "/admin/installaties", icon: Wrench, label: "Installaties" },
       { to: "/admin/financieel", icon: Wallet, label: "Financieel" },
     ],
   },
@@ -45,13 +49,23 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
     roles: ["admin", "manager", "sales"],
     items: [
       { to: "/sales/leads", icon: Target, label: "Leads" },
+      { to: "/sales/contacten", icon: Contact, label: "Contacten" },
       { to: "/sales/offertes", icon: FileText, label: "Offertes" },
       { to: "/sales/configurator", icon: WandSparkles, label: "Configurator" },
     ],
   },
+  marketing: {
+    key: "marketing",
+    label: "Marketing",
+    home: "/marketing/blogs",
+    roles: ["admin", "manager", "marketing"],
+    items: [
+      { to: "/marketing/blogs", icon: Newspaper, label: "Blogs" },
+    ],
+  },
 };
 
-export const WORKSPACE_ORDER: WorkspaceKey[] = ["beheer", "sales"];
+export const WORKSPACE_ORDER: WorkspaceKey[] = ["beheer", "sales", "marketing"];
 
 // Welke werkbladen mag deze rol zien?
 export function workspacesForRole(role: UserRole): WorkspaceKey[] {
@@ -61,9 +75,15 @@ export function workspacesForRole(role: UserRole): WorkspaceKey[] {
 
 // Huidig werkblad afgeleid uit het pad.
 export function workspaceForPath(pathname: string): WorkspaceKey {
-  return pathname.startsWith("/sales") ? "sales" : "beheer";
+  if (pathname.startsWith("/sales")) return "sales";
+  if (pathname.startsWith("/marketing")) return "marketing";
+  return "beheer";
 }
 
 export function canAccessBeheer(role: UserRole): boolean {
   return workspacesForRole(role).includes("beheer");
+}
+
+export function canAccessMarketing(role: UserRole): boolean {
+  return workspacesForRole(role).includes("marketing");
 }

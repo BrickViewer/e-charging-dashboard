@@ -12,63 +12,51 @@ const closeTo = (received: number, expected: number, precision = 6) => {
 };
 
 describe("pricing engine", () => {
-  it("matches the Excel default calculator output in fixed-target mode", () => {
-    const result = calculatePricing(excelDefaultPricingInput, {
-      ...defaultConfiguratorSettings,
-      useTieredTarget: false,
-    });
+  it("computes the customer net via a fixed e-charging margin per kWh", () => {
+    const result = calculatePricing(excelDefaultPricingInput, defaultConfiguratorSettings);
 
+    // Sessie- en blokkeertijd-rekenwijze blijft ongewijzigd.
     closeTo(result.kwhPerSession, 200 / 12);
     closeTo(result.chargingMinutesPerSession, 125);
     closeTo(result.idleMinutesPerSession, 235);
     closeTo(result.billableIdleMinutesPerSession, 175);
     closeTo(result.billableIdleMinutesPerChargePointMonth, 2100);
+
+    // netto rendement = 116 (laden) − 50 (stroom) + 6 (start) + 105 (blokkeer).
     closeTo(result.netReturnPerChargePointMonth, 177);
-    closeTo(result.efluxCostPerSocketMonth, 6.875);
-    closeTo(result.requiredGrossEchargingPerChargePointMonth, 26.875);
-    closeTo(result.serviceFeePct, 0.1518361581920904);
-    closeTo(result.customerNetPerChargePointMonth, 150.125);
-    closeTo(result.totals.customerPerMonth, 1501.25);
-    closeTo(result.echargingNetPerChargePointMonth, 20);
-    closeTo(result.totals.echargingNetPerMonth, 200);
+
+    // marge = 0,05 €/kWh × 200 kWh = 10; klant houdt 177 − 10 = 167 over.
+    closeTo(result.echargingMarginPerKwh, 0.05);
+    closeTo(result.echargingMarginPerChargePointMonth, 10);
+    closeTo(result.customerNetPerChargePointMonth, 167);
+    closeTo(result.echargingNetPerChargePointMonth, 10);
+
+    // afgeleid effectief fee-percentage = marge / netto rendement.
+    closeTo(result.serviceFeePct, 10 / 177);
+
+    // totalen schalen met 10 laadpunten.
+    closeTo(result.totals.customerPerMonth, 1670);
+    closeTo(result.totals.echargingNetPerMonth, 100);
+    closeTo(result.totals.netReturnPerMonth, 1770);
     expect(result.status).toBe("ok");
   });
 
-  it("uses the configured tier target in tiered-target mode", () => {
-    const input = pricingInputSchema.parse({
-      ...excelDefaultPricingInput,
-      targetMode: { type: "tieredTarget" },
+  it("scales the e-charging margin with the configured rate", () => {
+    const result = calculatePricing(excelDefaultPricingInput, {
+      ...defaultConfiguratorSettings,
+      echargingMarginPerKwh: 0.08,
     });
-    const result = calculatePricing(input, defaultConfiguratorSettings);
 
-    closeTo(result.netReturnPerChargePointMonth, 177);
-    closeTo(result.targetNetEchargingPerChargePointMonth, 40);
-    closeTo(result.serviceFeePct, 46.875 / 177);
-    closeTo(result.echargingNetPerChargePointMonth, 40);
-    closeTo(result.totals.echargingNetPerMonth, 400);
-    expect(result.currentTier?.minNetReturnPerChargePointMonth).toBe(150);
-    expect(result.currentTier?.maxNetReturnPerChargePointMonth).toBe(250);
+    closeTo(result.echargingMarginPerChargePointMonth, 16); // 0,08 × 200
+    closeTo(result.customerNetPerChargePointMonth, 161); // 177 − 16
+    closeTo(result.serviceFeePct, 16 / 177);
     expect(result.status).toBe("ok");
   });
 
-  it("blocks finalization when the fee exceeds max fee percentage", () => {
-    const input = pricingInputSchema.parse({
-      ...excelDefaultPricingInput,
-      usage: {
-        ...excelDefaultPricingInput.usage,
-        kwhPerChargePointMonth: 60,
-        averageSessionDurationHours: 1,
-      },
-      tariffs: {
-        ...excelDefaultPricingInput.tariffs,
-        idleFeeEnabled: false,
-      },
-      targetMode: { type: "tieredTarget" },
-    });
-    const result = calculatePricing(input, defaultConfiguratorSettings);
-
-    expect(result.status).toBe("blocked");
-    expect(result.blockingReasons.some((reason) => reason.includes("maximumgrens"))).toBe(true);
+  it("attributes the start fee to the customer in the deltas", () => {
+    const result = calculatePricing(excelDefaultPricingInput, defaultConfiguratorSettings);
+    // Start fee = 12 sessies × €0,50 = €6 per laadpunt → €60 over 10 laadpunten.
+    closeTo(result.deltas.startFeeCustomerPerMonth, 60);
   });
 
   it("blocks finalization when net return is zero or negative", () => {
@@ -81,7 +69,6 @@ describe("pricing engine", () => {
         startFeeEnabled: false,
         idleFeeEnabled: false,
       },
-      targetMode: { type: "tieredTarget" },
     });
     const result = calculatePricing(input, defaultConfiguratorSettings);
 

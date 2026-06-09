@@ -26,7 +26,16 @@ export type LeadPrefill = {
 export type SettingsResponse = {
   version: number;
   settings: ConfiguratorSettings;
+  leadId?: string | null;
   prefill?: LeadPrefill;
+  // Eerder opgeslagen configuratie van de lead (om verder te bewerken).
+  savedInput?: PricingInput;
+  savedExtras?: { ere: boolean; investmentMin: number | null; investmentMax: number | null };
+};
+
+export type SaveToLeadResponse = {
+  leadId: string;
+  savedAt: string;
 };
 
 export type DraftSaveResponse = {
@@ -46,7 +55,9 @@ async function requestJson<T>(
   { baseUrl = "", fetcher = fetch }: RequestOptions = {},
 ): Promise<T> {
   const response = await fetcher(`${baseUrl}${path}`, {
-    credentials: "include",
+    // Geen credentials/cookies: de sessie loopt via sessionId in de body. Met
+    // `credentials: "include"` blokkeert de browser de response omdat de edge
+    // Access-Control-Allow-Origin: * teruggeeft (wildcard mag niet met cookies).
     headers: {
       "content-type": "application/json",
       ...(init.headers ?? {}),
@@ -79,6 +90,23 @@ export function createConfiguratorApi(options: RequestOptions = {}) {
     saveDraft(sessionId: string, payload: { input: PricingInput; step: number }) {
       return requestJson<DraftSaveResponse>(
         "/functions/v1/configurator-draft-save",
+        { method: "POST", body: JSON.stringify({ sessionId, ...payload }) },
+        options,
+      );
+    },
+    // Slaat de configuratie op AAN DE LEAD (geen klant).
+    saveToLead(
+      sessionId: string,
+      payload: {
+        input: PricingInput;
+        settingsVersion: number;
+        ere?: boolean;
+        investmentMinTotal?: number;
+        investmentMaxTotal?: number;
+      },
+    ) {
+      return requestJson<SaveToLeadResponse>(
+        "/functions/v1/configurator-save-to-lead",
         { method: "POST", body: JSON.stringify({ sessionId, ...payload }) },
         options,
       );

@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useCreateLead, type LeadStage } from "@/hooks/useLeads";
+import { CompanyPicker } from "@/components/contacts/CompanyPicker";
+import { PersonPicker } from "@/components/contacts/PersonPicker";
 
 const LOCATION_TYPES = [
   { value: "workplace", label: "Werkplek" },
@@ -38,11 +40,10 @@ export function AddLeadDialog({
   const createLead = useCreateLead();
   const fallbackStage = stages.find((s) => s.is_default)?.id ?? stages[0]?.id;
   const [form, setForm] = useState({
+    company_id: "",
     company_name: "",
-    contact_name: "",
-    contact_role: "",
-    contact_email: "",
-    contact_phone: "",
+    person_id: "",
+    person_name: "",
     city: "",
     location_type: "",
     estimated_charge_points: "",
@@ -63,7 +64,7 @@ export function AddLeadDialog({
   }, [open, defaultStageId, fallbackStage]);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const canSubmit = form.company_name.trim().length > 0 && !!organizationId && !!form.stage_id;
+  const canSubmit = !!form.company_id && !!organizationId && !!form.stage_id;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -71,11 +72,11 @@ export function AddLeadDialog({
       await createLead.mutateAsync({
         organization_id: organizationId!,
         stage_id: form.stage_id,
-        company_name: form.company_name.trim(),
-        contact_name: form.contact_name.trim() || null,
-        contact_role: form.contact_role.trim() || null,
-        contact_email: form.contact_email.trim() || null,
-        contact_phone: form.contact_phone.trim() || null,
+        company_id: form.company_id || null,
+        person_id: form.person_id || null,
+        // company_name/contact_* worden door de sync-trigger gevuld vanuit het
+        // gekoppelde bedrijf/persoon; we sturen de naam mee als veilige fallback.
+        company_name: form.company_name.trim() || "Onbekend bedrijf",
         city: form.city.trim() || null,
         location_type: form.location_type || null,
         estimated_charge_points: form.estimated_charge_points ? Math.round(num(form.estimated_charge_points) ?? 0) : null,
@@ -90,7 +91,7 @@ export function AddLeadDialog({
       onOpenChange(false);
       setForm((f) => ({
         ...f,
-        company_name: "", contact_name: "", contact_role: "", contact_email: "", contact_phone: "",
+        company_id: "", company_name: "", person_id: "", person_name: "",
         city: "", location_type: "", estimated_charge_points: "", estimated_value: "",
         priority: "medium", expected_close_date: "", notes: "",
       }));
@@ -116,26 +117,23 @@ export function AddLeadDialog({
           }}
         >
           <div className="space-y-1.5">
-            <Label>Bedrijfsnaam *</Label>
-            <Input value={form.company_name} onChange={(e) => set("company_name")(e.target.value)} />
+            <Label>Bedrijf *</Label>
+            <CompanyPicker
+              value={form.company_id || null}
+              valueLabel={form.company_name || null}
+              onChange={(id, company) => setForm((f) => ({ ...f, company_id: id ?? "", company_name: company?.name ?? "" }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Contactpersoon</Label>
+            <PersonPicker
+              value={form.person_id || null}
+              valueLabel={form.person_name || null}
+              companyId={form.company_id || null}
+              onChange={(id, person) => setForm((f) => ({ ...f, person_id: id ?? "", person_name: person?.full_name ?? "" }))}
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Contactpersoon</Label>
-              <Input value={form.contact_name} onChange={(e) => set("contact_name")(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Functie</Label>
-              <Input value={form.contact_role} onChange={(e) => set("contact_role")(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>E-mail</Label>
-              <Input type="email" value={form.contact_email} onChange={(e) => set("contact_email")(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Telefoon</Label>
-              <Input value={form.contact_phone} onChange={(e) => set("contact_phone")(e.target.value)} />
-            </div>
             <div className="space-y-1.5">
               <Label>Plaats</Label>
               <Input value={form.city} onChange={(e) => set("city")(e.target.value)} />

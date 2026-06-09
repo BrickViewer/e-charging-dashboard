@@ -1,7 +1,7 @@
 import { useState } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import type { ConfiguratorSettings, PricingInput, PricingResult } from "@echarging/pricing-engine";
-import { ChevronDown, Eye, EyeOff, Minus, Plus } from "lucide-react";
+import { ChevronDown, Minus, Plus } from "lucide-react";
 import { euro, number, parseNumber } from "./format";
 
 function Control({ label, value, sub, children }: { label: string; value?: string; sub?: string; children?: React.ReactNode }) {
@@ -68,8 +68,6 @@ export function TariffControls({
   setLocationType,
   ereEnabled,
   setEreEnabled,
-  sellerMode,
-  setSellerMode,
   isFullscreen,
   settings,
 }: {
@@ -83,15 +81,11 @@ export function TariffControls({
   setLocationType: (lt: string) => void;
   ereEnabled: boolean;
   setEreEnabled: (b: boolean) => void;
-  sellerMode: boolean;
-  setSellerMode: (b: boolean) => void;
   isFullscreen: boolean;
   settings: ConfiguratorSettings;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [sellerOpen, setSellerOpen] = useState(false);
   const sockets = input.hardware.chargePoints;
-  const nextTier = pricing.nextTier;
   const ranges = settings.inputRanges;
   // Slider-plafond schaalt met het aantal laadpunten (schatting per laadpunt + lucht).
   const investMax = Math.max(
@@ -99,12 +93,6 @@ export function TariffControls({
     Math.ceil((sockets * settings.investmentPerSocketMax) / ranges.investmentSliderStep) * ranges.investmentSliderStep,
   );
   const ereMaand = ereEnabled ? settings.ereSubsidyPerKwh * input.usage.kwhPerChargePointMonth * sockets : 0;
-
-  const toggleSeller = () => {
-    const next = !sellerMode;
-    setSellerMode(next);
-    setSellerOpen(next);
-  };
 
   return (
     <div className="flex h-full flex-col">
@@ -131,9 +119,19 @@ export function TariffControls({
             onChange={(n) => updateInput((d) => { d.tariffs.chargeTariffPerKwh = n; })} />
         </Control>
 
+        <Control label="Stroominkoop" value={`${euro(input.tariffs.energyCostPerKwh, 2)} / kWh`}>
+          <NativeRange value={input.tariffs.energyCostPerKwh} min={ranges.energyCostMin} max={ranges.energyCostMax} step={ranges.energyCostStep}
+            onChange={(n) => updateInput((d) => { d.tariffs.energyCostPerKwh = n; })} />
+        </Control>
+
         <Control label="Verwacht verbruik" value={`${number(input.usage.kwhPerChargePointMonth)} kWh`} sub="per laadpunt / maand">
           <NativeRange value={input.usage.kwhPerChargePointMonth} min={ranges.kwhMin} max={ranges.kwhMax} step={ranges.kwhStep}
             onChange={(n) => updateInput((d) => { d.usage.kwhPerChargePointMonth = n; })} />
+        </Control>
+
+        <Control label="Sessies" value={`${number(input.usage.sessionsPerChargePointMonth)} / mnd`} sub="per laadpunt — standaard vanuit het locatietype">
+          <NativeRange value={input.usage.sessionsPerChargePointMonth} min={ranges.sessionsMin} max={ranges.sessionsMax} step={ranges.sessionsStep}
+            onChange={(n) => updateInput((d) => { d.usage.sessionsPerChargePointMonth = n; })} />
         </Control>
 
         <Control
@@ -155,7 +153,7 @@ export function TariffControls({
         <button type="button" className="ghost-row" onClick={() => setAdvancedOpen((v) => !v)} aria-expanded={advancedOpen}>
           <span className="flex flex-col text-left">
             <span className="text-sm font-semibold text-foreground">Geavanceerde instellingen</span>
-            <span className="text-[11px] text-muted-foreground">Sessies, start- &amp; blokkeertarief, stroominkoop</span>
+            <span className="text-[11px] text-muted-foreground">Start- &amp; blokkeertarief, gratis minuten, ERE</span>
           </span>
           <ChevronDown size={18} className="text-muted-foreground transition-transform duration-200" style={{ transform: advancedOpen ? "rotate(180deg)" : "none" }} />
         </button>
@@ -163,12 +161,7 @@ export function TariffControls({
         <div className="adv-wrap" data-open={advancedOpen}>
           <div className="adv-inner">
             <div className="space-y-5 pt-4">
-              <Control label="Sessies per laadpunt / maand" value={number(input.usage.sessionsPerChargePointMonth)}>
-                <NativeRange value={input.usage.sessionsPerChargePointMonth} min={ranges.sessionsMin} max={ranges.sessionsMax} step={ranges.sessionsStep}
-                  onChange={(n) => updateInput((d) => { d.usage.sessionsPerChargePointMonth = n; })} />
-              </Control>
-
-              <div className="space-y-3 border-t border-border-soft/60 pt-4">
+              <div className="space-y-3">
                 <SwitchRow
                   title="Starttarief"
                   sub="Per sessie"
@@ -179,17 +172,19 @@ export function TariffControls({
                 />
                 <SwitchRow
                   title="Blokkeertarief"
-                  sub={`Per minuut, na ${number(input.tariffs.idleGraceMinutes)} min`}
+                  sub={`Per minuut, na ${number(input.tariffs.idleGraceMinutes)} gratis min`}
                   active={input.tariffs.idleFeeEnabled}
                   amount={input.tariffs.idleFeePerMinute}
                   onToggle={() => updateInput((d) => { d.tariffs.idleFeeEnabled = !d.tariffs.idleFeeEnabled; })}
                   onAmount={(n) => updateInput((d) => { d.tariffs.idleFeePerMinute = n; })}
                 />
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-foreground">Stroominkoop / kWh</p>
-                  <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="decimal" value={input.tariffs.energyCostPerKwh}
-                    aria-label="Stroominkoop per kWh" onChange={(e) => updateInput((d) => { d.tariffs.energyCostPerKwh = parseNumber(e.target.value, d.tariffs.energyCostPerKwh); })} />
-                </div>
+                {input.tariffs.idleFeeEnabled && (
+                  <div className="flex items-center justify-between gap-3 pl-1">
+                    <p className="text-[13px] text-muted-foreground">Gratis minuten vóór blokkeertarief</p>
+                    <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.tariffs.idleGraceMinutes}
+                      aria-label="Gratis minuten" onChange={(e) => updateInput((d) => { d.tariffs.idleGraceMinutes = parseNumber(e.target.value, d.tariffs.idleGraceMinutes); })} />
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-3 border-t border-border-soft/60 pt-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground">ERE-subsidie</p>
@@ -206,40 +201,6 @@ export function TariffControls({
           </div>
         </div>
       </div>
-
-      {/* ---- VERKOPER-INZICHT (nooit tijdens presentatie/fullscreen) ---- */}
-      {!isFullscreen && (
-        <div className="relative mt-auto pt-4">
-          <button type="button" className="ghost-row" onClick={toggleSeller} aria-pressed={sellerMode}>
-            <span className="text-sm font-semibold text-foreground">Verkoper-inzicht</span>
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              {sellerMode ? <Eye size={15} /> : <EyeOff size={15} />}
-              {sellerMode ? "Aan" : "Uit"}
-            </span>
-          </button>
-          {sellerMode && sellerOpen && (
-            <div className="absolute bottom-full left-0 right-0 z-20 mb-2 panel space-y-2 p-4 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="field-label mb-0">Onze fee</span>
-                <span className="text-lg font-black text-foreground">{number(pricing.serviceFeePct * 100, 1)}%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="field-label mb-0">E-Charging netto</span>
-                <span className="mono font-bold text-gauge-green">{euro(pricing.totals.echargingNetPerMonth)}/mnd</span>
-              </div>
-              <div className="border-t border-border-soft pt-2 text-xs text-muted-foreground">
-                Staffel: <strong className="text-foreground">{euro(pricing.targetNetEchargingPerChargePointMonth)}</strong>/laadpunt
-                {nextTier
-                  ? ` · nog ${euro(Math.max(0, nextTier.minNetReturnPerChargePointMonth - pricing.netReturnPerChargePointMonth), 0)} netto tot volgende`
-                  : " · hoogste staffel"}
-              </div>
-              {pricing.status === "blocked" && (
-                <p className="rounded-lg bg-gauge-red/10 px-2.5 py-1.5 text-xs font-semibold text-gauge-red">{pricing.blockingReasons[0]}</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

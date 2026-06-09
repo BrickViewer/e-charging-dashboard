@@ -80,6 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRoleResolved(true);
           return;
         }
+        if (roles.some(r => r.role === "marketing")) {
+          setRole("marketing");
+          setRoleResolved(true);
+          return;
+        }
         if (roles.some(r => r.role === "viewer")) {
           setRole("viewer");
           setRoleResolved(true);
@@ -115,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsSuperadmin(false);
   };
 
-  const isInternal = role === "admin" || role === "manager" || role === "viewer" || role === "sales";
+  const isInternal = role === "admin" || role === "manager" || role === "viewer" || role === "sales" || role === "marketing";
 
   return (
     <AuthContext.Provider

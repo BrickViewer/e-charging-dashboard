@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { calculatePricing, normalizePricingInput, normalizeSettings } from "../_shared/configurator.ts";
+import { resolveOrCreateCompany, resolveOrCreatePerson, linkPersonToCompany } from "../_shared/contacts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -94,36 +95,88 @@ Deno.serve(async (req) => {
       : "";
     const clientNotes = `Aangemaakt vanuit klant-configurator${ereEnabled ? " · ERE-subsidie: aan (€0,10/kWh)" : ""}${investNote}`;
 
-    const { data: client, error: clientError } = await serviceClient
-      .from("clients")
-      .insert({
-        organization_id: session.organization_id,
-        company_name: input.customer.companyName,
-        contact_name: input.customer.contactName || null,
-        contact_email: input.customer.contactEmail || null,
-        contact_phone: input.customer.contactPhone || null,
-        billing_address: buildAddress(input) || null,
-        billing_address_street: input.customer.locationAddress || null,
-        billing_address_postal: input.customer.postalCode || null,
-        billing_address_city: input.customer.city || null,
+    // Centrale contacten koppelen: vanuit de lead (indien aanwezig) of resolve-or-create.
+    let companyId: string | null = null;
+    let personId: string | null = null;
+    if (session.lead_id) {
+      const { data: leadRow } = await serviceClient
+        .from("leads").select("company_id, person_id").eq("id", session.lead_id).maybeSingle();
+      companyId = (leadRow?.company_id as string | null) ?? null;
+      personId = (leadRow?.person_id as string | null) ?? null;
+    }
+    if (!companyId) {
+      companyId = await resolveOrCreateCompany(serviceClient, session.organization_id, {
+        name: input.customer.companyName, street: input.customer.locationAddress,
+        postal: input.customer.postalCode, city: input.customer.city,
+      });
+    }
+    if (!personId) {
+      personId = await resolveOrCreatePerson(serviceClient, session.organization_id, {
+        name: input.customer.contactName, email: input.customer.contactEmail, phone: input.customer.contactPhone,
+      });
+    }
+    if (companyId && personId) await linkPersonToCompany(serviceClient, companyId, personId, true);
+
+    // 1 bedrijf = 1 klantaccount: bestaat er al een account voor dit bedrijf, voeg
+    // dan een nieuwe configuratie-versie aan dat account toe i.p.v. een tweede klant.
+    let existing: { id: string; client_number: number | null; status: string | null } | null = null;
+    if (companyId) {
+      const { data } = await serviceClient
+        .from("clients").select("id, client_number, status")
+        .eq("organization_id", session.organization_id).eq("company_id", companyId)
+        .neq("status", "verwijderd").order("created_at", { ascending: true }).limit(1).maybeSingle();
+      existing = data as typeof existing;
+    }
+
+    let client: { id: string; client_number: number | null };
+    if (existing) {
+      client = { id: existing.id, client_number: existing.client_number };
+      await serviceClient.from("clients").update({
         charge_rate_per_kwh: input.tariffs.chargeTariffPerKwh,
         energy_cost_per_kwh: input.tariffs.energyCostPerKwh,
         revenue_share_percentage: Math.max(0, Math.min(100, (1 - pricing.serviceFeePct) * 100)),
         contract_duration_months: input.contract.durationMonths,
         notice_period_months: input.contract.noticePeriodMonths,
         status: "actief",
-        notes: clientNotes,
-      })
-      .select("id, client_number")
-      .single();
-    if (clientError) throw clientError;
+      }).eq("id", existing.id);
+    } else {
+      const { data: created, error: clientError } = await serviceClient
+        .from("clients")
+        .insert({
+          organization_id: session.organization_id,
+          company_id: companyId,
+          person_id: personId,
+          company_name: input.customer.companyName,
+          contact_name: input.customer.contactName || null,
+          contact_email: input.customer.contactEmail || null,
+          contact_phone: input.customer.contactPhone || null,
+          billing_address: buildAddress(input) || null,
+          billing_address_street: input.customer.locationAddress || null,
+          billing_address_postal: input.customer.postalCode || null,
+          billing_address_city: input.customer.city || null,
+          charge_rate_per_kwh: input.tariffs.chargeTariffPerKwh,
+          energy_cost_per_kwh: input.tariffs.energyCostPerKwh,
+          revenue_share_percentage: Math.max(0, Math.min(100, (1 - pricing.serviceFeePct) * 100)),
+          contract_duration_months: input.contract.durationMonths,
+          notice_period_months: input.contract.noticePeriodMonths,
+          status: "actief",
+          notes: clientNotes,
+        })
+        .select("id, client_number")
+        .single();
+      if (clientError) throw clientError;
+      client = { id: created.id, client_number: created.client_number };
+    }
 
+    const { data: maxConfigV } = await serviceClient
+      .from("customer_configurations").select("version").eq("client_id", client.id)
+      .order("version", { ascending: false }).limit(1).maybeSingle();
     const { data: configuration, error: configurationError } = await serviceClient
       .from("customer_configurations")
       .insert({
         client_id: client.id,
         organization_id: session.organization_id,
-        version: 1,
+        version: (maxConfigV?.version ?? 0) + 1,
         settings_version: settingsRow.version,
         pricing_input: input,
         pricing_result: pricing,

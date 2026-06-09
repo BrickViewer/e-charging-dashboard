@@ -51,15 +51,16 @@ async function getSessionSettings(serviceClient: ReturnType<typeof createClient>
   return { settings: data, leadId: (session.lead_id as string | null) ?? null };
 }
 
-// Bouwt de prefill-payload uit een lead (klant- + behoeftevelden) voor de wizard.
-async function getLeadPrefill(serviceClient: ReturnType<typeof createClient>, leadId: string) {
+// Lead-context voor de wizard: basis-prefill (klant-/behoeftevelden) + de eerder
+// opgeslagen volledige configuratie (savedInput) zodat heropenen verder bewerkt.
+async function getLeadContext(serviceClient: ReturnType<typeof createClient>, leadId: string) {
   const { data: lead } = await serviceClient
     .from("leads")
-    .select("company_name, contact_name, contact_email, contact_phone, address_street, postal_code, city, location_type, estimated_charge_points")
+    .select("company_name, contact_name, contact_email, contact_phone, address_street, postal_code, city, location_type, estimated_charge_points, configuration")
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) return undefined;
-  return {
+  const prefill = {
     companyName: lead.company_name ?? "",
     contactName: lead.contact_name ?? "",
     contactEmail: lead.contact_email ?? "",
@@ -70,6 +71,16 @@ async function getLeadPrefill(serviceClient: ReturnType<typeof createClient>, le
     locationType: lead.location_type ?? null,
     sockets: lead.estimated_charge_points ?? null,
   };
+  const cfg = (lead.configuration ?? null) as Record<string, unknown> | null;
+  const savedInput = cfg && cfg.pricing_input ? cfg.pricing_input : undefined;
+  const savedExtras = cfg
+    ? {
+        ere: cfg.ere === true,
+        investmentMin: (cfg.investment_min_total as number | null) ?? null,
+        investmentMax: (cfg.investment_max_total as number | null) ?? null,
+      }
+    : undefined;
+  return { prefill, savedInput, savedExtras };
 }
 
 Deno.serve(async (req) => {
@@ -91,8 +102,15 @@ Deno.serve(async (req) => {
     if (!req.headers.get("Authorization") && sessionId) {
       const result = await getSessionSettings(serviceClient, sessionId);
       if (!result) return json({ status: "forbidden", message: "Configuratiesessie verlopen" }, 403);
-      const prefill = result.leadId ? await getLeadPrefill(serviceClient, result.leadId) : undefined;
-      return json({ version: result.settings.version, settings: normalizeSettings(result.settings.settings), prefill });
+      const ctx = result.leadId ? await getLeadContext(serviceClient, result.leadId) : undefined;
+      return json({
+        version: result.settings.version,
+        settings: normalizeSettings(result.settings.settings),
+        leadId: result.leadId,
+        prefill: ctx?.prefill,
+        savedInput: ctx?.savedInput,
+        savedExtras: ctx?.savedExtras,
+      });
     }
 
     const auth = await requireAdminOrInternal(req, serviceClient, corsHeaders, { allowInternal: false });

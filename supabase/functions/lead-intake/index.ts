@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { resolveOrCreateCompany, resolveOrCreatePerson, linkPersonToCompany } from "../_shared/contacts.ts";
 
 // lead-intake — publieke endpoint waar de website nieuwe leads naartoe POST't.
 // Beveiliging: gedeelde sleutel in de header `x-intake-secret` (timing-safe) +
@@ -74,11 +75,26 @@ Deno.serve(async (req: Request) => {
       .from("lead_stages").select("id").eq("organization_id", org.id)
       .order("is_default", { ascending: false }).order("position", { ascending: true }).limit(1).maybeSingle();
 
+    // Dedup in de centrale contacten-laag (bedrijf + persoon) en koppel ze.
+    const contactName = str(body.contact_name) ?? str(body.name);
+    const contactEmail = str(body.contact_email) ?? str(body.email);
+    const contactPhone = str(body.contact_phone) ?? str(body.phone);
+    const companyId = await resolveOrCreateCompany(supabase, org.id, {
+      name: companyName, kvk: str(body.kvk), website: str(body.website), sector: str(body.sector),
+      street: str(body.address_street), postal: str(body.postal_code), city: str(body.city),
+    });
+    const personId = await resolveOrCreatePerson(supabase, org.id, {
+      name: contactName, email: contactEmail, phone: contactPhone, role: str(body.contact_role),
+    });
+    if (companyId && personId) await linkPersonToCompany(supabase, companyId, personId, true);
+
     const { data: lead, error } = await supabase
       .from("leads")
       .insert({
         organization_id: org.id,
         stage_id: stage?.id ?? null,
+        company_id: companyId,
+        person_id: personId,
         source: "website",
         position: 0,
         company_name: companyName,

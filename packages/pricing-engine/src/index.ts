@@ -10,12 +10,6 @@ export const locationTypeEntrySchema = z.object({
   label: z.string(),
 });
 
-export const targetTierSchema = z.object({
-  minNetReturnPerChargePointMonth: z.number().min(0),
-  maxNetReturnPerChargePointMonth: z.number().min(0).nullable(),
-  targetNetEchargingPerChargePointMonth: z.number().min(0),
-});
-
 export const locationTypeDefaultsSchema = z.object({
   sessionsPerChargePointMonth: z.number().min(0),
   kwhPerChargePointMonth: z.number().min(0),
@@ -28,6 +22,9 @@ export const inputRangesSchema = z.object({
   chargeTariffMin: z.number().min(0).default(0.39),
   chargeTariffMax: z.number().min(0).default(0.79),
   chargeTariffStep: z.number().positive().default(0.01),
+  energyCostMin: z.number().min(0).default(0.10),
+  energyCostMax: z.number().min(0).default(0.50),
+  energyCostStep: z.number().positive().default(0.01),
   kwhMin: z.number().min(0).default(0),
   kwhMax: z.number().min(0).default(900),
   kwhStep: z.number().positive().default(10),
@@ -42,13 +39,8 @@ export const inputRangesSchema = z.object({
 }).default({});
 
 export const configuratorSettingsSchema = z.object({
-  baseTargetNetEchargingPerChargePointMonth: z.number().min(0).default(20),
-  maxServiceFeePct: z.number().min(0).max(1).default(0.4),
-  useTieredTarget: z.boolean().default(true),
-  tiers: z.array(targetTierSchema).min(1),
-  efluxSubscriptionPerSocketMonth: z.number().min(0).default(5.5),
-  efluxSetupPerSocket: z.number().min(0).default(16.5),
-  efluxSetupAmortizationMonths: z.number().positive().default(12),
+  // e-charging-marge: vast bedrag per kWh dat e-charging op het verbruik verdient.
+  echargingMarginPerKwh: z.number().min(0).default(0.05),
   defaultContractDurationMonths: z.number().int().positive().default(12),
   defaultNoticePeriodMonths: z.number().int().min(0).default(3),
   defaultChargeTariffPerKwh: z.number().min(0).default(0.58),
@@ -108,14 +100,9 @@ export const pricingInputSchema = z.object({
     idleFeePerMinute: z.number().min(0),
     idleGraceMinutes: z.number().min(0),
   }),
-  targetMode: z.discriminatedUnion("type", [
-    z.object({ type: z.literal("tieredTarget") }),
-    z.object({ type: z.literal("fixedTarget"), targetNetEchargingPerChargePointMonth: z.number().min(0) }),
-  ]).default({ type: "tieredTarget" }),
 });
 
 export type LocationType = z.infer<typeof locationTypeSchema>;
-export type TargetTier = z.infer<typeof targetTierSchema>;
 export type ConfiguratorSettings = z.infer<typeof configuratorSettingsSchema>;
 export type PricingInput = z.infer<typeof pricingInputSchema>;
 
@@ -124,9 +111,6 @@ export type PricingStatus = "ok" | "blocked";
 export type PricingResult = {
   status: PricingStatus;
   blockingReasons: string[];
-  targetNetEchargingPerChargePointMonth: number;
-  currentTier: TargetTier | null;
-  nextTier: TargetTier | null;
   kwhPerSession: number;
   chargingMinutesPerSession: number;
   sessionDurationMinutes: number;
@@ -138,9 +122,10 @@ export type PricingResult = {
   startFeeRevenuePerChargePointMonth: number;
   idleFeeRevenuePerChargePointMonth: number;
   netReturnPerChargePointMonth: number;
-  efluxCostPerSocketMonth: number;
-  efluxCostPerChargePointMonth: number;
-  requiredGrossEchargingPerChargePointMonth: number;
+  // e-charging verdient een vaste marge per kWh; serviceFeePct is daarvan afgeleid
+  // (= marge / netto rendement) en blijft beschikbaar voor de klant-revenue-share.
+  echargingMarginPerKwh: number;
+  echargingMarginPerChargePointMonth: number;
   serviceFeePct: number;
   customerNetPerChargePointMonth: number;
   echargingGrossPerChargePointMonth: number;
@@ -152,7 +137,6 @@ export type PricingResult = {
     echargingGrossPerMonth: number;
     echargingNetPerMonth: number;
     echargingNetPerYear: number;
-    efluxCostPerMonth: number;
     netReturnPerMonth: number;
   };
   deltas: {
@@ -163,20 +147,7 @@ export type PricingResult = {
 };
 
 export const defaultConfiguratorSettings: ConfiguratorSettings = configuratorSettingsSchema.parse({
-  baseTargetNetEchargingPerChargePointMonth: 20,
-  maxServiceFeePct: 0.4,
-  useTieredTarget: true,
-  tiers: [
-    { minNetReturnPerChargePointMonth: 0, maxNetReturnPerChargePointMonth: 75, targetNetEchargingPerChargePointMonth: 20 },
-    { minNetReturnPerChargePointMonth: 75, maxNetReturnPerChargePointMonth: 150, targetNetEchargingPerChargePointMonth: 30 },
-    { minNetReturnPerChargePointMonth: 150, maxNetReturnPerChargePointMonth: 250, targetNetEchargingPerChargePointMonth: 40 },
-    { minNetReturnPerChargePointMonth: 250, maxNetReturnPerChargePointMonth: 400, targetNetEchargingPerChargePointMonth: 55 },
-    { minNetReturnPerChargePointMonth: 400, maxNetReturnPerChargePointMonth: 600, targetNetEchargingPerChargePointMonth: 70 },
-    { minNetReturnPerChargePointMonth: 600, maxNetReturnPerChargePointMonth: null, targetNetEchargingPerChargePointMonth: 85 },
-  ],
-  efluxSubscriptionPerSocketMonth: 5.5,
-  efluxSetupPerSocket: 16.5,
-  efluxSetupAmortizationMonths: 12,
+  echargingMarginPerKwh: 0.05,
   defaultContractDurationMonths: 12,
   defaultNoticePeriodMonths: 3,
   defaultChargeTariffPerKwh: 0.58,
@@ -194,6 +165,7 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = configuratorSet
   defaultSocketCount: 8,
   inputRanges: {
     chargeTariffMin: 0.39, chargeTariffMax: 0.79, chargeTariffStep: 0.01,
+    energyCostMin: 0.10, energyCostMax: 0.50, energyCostStep: 0.01,
     kwhMin: 0, kwhMax: 900, kwhStep: 10,
     sessionsMin: 0, sessionsMax: 90, sessionsStep: 1,
     socketsMin: 1, socketsMax: 200,
@@ -244,24 +216,7 @@ export const excelDefaultPricingInput: PricingInput = pricingInputSchema.parse({
     idleFeePerMinute: 0.05,
     idleGraceMinutes: 60,
   },
-  targetMode: {
-    type: "fixedTarget",
-    targetNetEchargingPerChargePointMonth: 20,
-  },
 });
-
-function findTier(tiers: TargetTier[], netReturn: number) {
-  const sorted = [...tiers].sort((a, b) => a.minNetReturnPerChargePointMonth - b.minNetReturnPerChargePointMonth);
-  const current = sorted.find((tier) => {
-    const aboveMin = netReturn >= tier.minNetReturnPerChargePointMonth;
-    const belowMax = tier.maxNetReturnPerChargePointMonth === null || netReturn < tier.maxNetReturnPerChargePointMonth;
-    return aboveMin && belowMax;
-  }) ?? sorted[0] ?? null;
-  const next = current
-    ? sorted.find((tier) => tier.minNetReturnPerChargePointMonth > current.minNetReturnPerChargePointMonth) ?? null
-    : null;
-  return { current, next };
-}
 
 function calculateWith(input: PricingInput, settings: ConfiguratorSettings, override?: Partial<PricingInput["tariffs"]>) {
   const tariffs = { ...input.tariffs, ...override };
@@ -289,28 +244,19 @@ function calculateWith(input: PricingInput, settings: ConfiguratorSettings, over
     startFeeRevenuePerChargePointMonth +
     idleFeeRevenuePerChargePointMonth;
 
-  const { current, next } = findTier(settings.tiers, netReturnPerChargePointMonth);
-  const targetNetEchargingPerChargePointMonth = input.targetMode.type === "fixedTarget"
-    ? input.targetMode.targetNetEchargingPerChargePointMonth
-    : current?.targetNetEchargingPerChargePointMonth ?? settings.baseTargetNetEchargingPerChargePointMonth;
-
-  const efluxCostPerSocketMonth =
-    settings.efluxSubscriptionPerSocketMonth +
-    settings.efluxSetupPerSocket / settings.efluxSetupAmortizationMonths;
-  const efluxCostPerChargePointMonth = input.hardware.socketsPerChargePoint * efluxCostPerSocketMonth;
-  const requiredGrossEchargingPerChargePointMonth =
-    targetNetEchargingPerChargePointMonth + efluxCostPerChargePointMonth;
+  // e-charging verdient een vaste marge per kWh; de rest is voor de klant.
+  const echargingMarginPerKwh = settings.echargingMarginPerKwh;
+  const echargingMarginPerChargePointMonth = echargingMarginPerKwh * kwh;
+  const customerNetPerChargePointMonth = netReturnPerChargePointMonth - echargingMarginPerChargePointMonth;
+  const echargingGrossPerChargePointMonth = echargingMarginPerChargePointMonth;
+  const echargingNetPerChargePointMonth = echargingMarginPerChargePointMonth;
+  // Afgeleid effectief fee-percentage (voor klant-revenue-share bij conversie).
   const serviceFeePct = netReturnPerChargePointMonth > 0
-    ? requiredGrossEchargingPerChargePointMonth / netReturnPerChargePointMonth
+    ? echargingMarginPerChargePointMonth / netReturnPerChargePointMonth
     : 0;
-  const customerNetPerChargePointMonth = netReturnPerChargePointMonth * (1 - serviceFeePct);
-  const echargingGrossPerChargePointMonth = netReturnPerChargePointMonth * serviceFeePct;
-  const echargingNetPerChargePointMonth = echargingGrossPerChargePointMonth - efluxCostPerChargePointMonth;
   const chargePoints = input.hardware.chargePoints;
 
   return {
-    currentTier: current,
-    nextTier: next,
     kwhPerSession,
     chargingMinutesPerSession,
     sessionDurationMinutes,
@@ -322,10 +268,8 @@ function calculateWith(input: PricingInput, settings: ConfiguratorSettings, over
     startFeeRevenuePerChargePointMonth,
     idleFeeRevenuePerChargePointMonth,
     netReturnPerChargePointMonth,
-    targetNetEchargingPerChargePointMonth,
-    efluxCostPerSocketMonth,
-    efluxCostPerChargePointMonth,
-    requiredGrossEchargingPerChargePointMonth,
+    echargingMarginPerKwh,
+    echargingMarginPerChargePointMonth,
     serviceFeePct,
     customerNetPerChargePointMonth,
     echargingGrossPerChargePointMonth,
@@ -337,7 +281,6 @@ function calculateWith(input: PricingInput, settings: ConfiguratorSettings, over
       echargingGrossPerMonth: echargingGrossPerChargePointMonth * chargePoints,
       echargingNetPerMonth: echargingNetPerChargePointMonth * chargePoints,
       echargingNetPerYear: echargingNetPerChargePointMonth * chargePoints * 12,
-      efluxCostPerMonth: efluxCostPerChargePointMonth * chargePoints,
       netReturnPerMonth: netReturnPerChargePointMonth * chargePoints,
     },
   };
@@ -354,9 +297,6 @@ export function calculatePricing(rawInput: PricingInput, rawSettings: Configurat
   const blockingReasons: string[] = [];
   if (base.netReturnPerChargePointMonth <= 0) {
     blockingReasons.push("Netto rendement is nul of negatief. Verhoog tarief of verwacht gebruik voordat u kunt finaliseren.");
-  }
-  if (base.serviceFeePct > settings.maxServiceFeePct) {
-    blockingReasons.push("Service-fee ligt boven de ingestelde maximumgrens. Pas tariefstructuur of gebruiksverwachting aan.");
   }
 
   return {

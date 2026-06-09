@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import logoBright from "@/assets/logo-bright.svg";
-import { Settings, LogOut, Menu, X, type LucideIcon } from "lucide-react";
+import { Settings, LogOut, Menu, X, ChevronLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -114,27 +114,37 @@ export default function WorkspaceLayout() {
       <div className="relative px-5 py-6 border-b border-white/[0.06]">
         <img src={logoBright} alt="E-Charging" className="h-8 w-auto max-w-[168px]" />
         {accessible.length > 1 ? (
-          <div className="mt-4 flex gap-1 rounded-xl bg-white/[0.04] p-1">
-            {accessible.map((key) => {
-              const ws = WORKSPACES[key];
-              const isActive = key === workspace;
-              return (
+          (() => {
+            const idx = Math.max(0, accessible.indexOf(workspace));
+            const go = (d: number) =>
+              switchWorkspace(WORKSPACES[accessible[(idx + d + accessible.length) % accessible.length]].home);
+            return (
+              <div className="mt-4 flex items-center gap-1 rounded-xl bg-white/[0.04] p-1">
                 <button
-                  key={key}
                   type="button"
-                  onClick={() => switchWorkspace(ws.home)}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`flex-1 rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-colors ${
-                    isActive
-                      ? "bg-white/[0.08] text-white shadow-[inset_0_0_0_1px_hsl(140_70%_55%/0.3)]"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  }`}
+                  onClick={() => go(-1)}
+                  aria-label="Vorig werkblad"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-white"
                 >
-                  {ws.label}
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-              );
-            })}
-          </div>
+                <span
+                  className="flex-1 rounded-lg bg-white/[0.08] px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-white shadow-[inset_0_0_0_1px_hsl(140_70%_55%/0.3)]"
+                  aria-current="page"
+                >
+                  {activeWorkspace.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => go(1)}
+                  aria-label="Volgend werkblad"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-white"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })()
         ) : (
           <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 mt-3">
             {activeWorkspace.label}

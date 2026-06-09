@@ -8,5 +8,14 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tiptap/extension-image": "^3.26.0",
+    "@tiptap/extension-link": "^3.26.0",
+    "@tiptap/extension-placeholder": "^3.26.0",
+    "@tiptap/react": "^3.26.0",
+    "@tiptap/starter-kit": "^3.26.0",
+    "@types/dompurify": "^3.0.5",
+    "dompurify": "^3.4.8"
   }
 }

@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Clock, ListChecks, MapPin, User } from "lucide-react";
+import { CalendarClock, Clock, ListChecks, MapPin, User } from "lucide-react";
 import type { LeadWithTasks } from "@/hooks/useLeads";
 
 const euro = (n: number | null | undefined) =>
@@ -17,6 +17,7 @@ const PRIORITY_COLOR: Record<string, string> = {
 const SOURCE_LABEL: Record<string, string> = {
   manual: "Handmatig",
   website: "Website",
+  contactformulier: "Contactformulier",
   configurator: "Configurator",
   referral: "Referral",
   campaign: "Campagne",
@@ -108,12 +109,19 @@ export function LeadCard({
               {openTasks}
             </span>
           )}
-          {lead.expected_close_date && (
+          {lead.appointment_at ? (
+            <span className="flex items-center gap-1 font-medium text-primary">
+              <CalendarClock className="h-3 w-3" />
+              {new Date(lead.appointment_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+              {" "}
+              {new Date(lead.appointment_at).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          ) : lead.expected_close_date ? (
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
               {new Date(lead.expected_close_date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
             </span>
-          )}
+          ) : null}
         </span>
         {ownerName && (
           <span

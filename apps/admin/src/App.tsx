@@ -13,6 +13,7 @@ import ClientLayout from "./layouts/ClientLayout";
 import WorkspaceLayout from "./layouts/WorkspaceLayout";
 import NotFound from "./pages/NotFound";
 import InviteAccept from "./pages/InviteAccept";
+import OfferAccept from "./pages/OfferAccept";
 import ResetPassword from "./pages/ResetPassword";
 import { workspacesForRole } from "@/lib/workspaces";
 
@@ -31,13 +32,19 @@ const AdminClientWizard = lazy(() => import("./pages/admin/AdminClientWizard"));
 const AdminClientDetail = lazy(() => import("./pages/admin/AdminClientDetail"));
 const AdminFinancial = lazy(() => import("./pages/admin/AdminFinancial"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
+const AdminInstallations = lazy(() => import("./pages/admin/AdminInstallations"));
 const AdminLocationDetail = lazy(() => import("./pages/admin/AdminLocationDetail"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminConfiguratorSettings = lazy(() => import("./pages/admin/AdminConfiguratorSettings"));
 
 // Sales pages — lazy loaded
 const SalesLeads = lazy(() => import("./pages/sales/SalesLeads"));
+const SalesContacts = lazy(() => import("./pages/sales/SalesContacts"));
 const SalesOffertes = lazy(() => import("./pages/sales/SalesOffertes"));
+
+// Marketing pages — lazy loaded
+const MarketingBlogs = lazy(() => import("./pages/marketing/MarketingBlogs"));
+const BlogEditor = lazy(() => import("./pages/marketing/BlogEditor"));
 
 const queryClient = new QueryClient();
 
@@ -56,6 +63,7 @@ function AuthRedirect() {
   const workspaces = workspacesForRole(role);
   if (workspaces.includes("beheer")) return <Navigate to="/admin" replace />;
   if (workspaces.includes("sales")) return <Navigate to="/sales" replace />;
+  if (workspaces.includes("marketing")) return <Navigate to="/marketing" replace />;
   if (role === "client") return <Navigate to="/portal" replace />;
   return <Navigate to="/login" replace />;
 }
@@ -98,6 +106,7 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/wachtwoord-herstellen" element={<ResetPassword />} />
               <Route path="/uitnodiging/:token" element={<InviteAccept />} />
+              <Route path="/offerte/:token" element={<OfferAccept />} />
 
               {/* Client Portal */}
               <Route path="/portal" element={
@@ -126,6 +135,7 @@ const App = () => (
                 <Route path="klanten/:id" element={<AdminClientDetail />} />
                 <Route path="locaties" element={<AdminLocations />} />
                 <Route path="locaties/:id" element={<AdminLocationDetail />} />
+                <Route path="installaties" element={<AdminInstallations />} />
                 <Route path="financieel" element={<AdminFinancial />} />
                 <Route path="instellingen" element={<AdminSettings />} />
                 {/* Configurator verhuisd naar Sales — oude pad blijft werken via redirect */}
@@ -140,8 +150,21 @@ const App = () => (
               }>
                 <Route index element={<Navigate to="/sales/leads" replace />} />
                 <Route path="leads" element={<SalesLeads />} />
+                <Route path="contacten" element={<SalesContacts />} />
                 <Route path="offertes" element={<SalesOffertes />} />
                 <Route path="configurator" element={<AdminConfiguratorSettings />} />
+              </Route>
+
+              {/* Marketing-werkblad */}
+              <Route path="/marketing" element={
+                <RequireAuth allowedRoles={["admin", "manager", "marketing"]}>
+                  <WorkspaceLayout />
+                </RequireAuth>
+              }>
+                <Route index element={<Navigate to="/marketing/blogs" replace />} />
+                <Route path="blogs" element={<MarketingBlogs />} />
+                <Route path="blogs/nieuw" element={<BlogEditor />} />
+                <Route path="blogs/:id" element={<BlogEditor />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

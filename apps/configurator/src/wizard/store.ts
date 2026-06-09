@@ -60,7 +60,6 @@ export function createDefaultInput(settings: ConfiguratorSettings = defaultConfi
       idleFeePerMinute: settings.defaultIdleFeePerMinute,
       idleGraceMinutes: settings.defaultIdleGraceMinutes,
     },
-    targetMode: { type: "tieredTarget" },
   });
 }
 
@@ -73,15 +72,17 @@ type WizardStore = {
   ereEnabled: boolean;
   settings: ConfiguratorSettings;
   settingsVersion: number;
-  // sellerMode toont interne cijfers; standaard uit (klant-facing).
-  sellerMode: boolean;
   applySettings: (settings: ConfiguratorSettings, version: number) => void;
   updateInput: (updater: (draft: PricingInput) => void) => void;
   setSockets: (count: number) => void;
   setInvestmentRange: (min: number, max: number) => void;
   setEreEnabled: (enabled: boolean) => void;
   setLocationType: (locationType: string) => void;
-  setSellerMode: (sellerMode: boolean) => void;
+  // Laadt een eerder opgeslagen configuratie (lead) volledig in.
+  hydrateFromSaved: (
+    input: PricingInput,
+    extras: { ere: boolean; investmentMin: number | null; investmentMax: number | null },
+  ) => void;
 };
 
 const initialBand = bandFor(defaultConfiguratorSettings, defaultConfiguratorSettings.defaultSocketCount);
@@ -94,7 +95,6 @@ export const useWizardStore = create<WizardStore>()(
     ereEnabled: defaultConfiguratorSettings.ereEnabledByDefault,
     settings: defaultConfiguratorSettings,
     settingsVersion: 1,
-    sellerMode: false,
     applySettings: (settings, version) =>
       set((state) => {
         state.settings = settings;
@@ -142,6 +142,20 @@ export const useWizardStore = create<WizardStore>()(
         state.input.customer.locationType = locationType;
         state.input.usage = usageFor(state.settings, locationType);
       }),
-    setSellerMode: (sellerMode) => set((state) => { state.sellerMode = sellerMode; }),
+    hydrateFromSaved: (input, extras) =>
+      set((state) => {
+        const parsed = pricingInputSchema.parse(input);
+        state.input = parsed;
+        if (extras.investmentMin != null && extras.investmentMax != null) {
+          const lo = Math.max(0, Math.round(extras.investmentMin));
+          state.investmentMinTotal = lo;
+          state.investmentMaxTotal = Math.max(lo, Math.round(extras.investmentMax));
+        } else {
+          const band = bandFor(state.settings, parsed.hardware.chargePoints);
+          state.investmentMinTotal = band.min;
+          state.investmentMaxTotal = band.max;
+        }
+        state.ereEnabled = extras.ere;
+      }),
   })),
 );

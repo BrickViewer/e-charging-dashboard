@@ -65,6 +65,101 @@ export type Database = {
           },
         ]
       }
+      blog_posts: {
+        Row: {
+          author_name: string | null
+          canonical_url: string | null
+          category: string | null
+          category_slug: string | null
+          content: string | null
+          cover_image_alt: string | null
+          cover_image_height: number | null
+          cover_image_url: string | null
+          cover_image_width: number | null
+          created_at: string
+          created_by: string | null
+          excerpt: string | null
+          faq: Json
+          featured: boolean
+          id: string
+          noindex: boolean
+          organization_id: string
+          published_at: string | null
+          reading_minutes: number | null
+          seo_description: string | null
+          seo_title: string | null
+          slug: string
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_name?: string | null
+          canonical_url?: string | null
+          category?: string | null
+          category_slug?: string | null
+          content?: string | null
+          cover_image_alt?: string | null
+          cover_image_height?: number | null
+          cover_image_url?: string | null
+          cover_image_width?: number | null
+          created_at?: string
+          created_by?: string | null
+          excerpt?: string | null
+          faq?: Json
+          featured?: boolean
+          id?: string
+          noindex?: boolean
+          organization_id?: string
+          published_at?: string | null
+          reading_minutes?: number | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug: string
+          status?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string | null
+          canonical_url?: string | null
+          category?: string | null
+          category_slug?: string | null
+          content?: string | null
+          cover_image_alt?: string | null
+          cover_image_height?: number | null
+          cover_image_url?: string | null
+          cover_image_width?: number | null
+          created_at?: string
+          created_by?: string | null
+          excerpt?: string | null
+          faq?: Json
+          featured?: boolean
+          id?: string
+          noindex?: boolean
+          organization_id?: string
+          published_at?: string | null
+          reading_minutes?: number | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug?: string
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_posts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_points: {
         Row: {
           brand: string | null
@@ -496,6 +591,7 @@ export type Database = {
           calculate_ere_enabled: boolean
           charge_rate_per_kwh: number | null
           client_number: number | null
+          company_id: string | null
           company_name: string
           contact_email: string | null
           contact_name: string | null
@@ -512,6 +608,7 @@ export type Database = {
           ere_rate_per_kwh: number | null
           id: string
           kvk: string | null
+          managed: boolean
           monthly_platform_surcharge: number | null
           notes: string | null
           notice_period_months: number
@@ -519,6 +616,7 @@ export type Database = {
           payment_onboarding_status: string
           payment_onboarding_submitted_at: string | null
           payment_onboarding_verified_at: string | null
+          person_id: string | null
           portal_user_id: string | null
           revenue_share_percentage: number | null
           status: string | null
@@ -535,6 +633,7 @@ export type Database = {
           calculate_ere_enabled?: boolean
           charge_rate_per_kwh?: number | null
           client_number?: number | null
+          company_id?: string | null
           company_name: string
           contact_email?: string | null
           contact_name?: string | null
@@ -551,6 +650,7 @@ export type Database = {
           ere_rate_per_kwh?: number | null
           id?: string
           kvk?: string | null
+          managed?: boolean
           monthly_platform_surcharge?: number | null
           notes?: string | null
           notice_period_months?: number
@@ -558,6 +658,7 @@ export type Database = {
           payment_onboarding_status?: string
           payment_onboarding_submitted_at?: string | null
           payment_onboarding_verified_at?: string | null
+          person_id?: string | null
           portal_user_id?: string | null
           revenue_share_percentage?: number | null
           status?: string | null
@@ -574,6 +675,7 @@ export type Database = {
           calculate_ere_enabled?: boolean
           charge_rate_per_kwh?: number | null
           client_number?: number | null
+          company_id?: string | null
           company_name?: string
           contact_email?: string | null
           contact_name?: string | null
@@ -590,6 +692,7 @@ export type Database = {
           ere_rate_per_kwh?: number | null
           id?: string
           kvk?: string | null
+          managed?: boolean
           monthly_platform_surcharge?: number | null
           notes?: string | null
           notice_period_months?: number
@@ -597,6 +700,7 @@ export type Database = {
           payment_onboarding_status?: string
           payment_onboarding_submitted_at?: string | null
           payment_onboarding_verified_at?: string | null
+          person_id?: string | null
           portal_user_id?: string | null
           revenue_share_percentage?: number | null
           status?: string | null
@@ -605,10 +709,128 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "clients_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "clients_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          address_street: string | null
+          btw_number: string | null
+          city: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          kvk: string | null
+          name: string
+          normalized_name: string | null
+          notes: string | null
+          organization_id: string
+          postal_code: string | null
+          sector: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address_street?: string | null
+          btw_number?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kvk?: string | null
+          name: string
+          normalized_name?: string | null
+          notes?: string | null
+          organization_id: string
+          postal_code?: string | null
+          sector?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address_street?: string | null
+          btw_number?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kvk?: string | null
+          name?: string
+          normalized_name?: string | null
+          notes?: string | null
+          organization_id?: string
+          postal_code?: string | null
+          sector?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_persons: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_primary: boolean
+          person_id: string
+          role: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          person_id: string
+          role?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          person_id?: string
+          role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_persons_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_persons_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
             referencedColumns: ["id"]
           },
         ]
@@ -758,6 +980,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contact_intake_log: {
+        Row: {
+          created_at: string
+          id: string
+          ip_hash: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+        }
+        Relationships: []
       }
       customer_configurations: {
         Row: {
@@ -945,6 +1185,90 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      installation_orders: {
+        Row: {
+          client_id: string | null
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          external_ref: string | null
+          id: string
+          lead_id: string | null
+          notes: string | null
+          organization_id: string
+          quote_id: string | null
+          scheduled_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_ref?: string | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          organization_id: string
+          quote_id?: string | null
+          scheduled_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_ref?: string | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          organization_id?: string
+          quote_id?: string | null
+          scheduled_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installation_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installation_orders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installation_orders_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installation_orders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installation_orders_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lead_activities: {
         Row: {
@@ -1140,9 +1464,14 @@ export type Database = {
       leads: {
         Row: {
           address_street: string | null
+          appointment_at: string | null
+          appointment_notes: string | null
           charger_type: string | null
           city: string | null
+          company_id: string | null
           company_name: string
+          configuration: Json | null
+          configuration_updated_at: string | null
           configurator_session_id: string | null
           contact_email: string | null
           contact_name: string | null
@@ -1166,6 +1495,7 @@ export type Database = {
           owner_user_id: string | null
           owns_property: boolean | null
           parking_spaces: number | null
+          person_id: string | null
           position: number
           postal_code: string | null
           priority: string
@@ -1180,9 +1510,14 @@ export type Database = {
         }
         Insert: {
           address_street?: string | null
+          appointment_at?: string | null
+          appointment_notes?: string | null
           charger_type?: string | null
           city?: string | null
+          company_id?: string | null
           company_name: string
+          configuration?: Json | null
+          configuration_updated_at?: string | null
           configurator_session_id?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -1206,6 +1541,7 @@ export type Database = {
           owner_user_id?: string | null
           owns_property?: boolean | null
           parking_spaces?: number | null
+          person_id?: string | null
           position?: number
           postal_code?: string | null
           priority?: string
@@ -1220,9 +1556,14 @@ export type Database = {
         }
         Update: {
           address_street?: string | null
+          appointment_at?: string | null
+          appointment_notes?: string | null
           charger_type?: string | null
           city?: string | null
+          company_id?: string | null
           company_name?: string
+          configuration?: Json | null
+          configuration_updated_at?: string | null
           configurator_session_id?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -1246,6 +1587,7 @@ export type Database = {
           owner_user_id?: string | null
           owns_property?: boolean | null
           parking_spaces?: number | null
+          person_id?: string | null
           position?: number
           postal_code?: string | null
           priority?: string
@@ -1260,6 +1602,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "leads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "leads_converted_client_id_fkey"
             columns: ["converted_client_id"]
             isOneToOne: false
@@ -1271,6 +1620,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
             referencedColumns: ["id"]
           },
           {
@@ -1477,6 +1833,59 @@ export type Database = {
         }
         Relationships: []
       }
+      persons: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string | null
+          first_name: string | null
+          full_name: string | null
+          id: string
+          last_name: string | null
+          notes: string | null
+          organization_id: string
+          phone: string | null
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          first_name?: string | null
+          full_name?: string | null
+          id?: string
+          last_name?: string | null
+          notes?: string | null
+          organization_id: string
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          first_name?: string | null
+          full_name?: string | null
+          id?: string
+          last_name?: string | null
+          notes?: string | null
+          organization_id?: string
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "persons_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1509,6 +1918,57 @@ export type Database = {
           },
         ]
       }
+      quote_acceptances: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          organization_id: string
+          quote_id: string
+          status: string
+          token_hash: string
+          token_last4: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          organization_id: string
+          quote_id: string
+          status?: string
+          token_hash: string
+          token_last4?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          quote_id?: string
+          status?: string
+          token_hash?: string
+          token_last4?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_acceptances_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_acceptances_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotes: {
         Row: {
           calculation_data: Json | null
@@ -1516,22 +1976,27 @@ export type Database = {
           charge_point_type: string | null
           charge_rate_per_kwh: number | null
           client_id: string | null
+          company_id: string | null
           created_at: string
           energy_cost_per_kwh: number | null
           ere_rate_per_kwh: number | null
           estimated_kwh_per_point: number | null
           has_solar: boolean | null
           id: string
+          lead_id: string | null
+          line_items: Json
           locations_data: Json | null
           monthly_projection: Json | null
           notes: string | null
           num_charge_points: number | null
           organization_id: string
+          person_id: string | null
           prospect_company: string | null
           prospect_contact: string | null
           prospect_email: string | null
           quote_number: string | null
           revenue_share_pct: number | null
+          sent_at: string | null
           signed_at: string | null
           solar_percentage: number | null
           status: string | null
@@ -1540,6 +2005,7 @@ export type Database = {
           total_installation_cost: number | null
           updated_at: string | null
           valid_until: string | null
+          with_management: boolean
         }
         Insert: {
           calculation_data?: Json | null
@@ -1547,22 +2013,27 @@ export type Database = {
           charge_point_type?: string | null
           charge_rate_per_kwh?: number | null
           client_id?: string | null
+          company_id?: string | null
           created_at?: string
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           estimated_kwh_per_point?: number | null
           has_solar?: boolean | null
           id?: string
+          lead_id?: string | null
+          line_items?: Json
           locations_data?: Json | null
           monthly_projection?: Json | null
           notes?: string | null
           num_charge_points?: number | null
           organization_id: string
+          person_id?: string | null
           prospect_company?: string | null
           prospect_contact?: string | null
           prospect_email?: string | null
           quote_number?: string | null
           revenue_share_pct?: number | null
+          sent_at?: string | null
           signed_at?: string | null
           solar_percentage?: number | null
           status?: string | null
@@ -1571,6 +2042,7 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
+          with_management?: boolean
         }
         Update: {
           calculation_data?: Json | null
@@ -1578,22 +2050,27 @@ export type Database = {
           charge_point_type?: string | null
           charge_rate_per_kwh?: number | null
           client_id?: string | null
+          company_id?: string | null
           created_at?: string
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           estimated_kwh_per_point?: number | null
           has_solar?: boolean | null
           id?: string
+          lead_id?: string | null
+          line_items?: Json
           locations_data?: Json | null
           monthly_projection?: Json | null
           notes?: string | null
           num_charge_points?: number | null
           organization_id?: string
+          person_id?: string | null
           prospect_company?: string | null
           prospect_contact?: string | null
           prospect_email?: string | null
           quote_number?: string | null
           revenue_share_pct?: number | null
+          sent_at?: string | null
           signed_at?: string | null
           solar_percentage?: number | null
           status?: string | null
@@ -1602,6 +2079,7 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
+          with_management?: boolean
         }
         Relationships: [
           {
@@ -1612,10 +2090,31 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "quotes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "quotes_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
             referencedColumns: ["id"]
           },
         ]
@@ -1930,6 +2429,7 @@ export type Database = {
         }[]
       }
       move_stage: { Args: { p_dir: number; p_id: string }; Returns: undefined }
+      next_offer_number: { Args: never; Returns: string }
       reorder_leads: { Args: { p_updates: Json }; Returns: undefined }
       set_location_client: {
         Args: { client_id: string; location_id: string }
@@ -1955,7 +2455,13 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "manager" | "viewer" | "superadmin" | "sales"
+      app_role:
+        | "admin"
+        | "manager"
+        | "viewer"
+        | "superadmin"
+        | "sales"
+        | "marketing"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2083,7 +2589,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "manager", "viewer", "superadmin", "sales"],
+      app_role: [
+        "admin",
+        "manager",
+        "viewer",
+        "superadmin",
+        "sales",
+        "marketing",
+      ],
     },
   },
 } as const

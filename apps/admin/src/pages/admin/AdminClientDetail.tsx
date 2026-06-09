@@ -17,13 +17,14 @@ import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import {
   ArrowLeft, MapPin, Zap, FileText, Activity, Building2, Upload, Pencil, Save, X,
   Mail, MailCheck, MailWarning, RefreshCw, Loader2,
-  Plug, Wallet, Landmark, CheckCircle2, Circle, Trash2, AlertTriangle,
+  Plug, Wallet, Landmark, CheckCircle2, Circle, Trash2, AlertTriangle, Wrench, Send,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/services/activityLog";
 import { deleteClientProfile } from "@/services/clients";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useClientOrders, useUpdateOrder, useHandoffOrder, ORDER_STATUSES } from "@/hooks/useInstallations";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -275,6 +276,21 @@ export default function AdminClientDetail() {
       }).eq("id", id);
       if (error) throw error;
 
+      // Houd de gekoppelde contacten de bron van waarheid: naam → bedrijf,
+      // contactgegevens → persoon. De propagate-trigger synct daarna alle
+      // gekoppelde leads/klanten/offertes. (Adres/kvk blijven klant-/billing-lokaal.)
+      if (clientData.company_id && asText(editData.company_name).trim()) {
+        await supabase.from("companies").update({ name: asText(editData.company_name).trim() }).eq("id", clientData.company_id);
+      }
+      if (clientData.person_id) {
+        await supabase.from("persons").update({
+          first_name: asText(editData.contact_first_name) || null,
+          last_name: asText(editData.contact_last_name) || null,
+          email: asText(editData.contact_email) || null,
+          phone: editData.contact_phone ? `${editData.contact_country_code || "+31"}${editData.contact_phone}` : null,
+        }).eq("id", clientData.person_id);
+      }
+
       await logActivity({
         client_id: id,
         action: "client_updated",
@@ -450,6 +466,9 @@ export default function AdminClientDetail() {
               </span>
             )}
             <StatusBadge status={client.status || "actief"} />
+            {client.managed === false && (
+              <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Zonder beheer</span>
+            )}
           </div>
           {(client.kvk || client.contact_email) && (
             <p className="text-sm text-muted-foreground mt-1">
@@ -457,6 +476,28 @@ export default function AdminClientDetail() {
               {client.kvk && client.contact_email && " · "}
               {client.contact_email}
             </p>
+          )}
+          {client.company_id && (
+            <button
+              onClick={() => navigate(`/sales/contacten?company=${client.company_id}`)}
+              className="mt-1 block text-xs font-medium text-primary hover:underline"
+            >
+              → Bedrijfsdossier in Contacten
+            </button>
+          )}
+          {client.managed === false && (
+            <button
+              onClick={async () => {
+                if (!id) return;
+                const { error } = await supabase.from("clients").update({ managed: true }).eq("id", id);
+                if (error) { toast.error(error.message); return; }
+                queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
+                toast.success("Beheer geactiveerd");
+              }}
+              className="mt-1 block text-xs font-medium text-primary hover:underline"
+            >
+              Beheer activeren (dashboard + opbrengstdeling)
+            </button>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -554,6 +595,7 @@ export default function AdminClientDetail() {
           sendingInvite={sendingInvite}
           onSendInvitation={handleSendInvitation}
           onLinkLocation={() => navigate("/admin/locaties?filter=unlinked")}
+          onEdit={() => setIsEditing(true)}
         />
       )}
 
@@ -565,6 +607,7 @@ export default function AdminClientDetail() {
             invitation={typedInvitation}
             sendingInvite={sendingInvite}
             onSend={handleSendInvitation}
+            onEdit={() => setIsEditing(true)}
           />
           <PaymentDetailsPanel
             client={client}
@@ -572,6 +615,8 @@ export default function AdminClientDetail() {
           />
         </div>
       )}
+
+      {!isErased && <InstallationOrdersCard clientId={id} />}
 
       <Tabs defaultValue="overzicht">
         <TabsList>
@@ -1178,6 +1223,7 @@ function OnboardingChecklistPanel({
   sendingInvite,
   onSendInvitation,
   onLinkLocation,
+  onEdit,
 }: {
   client: ClientWithRelations;
   invitation: ClientInvitationSummary | null | undefined;
@@ -1185,6 +1231,7 @@ function OnboardingChecklistPanel({
   sendingInvite: boolean;
   onSendInvitation: (resend: boolean) => void;
   onLinkLocation: () => void;
+  onEdit: () => void;
 }) {
   const hasPortalAccount = Boolean(client.portal_user_id);
   const hasPendingInvite = invitation?.status === "pending";
@@ -1194,11 +1241,15 @@ function OnboardingChecklistPanel({
 
   const invitationSubtitle = hasPortalAccount
     ? "Klant kan inloggen"
-    : hasPendingInvite && invitation?.expires_at
-      ? `Verloopt ${format(new Date(invitation.expires_at), "d MMM yyyy", { locale: nl })}`
-      : invitation?.status === "expired"
-        ? "Laatste uitnodiging is verlopen"
-        : "Nog geen actieve uitnodiging";
+    : client.managed === false
+      ? "Zonder beheer — geen portaaltoegang"
+      : !client.contact_email
+        ? "Geen e-mailadres bekend"
+        : hasPendingInvite && invitation?.expires_at
+          ? `Verloopt ${format(new Date(invitation.expires_at), "d MMM yyyy", { locale: nl })}`
+          : invitation?.status === "expired"
+            ? "Laatste uitnodiging is verlopen"
+            : "Nog geen actieve uitnodiging";
 
   const steps: Array<{
     label: string;
@@ -1216,21 +1267,29 @@ function OnboardingChecklistPanel({
       done: hasSentInvite,
       subtitle: invitationSubtitle,
       action: !hasPortalAccount ? (
-        <Button
-          size="sm"
-          variant={hasPendingInvite ? "outline" : "default"}
-          onClick={() => onSendInvitation(Boolean(hasPendingInvite))}
-          disabled={sendingInvite || !client.contact_email}
-        >
-          {sendingInvite ? (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          ) : hasPendingInvite ? (
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-          ) : (
-            <Mail className="mr-1.5 h-3.5 w-3.5" />
-          )}
-          {hasPendingInvite ? "Opnieuw sturen" : "Uitnodiging sturen"}
-        </Button>
+        client.managed === false ? (
+          <span className="text-[11px] font-medium text-amber-600">Activeer eerst beheer</span>
+        ) : !client.contact_email ? (
+          <Button size="sm" variant="outline" onClick={onEdit}>
+            <Mail className="mr-1.5 h-3.5 w-3.5" /> E-mailadres toevoegen
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant={hasPendingInvite ? "outline" : "default"}
+            onClick={() => onSendInvitation(Boolean(hasPendingInvite))}
+            disabled={sendingInvite}
+          >
+            {sendingInvite ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : hasPendingInvite ? (
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+            ) : (
+              <Mail className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {hasPendingInvite ? "Opnieuw sturen" : "Uitnodiging sturen"}
+          </Button>
+        )
       ) : null,
     },
     {
@@ -1295,11 +1354,13 @@ function PortalAccountPanel({
   invitation,
   sendingInvite,
   onSend,
+  onEdit,
 }: {
   client: ClientWithRelations;
   invitation: ClientInvitationSummary | null | undefined;
   sendingInvite: boolean;
   onSend: (resend: boolean) => void;
+  onEdit: () => void;
 }) {
   const linked = !!client.portal_user_id;
   const isPending = invitation && invitation.status === "pending";
@@ -1365,6 +1426,23 @@ function PortalAccountPanel({
         Nieuwe sturen
       </Button>
     );
+  } else if (client.managed === false) {
+    icon = <Mail className="w-4 h-4 text-amber-500" />;
+    iconBg = "bg-amber-400/10 border-amber-400/20";
+    title = "Geen portaaltoegang";
+    subtitle = "Klant staat op 'zonder beheer' — activeer eerst beheer";
+    action = null;
+  } else if (!client.contact_email) {
+    icon = <MailWarning className="w-4 h-4 text-muted-foreground" />;
+    iconBg = "bg-muted/40 border-border";
+    title = "Geen e-mailadres";
+    subtitle = "Voeg een e-mailadres toe om uit te nodigen";
+    action = (
+      <Button size="sm" variant="outline" onClick={onEdit} className="portal-card">
+        <Mail className="w-3.5 h-3.5 mr-1.5" />
+        E-mailadres toevoegen
+      </Button>
+    );
   } else {
     icon = <Mail className="w-4 h-4 text-muted-foreground" />;
     iconBg = "bg-muted/40 border-border";
@@ -1374,7 +1452,7 @@ function PortalAccountPanel({
       <Button
         size="sm"
         onClick={() => onSend(false)}
-        disabled={sendingInvite || !client.contact_email}
+        disabled={sendingInvite}
       >
         {sendingInvite ? (
           <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -1464,4 +1542,51 @@ function SettlementAdminStatusBadge({ settlement }: { settlement: QuarterlySettl
   }
 
   return <StatusBadge status={settlement.status || "calculated"} />;
+}
+
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  nieuw: "Nieuw", overgedragen: "Overgedragen", ingepland: "Ingepland",
+  geinstalleerd: "Geïnstalleerd", afgerond: "Afgerond", geannuleerd: "Geannuleerd",
+};
+
+function InstallationOrdersCard({ clientId }: { clientId: string | undefined }) {
+  const orders = useClientOrders(clientId);
+  const update = useUpdateOrder();
+  const handoff = useHandoffOrder();
+  const list = orders.data ?? [];
+  if (orders.isLoading || list.length === 0) return null;
+
+  const doHandoff = async (orderId: string) => {
+    try {
+      const res = await handoff.mutateAsync(orderId);
+      toast.success(`Overgedragen aan e-portal (${res?.external_ref ?? "—"})`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Overdracht mislukt");
+    }
+  };
+
+  return (
+    <Card className="portal-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2"><Wrench className="h-4 w-4" />Installatie</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {list.map((o) => (
+          <div key={o.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border/70 p-3 text-sm">
+            <span className="font-medium text-foreground">{o.external_ref || "Installatie-order"}</span>
+            <Select value={o.status} onValueChange={(v) => update.mutate({ id: o.id, patch: { status: v } })}>
+              <SelectTrigger className="h-8 w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectContent>{ORDER_STATUSES.map((s) => <SelectItem key={s} value={s}>{ORDER_STATUS_LABEL[s]}</SelectItem>)}</SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString("nl-NL")}</span>
+            {o.status === "nieuw" && (
+              <Button size="sm" variant="outline" className="ml-auto" onClick={() => doHandoff(o.id)} disabled={handoff.isPending}>
+                <Send className="mr-1.5 h-4 w-4" /> Verstuur naar e-portal
+              </Button>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }

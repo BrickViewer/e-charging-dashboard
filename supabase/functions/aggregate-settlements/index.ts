@@ -264,15 +264,17 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
   const clientIds = aggregations.map((a) => a.client_id);
   const clientFee = new Map<string, number>();
   const clientVatLiable = new Map<string, boolean>();
+  const managedClients = new Set<string>();
   if (clientIds.length > 0) {
     const { data: clients } = await supabase
       .from("clients")
-      .select("id, echarging_fee_per_kwh, vat_liable")
+      .select("id, echarging_fee_per_kwh, vat_liable, managed")
       .in("id", clientIds);
     for (const c of clients ?? []) {
       const override = c.echarging_fee_per_kwh;
       clientFee.set(c.id as string, override === null || override === undefined ? orgFeePerKwh : Number(override));
       clientVatLiable.set(c.id as string, c.vat_liable !== false); // default BTW-plichtig
+      if (c.managed !== false) managedClients.add(c.id as string); // 'zonder beheer' → geen opbrengstdeling
     }
   }
 
@@ -282,6 +284,8 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
   let computed = 0, skipped = 0, errors = 0;
 
   for (const a of aggregations) {
+    // 'Zonder beheer'-klanten (managed=false) krijgen geen maandelijkse opbrengstdeling.
+    if (!managedClients.has(a.client_id)) { skipped++; continue; }
     const feePerKwh = clientFee.get(a.client_id) ?? orgFeePerKwh;
     const vatRate = (clientVatLiable.get(a.client_id) ?? true) ? 0.21 : 0; // BTW-plichtig → 21%
 

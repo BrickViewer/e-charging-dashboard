@@ -120,7 +120,7 @@ Deno.serve(async (req: Request) => {
     // Klant ophalen
     const { data: client, error: clientErr } = await supabase
       .from("clients")
-      .select("id, client_number, company_name, contact_name, contact_email, portal_user_id")
+      .select("id, client_number, company_name, contact_name, contact_email, portal_user_id, person_id")
       .eq("id", client_id)
       .maybeSingle();
     if (clientErr) throw clientErr;
@@ -128,7 +128,13 @@ Deno.serve(async (req: Request) => {
     if (client.portal_user_id) {
       return json({ status: "already_linked", message: "Klant heeft al een actief portal-account" }, 409);
     }
-    if (!client.contact_email) {
+    // E-mail bepalen: klant-adres, anders het adres van de gekoppelde persoon (bron-van-waarheid).
+    let recipientEmail = (client.contact_email as string | null) || null;
+    if (!recipientEmail && client.person_id) {
+      const { data: person } = await supabase.from("persons").select("email").eq("id", client.person_id).maybeSingle();
+      recipientEmail = (person?.email as string | null) || null;
+    }
+    if (!recipientEmail) {
       return json({ status: "error", message: "Klant heeft geen e-mailadres" }, 400);
     }
 
@@ -157,7 +163,7 @@ Deno.serve(async (req: Request) => {
       .from("client_invitations")
       .insert({
         client_id,
-        email: client.contact_email,
+        email: recipientEmail,
         token_hash: tokenHash,
         token_last4: token.slice(-4),
         status: "pending",
@@ -194,7 +200,7 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         from: `${FROM_NAME} <${FROM_EMAIL}>`,
-        to: [client.contact_email],
+        to: [recipientEmail],
         subject,
         html,
         text,
@@ -225,11 +231,11 @@ Deno.serve(async (req: Request) => {
       client_id,
       user_id: user.id,
       action: isResend ? "invitation_resent" : "invitation_sent",
-      description: `Uitnodiging ${isResend ? "opnieuw " : ""}verstuurd naar ${client.contact_email}`,
+      description: `Uitnodiging ${isResend ? "opnieuw " : ""}verstuurd naar ${recipientEmail}`,
       metadata: {
         invitation_id: invitation.id,
         resend_id: resendData.id,
-        email: client.contact_email,
+        email: recipientEmail,
         client_number: client.client_number,
       },
     });
@@ -239,7 +245,7 @@ Deno.serve(async (req: Request) => {
       invitation_id: invitation.id,
       resend_id: resendData.id,
       expires_at: invitation.expires_at,
-      to: client.contact_email,
+      to: recipientEmail,
     });
   } catch (err) {
     const msg = (err as Error).message ?? "Onbekende fout";

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   configuratorSettingsSchema,
   defaultConfiguratorSettings,
@@ -148,11 +148,6 @@ export default function AdminConfiguratorSettings() {
     };
   }, []);
 
-  const sortedTiers = useMemo(
-    () => [...settings.tiers].sort((a, b) => a.minNetReturnPerChargePointMonth - b.minNetReturnPerChargePointMonth),
-    [settings.tiers],
-  );
-
   // Tolerante update: geldige edits worden genormaliseerd, tussentijdse ongeldige
   // waarden (bv. leeg label of 0 in een verplicht veld) blijven staan zonder crash.
   // De harde validatie gebeurt bij Opslaan.
@@ -261,10 +256,8 @@ export default function AdminConfiguratorSettings() {
       </div>
 
       <Tabs defaultValue="defaults">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           <TabsTrigger value="defaults">Defaults</TabsTrigger>
-          <TabsTrigger value="tiers">Staffel</TabsTrigger>
-          <TabsTrigger value="eflux">E-Flux</TabsTrigger>
           <TabsTrigger value="locations">Locatietypes</TabsTrigger>
           <TabsTrigger value="tariffs">Tarieven</TabsTrigger>
           <TabsTrigger value="investment">ERE &amp; investering</TabsTrigger>
@@ -275,56 +268,12 @@ export default function AdminConfiguratorSettings() {
         <TabsContent value="defaults" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Globale defaults</CardTitle>
-              <CardDescription>Basisdoelen en commerciële grenzen.</CardDescription>
+              <CardTitle>Contract-defaults</CardTitle>
+              <CardDescription>Startwaarden voor de contractduur bij een nieuwe configuratie.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-5 md:grid-cols-3">
-              <CurrencyInput label="Target basis netto per paal/maand" value={settings.baseTargetNetEchargingPerChargePointMonth} onChange={(value) => updateSettings((c) => ({ ...c, baseTargetNetEchargingPerChargePointMonth: value }))} />
-              <CurrencyInput label="Maximale fee in %" value={settings.maxServiceFeePct * 100} onChange={(value) => updateSettings((c) => ({ ...c, maxServiceFeePct: Math.min(1, Math.max(0, value / 100)) }))} />
               <CurrencyInput label="Default contractduur" value={settings.defaultContractDurationMonths} onChange={(value) => updateSettings((c) => ({ ...c, defaultContractDurationMonths: Math.max(1, Math.round(value)) }))} />
               <CurrencyInput label="Opzegtermijn" value={settings.defaultNoticePeriodMonths} onChange={(value) => updateSettings((c) => ({ ...c, defaultNoticePeriodMonths: Math.max(0, Math.round(value)) }))} />
-              <ToggleField label="Staffel gebruiken" description="Uit betekent vast target basis gebruiken." checked={settings.useTieredTarget} onChange={(checked) => updateSettings((c) => ({ ...c, useTieredTarget: checked }))} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* TIERS */}
-        <TabsContent value="tiers" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Staffel</CardTitle>
-              <CardDescription>Target netto E-Charging per paal per maand op basis van klant-rendement.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {sortedTiers.map((tier, index) => (
-                <div key={`${tier.minNetReturnPerChargePointMonth}-${index}`} className="grid gap-3 rounded-xl border p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
-                  <CurrencyInput label="Vanaf netto" value={tier.minNetReturnPerChargePointMonth} onChange={(value) => updateSettings((c) => { const next = [...c.tiers]; next[index] = { ...next[index], minNetReturnPerChargePointMonth: value }; return { ...c, tiers: next }; })} />
-                  <CurrencyInput label="Tot netto" value={tier.maxNetReturnPerChargePointMonth ?? 0} onChange={(value) => updateSettings((c) => { const next = [...c.tiers]; next[index] = { ...next[index], maxNetReturnPerChargePointMonth: value <= 0 ? null : value }; return { ...c, tiers: next }; })} />
-                  <CurrencyInput label="Target netto" value={tier.targetNetEchargingPerChargePointMonth} onChange={(value) => updateSettings((c) => { const next = [...c.tiers]; next[index] = { ...next[index], targetNetEchargingPerChargePointMonth: value }; return { ...c, tiers: next }; })} />
-                  <Button variant="outline" size="icon" className="self-end" disabled={settings.tiers.length <= 1} onClick={() => updateSettings((c) => ({ ...c, tiers: c.tiers.filter((_, i) => i !== index) }))}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              <Button variant="outline" onClick={() => updateSettings((c) => ({ ...c, tiers: [...c.tiers, { minNetReturnPerChargePointMonth: 600, maxNetReturnPerChargePointMonth: null, targetNetEchargingPerChargePointMonth: 85 }] }))}>
-                <Plus className="mr-2 h-4 w-4" />
-                Tier toevoegen
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* EFLUX */}
-        <TabsContent value="eflux" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>E-Flux kosten</CardTitle>
-              <CardDescription>Deze kosten worden meegenomen in de vereiste fee.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-5 md:grid-cols-3">
-              <CurrencyInput label="Abonnement per socket/mnd" value={settings.efluxSubscriptionPerSocketMonth} onChange={(value) => updateSettings((c) => ({ ...c, efluxSubscriptionPerSocketMonth: value }))} />
-              <CurrencyInput label="Opstartkosten per socket" value={settings.efluxSetupPerSocket} onChange={(value) => updateSettings((c) => ({ ...c, efluxSetupPerSocket: value }))} />
-              <CurrencyInput label="Afschrijftermijn in maanden" value={settings.efluxSetupAmortizationMonths} onChange={(value) => updateSettings((c) => ({ ...c, efluxSetupAmortizationMonths: Math.max(1, Math.round(value)) }))} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -401,6 +350,7 @@ export default function AdminConfiguratorSettings() {
               <div className="grid gap-5 md:grid-cols-3">
                 <CurrencyInput label="Laadtarief/kWh" value={settings.defaultChargeTariffPerKwh} onChange={(value) => updateSettings((c) => ({ ...c, defaultChargeTariffPerKwh: value }))} />
                 <CurrencyInput label="Stroom-inkoop/kWh" value={settings.defaultEnergyCostPerKwh} onChange={(value) => updateSettings((c) => ({ ...c, defaultEnergyCostPerKwh: value }))} />
+                <CurrencyInput label="E-charging marge/kWh" value={settings.echargingMarginPerKwh} onChange={(value) => updateSettings((c) => ({ ...c, echargingMarginPerKwh: Math.max(0, value) }))} />
                 <CurrencyInput label="Starttarief/sessie" value={settings.defaultStartFeePerSession} onChange={(value) => updateSettings((c) => ({ ...c, defaultStartFeePerSession: value }))} />
                 <CurrencyInput label="Blokkeertarief/min" value={settings.defaultIdleFeePerMinute} onChange={(value) => updateSettings((c) => ({ ...c, defaultIdleFeePerMinute: value }))} />
                 <CurrencyInput label="Grace in minuten" value={settings.defaultIdleGraceMinutes} onChange={(value) => updateSettings((c) => ({ ...c, defaultIdleGraceMinutes: value }))} />
@@ -448,6 +398,9 @@ export default function AdminConfiguratorSettings() {
                   <CurrencyInput label="Laadtarief min" value={settings.inputRanges.chargeTariffMin} onChange={(v) => setRange("chargeTariffMin", v)} />
                   <CurrencyInput label="Laadtarief max" value={settings.inputRanges.chargeTariffMax} onChange={(v) => setRange("chargeTariffMax", v)} />
                   <CurrencyInput label="Laadtarief stap" value={settings.inputRanges.chargeTariffStep} onChange={(v) => setRange("chargeTariffStep", Math.max(0.001, v))} />
+                  <CurrencyInput label="Stroominkoop min" value={settings.inputRanges.energyCostMin} onChange={(v) => setRange("energyCostMin", v)} />
+                  <CurrencyInput label="Stroominkoop max" value={settings.inputRanges.energyCostMax} onChange={(v) => setRange("energyCostMax", v)} />
+                  <CurrencyInput label="Stroominkoop stap" value={settings.inputRanges.energyCostStep} onChange={(v) => setRange("energyCostStep", Math.max(0.001, v))} />
                   <CurrencyInput label="kWh min" value={settings.inputRanges.kwhMin} onChange={(v) => setRange("kwhMin", v)} />
                   <CurrencyInput label="kWh max" value={settings.inputRanges.kwhMax} onChange={(v) => setRange("kwhMax", v)} />
                   <CurrencyInput label="kWh stap" value={settings.inputRanges.kwhStep} onChange={(v) => setRange("kwhStep", Math.max(1, v))} />

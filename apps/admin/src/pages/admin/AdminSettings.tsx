@@ -538,6 +538,7 @@ export default function AdminSettings() {
                       <SelectItem value="admin">Admin — volledige toegang</SelectItem>
                       <SelectItem value="manager">Manager — beheer &amp; financieel</SelectItem>
                       <SelectItem value="sales">Sales — alleen het Sales-werkblad</SelectItem>
+                      <SelectItem value="marketing">Marketing — alleen het Marketing-werkblad</SelectItem>
                       <SelectItem value="viewer">Viewer — alleen lezen</SelectItem>
                     </SelectContent>
                   </Select>

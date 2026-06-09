@@ -10,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ArrowLeft, Building2, Mail } from "lucide-react";
+import { CompanyPicker } from "@/components/contacts/CompanyPicker";
+import { PersonPicker } from "@/components/contacts/PersonPicker";
+import { useClientForCompany } from "@/hooks/useContacts";
 
 // Klant aanmaken: alleen de basis die nodig is om de klant uit te nodigen.
 // Tarieven en contractdefaults blijven technisch gevuld, maar staan niet in deze startflow.
@@ -23,10 +26,12 @@ export default function AdminClientWizard() {
   const [saving, setSaving] = useState(false);
 
   const [company, setCompany] = useState({
+    company_id: "",
     company_name: "",
+    person_id: "",
+    person_name: "",
     kvk: "",
     btw_number: "",
-    contact_name: "",
     contact_email: "",
     contact_phone: "",
     billing_street: "",
@@ -34,10 +39,8 @@ export default function AdminClientWizard() {
     billing_city: "",
   });
 
-  const canSubmit =
-    company.company_name.trim() &&
-    company.contact_name.trim() &&
-    company.contact_email.trim();
+  const existingClient = useClientForCompany(company.company_id || undefined).data;
+  const canSubmit = !!company.company_id && !!company.person_id && !!company.contact_email.trim() && !existingClient;
 
   const handleSave = async () => {
     if (!org) {
@@ -45,21 +48,29 @@ export default function AdminClientWizard() {
       return;
     }
     if (!canSubmit) {
-      toast.error("Vul minimaal bedrijfsnaam, contactpersoon en e-mail in");
+      toast.error("Kies een bedrijf en contactpersoon en vul een e-mail in");
       return;
     }
     setSaving(true);
     try {
+      // E-mail/telefoon vastleggen op de persoon (bron van waarheid); de sync-trigger
+      // vult daarna company_name/contact_* op de klant vanuit company_id/person_id.
+      if (company.person_id && (company.contact_email.trim() || company.contact_phone.trim())) {
+        const personPatch: { email?: string; phone?: string } = {};
+        if (company.contact_email.trim()) personPatch.email = company.contact_email.trim();
+        if (company.contact_phone.trim()) personPatch.phone = company.contact_phone.trim();
+        await supabase.from("persons").update(personPatch).eq("id", company.person_id);
+      }
+
       const { data: client, error: clientErr } = await supabase
         .from("clients")
         .insert({
           organization_id: org.id,
-          company_name: company.company_name,
+          company_id: company.company_id,
+          person_id: company.person_id,
+          company_name: company.company_name || "Onbekend bedrijf",
           kvk: company.kvk || null,
           btw_number: company.btw_number || null,
-          contact_name: company.contact_name,
-          contact_email: company.contact_email,
-          contact_phone: company.contact_phone || null,
           billing_address_street: company.billing_street || null,
           billing_address_postal: company.billing_postal || null,
           billing_address_city: company.billing_city || null,
@@ -119,13 +130,23 @@ export default function AdminClientWizard() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label>Bedrijfsnaam *</Label>
-              <Input
-                value={company.company_name}
-                onChange={(e) => setCompany((p) => ({ ...p, company_name: e.target.value }))}
-                placeholder="Van der Berg Vastgoed BV"
+              <Label>Bedrijf *</Label>
+              <CompanyPicker
+                value={company.company_id || null}
+                valueLabel={company.company_name || null}
+                onChange={(id, c) => setCompany((p) => ({ ...p, company_id: id ?? "", company_name: c?.name ?? "" }))}
               />
             </div>
+            {existingClient && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+                <span className="text-amber-900">
+                  Dit bedrijf heeft al een klantaccount{existingClient.client_number ? ` (#${existingClient.client_number})` : ""}.
+                </span>
+                <Button size="sm" variant="outline" onClick={() => navigate(`/admin/klanten/${existingClient.id}`)}>
+                  Open klant
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>KVK-nummer</Label>
@@ -146,9 +167,11 @@ export default function AdminClientWizard() {
             </div>
             <div>
               <Label>Contactpersoon *</Label>
-              <Input
-                value={company.contact_name}
-                onChange={(e) => setCompany((p) => ({ ...p, contact_name: e.target.value }))}
+              <PersonPicker
+                value={company.person_id || null}
+                valueLabel={company.person_name || null}
+                companyId={company.company_id || null}
+                onChange={(id, person) => setCompany((p) => ({ ...p, person_id: id ?? "", person_name: person?.full_name ?? "" }))}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">

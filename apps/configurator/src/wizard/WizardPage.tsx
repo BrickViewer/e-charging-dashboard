@@ -108,6 +108,7 @@ export default function WizardPage() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [finalizeResult, setFinalizeResult] = useState<{ clientNumber: number | null; clientId: string } | null>(null);
+  const [savedToLead, setSavedToLead] = useState(false);
 
   const {
     input,
@@ -115,7 +116,6 @@ export default function WizardPage() {
     investmentMaxTotal,
     settings,
     settingsVersion,
-    sellerMode,
     applySettings,
     updateInput,
     setSockets,
@@ -123,7 +123,7 @@ export default function WizardPage() {
     setLocationType,
     ereEnabled,
     setEreEnabled,
-    setSellerMode,
+    hydrateFromSaved,
   } = useWizardStore();
 
   const pricing = useMemo(() => calculatePricing(input, settings), [input, settings]);
@@ -169,15 +169,25 @@ export default function WizardPage() {
     staleTime: 60_000,
   });
 
-  const prefillApplied = useRef(false);
-  useEffect(() => {
-    if (!settingsQuery.data) return;
-    applySettings(settingsQuery.data.settings, settingsQuery.data.version);
+  const leadId = settingsQuery.data && "leadId" in settingsQuery.data ? settingsQuery.data.leadId ?? null : null;
+  const headerLabel = (leadId && settingsQuery.data?.prefill?.companyName) || "Configurator";
 
-    // Eenmalige prefill vanuit de lead (geen dubbele invoer).
-    const p = settingsQuery.data.prefill;
-    if (p && !prefillApplied.current) {
-      prefillApplied.current = true;
+  // Eénmalig bootstrappen: instellingen toepassen + (opgeslagen) configuratie of
+  // basis-prefill van de lead laden. Niet opnieuw bij refetch → geen reset van
+  // wat de gebruiker intussen heeft aangepast.
+  const bootstrapped = useRef(false);
+  useEffect(() => {
+    const data = settingsQuery.data;
+    if (!data || bootstrapped.current) return;
+    bootstrapped.current = true;
+    applySettings(data.settings, data.version);
+
+    if (data.savedInput) {
+      hydrateFromSaved(data.savedInput, data.savedExtras ?? { ere: false, investmentMin: null, investmentMax: null });
+      return;
+    }
+    const p = data.prefill;
+    if (p) {
       updateInput((draft) => {
         if (p.companyName) draft.customer.companyName = p.companyName;
         if (p.contactName) draft.customer.contactName = p.contactName;
@@ -187,12 +197,12 @@ export default function WizardPage() {
         if (p.postalCode) draft.customer.postalCode = p.postalCode;
         if (p.city) draft.customer.city = p.city;
       });
-      if (p.locationType && settingsQuery.data.settings.locationTypes.some((t) => t.key === p.locationType)) {
+      if (p.locationType && data.settings.locationTypes.some((t) => t.key === p.locationType)) {
         setLocationType(p.locationType);
       }
       if (p.sockets && p.sockets > 0) setSockets(p.sockets);
     }
-  }, [applySettings, settingsQuery.data, updateInput, setLocationType, setSockets]);
+  }, [applySettings, settingsQuery.data, updateInput, setLocationType, setSockets, hydrateFromSaved]);
 
   // Autosave concept (debounce 2s).
   useEffect(() => {
@@ -214,19 +224,22 @@ export default function WizardPage() {
   };
 
   const finalizeMutation = useMutation({
-    mutationFn: () => configuratorApi.finalizeClient(sessionId, {
-      input,
-      settingsVersion,
-      ere: ereEnabled,
-      investmentMinTotal,
-      investmentMaxTotal,
-    }),
+    mutationFn: async () => {
+      const payload = { input, settingsVersion, ere: ereEnabled, investmentMinTotal, investmentMaxTotal };
+      if (leadId) {
+        await configuratorApi.saveToLead(sessionId, payload);
+        return { kind: "lead" as const };
+      }
+      const result = await configuratorApi.finalizeClient(sessionId, payload);
+      return { kind: "client" as const, clientNumber: result.clientNumber ?? null, clientId: result.clientId };
+    },
     onSuccess: (result) => {
       setFinalizeError(null);
-      setFinalizeResult({ clientNumber: result.clientNumber ?? null, clientId: result.clientId });
+      if (result.kind === "lead") setSavedToLead(true);
+      else setFinalizeResult({ clientNumber: result.clientNumber, clientId: result.clientId });
     },
     onError: (error) => {
-      setFinalizeError(error instanceof Error ? error.message : "Voorstel opslaan mislukt.");
+      setFinalizeError(error instanceof Error ? error.message : "Opslaan mislukt.");
     },
   });
 
@@ -240,7 +253,7 @@ export default function WizardPage() {
       <header className="cfg-header">
         <div className="flex items-center gap-3">
           <img src={logoBright} alt="E-Charging" className="h-6 w-auto" />
-          <span className="hidden border-l border-border-soft pl-3 text-sm font-medium text-muted-foreground sm:inline">Configurator</span>
+          <span className="hidden border-l border-border-soft pl-3 text-sm font-medium text-foreground sm:inline">{headerLabel}</span>
         </div>
         <div className="flex items-center gap-3">
           <button type="button" className="secondary-button !min-h-10 px-4" onClick={toggleFullscreen}
@@ -248,7 +261,7 @@ export default function WizardPage() {
             {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             <span className="hidden sm:inline">{isFullscreen ? "Verlaten" : "Fullscreen"}</span>
           </button>
-          <button type="button" className="primary-button !min-h-10 px-5" onClick={openSave}>Voorstel vastleggen</button>
+          <button type="button" className="primary-button !min-h-10 px-5" onClick={openSave}>Opslaan</button>
         </div>
       </header>
 
@@ -281,8 +294,6 @@ export default function WizardPage() {
             setLocationType={setLocationType}
             ereEnabled={ereEnabled}
             setEreEnabled={setEreEnabled}
-            sellerMode={sellerMode}
-            setSellerMode={setSellerMode}
             isFullscreen={isFullscreen}
             settings={settings}
           />
@@ -300,6 +311,8 @@ export default function WizardPage() {
           finalizing={finalizeMutation.isPending}
           finalizeError={finalizeError}
           finalizeResult={finalizeResult}
+          leadMode={!!leadId}
+          savedToLead={savedToLead}
           onClose={() => setSaveOpen(false)}
         />
       )}

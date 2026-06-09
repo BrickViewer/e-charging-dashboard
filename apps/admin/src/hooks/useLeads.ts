@@ -107,14 +107,23 @@ export function useStageTasks() {
   });
 }
 
-// Teamleden (voor eigenaar-toewijzing + weergave)
+// Teamleden (voor eigenaar-toewijzing + weergave) — alleen actieve interne
+// gebruikers (mét een rol in user_roles); portaalklanten en oude/rolloze
+// profielen worden uitgefilterd.
 export function useTeamProfiles() {
   return useQuery({
     queryKey: ["team-profiles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("user_id, full_name");
-      if (error) throw error;
-      return (data ?? []) as { user_id: string; full_name: string | null }[];
+      const [{ data: profiles, error: pErr }, { data: roles, error: rErr }] = await Promise.all([
+        supabase.from("profiles").select("user_id, full_name"),
+        supabase.from("user_roles").select("user_id"),
+      ]);
+      if (pErr) throw pErr;
+      if (rErr) throw rErr;
+      const internal = new Set((roles ?? []).map((r) => r.user_id));
+      return (profiles ?? [])
+        .filter((p) => internal.has(p.user_id))
+        .sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "")) as { user_id: string; full_name: string | null }[];
     },
   });
 }
@@ -319,46 +328,19 @@ export function useDeleteStage() {
   });
 }
 
-// Converteer een lead naar een klant (status 'actief'; client_number wordt door
-// een DB-trigger toegekend). Linkt de lead + verplaatst naar de Gewonnen-fase.
+// Converteer een lead naar een klant via de edge-functie. Bestaat er een
+// opgeslagen configuratie, dan krijgt de klant EXACT die tarieven/contract +
+// een customer_configurations-snapshot. Linkt de lead + zet 'm op Gewonnen.
 export function useConvertLeadToClient() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ lead, wonStageId }: { lead: Lead; wonStageId?: string }) => {
-      const uid = await currentUserId();
-      const { data: client, error } = await supabase
-        .from("clients")
-        .insert({
-          organization_id: lead.organization_id,
-          company_name: lead.company_name,
-          kvk: lead.kvk ?? null,
-          contact_name: lead.contact_name ?? null,
-          contact_email: lead.contact_email ?? null,
-          contact_phone: lead.contact_phone ?? null,
-          billing_address_street: lead.address_street ?? null,
-          billing_address_postal: lead.postal_code ?? null,
-          billing_address_city: lead.city ?? null,
-          status: "actief",
-          notes: lead.notes ?? "Geconverteerd vanuit lead",
-        })
-        .select("id, client_number")
-        .single();
+    mutationFn: async ({ lead }: { lead: Lead }) => {
+      const { data, error } = await supabase.functions.invoke<{ clientId: string; clientNumber: number | null }>(
+        "lead-convert-to-client",
+        { body: { lead_id: lead.id } },
+      );
       if (error) throw error;
-
-      const patch: LeadUpdate = { converted_client_id: client.id };
-      if (wonStageId) patch.stage_id = wonStageId;
-      const { error: e2 } = await supabase.from("leads").update(patch).eq("id", lead.id);
-      if (e2) throw e2;
-
-      await supabase.from("lead_activities").insert({
-        lead_id: lead.id,
-        organization_id: lead.organization_id,
-        user_id: uid,
-        type: "converted",
-        description: `Geconverteerd naar klant #${client.client_number ?? client.id}`,
-        metadata: { client_id: client.id },
-      });
-      return client;
+      return data as { clientId: string; clientNumber: number | null };
     },
     onSuccess: (_d, { lead }) => {
       qc.invalidateQueries({ queryKey: ["leads"] });
