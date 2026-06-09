@@ -102,13 +102,13 @@ export function AddLeadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 sm:max-w-lg">
+        <DialogHeader className="shrink-0 pb-3">
           <DialogTitle>Nieuwe lead</DialogTitle>
         </DialogHeader>
 
         <div
-          className="space-y-4"
+          className="ec-scroll flex-1 space-y-4 overflow-y-auto py-1 pr-1"
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
               e.preventDefault();
@@ -186,7 +186,7 @@ export function AddLeadDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="mt-3 shrink-0 border-t pt-3">
           {!canSubmit && (
             <p className="mr-auto self-center text-xs text-muted-foreground">Vul een bedrijfsnaam in en kies een fase.</p>
           )}

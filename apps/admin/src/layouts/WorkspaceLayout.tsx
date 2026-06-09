@@ -231,7 +231,9 @@ export default function WorkspaceLayout() {
         )}
 
         {/* Main content — ambient gloed komt van .admin-shell (index.css) */}
-        <main className="flex-1 min-h-screen lg:ml-[240px]">
+        {/* min-w-0: laat main krimpen i.p.v. meegroeien met brede content (Kanban),
+            zodat overflow-x-auto-blokken intern scrollen en de pagina niet horizontaal schuift. */}
+        <main className="flex-1 min-w-0 min-h-screen lg:ml-[240px]">
           <div className="p-4 lg:p-8 max-w-7xl mx-auto">
             <Outlet />
           </div>
