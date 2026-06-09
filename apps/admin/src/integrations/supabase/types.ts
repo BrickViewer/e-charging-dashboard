@@ -2025,6 +2025,8 @@ export type Database = {
           revenue_share_pct: number | null
           sent_at: string | null
           signed_at: string | null
+          signed_pdf_path: string | null
+          signer_name: string | null
           solar_percentage: number | null
           status: string | null
           tariff_data: Json | null
@@ -2062,6 +2064,8 @@ export type Database = {
           revenue_share_pct?: number | null
           sent_at?: string | null
           signed_at?: string | null
+          signed_pdf_path?: string | null
+          signer_name?: string | null
           solar_percentage?: number | null
           status?: string | null
           tariff_data?: Json | null
@@ -2099,6 +2103,8 @@ export type Database = {
           revenue_share_pct?: number | null
           sent_at?: string | null
           signed_at?: string | null
+          signed_pdf_path?: string | null
+          signer_name?: string | null
           solar_percentage?: number | null
           status?: string | null
           tariff_data?: Json | null

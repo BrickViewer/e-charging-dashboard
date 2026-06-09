@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Send, Trash2 } from "lucide-react";
+import { Eye, Plus, Send, Trash2 } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
+import { offerPdfBlob, type OfferPdfData } from "@/services/offerPdf";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
@@ -76,6 +77,27 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       });
       toast.success("Offerte opgeslagen");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
+  };
+
+  const pdfData = (): OfferPdfData => ({
+    quoteNumber: quote!.quote_number ?? "",
+    date: quote!.sent_at ?? null,
+    company: quote!.prospect_company ?? "",
+    contactName: quote!.prospect_contact ?? null,
+    numChargePoints: quote!.num_charge_points ?? (Number(items[0]?.qty) || null),
+    totalInvestment: grandTotal,
+    withManagement,
+    chargeTariffPerKwh: numOr(chargeRate),
+    idleFeePerMinute: numOr(idleFee),
+    idleGraceMinutes: numOr(idleGrace),
+    validUntil: quote!.valid_until ?? null,
+  });
+
+  const doPreview = async () => {
+    if (!quote) return;
+    try {
+      window.open(URL.createObjectURL(await offerPdfBlob(pdfData())), "_blank");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Preview mislukt"); }
   };
 
   const doSend = async () => {
@@ -175,10 +197,11 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={quote.status === "getekend"} />
             </div>
 
-            <div className="flex items-center justify-between border-t pt-4">
-              {isConcept ? (
-                <Button variant="outline" onClick={save} disabled={update.isPending}>Opslaan</Button>
-              ) : <span className="text-xs text-muted-foreground">Geldig tot {quote.valid_until ?? "—"}</span>}
+            <div className="flex items-center justify-between gap-2 border-t pt-4">
+              <div className="flex items-center gap-2">
+                {isConcept && <Button variant="outline" onClick={save} disabled={update.isPending}>Opslaan</Button>}
+                <Button variant="outline" onClick={doPreview}><Eye className="mr-1.5 h-4 w-4" /> Bekijken</Button>
+              </div>
               {quote.status !== "getekend" && (
                 <Button onClick={doSend} disabled={send.isPending || update.isPending}>
                   <Send className="mr-1.5 h-4 w-4" />
@@ -186,6 +209,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                 </Button>
               )}
             </div>
+            {!isConcept && <p className="-mt-3 text-right text-xs text-muted-foreground">Geldig tot {quote.valid_until ?? "—"}</p>}
 
             <div className="flex justify-end border-t pt-4">
               <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={doDelete} disabled={del.isPending}>

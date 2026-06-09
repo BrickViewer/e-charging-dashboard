@@ -2,12 +2,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
-// offerte-samenvatting; POST accordeert → status getekend, maakt/koppelt het
-// klantaccount (1:1) + een installatie-order, en zet de lead op Gewonnen.
+// offerte-samenvatting (genoeg om de PDF te renderen). POST accordeert: slaat de
+// getekende PDF op, zet status 'getekend' + ondertekenaar, maakt/koppelt het
+// klantaccount (1:1) + installatie-order, zet de lead op Gewonnen, mailt de klant
+// een bevestiging (met PDF) en e-charging een melding.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 function json(body: unknown, status = 200) {
@@ -16,6 +18,33 @@ function json(body: unknown, status = 200) {
 function bytesToHex(b: Uint8Array) { return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(""); }
 async function sha256Hex(v: string) { return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))); }
 function num(v: unknown): number | null { const n = Number(v); return Number.isFinite(n) ? n : null; }
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64.replace(/^data:[^,]+,/, ""));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+const RESEND_API = "https://api.resend.com/emails";
+async function sendEmail(opts: { to: string; subject: string; html: string; text: string; attachments?: { filename: string; content: string }[] }) {
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key) return;
+  const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
+  const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
+  try {
+    await fetch(RESEND_API, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: `${FROM_NAME} <${FROM_EMAIL}>`, to: [opts.to], subject: opts.subject,
+        html: opts.html, text: opts.text, reply_to: "info@e-charging.nl",
+        ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
+      }),
+    });
+  } catch (_e) { /* mail mag de acceptatie niet blokkeren */ }
+}
+
+const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -27,8 +56,9 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   let token = url.searchParams.get("token") ?? "";
+  let body: Record<string, unknown> = {};
   if (req.method === "POST") {
-    const body = await req.json().catch(() => ({}));
+    body = await req.json().catch(() => ({}));
     token = typeof body.token === "string" && body.token ? body.token : token;
   }
   if (!token) return json({ status: "error", message: "Token ontbreekt" }, 400);
@@ -42,18 +72,31 @@ Deno.serve(async (req) => {
     const { data: quote } = await sb.from("quotes").select("*").eq("id", acc.quote_id).maybeSingle();
     if (!quote) return json({ status: "not_found", message: "Offerte niet gevonden" }, 404);
 
+    const { data: lead } = quote.lead_id
+      ? await sb.from("leads").select("*").eq("id", quote.lead_id).maybeSingle()
+      : { data: null as any };
+
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
+    const tariffs = (quote.tariff_data ?? {}) as Record<string, any>;
+    const snap = (quote.calculation_snapshot ?? {}) as Record<string, any>;
+    const addr = lead ? [lead.address_street, [lead.postal_code, lead.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
+    // Samenvatting met alle velden die de publieke pagina nodig heeft om de PDF te renderen.
     const summary = {
       quoteNumber: quote.quote_number,
       company: quote.prospect_company,
       contact: quote.prospect_contact,
-      lineItems: Array.isArray(quote.line_items) ? quote.line_items : [],
+      addressLine: addr || null,
+      numChargePoints: quote.num_charge_points ?? null,
       total,
-      monthlyProjection: quote.monthly_projection ?? null,
-      tariffs: quote.tariff_data ?? null,
-      validUntil: quote.valid_until,
-      status: quote.status,
       withManagement: quote.with_management !== false,
+      durationMonths: snap?.pricing_input?.contract?.durationMonths ?? null,
+      noticeMonths: snap?.pricing_input?.contract?.noticePeriodMonths ?? null,
+      chargeTariffPerKwh: num(quote.charge_rate_per_kwh) ?? num(tariffs.chargeTariffPerKwh),
+      idleFeePerMinute: num(tariffs.idleFeePerMinute),
+      idleGraceMinutes: num(tariffs.idleGraceMinutes),
+      validUntil: quote.valid_until,
+      date: quote.sent_at ?? quote.created_at ?? null,
+      status: quote.status,
       acceptanceStatus: acc.status,
     };
 
@@ -68,16 +111,15 @@ Deno.serve(async (req) => {
     if (acc.status === "accepted" || quote.status === "getekend") return json({ status: "already_accepted", quote: summary });
     if (acc.status !== "pending" || expired) return json({ status: "invalid", message: "Deze link is niet meer geldig." }, 410);
 
-    const org = quote.organization_id as string;
-    const { data: lead } = quote.lead_id
-      ? await sb.from("leads").select("*").eq("id", quote.lead_id).maybeSingle()
-      : { data: null as any };
+    const signerName = typeof body.signer_name === "string" ? body.signer_name.trim() : "";
+    if (!signerName) return json({ status: "invalid", message: "Naam ontbreekt." }, 400);
+    const signedPdfB64 = typeof body.signed_pdf_base64 === "string" ? body.signed_pdf_base64 : "";
 
+    const org = quote.organization_id as string;
     const companyId = (lead?.company_id ?? quote.company_id) as string | null;
     const personId = (lead?.person_id ?? quote.person_id) as string | null;
 
-    // Bron-van-waarheid completeren: zet e-mail/telefoon op de persoon als die leeg is,
-    // zodat de klant (via de sync-trigger) een e-mailadres krijgt en uitnodigen later werkt.
+    // Bron-van-waarheid completeren: zet e-mail/telefoon op de persoon als die leeg is.
     if (personId) {
       const email = (lead?.contact_email ?? quote.prospect_email ?? null) as string | null;
       const phone = (lead?.contact_phone ?? null) as string | null;
@@ -143,8 +185,20 @@ Deno.serve(async (req) => {
       notes: `Vanuit getekende offerte ${quote.quote_number}`,
     });
 
+    // Getekende PDF opslaan (privé bucket). Mag de acceptatie niet blokkeren.
+    let signedPath: string | null = null;
+    if (signedPdfB64) {
+      const path = `signed/${quote.id}.pdf`;
+      const { error: upErr } = await sb.storage.from("quote-documents")
+        .upload(path, base64ToBytes(signedPdfB64), { contentType: "application/pdf", upsert: true });
+      if (!upErr) signedPath = path;
+    }
+
     // Offerte + acceptatie afronden.
-    await sb.from("quotes").update({ status: "getekend", signed_at: new Date().toISOString(), client_id: clientId }).eq("id", quote.id);
+    await sb.from("quotes").update({
+      status: "getekend", signed_at: new Date().toISOString(), client_id: clientId,
+      signer_name: signerName, signed_pdf_path: signedPath,
+    }).eq("id", quote.id);
     await sb.from("quote_acceptances").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", acc.id);
 
     // Lead naar Gewonnen + koppelen.
@@ -157,10 +211,43 @@ Deno.serve(async (req) => {
       await sb.from("leads").update(patch).eq("id", lead.id);
       await sb.from("lead_activities").insert({
         lead_id: lead.id, organization_id: org, type: "quote_accepted",
-        description: `Offerte ${quote.quote_number} digitaal akkoord → klantaccount + installatie-order`,
-        metadata: { quote_id: quote.id, client_id: clientId },
+        description: `Offerte ${quote.quote_number} getekend door ${signerName} → klantaccount + installatie-order`,
+        metadata: { quote_id: quote.id, client_id: clientId, signer_name: signerName },
       });
     }
+    await sb.from("activity_log").insert({
+      organization_id: org, client_id: clientId, action: "quote_signed",
+      details: { quote_id: quote.id, quote_number: quote.quote_number, signer_name: signerName, signed_pdf_path: signedPath },
+    });
+
+    // Mails: klant-bevestiging (met getekende PDF) + interne melding.
+    const attach = signedPdfB64 ? [{ filename: `offerte-${quote.quote_number}.pdf`, content: signedPdfB64.replace(/^data:[^,]+,/, "") }] : undefined;
+    const recipient = (quote.prospect_email ?? lead?.contact_email) as string | null;
+    if (recipient) {
+      await sendEmail({
+        to: recipient,
+        subject: `Bevestiging — offerte ${quote.quote_number} getekend`,
+        html: `<!doctype html><html><body style="margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#0b1220;padding:32px 16px">
+<div style="max-width:560px;margin:auto;background:#0f1629;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:30px 34px">
+  <div style="font-size:20px;font-weight:800;color:#fff">e<span style="color:#05A500">-</span>charging</div>
+  <h1 style="font-size:22px;color:#fff;margin:18px 0 6px">Bedankt — uw offerte is getekend</h1>
+  <p style="color:#9aa4b2;font-size:14px;line-height:1.6;margin:0 0 14px">Beste ${signerName},<br><br>Hartelijk dank voor uw akkoord op offerte <strong style="color:#fff">${quote.quote_number}</strong> (eenmalige investering ${euro(total)} excl. BTW). De getekende offerte vindt u als bijlage bij deze e-mail.</p>
+  <p style="color:#9aa4b2;font-size:14px;line-height:1.6;margin:0">Wij nemen contact met u op voor de planning van de installatie. Heeft u vragen? Mail ons gerust via info@e-charging.nl.</p>
+  <div style="margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06);color:#6b7280;font-size:11px">E-Charging · Dwarsweg 8, 5301 KT Zaltbommel · info@e-charging.nl</div>
+</div></body></html>`,
+        text: `Beste ${signerName},\n\nBedankt voor uw akkoord op offerte ${quote.quote_number} (eenmalige investering ${euro(total)} excl. BTW). De getekende offerte zit als bijlage bij deze e-mail.\n\nWij nemen contact op voor de planning van de installatie.\n\nE-Charging · info@e-charging.nl`,
+        attachments: attach,
+      });
+    }
+    await sendEmail({
+      to: "info@e-charging.nl",
+      subject: `✅ Offerte ${quote.quote_number} getekend — ${quote.prospect_company ?? ""}`,
+      html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">
+  <p><strong>${quote.prospect_company ?? "Onbekend bedrijf"}</strong> heeft offerte <strong>${quote.quote_number}</strong> digitaal getekend.</p>
+  <ul><li>Getekend door: ${signerName}</li><li>Investering: ${euro(total)} excl. BTW</li><li>Een klantaccount en installatie-order zijn automatisch aangemaakt.</li></ul></div>`,
+      text: `${quote.prospect_company ?? "Onbekend bedrijf"} heeft offerte ${quote.quote_number} getekend door ${signerName}. Investering ${euro(total)} excl. BTW. Klantaccount + installatie-order aangemaakt.`,
+      attachments: attach,
+    });
 
     return json({ status: "accepted", quote: { ...summary, status: "getekend", acceptanceStatus: "accepted" } });
   } catch (err) {

@@ -66,26 +66,28 @@ Deno.serve(async (req) => {
 
     const acceptUrl = `${PUBLIC_URL}/offerte/${token}`;
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
-    const monthly = quote.monthly_projection?.customerPerMonth ? Math.round(Number(quote.monthly_projection.customerPerMonth)) : null;
-    const lineRows = (Array.isArray(quote.line_items) ? quote.line_items : [])
-      .map((li: any) => `<tr><td style="padding:6px 0;color:#374151">${li.description}</td><td style="padding:6px 0;text-align:right;color:#111827;font-weight:600">${euro(Number(li.total) || 0)}</td></tr>`)
-      .join("");
 
     if (RESEND_API_KEY) {
-      const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f6f7f9;padding:24px">
-<div style="max-width:560px;margin:auto;background:#fff;border-radius:14px;padding:28px;border:1px solid #e5e7eb">
-  <p style="font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#05A500;font-weight:700;margin:0">Offerte ${quote.quote_number}</p>
-  <h1 style="font-size:22px;color:#111827;margin:6px 0 4px">Uw voorstel voor laadpalen</h1>
-  <p style="color:#6b7280;font-size:14px;margin:0 0 18px">Voor ${quote.prospect_company ?? "uw organisatie"}</p>
-  <table style="width:100%;border-collapse:collapse;font-size:14px">${lineRows}
-    <tr><td style="padding:10px 0 0;border-top:1px solid #e5e7eb;font-weight:700;color:#111827">Totaal investering</td>
-        <td style="padding:10px 0 0;border-top:1px solid #e5e7eb;text-align:right;font-weight:800;color:#111827">${euro(total)}</td></tr>
-  </table>
-  ${monthly ? `<p style="margin:16px 0 0;color:#374151;font-size:14px">Geschatte opbrengst: <strong style="color:#05A500">${euro(monthly)} / maand</strong></p>` : ""}
-  <a href="${acceptUrl}" style="display:inline-block;margin:24px 0 8px;background:#05A500;color:#fff;text-decoration:none;padding:13px 22px;border-radius:10px;font-weight:700">Offerte bekijken & akkoord geven</a>
-  <p style="color:#9ca3af;font-size:12px;margin-top:14px">Deze link is 30 dagen geldig. Geldig tot ${quote.valid_until ?? ""}.</p>
+      // Branded, één prijs (totale investering). Géén uitsplitsing, géén maandbedrag.
+      const html = `<!doctype html><html><body style="margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#0b1220;padding:32px 16px">
+<div style="max-width:560px;margin:auto;background:#0f1629;border:1px solid rgba(255,255,255,.08);border-radius:18px;overflow:hidden">
+  <div style="padding:30px 34px 0"><div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-.01em">e<span style="color:#05A500">-</span>charging</div></div>
+  <div style="padding:22px 34px 34px">
+    <p style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#05A500;font-weight:700;margin:0 0 6px">Offerte ${quote.quote_number}</p>
+    <h1 style="font-size:24px;line-height:1.25;color:#fff;margin:0 0 6px">Wij plaatsen uw laadpalen.<br><span style="color:#9aa4b2;font-weight:500">U verdient eraan.</span></h1>
+    <p style="color:#9aa4b2;font-size:14px;margin:6px 0 22px">Voor ${quote.prospect_company ?? "uw organisatie"}</p>
+    <div style="background:rgba(5,165,0,.10);border:1px solid rgba(5,165,0,.30);border-radius:14px;padding:18px 20px;margin:0 0 24px">
+      <p style="margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7dd87a;font-weight:700">Eenmalige investering</p>
+      <p style="margin:4px 0 0;font-size:30px;font-weight:800;color:#fff">${euro(total)} <span style="font-size:13px;font-weight:500;color:#9aa4b2">excl. BTW</span></p>
+      <p style="margin:6px 0 0;font-size:12px;color:#9aa4b2">Voor de complete oplevering — hardware, montage, aansluiting, NEN-keuring en activatie.</p>
+    </div>
+    <a href="${acceptUrl}" style="display:block;text-align:center;background:#05A500;color:#fff;text-decoration:none;padding:15px 22px;border-radius:12px;font-weight:700;font-size:15px">Offerte bekijken &amp; tekenen</a>
+    <p style="color:#6b7280;font-size:12px;margin:18px 0 0;text-align:center">Open de offerte om alle voorwaarden te lezen en digitaal te ondertekenen.<br>Deze link is 30 dagen geldig${quote.valid_until ? ` (t/m ${quote.valid_until})` : ""}.</p>
+    <p style="color:#6b7280;font-size:11px;margin:14px 0 0;text-align:center">De Algemene Voorwaarden en Verwerkersovereenkomst E-Charging horen bij deze offerte.</p>
+  </div>
+  <div style="padding:16px 34px;border-top:1px solid rgba(255,255,255,.06);color:#6b7280;font-size:11px;text-align:center">E-Charging · Dwarsweg 8, 5301 KT Zaltbommel · info@e-charging.nl</div>
 </div></body></html>`;
-      const text = `Offerte ${quote.quote_number} voor ${quote.prospect_company ?? ""}\nTotaal investering: ${euro(total)}\n${monthly ? `Geschatte opbrengst: ${euro(monthly)}/maand\n` : ""}Bekijk & accordeer: ${acceptUrl}\n(30 dagen geldig)`;
+      const text = `Offerte ${quote.quote_number} — voor ${quote.prospect_company ?? "uw organisatie"}\n\nEenmalige investering: ${euro(total)} excl. BTW (complete oplevering).\n\nBekijk de offerte en teken digitaal: ${acceptUrl}\n(30 dagen geldig${quote.valid_until ? `, t/m ${quote.valid_until}` : ""})\n\nDe Algemene Voorwaarden en Verwerkersovereenkomst E-Charging horen bij deze offerte.`;
       const res = await fetch(RESEND_API, {
         method: "POST",
         headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
