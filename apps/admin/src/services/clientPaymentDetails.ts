@@ -130,8 +130,9 @@ export async function changePortalPassword(currentEmail: string, currentPassword
 }
 
 export async function requestPasswordReset(email: string) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-    redirectTo: `${window.location.origin}/wachtwoord-herstellen`,
+  // Branded reset-mail via Resend (edge-functie password-reset) i.p.v. Supabase' ingebouwde mailer.
+  const { error } = await supabase.functions.invoke("password-reset", {
+    body: { email: email.trim().toLowerCase(), redirectTo: `${window.location.origin}/wachtwoord-herstellen` },
   });
   if (error) throw error;
 }
