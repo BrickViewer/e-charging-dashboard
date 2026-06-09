@@ -407,21 +407,6 @@ export default function AdminClientDetail() {
   // Aantal formele afrekeningen (live/calculated tellen niet)
   const afrekeningenCount = settlementsApproved.length;
 
-  // Laadtarieven uit Road — verzameld van alle palen onder deze klant's locaties.
-  // Niet meer handmatig op klant-niveau; komt direct uit evseControllers.costSettings.pricePerKwh.
-  const roadLaadtarief = (() => {
-    const palen = (client.locations ?? []).flatMap((l) => l.charge_points ?? []);
-    const tarieven = palen
-      .map((p) => p.current_price_per_kwh)
-      .filter((v): v is number => v !== null && v !== undefined)
-      .map((v) => Number(v));
-    if (palen.length === 0) return { display: "Geen palen gekoppeld", uniform: null as number | null };
-    if (tarieven.length === 0) return { display: "—", uniform: null };
-    const min = Math.min(...tarieven);
-    const max = Math.max(...tarieven);
-    if (min === max) return { display: `€${min.toFixed(2)}/kWh`, uniform: min };
-    return { display: `€${min.toFixed(2)} – €${max.toFixed(2)}/kWh`, uniform: null };
-  })();
 
   const ed = editData;
   const setEd = (field: string, value: string | number | null) => {
@@ -641,12 +626,7 @@ export default function AdminClientDetail() {
                     <div><Label>Startdatum</Label><Input type="date" value={ed.contract_start_date} onChange={e => setEd("contract_start_date", e.target.value)} /></div>
                     <div><Label>Looptijd (maanden)</Label><Input type="number" value={ed.contract_duration_months} onChange={e => setEd("contract_duration_months", e.target.value)} /></div>
                     <div><Label>E-Charging fee (€/kWh, leeg = standaard)</Label><Input type="number" step="0.01" placeholder="standaard 0,10" value={ed.echarging_fee_per_kwh} onChange={e => setEd("echarging_fee_per_kwh", e.target.value)} /></div>
-                    <div>
-                      <Label>Laadtarief</Label>
-                      <p className="text-sm px-2 py-1.5 bg-muted/50 rounded text-muted-foreground">
-                        {roadLaadtarief.display} <span className="text-xs">(uit Road, niet bewerkbaar)</span>
-                      </p>
-                    </div>
+                    <div><Label>Laadtarief (€/kWh)</Label><Input type="number" step="0.01" value={ed.charge_rate_per_kwh} onChange={e => setEd("charge_rate_per_kwh", e.target.value)} /></div>
                     <div><Label>Energiekost (€/kWh)</Label><Input type="number" step="0.01" value={ed.energy_cost_per_kwh} onChange={e => setEd("energy_cost_per_kwh", e.target.value)} /></div>
                     <div><Label>ERE-tarief (€/kWh)</Label><Input type="number" step="0.01" value={ed.ere_rate_per_kwh} onChange={e => setEd("ere_rate_per_kwh", e.target.value)} /></div>
                   </div>
@@ -655,10 +635,7 @@ export default function AdminClientDetail() {
                     <p><span className="text-muted-foreground">Startdatum:</span> {client.contract_start_date || "—"}</p>
                     <p><span className="text-muted-foreground">Looptijd:</span> {client.contract_duration_months} maanden</p>
                     <p><span className="text-muted-foreground">E-Charging fee:</span> {client.echarging_fee_per_kwh != null ? `€${Number(client.echarging_fee_per_kwh).toFixed(2)}/kWh` : "standaard (€0,10/kWh)"}</p>
-                    <p>
-                      <span className="text-muted-foreground">Laadtarief:</span> {roadLaadtarief.display}
-                      <span className="text-xs text-muted-foreground ml-1">(uit Road)</span>
-                    </p>
+                    <p><span className="text-muted-foreground">Laadtarief:</span> {client.charge_rate_per_kwh != null ? `€${Number(client.charge_rate_per_kwh).toFixed(2)}/kWh` : "—"}</p>
                     <p><span className="text-muted-foreground">Energiekost:</span> €{Number(client.energy_cost_per_kwh).toFixed(2)}/kWh</p>
                     <p><span className="text-muted-foreground">ERE-tarief:</span> €{Number(client.ere_rate_per_kwh).toFixed(2)}/kWh</p>
                   </div>
