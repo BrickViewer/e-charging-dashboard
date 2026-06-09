@@ -27,7 +27,6 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   const [chargeRate, setChargeRate] = useState("");
   const [idleFee, setIdleFee] = useState("");
   const [idleGrace, setIdleGrace] = useState("");
-  const [monthly, setMonthly] = useState("");
 
   useEffect(() => {
     if (quote) {
@@ -39,8 +38,6 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       const td = (quote.tariff_data ?? {}) as Record<string, unknown>;
       setIdleFee(td.idleFeePerMinute != null ? String(td.idleFeePerMinute) : "");
       setIdleGrace(td.idleGraceMinutes != null ? String(td.idleGraceMinutes) : "");
-      const mp = (quote.monthly_projection ?? {}) as Record<string, unknown>;
-      setMonthly(mp.customerPerMonth != null ? String(Math.round(Number(mp.customerPerMonth))) : "");
     }
   }, [quote]);
 
@@ -63,7 +60,6 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
     const tariffData = withManagement && (numOr(chargeRate) != null || numOr(idleFee) != null || numOr(idleGrace) != null)
       ? { chargeTariffPerKwh: numOr(chargeRate), idleFeePerMinute: numOr(idleFee), idleGraceMinutes: numOr(idleGrace) }
       : null;
-    const monthlyProj = withManagement && numOr(monthly) != null ? { customerPerMonth: numOr(monthly) } : null;
     try {
       await update.mutateAsync({
         id: quote.id,
@@ -76,7 +72,6 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
           with_management: withManagement,
           charge_rate_per_kwh: withManagement ? numOr(chargeRate) : null,
           tariff_data: tariffData as unknown as never,
-          monthly_projection: monthlyProj as unknown as never,
         },
       });
       toast.success("Offerte opgeslagen");
@@ -164,7 +159,6 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Beheer-gegevens (optioneel)</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1"><Label className="text-xs">Laadtarief / kWh</Label><Input inputMode="decimal" value={chargeRate} disabled={!isConcept} onChange={(e) => setChargeRate(e.target.value)} /></div>
-                  <div className="space-y-1"><Label className="text-xs">Opbrengst / maand (€)</Label><Input inputMode="decimal" value={monthly} disabled={!isConcept} onChange={(e) => setMonthly(e.target.value)} /></div>
                   <div className="space-y-1"><Label className="text-xs">Blokkeertarief / min</Label><Input inputMode="decimal" value={idleFee} disabled={!isConcept} onChange={(e) => setIdleFee(e.target.value)} /></div>
                   <div className="space-y-1"><Label className="text-xs">Gratis minuten</Label><Input inputMode="numeric" value={idleGrace} disabled={!isConcept} onChange={(e) => setIdleGrace(e.target.value)} /></div>
                 </div>

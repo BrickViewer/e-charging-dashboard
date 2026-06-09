@@ -60,7 +60,6 @@ export default function OfferAccept() {
   };
 
   const quote = resp?.quote;
-  const monthly = quote?.monthlyProjection?.customerPerMonth ? Math.round(Number(quote.monthlyProjection.customerPerMonth)) : 0;
   const done = accepted || resp?.status === "already_accepted";
   const invalid = resp && !["ok", "already_accepted"].includes(resp.status);
 
@@ -101,12 +100,6 @@ export default function OfferAccept() {
                 <span className="text-lg font-extrabold">{euro(quote.total)}</span>
               </div>
             </div>
-            {monthly > 0 && (
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-center">
-                <p className="text-xs text-muted-foreground">Geschatte opbrengst</p>
-                <p className="text-2xl font-extrabold text-primary">{euro(monthly)} <span className="text-sm font-medium text-muted-foreground">/ maand</span></p>
-              </div>
-            )}
             {quote.withManagement && (
               <p className="text-center text-xs font-medium text-primary">Inclusief e-Charging beheer — dashboard + maandelijkse opbrengstdeling.</p>
             )}
