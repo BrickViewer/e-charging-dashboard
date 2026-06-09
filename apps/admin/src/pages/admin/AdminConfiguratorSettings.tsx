@@ -187,14 +187,16 @@ export default function AdminConfiguratorSettings() {
       toast.error("Viewer kan geen configuratie starten");
       return;
     }
+    // Fallback-basis: lokaal de dev-server, in productie het gekoppelde domein.
+    const base = import.meta.env.DEV ? "http://localhost:8081" : "https://configurator.e-charging.nl";
     try {
       const { data, error } = await supabase.functions.invoke<SessionStartResponse>("configurator-session-start");
       if (error) throw error;
-      const url = data?.url ?? `http://localhost:8081/s/local-${Date.now()}/stap/1`;
+      const url = data?.url ?? `${base}/s/local-${Date.now()}/stap/1`;
       window.open(url, "_blank", "noopener,noreferrer,width=1400,height=900");
     } catch {
-      const localUrl = `http://localhost:8081/s/local-${Date.now()}/stap/1`;
-      toast.warning("Configuratiesessie kon niet via de backend starten. Lokale preview geopend.");
+      const localUrl = `${base}/s/local-${Date.now()}/stap/1`;
+      toast.warning("Configuratiesessie kon niet via de backend starten. Preview geopend.");
       window.open(localUrl, "_blank", "noopener,noreferrer,width=1400,height=900");
     }
   };
