@@ -104,7 +104,9 @@ Deno.serve(async (req) => {
       contact_name: name || null,
       contact_email: email || null,
       contact_phone: phone || null,
-      notes: subject ? `${subject}\n\n${message}` : message,
+      // Het bericht van de aanvrager komt in aparte velden (niet in interne notities).
+      message_subject: subject || null,
+      message_body: message,
       source: "contactformulier",
       position: 0,
     });

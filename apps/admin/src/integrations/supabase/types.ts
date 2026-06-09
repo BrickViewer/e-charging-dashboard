@@ -1490,6 +1490,8 @@ export type Database = {
           kvk: string | null
           location_type: string | null
           lost_reason: string | null
+          message_body: string | null
+          message_subject: string | null
           notes: string | null
           organization_id: string
           owner_user_id: string | null
@@ -1536,6 +1538,8 @@ export type Database = {
           kvk?: string | null
           location_type?: string | null
           lost_reason?: string | null
+          message_body?: string | null
+          message_subject?: string | null
           notes?: string | null
           organization_id: string
           owner_user_id?: string | null
@@ -1582,6 +1586,8 @@ export type Database = {
           kvk?: string | null
           location_type?: string | null
           lost_reason?: string | null
+          message_body?: string | null
+          message_subject?: string | null
           notes?: string | null
           organization_id?: string
           owner_user_id?: string | null
@@ -1830,6 +1836,27 @@ export type Database = {
           name?: string
           phone?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      password_reset_log: {
+        Row: {
+          created_at: string
+          email_hash: string | null
+          id: number
+          ip_hash: string | null
+        }
+        Insert: {
+          created_at?: string
+          email_hash?: string | null
+          id?: never
+          ip_hash?: string | null
+        }
+        Update: {
+          created_at?: string
+          email_hash?: string | null
+          id?: never
+          ip_hash?: string | null
         }
         Relationships: []
       }

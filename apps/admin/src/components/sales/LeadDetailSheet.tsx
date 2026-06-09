@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
-  Building2, CalendarClock, Euro, ExternalLink, FileText, MapPin, MoreHorizontal,
+  Building2, CalendarClock, Euro, ExternalLink, FileText, MapPin, MessageSquare, MoreHorizontal,
   Pencil, Plus, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
 } from "lucide-react";
 import { useCreateQuoteFromLead, useLeadQuotes } from "@/hooks/useQuotes";
@@ -119,6 +119,7 @@ export function LeadDetailSheet({
       owns_property: l.owns_property ?? false, has_solar: l.has_solar ?? false,
       estimated_value: l.estimated_value?.toString() ?? "", expected_close_date: l.expected_close_date ?? "",
       priority: l.priority ?? "medium", notes: l.notes ?? "",
+      message_subject: l.message_subject ?? "", message_body: l.message_body ?? "",
       appointment_at: l.appointment_at ? toLocalInput(l.appointment_at) : "",
       appointment_notes: l.appointment_notes ?? "",
       // Configuratie-instellingen (ook bewerkbaar zonder dat er al een configuratie is).
@@ -201,6 +202,7 @@ export function LeadDetailSheet({
           owns_property: form.owns_property as boolean, has_solar: form.has_solar as boolean,
           estimated_value: num(text("estimated_value")), expected_close_date: text("expected_close_date") || null,
           priority: text("priority") || "medium", notes: text("notes").trim() || null,
+          message_subject: text("message_subject").trim() || null, message_body: text("message_body").trim() || null,
           appointment_at: text("appointment_at") ? new Date(text("appointment_at")).toISOString() : null,
           appointment_notes: text("appointment_notes").trim() || null,
           configuration: configuration as unknown as never,
@@ -413,6 +415,13 @@ export function LeadDetailSheet({
                       <DetailRow label="E-mail" value={lead.contact_email} />
                       <DetailRow label="Telefoon" value={lead.contact_phone} />
                     </InfoCard>
+
+                    {(lead.message_body || lead.message_subject) && (
+                      <InfoCard title="Bericht" icon={MessageSquare}>
+                        {lead.message_subject && <p className="text-sm font-semibold text-foreground">{lead.message_subject}</p>}
+                        {lead.message_body && <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{lead.message_body}</p>}
+                      </InfoCard>
+                    )}
 
                     <InfoCard title="Locatie & behoefte" icon={MapPin}>
                       <DetailRow label="Adres" value={address || null} />
@@ -773,6 +782,14 @@ function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
         <ERow label="KvK"><EInput value={text("kvk")} onChange={set("kvk")} /></ERow>
         <ERow label="Website"><EInput value={text("website")} onChange={set("website")} /></ERow>
         <ERow label="Sector"><EInput value={text("sector")} onChange={set("sector")} /></ERow>
+      </InfoCard>
+
+      <InfoCard title="Bericht" icon={MessageSquare}>
+        <ERow label="Onderwerp"><EInput value={text("message_subject")} onChange={set("message_subject")} /></ERow>
+        <div className="pt-2">
+          <Label className="mb-1 block text-xs text-muted-foreground">Bericht van de aanvrager</Label>
+          <Textarea rows={3} value={text("message_body")} onChange={(e) => set("message_body")(e.target.value)} />
+        </div>
       </InfoCard>
 
       <InfoCard title="Locatie & behoefte" icon={MapPin}>
