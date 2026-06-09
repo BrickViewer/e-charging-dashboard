@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Plus, Send, Trash2 } from "lucide-react";
-import { useQuote, useUpdateQuote, useSendQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
+import { useQuote, useUpdateQuote, useSendQuote, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
@@ -17,6 +17,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   const quoteQ = useQuote(open ? quoteId ?? undefined : undefined);
   const update = useUpdateQuote();
   const send = useSendQuote();
+  const del = useDeleteQuote();
   const quote = quoteQ.data;
 
   const [items, setItems] = useState<QuoteLineItem[]>([]);
@@ -91,6 +92,16 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       await send.mutateAsync({ quoteId: quote.id, email: email.trim() });
       toast.success(`Offerte verstuurd naar ${email.trim()}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
+  };
+
+  const doDelete = async () => {
+    if (!quote) return;
+    if (!window.confirm(`Offerte ${quote.quote_number} definitief verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+    try {
+      await del.mutateAsync(quote.id);
+      toast.success("Offerte verwijderd");
+      onOpenChange(false);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Verwijderen mislukt"); }
   };
 
   return (
@@ -180,6 +191,12 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                   {quote.status === "verstuurd" ? "Opnieuw versturen" : "Versturen"}
                 </Button>
               )}
+            </div>
+
+            <div className="flex justify-end border-t pt-4">
+              <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={doDelete} disabled={del.isPending}>
+                <Trash2 className="mr-1.5 h-4 w-4" /> Offerte verwijderen
+              </Button>
             </div>
           </div>
         )}

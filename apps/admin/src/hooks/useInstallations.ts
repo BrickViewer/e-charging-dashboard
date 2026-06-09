@@ -51,6 +51,20 @@ export function useUpdateOrder() {
   });
 }
 
+export function useDeleteOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("installation_orders").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["installation-orders"] });
+      qc.invalidateQueries({ queryKey: ["client-orders"] });
+    },
+  });
+}
+
 export function useHandoffOrder() {
   const qc = useQueryClient();
   return useMutation({

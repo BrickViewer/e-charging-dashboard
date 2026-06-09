@@ -66,6 +66,22 @@ export function useUpdateQuote() {
   });
 }
 
+export function useDeleteQuote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("quotes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["lead-quotes"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["installation-orders"] });
+    },
+  });
+}
+
 export function useCreateQuoteFromLead() {
   const qc = useQueryClient();
   return useMutation({

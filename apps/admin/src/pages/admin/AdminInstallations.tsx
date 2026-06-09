@@ -1,10 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { Send, Wrench } from "lucide-react";
+import { Send, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useInstallationOrders, useUpdateOrder, useHandoffOrder, ORDER_STATUSES } from "@/hooks/useInstallations";
+import { useInstallationOrders, useUpdateOrder, useHandoffOrder, useDeleteOrder, ORDER_STATUSES } from "@/hooks/useInstallations";
 
 const STATUS_LABEL: Record<string, string> = {
   nieuw: "Nieuw", overgedragen: "Overgedragen", ingepland: "Ingepland",
@@ -15,6 +15,7 @@ export default function AdminInstallations() {
   const orders = useInstallationOrders();
   const update = useUpdateOrder();
   const handoff = useHandoffOrder();
+  const del = useDeleteOrder();
   const navigate = useNavigate();
 
   const doHandoff = async (id: string) => {
@@ -23,6 +24,16 @@ export default function AdminInstallations() {
       toast.success(`Overgedragen aan e-portal (${res?.external_ref ?? "—"})`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Overdracht mislukt");
+    }
+  };
+
+  const doDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Installatie-opdracht van ${name} definitief verwijderen?`)) return;
+    try {
+      await del.mutateAsync(id);
+      toast.success("Installatie-opdracht verwijderd");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Verwijderen mislukt");
     }
   };
 
@@ -70,11 +81,21 @@ export default function AdminInstallations() {
                     </Select>
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    {o.status === "nieuw" && (
-                      <Button size="sm" variant="outline" onClick={() => doHandoff(o.id)} disabled={handoff.isPending}>
-                        <Send className="mr-1.5 h-4 w-4" /> Verstuur naar e-portal
-                      </Button>
-                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      {o.status === "nieuw" && (
+                        <Button size="sm" variant="outline" onClick={() => doHandoff(o.id)} disabled={handoff.isPending}>
+                          <Send className="mr-1.5 h-4 w-4" /> Verstuur naar e-portal
+                        </Button>
+                      )}
+                      <button
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600"
+                        title="Verwijderen"
+                        onClick={() => doDelete(o.id, o.clients?.company_name || "deze klant")}
+                        disabled={del.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
