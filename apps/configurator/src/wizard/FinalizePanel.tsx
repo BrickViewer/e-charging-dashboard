@@ -20,7 +20,6 @@ export function FinalizePanel({
   onFinalize,
   finalizing,
   finalizeError,
-  finalizeResult,
   leadMode,
   savedToLead,
   onClose,
@@ -33,7 +32,6 @@ export function FinalizePanel({
   onFinalize: () => void;
   finalizing: boolean;
   finalizeError: string | null;
-  finalizeResult: { clientNumber: number | null; clientId: string } | null;
   leadMode?: boolean;
   savedToLead?: boolean;
   onClose: () => void;
@@ -43,9 +41,9 @@ export function FinalizePanel({
   return (
     <>
       <div className="slideover-backdrop" onClick={onClose} />
-      <aside className="slideover-panel" role="dialog" aria-label={leadMode ? "Opslaan" : "Voorstel vastleggen"}>
+      <aside className="slideover-panel" role="dialog" aria-label="Opslaan">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-foreground">{leadMode ? "Opslaan" : "Voorstel vastleggen"}</h2>
+          <h2 className="text-xl font-bold text-foreground">Opslaan</h2>
           <button type="button" onClick={onClose} aria-label="Sluiten"
             className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-card-soft hover:text-foreground">
             <X size={18} />
@@ -59,19 +57,7 @@ export function FinalizePanel({
             </div>
             <p className="text-lg font-bold text-foreground">Opgeslagen aan de lead</p>
             <p className="text-sm text-muted-foreground">
-              De configuratie staat nu op de lead. Vanuit de lead stel je hiermee de offerte op en maak je later een klant met exact deze gegevens.
-            </p>
-            <button type="button" className="secondary-button w-full" onClick={onClose}>Sluiten</button>
-          </div>
-        ) : finalizeResult ? (
-          <div className="mt-10 space-y-4 text-center">
-            <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-gauge-green/15 text-gauge-green">
-              <Check size={32} />
-            </div>
-            <p className="text-lg font-bold text-foreground">Klant opgeslagen</p>
-            <p className="text-sm text-muted-foreground">
-              Klantnummer <strong className="text-foreground">#{finalizeResult.clientNumber ?? finalizeResult.clientId}</strong> staat met
-              deze instellingen in het systeem. Wij stellen op basis hiervan een voorstel op maat op.
+              De configuratie staat nu op de lead. Vanuit de lead stel je hiermee de offerte op; de klant wordt aangemaakt zodra de offerte wordt geaccepteerd.
             </p>
             <button type="button" className="secondary-button w-full" onClick={onClose}>Sluiten</button>
           </div>
@@ -79,8 +65,8 @@ export function FinalizePanel({
           <>
             <p className="mt-4 text-sm leading-6 text-muted-foreground">
               {leadMode
-                ? "Sla de configuratie op aan de lead. Je kunt later verder bewerken; bij conversie wordt een klant met exact deze gegevens aangemaakt."
-                : "Leg de afgesproken instellingen en gegevens vast. Wij bepalen daarna de exacte prijs en stellen een voorstel op maat op."}
+                ? "Sla de configuratie op aan de lead. Je kunt later verder bewerken; de klant wordt aangemaakt zodra de offerte wordt geaccepteerd."
+                : "Sla de configuratie op. Er wordt een lead aangemaakt met deze gegevens; de klant ontstaat pas zodra de offerte wordt geaccepteerd."}
             </p>
 
             <div className="mt-5 rounded-2xl border border-gauge-green/25 bg-gauge-green/[0.07] p-4">
@@ -145,7 +131,7 @@ export function FinalizePanel({
             )}
 
             <button type="button" className="primary-button mt-6 w-full" disabled={!canSubmit} onClick={onFinalize}>
-              {finalizing ? "Bezig met opslaan…" : leadMode ? "Opslaan" : "Klant opslaan"}
+              {finalizing ? "Bezig met opslaan…" : "Opslaan"}
             </button>
             {!input.customer.companyName.trim() && (
               <p className="mt-2 text-center text-xs text-muted-foreground">Vul een bedrijfsnaam in om op te slaan.</p>

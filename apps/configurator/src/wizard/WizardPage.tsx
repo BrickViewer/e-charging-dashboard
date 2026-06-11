@@ -107,7 +107,6 @@ export default function WizardPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
-  const [finalizeResult, setFinalizeResult] = useState<{ clientNumber: number | null; clientId: string } | null>(null);
   const [savedToLead, setSavedToLead] = useState(false);
 
   const {
@@ -226,17 +225,14 @@ export default function WizardPage() {
   const finalizeMutation = useMutation({
     mutationFn: async () => {
       const payload = { input, settingsVersion, ere: ereEnabled, investmentMinTotal, investmentMaxTotal };
-      if (leadId) {
-        await configuratorApi.saveToLead(sessionId, payload);
-        return { kind: "lead" as const };
-      }
-      const result = await configuratorApi.finalizeClient(sessionId, payload);
-      return { kind: "client" as const, clientNumber: result.clientNumber ?? null, clientId: result.clientId };
+      // Altijd opslaan op een lead (geen klant). Heeft de sessie nog geen lead,
+      // dan maakt de backend er één aan; de klant ontstaat pas bij offerte-acceptatie.
+      await configuratorApi.saveToLead(sessionId, payload);
+      return { kind: "lead" as const };
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
       setFinalizeError(null);
-      if (result.kind === "lead") setSavedToLead(true);
-      else setFinalizeResult({ clientNumber: result.clientNumber, clientId: result.clientId });
+      setSavedToLead(true);
     },
     onError: (error) => {
       setFinalizeError(error instanceof Error ? error.message : "Opslaan mislukt.");
@@ -310,7 +306,6 @@ export default function WizardPage() {
           onFinalize={() => finalizeMutation.mutate()}
           finalizing={finalizeMutation.isPending}
           finalizeError={finalizeError}
-          finalizeResult={finalizeResult}
           leadMode={!!leadId}
           savedToLead={savedToLead}
           onClose={() => setSaveOpen(false)}

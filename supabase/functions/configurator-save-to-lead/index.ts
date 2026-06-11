@@ -1,9 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { calculatePricing, normalizePricingInput, normalizeSettings } from "../_shared/configurator.ts";
-import { splitName } from "../_shared/contacts.ts";
+import { splitName, resolveOrCreateCompany, resolveOrCreatePerson, linkPersonToCompany } from "../_shared/contacts.ts";
 
 // Slaat de volledige configurator-configuratie op AAN DE LEAD (geen klant).
+// Heeft de sessie nog geen lead (losse configuratie), dan wordt er een lead
+// aangemaakt — een klant ontstaat pas zodra de offerte wordt geaccepteerd.
 // Sessie blijft actief zodat meerdere keren opslaan kan; fase wordt niet gewijzigd.
 
 const corsHeaders = {
@@ -45,10 +47,6 @@ Deno.serve(async (req) => {
     if (!session || session.status !== "active" || new Date(session.expires_at).getTime() < Date.now()) {
       return json({ status: "forbidden", message: "Configuratiesessie verlopen" }, 403);
     }
-    if (!session.lead_id) {
-      return json({ status: "error", message: "Deze sessie is niet aan een lead gekoppeld" }, 400);
-    }
-
     const { data: roleRows, error: roleError } = await serviceClient
       .from("user_roles").select("role").eq("user_id", session.actor_user_id);
     if (roleError) throw roleError;
@@ -79,6 +77,41 @@ Deno.serve(async (req) => {
     };
 
     const savedAt = new Date().toISOString();
+
+    // Sessie zonder lead (losse configuratie) → maak een lead aan (géén klant).
+    let leadId = session.lead_id as string | null;
+    const createdNewLead = !leadId;
+    if (!leadId) {
+      const orgId = session.organization_id as string;
+      const companyId = await resolveOrCreateCompany(serviceClient, orgId, {
+        name: input.customer.companyName,
+        street: input.customer.locationAddress || null,
+        postal: input.customer.postalCode || null,
+        city: input.customer.city || null,
+      });
+      const personId = await resolveOrCreatePerson(serviceClient, orgId, {
+        name: input.customer.contactName || null,
+        email: input.customer.contactEmail || null,
+        phone: input.customer.contactPhone || null,
+      });
+      if (companyId && personId) await linkPersonToCompany(serviceClient, companyId, personId, true);
+      const { data: stage } = await serviceClient
+        .from("lead_stages").select("id").eq("organization_id", orgId)
+        .order("position", { ascending: true }).limit(1).maybeSingle();
+      const { data: newLead, error: leadErr } = await serviceClient.from("leads").insert({
+        organization_id: orgId, stage_id: stage?.id ?? null,
+        company_id: companyId, person_id: personId,
+        company_name: input.customer.companyName,
+        contact_name: input.customer.contactName || null,
+        contact_email: input.customer.contactEmail || null,
+        contact_phone: input.customer.contactPhone || null,
+        owner_user_id: session.actor_user_id, source: "configurator", position: 0,
+      }).select("id").single();
+      if (leadErr) throw leadErr;
+      leadId = newLead.id as string;
+      await serviceClient.from("configurator_sessions").update({ lead_id: leadId }).eq("id", session.id);
+    }
+
     const { error: updateError } = await serviceClient
       .from("leads")
       .update({
@@ -97,14 +130,14 @@ Deno.serve(async (req) => {
         configuration,
         configuration_updated_at: savedAt,
       })
-      .eq("id", session.lead_id);
+      .eq("id", leadId);
     if (updateError) throw updateError;
 
     // Houd de centrale contacten-laag de bron van waarheid: bewerk de salesrep
     // bedrijf/contact in de configurator, dan werken we de gekoppelde records bij
     // (de propagate-trigger synct vervolgens alle gekoppelde leads/klanten).
     const { data: leadRow } = await serviceClient
-      .from("leads").select("company_id, person_id").eq("id", session.lead_id).maybeSingle();
+      .from("leads").select("company_id, person_id").eq("id", leadId).maybeSingle();
     if (leadRow?.company_id) {
       await serviceClient.from("companies").update({
         name: input.customer.companyName,
@@ -131,7 +164,7 @@ Deno.serve(async (req) => {
     await serviceClient.from("configurator_sessions").update({ last_seen_at: savedAt }).eq("id", session.id);
 
     await serviceClient.from("lead_activities").insert({
-      lead_id: session.lead_id,
+      lead_id: leadId,
       organization_id: session.organization_id,
       user_id: session.actor_user_id,
       type: "configuration_saved",
@@ -144,7 +177,7 @@ Deno.serve(async (req) => {
       },
     });
 
-    return json({ leadId: session.lead_id, savedAt });
+    return json({ leadId, savedAt, leadCreated: createdNewLead });
   } catch (error) {
     return json({ status: "error", message: error instanceof Error ? error.message : "Opslaan aan lead mislukt" }, 500);
   }
