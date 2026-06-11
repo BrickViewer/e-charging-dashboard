@@ -5,7 +5,7 @@ import type { Database } from "@/integrations/supabase/types";
 export type InstallationOrder = Database["public"]["Tables"]["installation_orders"]["Row"];
 export type OrderWithClient = InstallationOrder & { clients: { company_name: string; client_number: number | null } | null };
 
-export const ORDER_STATUSES = ["nieuw", "overgedragen", "ingepland", "geinstalleerd", "afgerond", "geannuleerd"] as const;
+export const ORDER_STATUSES = ["nieuw", "overgedragen", "ingepland", "geinstalleerd", "opgeleverd", "afgerond", "geannuleerd"] as const;
 
 export function useInstallationOrders() {
   return useQuery({

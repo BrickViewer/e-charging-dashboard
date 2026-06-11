@@ -150,3 +150,19 @@ Investering: ${eur0(o.total)} excl. BTW
 Klantaccount + installatie-order automatisch aangemaakt. Getekende offerte als bijlage.`;
   return { html: shell(o.supabaseUrl, inner), text };
 }
+
+// 4) Interne melding: werkbon opgeleverd in de e-portal → e-charging moet factureren.
+export function renderInternalDeliveredNotice(o: { supabaseUrl: string; company?: string | null; externalRef?: string | null; deliveredAt?: string | null }): { html: string; text: string } {
+  const opgeleverd = nlDate(o.deliveredAt);
+  const inner =
+    eyebrow("Installatie opgeleverd") +
+    h1(o.company || "Werkbon afgetekend") +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#374151;line-height:26px">
+      <tr><td width="130" style="color:#6b7280">e-portal ref</td><td style="font-weight:600;color:#111827">${o.externalRef ?? "—"}</td></tr>
+      <tr><td width="130" style="color:#6b7280">Opgeleverd</td><td style="font-weight:600;color:#111827">${opgeleverd || "—"}</td></tr>
+    </table>` +
+    fine("De werkbon is afgetekend voor oplevering. Stuur nu de eenmalige installatiefactuur naar de klant.");
+  const text = `${o.company || "Een klant"}: werkbon opgeleverd in de e-portal (ref ${o.externalRef ?? "—"}${opgeleverd ? `, ${opgeleverd}` : ""}).
+De installatie is opgeleverd — stuur de eenmalige installatiefactuur naar de klant.`;
+  return { html: shell(o.supabaseUrl, inner), text };
+}

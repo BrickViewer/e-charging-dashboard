@@ -32,7 +32,6 @@ const AdminClientWizard = lazy(() => import("./pages/admin/AdminClientWizard"));
 const AdminClientDetail = lazy(() => import("./pages/admin/AdminClientDetail"));
 const AdminFinancial = lazy(() => import("./pages/admin/AdminFinancial"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
-const AdminInstallations = lazy(() => import("./pages/admin/AdminInstallations"));
 const AdminLocationDetail = lazy(() => import("./pages/admin/AdminLocationDetail"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminConfiguratorSettings = lazy(() => import("./pages/admin/AdminConfiguratorSettings"));
@@ -41,6 +40,7 @@ const AdminConfiguratorSettings = lazy(() => import("./pages/admin/AdminConfigur
 const SalesLeads = lazy(() => import("./pages/sales/SalesLeads"));
 const SalesContacts = lazy(() => import("./pages/sales/SalesContacts"));
 const SalesOffertes = lazy(() => import("./pages/sales/SalesOffertes"));
+const SalesInstallations = lazy(() => import("./pages/sales/SalesInstallations"));
 
 // Marketing pages — lazy loaded
 const MarketingBlogs = lazy(() => import("./pages/marketing/MarketingBlogs"));
@@ -135,7 +135,8 @@ const App = () => (
                 <Route path="klanten/:id" element={<AdminClientDetail />} />
                 <Route path="locaties" element={<AdminLocations />} />
                 <Route path="locaties/:id" element={<AdminLocationDetail />} />
-                <Route path="installaties" element={<AdminInstallations />} />
+                {/* Installaties verhuisd naar Sales — oude pad blijft werken via redirect */}
+                <Route path="installaties" element={<Navigate to="/sales/installaties" replace />} />
                 <Route path="financieel" element={<AdminFinancial />} />
                 <Route path="instellingen" element={<AdminSettings />} />
                 {/* Configurator verhuisd naar Sales — oude pad blijft werken via redirect */}
@@ -152,6 +153,7 @@ const App = () => (
                 <Route path="leads" element={<SalesLeads />} />
                 <Route path="contacten" element={<SalesContacts />} />
                 <Route path="offertes" element={<SalesOffertes />} />
+                <Route path="installaties" element={<SalesInstallations />} />
                 <Route path="configurator" element={<AdminConfiguratorSettings />} />
               </Route>
 

@@ -8,10 +8,10 @@ import { useInstallationOrders, useUpdateOrder, useHandoffOrder, useDeleteOrder,
 
 const STATUS_LABEL: Record<string, string> = {
   nieuw: "Nieuw", overgedragen: "Overgedragen", ingepland: "Ingepland",
-  geinstalleerd: "Geïnstalleerd", afgerond: "Afgerond", geannuleerd: "Geannuleerd",
+  geinstalleerd: "Geïnstalleerd", opgeleverd: "Opgeleverd", afgerond: "Afgerond", geannuleerd: "Geannuleerd",
 };
 
-export default function AdminInstallations() {
+export default function SalesInstallations() {
   const orders = useInstallationOrders();
   const update = useUpdateOrder();
   const handoff = useHandoffOrder();
@@ -41,7 +41,7 @@ export default function AdminInstallations() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-semibold">Installaties</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Installatie-orders uit getekende offertes — overdracht naar e-portal en voortgang.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Installatie-orders uit getekende offertes — overdracht naar e-portal en voortgang. Bij oplevering volgt het signaal om te factureren.</p>
       </div>
 
       {orders.isLoading ? (
@@ -82,6 +82,11 @@ export default function AdminInstallations() {
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {o.status === "opgeleverd" && (
+                        <span className="badge-offerte" title={o.delivered_at ? `Opgeleverd op ${new Date(o.delivered_at).toLocaleDateString("nl-NL")}` : undefined}>
+                          Factuur sturen
+                        </span>
+                      )}
                       {o.status === "nieuw" && (
                         <Button size="sm" variant="outline" onClick={() => doHandoff(o.id)} disabled={handoff.isPending}>
                           <Send className="mr-1.5 h-4 w-4" /> Verstuur naar e-portal

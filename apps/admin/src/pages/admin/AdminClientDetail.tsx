@@ -1523,7 +1523,7 @@ function SettlementAdminStatusBadge({ settlement }: { settlement: QuarterlySettl
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
   nieuw: "Nieuw", overgedragen: "Overgedragen", ingepland: "Ingepland",
-  geinstalleerd: "Geïnstalleerd", afgerond: "Afgerond", geannuleerd: "Geannuleerd",
+  geinstalleerd: "Geïnstalleerd", opgeleverd: "Opgeleverd", afgerond: "Afgerond", geannuleerd: "Geannuleerd",
 };
 
 function InstallationOrdersCard({ clientId }: { clientId: string | undefined }) {
