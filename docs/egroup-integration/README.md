@@ -71,7 +71,8 @@ De Vault-waarden zijn gezet via MCP; de gebruiker kan desgewenst env-secrets zet
   "callback_url": "https://uuldldhmuanmjlyvnagt.supabase.co/functions/v1/installation-completion-webhook",
   "customer": { "name": "...", "organization_type": "bedrijf", "kvk_number": "...", "vat_number": "...", "email": "...", "phone": "...", "street": "...", "house_number": "...", "postal_code": "...", "city": "...", "country": "NL", "client_number": 142 },
   "site": { "location_name": "...", "street": "...", "house_number": "...", "postal_code": "...", "city": "...", "country": "NL" },
-  "contact": { "name": "...", "email": "...", "phone": "...", "role": "..." },
+  "contact": { "name": "...", "email": "...", "phone": "..." },        // back-office/administratie (uit de klant)
+  "site_contact": { "name": "...", "phone": "...", "email": "..." },   // contactpersoon op locatie (uit het bewerkbare site-snapshot)
   "order_lines": [ { "description": "...", "qty": 10, "unit_price": 950, "total": 9500 } ],
   "totals": { "hardware_cost": 9500, "installation_cost": 4500, "with_management": true }
 }

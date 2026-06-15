@@ -130,11 +130,17 @@ export function buildHandoffPayload(input: any): any {
       city: firstNonEmpty(order.site_city, lead?.city),
       country: "NL",
     },
+    // Back-office/administratie-contact: het algemene accountcontact van de klant.
     contact: {
-      name: firstNonEmpty(order.site_contact_name, client?.contact_name, lead?.contact_name),
-      email: firstNonEmpty(order.site_contact_email, client?.contact_email, lead?.contact_email),
-      phone: firstNonEmpty(order.site_contact_phone, client?.contact_phone, lead?.contact_phone),
-      role: firstNonEmpty(lead?.contact_role),
+      name: firstNonEmpty(client?.contact_name, lead?.contact_name),
+      email: firstNonEmpty(client?.contact_email, lead?.contact_email),
+      phone: firstNonEmpty(client?.contact_phone, lead?.contact_phone),
+    },
+    // Contactpersoon op locatie: bewerkbare snapshot is leidend, terugval op lead.
+    site_contact: {
+      name: firstNonEmpty(order.site_contact_name, lead?.contact_name),
+      phone: firstNonEmpty(order.site_contact_phone, lead?.contact_phone),
+      email: firstNonEmpty(order.site_contact_email, lead?.contact_email),
     },
     order_lines: normalizeLines(quote?.line_items),
     totals: {

@@ -6,9 +6,9 @@ import { resolveSecret } from "../_shared/secrets.ts";
 import { EgroupApiError, EgroupClient } from "./egroup-api.ts";
 
 // Overdracht van een installatie-order naar de E-Group portal. Bouwt een
-// volledig payload (klant, site-adres, contact, offerte-regels), POST naar de
-// E-Group intake-endpoint en bewaart de E-Group order-referenties. Idempotent:
-// een al verstuurde order wordt niet opnieuw aangemaakt.
+// volledig payload (klant, site-adres, contact + site_contact, offerte-regels),
+// POST naar de E-Group intake-endpoint en bewaart de E-Group order-referenties.
+// Idempotent: een al verstuurde order wordt niet opnieuw aangemaakt.
 // Body: { order_id }
 
 const corsHeaders = {

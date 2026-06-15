@@ -131,7 +131,9 @@ describe("buildHandoffPayload", () => {
     expect(p.site.street).toBe("Industrieweg");
     expect(p.site.house_number).toBe("5");
     expect(p.site.postal_code).toBe("5678 CD");
-    expect(p.contact.role).toBe("Facility Manager");
+    // Back-office contact = algemeen klantcontact; site_contact = on-site snapshot.
+    expect(p.contact).toEqual({ name: "Piet Klant", email: "info@acme.nl", phone: "+31201234567" });
+    expect(p.site_contact).toEqual({ name: "Jan Jansen", phone: "+31612345678", email: "jan@acme.nl" });
     expect(p.order_lines).toHaveLength(2);
     expect(p.order_lines[0]).toEqual({
       description: "Levering laadpaal AC 22kW",
@@ -166,5 +168,30 @@ describe("buildHandoffPayload", () => {
     });
     expect(p.order_lines).toHaveLength(1);
     expect(p.order_lines[0]).toEqual({ description: "Werk", qty: 2, unit_price: 5, total: 10 });
+  });
+
+  it("scheidt back-office contact (klant) van site_contact (snapshot)", () => {
+    const p = buildHandoffPayload({
+      callbackUrl: base.callbackUrl,
+      order: {
+        id: "o4", site_street: "A", site_house_number: "1", site_postal: "1", site_city: "X",
+        site_contact_name: "Piet op Locatie", site_contact_phone: "+31600000001", site_contact_email: "piet@loc.nl",
+      },
+      client: { company_name: "Acme", contact_name: "Admin Anita", contact_email: "admin@acme.nl", contact_phone: "+31200000002" },
+    });
+    expect(p.contact).toEqual({ name: "Admin Anita", email: "admin@acme.nl", phone: "+31200000002" });
+    expect(p.site_contact).toEqual({ name: "Piet op Locatie", phone: "+31600000001", email: "piet@loc.nl" });
+  });
+
+  it("site_contact valt terug op het lead-contact als het snapshot leeg is", () => {
+    const p = buildHandoffPayload({
+      callbackUrl: base.callbackUrl,
+      order: { id: "o5", site_street: "A", site_house_number: "1", site_postal: "1", site_city: "X" },
+      client: { company_name: "Acme", contact_name: "Admin Anita", contact_phone: "+31200000002" },
+      lead: { contact_name: "Lead Lars", contact_phone: "+31600000009" },
+    });
+    expect(p.contact.name).toBe("Admin Anita");
+    expect(p.site_contact.name).toBe("Lead Lars");
+    expect(p.site_contact.phone).toBe("+31600000009");
   });
 });

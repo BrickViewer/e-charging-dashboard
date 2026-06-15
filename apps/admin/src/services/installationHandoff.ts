@@ -99,7 +99,11 @@ export interface HandoffPayload {
     name: string | null;
     email: string | null;
     phone: string | null;
-    role: string | null;
+  };
+  site_contact: {
+    name: string | null;
+    phone: string | null;
+    email: string | null;
   };
   order_lines: HandoffLine[];
   totals: {
@@ -273,11 +277,18 @@ export function buildHandoffPayload(input: BuildHandoffInput): HandoffPayload {
       city: firstNonEmpty(order.site_city, lead?.city),
       country: "NL",
     },
+    // Back-office/administratie-contact: het algemene accountcontact van de klant.
     contact: {
-      name: firstNonEmpty(order.site_contact_name, client?.contact_name, lead?.contact_name),
-      email: firstNonEmpty(order.site_contact_email, client?.contact_email, lead?.contact_email),
-      phone: firstNonEmpty(order.site_contact_phone, client?.contact_phone, lead?.contact_phone),
-      role: firstNonEmpty(lead?.contact_role),
+      name: firstNonEmpty(client?.contact_name, lead?.contact_name),
+      email: firstNonEmpty(client?.contact_email, lead?.contact_email),
+      phone: firstNonEmpty(client?.contact_phone, lead?.contact_phone),
+    },
+    // Contactpersoon op locatie: het bewerkbare snapshot is leidend (wie de
+    // monteur belt / mee aftekent), met terugval op het lead-contact.
+    site_contact: {
+      name: firstNonEmpty(order.site_contact_name, lead?.contact_name),
+      phone: firstNonEmpty(order.site_contact_phone, lead?.contact_phone),
+      email: firstNonEmpty(order.site_contact_email, lead?.contact_email),
     },
     order_lines: lines,
     totals: {
