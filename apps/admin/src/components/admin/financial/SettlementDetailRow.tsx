@@ -1,5 +1,6 @@
 import type { AdminSettlement } from "@/types/db";
 import { settlementVat } from "@/services/calculations";
+import { FeeWaiverControl } from "@/components/admin/financial/FeeWaiverControl";
 
 const fmt = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -25,7 +26,10 @@ export function SettlementDetailRow({ settlement }: { settlement: AdminSettlemen
             </div>
             <div>
               <p className="text-muted-foreground mb-1">E-Charging service-fee</p>
-              <p className="font-medium">{fmt(Number(settlement.echarging_revenue || 0))}</p>
+              <p className="font-medium flex items-center gap-2 flex-wrap">
+                {fmt(Number(settlement.echarging_revenue || 0))}
+                <FeeWaiverControl settlement={settlement} />
+              </p>
             </div>
             <div>
               <p className="text-muted-foreground mb-1">e-Flux uitbetaald</p>

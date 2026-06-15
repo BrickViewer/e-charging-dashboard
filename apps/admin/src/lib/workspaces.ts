@@ -9,6 +9,8 @@ import {
   Contact,
   Wrench,
   Newspaper,
+  MonitorPlay,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/contexts/authContextValue";
@@ -18,7 +20,7 @@ import type { UserRole } from "@/contexts/authContextValue";
 
 export type WorkspaceKey = "beheer" | "sales" | "marketing";
 
-export type NavItem = { to: string; icon: LucideIcon; label: string; end?: boolean };
+export type NavItem = { to: string; icon: LucideIcon; label: string; end?: boolean; newTab?: boolean };
 
 export type Workspace = {
   key: WorkspaceKey;
@@ -38,7 +40,7 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
       { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
       { to: "/admin/klanten", icon: Users, label: "Klanten" },
       { to: "/admin/locaties", icon: MapPin, label: "Locaties" },
-      { to: "/admin/installaties", icon: Wrench, label: "Installaties" },
+      { to: "/admin/storingen", icon: AlertTriangle, label: "Storingen" },
       { to: "/admin/financieel", icon: Wallet, label: "Financieel" },
     ],
   },
@@ -51,7 +53,11 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
       { to: "/sales/leads", icon: Target, label: "Leads" },
       { to: "/sales/contacten", icon: Contact, label: "Contacten" },
       { to: "/sales/offertes", icon: FileText, label: "Offertes" },
+      // Installaties volgen uit getekende offertes — hoort bij de salesflow
+      { to: "/sales/installaties", icon: Wrench, label: "Installaties" },
       { to: "/sales/configurator", icon: WandSparkles, label: "Configurator" },
+      // Opent het fictieve klantportaal in een eigen venster (configurator-patroon)
+      { to: "/demo", icon: MonitorPlay, label: "Demo", newTab: true },
     ],
   },
   marketing: {

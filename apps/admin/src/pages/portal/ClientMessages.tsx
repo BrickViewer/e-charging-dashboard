@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,12 +6,17 @@ import { Bell, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import type { Notification } from "@/types/db";
+import { buildDemoNotifications } from "@/lib/demoData";
+import { useDemoMode } from "@/contexts/demoModeContextValue";
 
 export default function ClientMessages() {
   const { user } = useAuth();
+  const demo = useDemoMode();
+  const queryClient = useQueryClient();
   const { data: notifications } = useQuery({
-    queryKey: ["notifications", user?.id],
+    queryKey: demo ? ["demo", "notifications"] : ["notifications", user?.id],
     queryFn: async () => {
+      if (demo) return buildDemoNotifications();
       const { data, error } = await supabase
         .from("notifications")
         .select("id, type, title, message, read, created_at")
@@ -20,10 +25,21 @@ export default function ClientMessages() {
       if (error) throw error;
       return (data ?? []) as Pick<Notification, "id" | "type" | "title" | "message" | "read" | "created_at">[];
     },
-    enabled: !!user,
+    enabled: demo || !!user,
+    // Demo: niet refetchen bij focus, anders verspringt de gelezen-status terug
+    staleTime: demo ? Infinity : undefined,
   });
 
   const markRead = async (id: string) => {
+    if (demo) {
+      // Lokaal markeren: interactief in de demo, zonder Supabase
+      queryClient.setQueryData(
+        ["demo", "notifications"],
+        (rows?: Pick<Notification, "id" | "type" | "title" | "message" | "read" | "created_at">[]) =>
+          rows?.map((n) => (n.id === id ? { ...n, read: true } : n)),
+      );
+      return;
+    }
     await supabase.from("notifications").update({ read: true }).eq("id", id);
   };
 

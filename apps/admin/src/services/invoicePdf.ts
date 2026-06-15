@@ -5,6 +5,11 @@ import { OUTFIT_REGULAR_BASE64, OUTFIT_SEMIBOLD_BASE64 } from "@/assets/fonts/ou
 import { getSettlementSessions } from "@/services/sessions";
 import { settlementVat } from "@/services/calculations";
 import { MONTH_LABELS_LONG } from "@/lib/period";
+import {
+  effectiveVatStatus,
+  validateSelfBillingInvoiceData,
+  type InvoiceValidationIssue,
+} from "@/services/invoiceValidation";
 
 // Self-billing vergoedingsfactuur (maandelijks, service-fee model).
 //
@@ -14,9 +19,26 @@ import { MONTH_LABELS_LONG } from "@/lib/period";
 // E-Charging service-fee en de bruto laadopbrengst staan NERGENS op het document en
 // zijn niet herleidbaar — geen aftrekregel, geen formule, geen bruto bedrag.
 //
-// Pagina 1: één regel "Vergoeding laadsessies {maand}" = client_payout, + 21% btw.
+// Wet OB (art. 35a): het factuurnummer komt uit de opgeslagen doorlopende reeks
+// (settlements.invoice_number, toegekend bij goedkeuring), de letterlijke vermelding
+// "Factuur uitgereikt door afnemer" staat op het document, beide partijen staan er
+// met volledige NAW + KVK + BTW-id op, en de BTW-behandeling volgt de bevestigde
+// BTW-status van de leverancier (vat_liable 21% / kor / private zonder BTW, met
+// passende vermelding). Renderen wordt GEWEIGERD (InvoiceValidationError) zolang
+// verplichte gegevens ontbreken — zie services/invoiceValidation.ts.
+//
+// Pagina 1: één regel "Vergoeding laadsessies {maand}" = client_payout, + evt. btw.
 // Pagina 2+: transactiespecificatie met een NETTO bedrag per sessie dat optelt tot
 // het pagina-1-totaal (transparant, maar de fee blijft afgeschermd).
+
+/** Wordt geworpen als verplichte factuurgegevens ontbreken; `issues` bevat de
+ *  ontbrekende velden met NL-labels en de plek waar ze in te vullen zijn. */
+export class InvoiceValidationError extends Error {
+  constructor(public issues: InvoiceValidationIssue[]) {
+    super(`Factuur kan niet worden gegenereerd — ontbrekend: ${issues.map((i) => i.label).join(", ")}`);
+    this.name = "InvoiceValidationError";
+  }
+}
 
 const BRAND_GREEN: [number, number, number] = [5, 165, 0];   // logo-groen #05A500
 const GREEN_FOOT: [number, number, number] = [4, 127, 0];    // logo donkergroen #047F00
@@ -58,6 +80,10 @@ export interface SelfBillingSettlement {
   vat_rate?: number | null;   // 0.21 (BTW-plichtig) of 0; default 0.21
   period_start: string;
   period_end: string;
+  // Toegekend bij goedkeuring (doorlopende reeks); verplicht om te renderen.
+  invoice_number?: string | null;
+  // Snapshot van de BTW-status op het moment van goedkeuren.
+  vat_status?: string | null;
 }
 
 export interface SelfBillingClient {
@@ -70,6 +96,9 @@ export interface SelfBillingClient {
   billing_address_street?: string | null;
   billing_address_postal?: string | null;
   billing_address_city?: string | null;
+  country?: string | null;
+  vat_status?: string | null;
+  vat_status_confirmed_at?: string | null;
 }
 
 export interface SelfBillingPaymentDetails {
@@ -84,7 +113,11 @@ export interface SelfBillingOrg {
   btw_number?: string | null;
   iban?: string | null;
   bic?: string | null;
-  address?: string | null;
+  address?: string | null;          // legacy enkelvoudig adres (fallback)
+  address_street?: string | null;
+  address_postal?: string | null;
+  address_city?: string | null;
+  country?: string | null;
   email?: string | null;
 }
 
@@ -166,13 +199,22 @@ async function rasterizeLogo(url: string): Promise<{ dataUrl: string; ratio: num
   }
 }
 
-export async function generateSelfBillingInvoicePdf(
+/** Bouwt het PDF-document en geeft het terug (testbaar, geen download).
+ *  Werpt InvoiceValidationError zolang verplichte gegevens ontbreken. */
+export async function buildSelfBillingInvoicePdf(
   settlement: SelfBillingSettlement,
   client: SelfBillingClient,
   org?: SelfBillingOrg | null,
   paymentDetails?: SelfBillingPaymentDetails | null,
   sessionLines?: InvoiceSessionLine[] | null,
-): Promise<void> {
+): Promise<jsPDF> {
+  // ── Wet OB-validatie: geen compliant gegevens → geen factuur ──
+  const validation = validateSelfBillingInvoiceData({ settlement, client, org, paymentDetails });
+  if (!validation.ok) {
+    throw new InvoiceValidationError(validation.missing);
+  }
+  const vatStatus = effectiveVatStatus({ settlement, client, org, paymentDetails });
+
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const FONT = registerFont(doc);
   const pageW = doc.internal.pageSize.getWidth();   // 210
@@ -186,7 +228,8 @@ export async function generateSelfBillingInvoicePdf(
   const monthName = MONTH_LABELS_LONG[settlement.month - 1] ?? "";
   const mm = String(settlement.month).padStart(2, "0");
   const periodLabel = `${monthName} ${settlement.year}`;
-  const invoiceNr = `EC-${settlement.year}${mm}-${client.client_number ?? "0000"}`;
+  // Opgeslagen doorlopend nummer (toegekend bij goedkeuring; validatie garandeert aanwezigheid)
+  const invoiceNr = (settlement.invoice_number ?? "").trim();
   // Factuurdatum in Europe/Amsterdam (dd-mm-jjjj), onafhankelijk van de browser-tijdzone.
   const todayStr = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/Amsterdam", day: "2-digit", month: "2-digit", year: "numeric",
@@ -263,7 +306,7 @@ export async function generateSelfBillingInvoicePdf(
     client.contact_name || "",
     client.billing_address_street || "",
     postalCity,
-    "Nederland",
+    client.country || "Nederland",
     client.client_number ? `Klantnr. ${client.client_number}` : "",
     client.kvk ? `KVK ${client.kvk}` : "",
     client.btw_number ? `BTW ${client.btw_number}` : "",
@@ -271,9 +314,13 @@ export async function generateSelfBillingInvoicePdf(
   // KVK/BTW (de muted regels) staan achteraan; bepaal vanaf welke index muted.
   const vanMutedFrom = vanLines.findIndex((l) => l.startsWith("Klantnr.") || l.startsWith("KVK") || l.startsWith("BTW"));
 
+  // Gesplitst org-adres; legacy enkelvoudig adres alleen als defensieve fallback.
+  const orgPostalCity = [org?.address_postal, org?.address_city].filter(Boolean).join(" ");
   const naarLines = [
     orgName,
-    org?.address || "",
+    org?.address_street || (orgPostalCity ? "" : org?.address || ""),
+    orgPostalCity,
+    org?.country || "Nederland",
     org?.email || "",
     org?.kvk ? `KVK ${org.kvk}` : "",
     org?.btw_number ? `BTW ${org.btw_number}` : "",
@@ -301,8 +348,14 @@ export async function generateSelfBillingInvoicePdf(
   setFont("bold");
   doc.setFontSize(9);
   doc.setTextColor(...BRAND_GREEN);
-  doc.text("Deze factuur wordt aan u uitbetaald — u hoeft niets te betalen.", L, cursor);
+  doc.text("Deze factuur wordt aan u uitbetaald. U hoeft niets te betalen.", L, cursor);
   cursor += 4.5;
+  // Wettelijk verplichte letterlijke vermelding (Wet OB art. 35a lid 1 onder k).
+  setFont("bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...INK);
+  doc.text("Factuur uitgereikt door afnemer", L, cursor);
+  cursor += 4.2;
   setFont("normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);
@@ -363,7 +416,7 @@ export async function generateSelfBillingInvoicePdf(
   doc.text(`${settlement.total_sessions ?? 0} sessies · ${nlNum(totalKwh, 2)} kWh`, L, cursor);
   cursor += 12;
 
-  // ── Btw-blok (rechts) — alleen tonen bij een BTW-plichtige klant ──
+  // ── Btw-blok (rechts) — afhankelijk van de BTW-status van de leverancier ──
   const labelX = 128;
   if (hasVat) {
     setFont("normal");
@@ -385,6 +438,21 @@ export async function generateSelfBillingInvoicePdf(
   doc.setTextColor(...INK);
   doc.text(hasVat ? "Totaal incl. BTW" : "Totaal", labelX, cursor);
   doc.text(euro(inclBtw), R, cursor, { align: "right" });
+
+  // Vermelding van de BTW-behandeling bij een 0%-factuur (Wet OB: de reden moet
+  // op de factuur staan). vat_liable-facturen hebben de reguliere splitsing.
+  if (!hasVat) {
+    cursor += 5;
+    setFont("normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    const vatNote = vatStatus === "kor"
+      ? "Vrijgesteld van BTW op grond van de kleineondernemersregeling (KOR)."
+      : vatStatus === "private"
+      ? "BTW niet van toepassing (leverancier handelt als particulier)."
+      : "Geen BTW van toepassing.";
+    doc.text(vatNote, R, cursor, { align: "right" });
+  }
 
   // ── Pagina 2+: transactiespecificatie (netto per sessie) ─
   // Portaal levert netto sessielijnen aan (geen bruto/fee in de browser); de admin
@@ -506,6 +574,20 @@ export async function generateSelfBillingInvoicePdf(
     doc.text(`Pagina ${p} / ${pageCount}`, R, pageH - 9, { align: "right" });
   }
 
+  return doc;
+}
+
+/** Genereert en downloadt de factuur (browser). Werpt InvoiceValidationError
+ *  met een NL-veldenlijst zolang verplichte gegevens ontbreken. */
+export async function generateSelfBillingInvoicePdf(
+  settlement: SelfBillingSettlement,
+  client: SelfBillingClient,
+  org?: SelfBillingOrg | null,
+  paymentDetails?: SelfBillingPaymentDetails | null,
+  sessionLines?: InvoiceSessionLine[] | null,
+): Promise<void> {
+  const doc = await buildSelfBillingInvoicePdf(settlement, client, org, paymentDetails, sessionLines);
+  const mm = String(settlement.month).padStart(2, "0");
   const safeName = (client.company_name || "klant").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   doc.save(`vergoedingsfactuur-${safeName}-${settlement.year}-${mm}.pdf`);
 }

@@ -33,7 +33,7 @@ interface ServiceClient {
 
 const encoder = new TextEncoder();
 
-function timingSafeEqual(a: string, b: string) {
+export function timingSafeEqual(a: string, b: string) {
   const aBytes = encoder.encode(a);
   const bBytes = encoder.encode(b);
   const length = Math.max(aBytes.length, bBytes.length);

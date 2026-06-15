@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Activity, Wallet, User, Bell, type LucideIcon } from "lucide-react";
+import { useDemoMode } from "@/contexts/demoModeContextValue";
 
 interface NavItem {
   to: string;
@@ -7,11 +8,12 @@ interface NavItem {
   icon: LucideIcon;
 }
 
+// Sub-paden: de base (/portal of /demo) wordt er in de component voorgeplakt.
 const navItems: NavItem[] = [
-  { to: "/portal/sessies", label: "Sessies", icon: Activity },
-  { to: "/portal/financieel", label: "Financieel", icon: Wallet },
-  { to: "/portal/gegevens", label: "Mijn gegevens", icon: User },
-  { to: "/portal/berichten", label: "Berichten", icon: Bell },
+  { to: "sessies", label: "Sessies", icon: Activity },
+  { to: "financieel", label: "Financieel", icon: Wallet },
+  { to: "gegevens", label: "Mijn gegevens", icon: User },
+  { to: "berichten", label: "Berichten", icon: Bell },
 ];
 
 function NavTile({ item, isActive }: { item: NavItem; isActive: boolean }) {
@@ -34,10 +36,12 @@ function NavTile({ item, isActive }: { item: NavItem; isActive: boolean }) {
 
 export function NavIconBar() {
   const { pathname } = useLocation();
+  const base = useDemoMode() ? "/demo" : "/portal";
 
   const renderItem = (item: NavItem) => {
-    const isActive = pathname === item.to || pathname.startsWith(item.to + "/");
-    return <NavTile key={item.to} item={item} isActive={isActive} />;
+    const to = `${base}/${item.to}`;
+    const isActive = pathname === to || pathname.startsWith(to + "/");
+    return <NavTile key={to} item={{ ...item, to }} isActive={isActive} />;
   };
 
   return (

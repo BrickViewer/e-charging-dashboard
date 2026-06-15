@@ -1,30 +1,52 @@
+import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { NavIconBar } from "@/components/portal/NavIconBar";
 import { CockpitArc } from "@/components/portal/CockpitArc";
+import { ThemeToggle } from "@/components/portal/ThemeToggle";
+import { usePortalTheme } from "@/hooks/usePortalTheme";
+import { useDemoMode } from "@/contexts/demoModeContextValue";
 
+// Titels op sub-pad, zodat ze zowel onder /portal als /demo werken.
 const TITLES: Record<string, string> = {
-  "/portal/sessies": "Sessies",
-  "/portal/financieel": "Financieel",
-  "/portal/gegevens": "Mijn gegevens",
-  "/portal/onboarding": "Financieel",
-  "/portal/berichten": "Berichten",
+  sessies: "Sessies",
+  financieel: "Financieel",
+  gegevens: "Mijn gegevens",
+  onboarding: "Financieel",
+  berichten: "Berichten",
 };
 
-function getTitle(pathname: string): string | null {
-  if (pathname === "/portal" || pathname === "/portal/") return null;
-  if (TITLES[pathname]) return TITLES[pathname];
-  if (pathname.startsWith("/portal/locatie/")) return "Locatie";
+function getTitle(pathname: string, base: string): string | null {
+  if (pathname === base || pathname === `${base}/`) return null;
+  const sub = pathname.startsWith(`${base}/`) ? pathname.slice(base.length + 1) : "";
+  if (TITLES[sub]) return TITLES[sub];
+  if (sub.startsWith("locatie/")) return "Locatie";
   return null;
 }
 
 export default function ClientLayout() {
   const { pathname } = useLocation();
-  const isDashboard = pathname === "/portal" || pathname === "/portal/";
-  const title = getTitle(pathname);
+  const { isLight } = usePortalTheme();
+  const isDemo = useDemoMode();
+  const base = isDemo ? "/demo" : "/portal";
+  const isDashboard = pathname === base || pathname === `${base}/`;
+  const title = getTitle(pathname, base);
+
+  // Sync de thema-klassen naar <html> zodat Radix-portals (Select, Tooltip —
+  // gerenderd in document.body, búiten deze div) dezelfde tokens krijgen.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("portal-theme");
+    root.classList.toggle("light", isLight);
+    return () => root.classList.remove("portal-theme", "light");
+  }, [isLight]);
+
+  const shellClass = `portal-theme${isLight ? " light" : ""} portal-shell h-screen overflow-hidden flex flex-col bg-background text-foreground`;
 
   if (isDashboard) {
     return (
-      <div className="portal-theme portal-shell h-screen overflow-hidden flex flex-col bg-background text-foreground">
+      <div className={shellClass}>
+        <ThemeToggle variant="floating" />
+        {isDemo && <span className="portal-demo-chip" aria-label="Demo-omgeving">Demo</span>}
         <div className="flex-shrink-0 w-full pt-0">
           <CockpitArc className="h-[clamp(80px,14vh,240px)]" />
         </div>
@@ -39,7 +61,9 @@ export default function ClientLayout() {
   }
 
   return (
-    <div className="portal-theme portal-shell h-screen overflow-hidden flex flex-col bg-background text-foreground">
+    <div className={shellClass}>
+      <ThemeToggle variant="floating" />
+        {isDemo && <span className="portal-demo-chip" aria-label="Demo-omgeving">Demo</span>}
       {/* Eén scroll-container — content schuift onder de cockpit-arc door, volgt zo de curve */}
       <div className="flex-1 min-h-0 w-full overflow-y-auto">
         {/* Sticky cockpit-arc met overlay-titel. h-0 op de sticky-wrapper zodat de inhoud
@@ -57,7 +81,7 @@ export default function ClientLayout() {
 
         <div className="portal-fixed-nav">
           <NavIconBar />
-          <Link to="/portal" className="portal-back-link" aria-label="Terug naar dashboard">
+          <Link to={base} className="portal-back-link" aria-label="Terug naar dashboard">
             ←
           </Link>
         </div>

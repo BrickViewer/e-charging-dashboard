@@ -2,6 +2,7 @@ import { useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthContext, type UserRole } from "@/contexts/authContextValue";
+import { syncAdminThemeFromUser } from "@/hooks/useAdminTheme";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+        syncAdminThemeFromUser(session?.user ?? null); // accountgebonden admin-thema (synchroon)
         setSessionRestored(true);
       },
     );
@@ -33,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      syncAdminThemeFromUser(session?.user ?? null);
       setSessionRestored(true);
     });
 

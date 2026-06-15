@@ -44,3 +44,26 @@ export async function markSettlementInvoicePaid(id: string) {
   };
   return rpcClient.rpc("mark_settlements_invoice_paid", { settlement_ids: [id] });
 }
+
+// Goedkeuring terugdraaien (approved → calculated). Alleen mogelijk zolang er
+// geen geldstroom is gestart; daarna is de afrekening definitief.
+export async function unapproveSettlement(id: string) {
+  const rpcClient = supabase as unknown as {
+    rpc(name: "unapprove_settlements", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
+  };
+  return rpcClient.rpc("unapprove_settlements", { settlement_ids: [id] });
+}
+
+// Service-fee voor één maand kwijtschelden of herstellen. Alleen mogelijk bij
+// status 'live'/'calculated' (server-side afgedwongen). Kwijtschelden nult de
+// fee-snapshot (fee 0, payout = bruto); herstellen herleidt het tarief van de
+// klant/organisatie en herrekent de bedragen.
+export async function setSettlementFeeWaived(id: string, waived: boolean) {
+  const rpcClient = supabase as unknown as {
+    rpc(
+      name: "set_settlement_fee_waived",
+      args: { p_settlement_id: string; p_waived: boolean },
+    ): Promise<{ data: unknown; error: Error | null }>;
+  };
+  return rpcClient.rpc("set_settlement_fee_waived", { p_settlement_id: id, p_waived: waived });
+}

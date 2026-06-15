@@ -34,7 +34,8 @@ function ChargerIcon({ className, style }: { className?: string; style?: CSSProp
 
 export function WarningLight({ count, variant }: WarningLightProps) {
   const active = count > 0;
-  const colorHsl = variant === "offline" ? "350 88% 62%" : "140 70% 55%";
+  // Theme-aware: volgt de --gauge-* overrides van de dagmodus
+  const colorHsl = variant === "offline" ? "var(--gauge-red)" : "var(--gauge-green)";
   const woord = count === 1 ? "laadpaal" : "laadpalen";
   const tooltipText = variant === "offline"
     ? (count === 0 ? "Geen storingen" : `${count} ${woord} buiten gebruik`)

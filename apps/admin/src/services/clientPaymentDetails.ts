@@ -25,6 +25,9 @@ export type UpdatePortalCompanyDetailsInput = {
   billingAddressCity: string;
   invoiceEmail: string;
   calculateEreEnabled: boolean;
+  // BTW-status van de host (vat_liable/kor/private); een gewijzigde keuze
+  // reset de admin-bevestiging server-side. null = niet wijzigen.
+  vatStatus: "vat_liable" | "kor" | "private" | null;
 };
 
 export type UpdatePortalBankDetailsInput = {
@@ -64,6 +67,7 @@ export async function updatePortalCompanyDetails(input: UpdatePortalCompanyDetai
     p_billing_address_city: input.billingAddressCity,
     p_invoice_email: input.invoiceEmail,
     p_calculate_ere_enabled: input.calculateEreEnabled,
+    p_vat_status: input.vatStatus,
   });
 
   if (error) throw new Error(error.message);

@@ -1,6 +1,8 @@
 import { useClientProfile, useClientLocations } from "@/hooks/useClientData";
 import { useQuery } from "@tanstack/react-query";
 import { getPortalSessions } from "@/services/sessions";
+import { getDemoSessions } from "@/lib/demoData";
+import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,7 @@ function getDateFrom(range: string): string | null {
 }
 
 export default function ClientSessions() {
+  const demo = useDemoMode();
   const { data: client } = useClientProfile();
   const { data: locations } = useClientLocations(client?.id);
   const [search, setSearch] = useState("");
@@ -62,14 +65,20 @@ export default function ClientSessions() {
   const dateFrom = useMemo(() => getDateFrom(dateRange), [dateRange]);
 
   const { data: sessions, isLoading } = useQuery({
-    queryKey: ["client-sessions-filtered", client?.id, dateRange, chargePointFilter],
+    queryKey: ["client-sessions-filtered", demo ? "demo" : client?.id, dateRange, chargePointFilter],
     queryFn: async () =>
-      getPortalSessions({
-        from: dateFrom,
-        chargePointId: chargePointFilter === "all" ? null : chargePointFilter,
-        limit: 2000,
-      }),
-    enabled: !!client?.id,
+      demo
+        ? getDemoSessions({
+            from: dateFrom,
+            chargePointId: chargePointFilter === "all" ? null : chargePointFilter,
+            limit: 2000,
+          })
+        : getPortalSessions({
+            from: dateFrom,
+            chargePointId: chargePointFilter === "all" ? null : chargePointFilter,
+            limit: 2000,
+          }),
+    enabled: demo || !!client?.id,
     placeholderData: (previousData) => previousData,
     staleTime: 30_000,
   });
@@ -130,8 +139,8 @@ export default function ClientSessions() {
         <Card className="portal-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
-                <Zap className="w-4 h-4 text-blue-400" />
+              <div className="w-9 h-9 rounded-lg bg-[hsl(var(--status-blue)/var(--status-tile-alpha))] border border-[hsl(var(--status-blue)/var(--status-tile-border-alpha))] flex items-center justify-center flex-shrink-0">
+                <Zap className="w-4 h-4 text-[hsl(var(--status-blue))]" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="cockpit-section-label">kWh geleverd</p>
@@ -143,8 +152,8 @@ export default function ClientSessions() {
         <Card className="portal-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                <Zap className="w-4 h-4 text-amber-400" />
+              <div className="w-9 h-9 rounded-lg bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] flex items-center justify-center flex-shrink-0">
+                <Zap className="w-4 h-4 text-[hsl(var(--status-amber))]" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="cockpit-section-label">Gem. kWh / paal</p>
@@ -156,8 +165,8 @@ export default function ClientSessions() {
         <Card className="portal-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center flex-shrink-0">
-                <Plug className="w-4 h-4 text-green-500" />
+              <div className="w-9 h-9 rounded-lg bg-[hsl(var(--gauge-green)/var(--status-tile-alpha))] border border-[hsl(var(--gauge-green)/var(--status-tile-border-alpha))] flex items-center justify-center flex-shrink-0">
+                <Plug className="w-4 h-4 text-[hsl(var(--gauge-green))]" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="cockpit-section-label">Laadpalen actief</p>

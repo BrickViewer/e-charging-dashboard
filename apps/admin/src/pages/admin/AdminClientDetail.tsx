@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useClientById, useClientSettlements, useClientActivity, useClientInvitation, useOrganization } from "@/hooks/useAdminData";
-import { generateSelfBillingInvoicePdf } from "@/services/invoicePdf";
+import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { FeeWaiverControl } from "@/components/admin/financial/FeeWaiverControl";
 import { formatEuro, formatNumber, settlementVat } from "@/services/calculations";
 import { monthFullLabel } from "@/lib/period";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import {
   ArrowLeft, MapPin, Zap, FileText, Activity, Building2, Upload, Pencil, Save, X,
-  Mail, MailCheck, MailWarning, RefreshCw, Loader2,
+  Mail, MailCheck, MailWarning, RefreshCw, Loader2, RotateCcw,
   Plug, Wallet, Landmark, CheckCircle2, Circle, Trash2, AlertTriangle, Wrench, Send,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -119,6 +120,32 @@ export default function AdminClientDetail() {
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
     } catch (err) {
       toast.error(err.message || "Goedkeuring mislukt");
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  // Goedkeuring terugdraaien (approved → calculated) — kan zolang er geen
+  // geldstroom is gestart; de RPC dwingt dat server-side af.
+  const unapproveSettlementAction = async (settlementId: string) => {
+    setApprovingId(settlementId);
+    try {
+      const rpcClient = supabase as unknown as {
+        rpc(name: "unapprove_settlements", args: { settlement_ids: string[] }): Promise<{
+          data: Array<{ unapproved_count?: number }> | null;
+          error: Error | null;
+        }>;
+      };
+      const { error } = await rpcClient.rpc("unapprove_settlements", {
+        settlement_ids: [settlementId],
+      });
+      if (error) throw error;
+      toast.success("Goedkeuring teruggedraaid — afrekening staat weer op 'berekend'");
+      queryClient.invalidateQueries({ queryKey: ["admin-client-settlements", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
+    } catch (err) {
+      toast.error(err.message || "Terugdraaien mislukt");
     } finally {
       setApprovingId(null);
     }
@@ -231,7 +258,6 @@ export default function AdminClientDetail() {
       energy_cost_per_kwh: client.energy_cost_per_kwh ?? 0.25,
       ere_rate_per_kwh: client.ere_rate_per_kwh ?? 0.10,
       calculate_ere_enabled: client.calculate_ere_enabled ? "true" : "false",
-      vat_liable: client.vat_liable === false ? "false" : "true",
     });
     setIsEditing(true);
   };
@@ -272,7 +298,7 @@ export default function AdminClientDetail() {
         energy_cost_per_kwh: Number(editData.energy_cost_per_kwh) || 0.25,
         ere_rate_per_kwh: Number(editData.ere_rate_per_kwh) || 0.10,
         calculate_ere_enabled: editData.calculate_ere_enabled === "true",
-        vat_liable: editData.vat_liable !== "false",
+        // BTW-status (en de legacy vat_liable) lopen via confirm_client_vat_status.
       }).eq("id", id);
       if (error) throw error;
 
@@ -796,11 +822,33 @@ export default function AdminClientDetail() {
                             : "Bankbetaling markeren"}
                         </Button>
                       )}
+                      {s.status === "approved" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => unapproveSettlementAction(s.id)}
+                          disabled={approvingId === s.id}
+                          title="Terug naar 'berekend' — daarna kun je bv. de fee kwijtschelden"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                          Terugdraaien
+                        </Button>
+                      )}
                       {!isLive && !isCalculated && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => { void generateSelfBillingInvoicePdf(s, client, org, paymentDetails); }}
+                          onClick={async () => {
+                            try {
+                              await generateSelfBillingInvoicePdf(s, client, org, paymentDetails);
+                            } catch (err) {
+                              if (err instanceof InvoiceValidationError) {
+                                toast.error(`Factuur geblokkeerd — ontbrekend: ${err.issues.map((i) => i.label).join(", ")}`);
+                              } else {
+                                toast.error((err as Error).message || "Factuur genereren mislukt");
+                              }
+                            }
+                          }}
                           title="Self-billing afrekening als PDF"
                         >
                           <FileText className="w-3.5 h-3.5 mr-1.5" />
@@ -850,6 +898,10 @@ export default function AdminClientDetail() {
                         </table>
                       </div>
                     </details>
+                    {/* Kwijtschelding: badge + toggle (alleen actief bij live/calculated) */}
+                    <div className="flex justify-end">
+                      <FeeWaiverControl settlement={s} />
+                    </div>
                     <div className="border-t border-border pt-2 flex justify-between text-base font-bold">
                       <span>Uitbetaling klant</span>
                       <span className="text-primary tabular-nums">{formatEuro(clientPayout)}</span>
@@ -1097,17 +1149,6 @@ function BusinessDetailsCard({
                 onCheckedChange={(checked) => setEd("calculate_ere_enabled", checked ? "true" : "false")}
               />
             </div>
-            <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-              <div className="min-w-0">
-                <Label htmlFor="admin-vat-liable">BTW-plichtig</Label>
-                <p className="text-[11px] text-muted-foreground">21% op de factuur + incl-BTW uitbetalen</p>
-              </div>
-              <Switch
-                id="admin-vat-liable"
-                checked={ed.vat_liable !== "false"}
-                onCheckedChange={(checked) => setEd("vat_liable", checked ? "true" : "false")}
-              />
-            </div>
           </div>
         ) : (
           <div className="space-y-0">
@@ -1119,11 +1160,98 @@ function BusinessDetailsCard({
             <DetailRow label="Postcode" value={client.billing_address_postal} />
             <DetailRow label="Plaats" value={client.billing_address_city} />
             <DetailRow label="Bereken ERE's" value={client.calculate_ere_enabled ? "Ja" : "Nee"} />
-            <DetailRow label="BTW-plichtig" value={client.vat_liable === false ? "Nee" : "Ja"} />
           </div>
         )}
+        {/* BTW-status loopt buiten de gewone edit-flow: host geeft op, admin
+            bevestigt via een eigen RPC (vereist voor goedkeuren/factureren). */}
+        <VatStatusBlock client={client} />
       </CardContent>
     </Card>
+  );
+}
+
+const VAT_STATUS_LABELS: Record<string, string> = {
+  vat_liable: "BTW-ondernemer (21%)",
+  kor: "KOR — vrijgesteld van BTW",
+  private: "Particulier — geen BTW",
+};
+
+// Weergave + bevestiging van de BTW-status van de leverancier (Wet OB).
+// Zonder bevestigde status blokkeert approve_settlements het goedkeuren.
+function VatStatusBlock({ client }: { client: ClientWithRelations }) {
+  const queryClient = useQueryClient();
+  const { id } = useParams<{ id: string }>();
+  const [selected, setSelected] = useState<string>(client.vat_status ?? "");
+  const [confirming, setConfirming] = useState(false);
+
+  const confirmed = Boolean(client.vat_status && client.vat_status_confirmed_at);
+  const pending = Boolean(client.vat_status && !client.vat_status_confirmed_at);
+
+  const confirm = async () => {
+    if (!selected) { toast.error("Kies eerst een BTW-status"); return; }
+    setConfirming(true);
+    try {
+      const rpcClient = supabase as unknown as {
+        rpc(name: "confirm_client_vat_status", args: { p_client_id: string; p_vat_status: string }): Promise<{ data: unknown; error: Error | null }>;
+      };
+      const { error } = await rpcClient.rpc("confirm_client_vat_status", {
+        p_client_id: client.id,
+        p_vat_status: selected,
+      });
+      if (error) throw error;
+      toast.success("BTW-status bevestigd");
+      queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
+    } catch (err) {
+      toast.error((err as Error).message || "Bevestigen mislukt");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border space-y-2">
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-medium">BTW-status</p>
+        {confirmed && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-primary/15 text-primary border border-primary/25">
+            Bevestigd
+          </span>
+        )}
+        {pending && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-[hsl(var(--status-amber)/0.15)] text-[hsl(var(--status-amber))] border border-[hsl(var(--status-amber)/0.25)]">
+            Wacht op bevestiging
+          </span>
+        )}
+        {!client.vat_status && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-muted/50 text-muted-foreground border border-border">
+            Nog niet opgegeven
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        {client.vat_status
+          ? `Opgegeven: ${VAT_STATUS_LABELS[client.vat_status] ?? client.vat_status}`
+          : "De host kan dit in het portaal opgeven; jij kunt het hier direct vaststellen."}
+        {" "}Zonder bevestigde status kan de maand niet worden goedgekeurd.
+      </p>
+      <div className="flex items-center gap-2">
+        <Select value={selected} onValueChange={setSelected}>
+          <SelectTrigger className="h-8 w-[260px] text-xs">
+            <SelectValue placeholder="Kies BTW-status…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="vat_liable">{VAT_STATUS_LABELS.vat_liable}</SelectItem>
+            <SelectItem value="kor">{VAT_STATUS_LABELS.kor}</SelectItem>
+            <SelectItem value="private">{VAT_STATUS_LABELS.private}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button size="sm" variant="outline" onClick={confirm} disabled={confirming || !selected}>
+          {confirming ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
+          Bevestigen
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -1536,9 +1664,17 @@ function InstallationOrdersCard({ clientId }: { clientId: string | undefined }) 
   const doHandoff = async (orderId: string) => {
     try {
       const res = await handoff.mutateAsync(orderId);
-      toast.success(`Overgedragen aan e-portal (${res?.external_ref ?? "—"})`);
+      if (res.status === "ok") {
+        toast.success(`Verstuurd naar E-Group (${res.egroup_order_number ?? res.egroup_order_id ?? "—"})`);
+      } else if (res.status === "validation_error") {
+        toast.error(res.message ?? "Site-adres onvolledig, vul aan via Installaties");
+      } else if (res.status === "not_configured") {
+        toast.warning("E-Group koppeling is nog niet geconfigureerd");
+      } else {
+        toast.error(res.message ?? "Versturen mislukt");
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Overdracht mislukt");
+      toast.error(e instanceof Error ? e.message : "Versturen mislukt");
     }
   };
 

@@ -526,29 +526,29 @@ export default function AdminLocationDetail() {
           }
         }}
       >
-        <DialogContent className="border-white/10 bg-[#10151b] text-white shadow-2xl sm:max-w-xl">
+        <DialogContent className="bg-card text-card-foreground shadow-2xl sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Koppel locatie aan klant</DialogTitle>
-            <DialogDescription className="text-zinc-300">
+            <DialogDescription className="text-foreground/75">
               Selecteer bij welke klant deze locatie hoort. Alle niet-afgerekende
               sessies van deze locatie worden aan de gekozen klant gekoppeld.
               Sessies die al definitief zijn afgerekend blijven historisch staan.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <label className="text-sm font-medium text-zinc-100">Klant</label>
+            <label className="text-sm font-medium text-foreground">Klant</label>
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 autoFocus
                 value={clientSearch}
                 onChange={(event) => setClientSearch(event.target.value)}
                 placeholder="Zoek op klantnaam, klantnummer of KvK..."
-                className="border-white/10 bg-black/25 pl-9 text-white placeholder:text-zinc-500 focus-visible:ring-primary"
+                className="bg-background/60 pl-9 focus-visible:ring-primary"
               />
             </div>
 
-            <div className="max-h-72 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-1">
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-border bg-background/50 p-1">
               {filteredClientList.map((client) => {
                 const isSelected = selectedClientId === client.id;
 
@@ -560,8 +560,8 @@ export default function AdminLocationDetail() {
                     className={cn(
                       "flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left transition-colors",
                       isSelected
-                        ? "bg-primary/15 text-white ring-1 ring-primary/40"
-                        : "text-white hover:bg-white/[0.07]",
+                        ? "bg-primary/15 text-foreground ring-1 ring-primary/40"
+                        : "text-foreground hover:bg-foreground/[0.07]",
                     )}
                   >
                     <span className="min-w-0">
@@ -573,7 +573,7 @@ export default function AdminLocationDetail() {
                         )}
                         <span className="truncate font-medium">{client.company_name}</span>
                       </span>
-                      <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+                      <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         {client.kvk && <span className="font-mono">KvK {client.kvk}</span>}
                         {client.contact_email && <span>{client.contact_email}</span>}
                       </span>
@@ -586,7 +586,7 @@ export default function AdminLocationDetail() {
               })}
 
               {filteredClientList.length === 0 && (
-                <div className="rounded-md px-3 py-6 text-center text-sm text-zinc-400">
+                <div className="rounded-md px-3 py-6 text-center text-sm text-muted-foreground">
                   {assignableClientList.length === 0
                     ? "Geen klanten beschikbaar om te koppelen."
                     : "Geen klanten gevonden."}
@@ -597,7 +597,7 @@ export default function AdminLocationDetail() {
           <DialogFooter>
             <Button
               variant="outline"
-              className="border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+              className="border-foreground/15 bg-foreground/5 text-foreground hover:bg-foreground/10 hover:text-foreground"
               onClick={() => {
                 setLinkDialogOpen(false);
                 setClientSearch("");

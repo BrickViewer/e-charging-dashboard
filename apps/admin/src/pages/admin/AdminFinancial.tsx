@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { FinancialCharts } from "@/components/admin/financial/FinancialCharts";
 import { SettlementDetailRow } from "@/components/admin/financial/SettlementDetailRow";
 import {
-  ChevronDown, ChevronRight, CheckCircle, RefreshCw, Loader2,
+  ChevronDown, ChevronRight, CheckCircle, RefreshCw, Loader2, RotateCcw,
   Search, Wallet, Hourglass, Banknote, AlertCircle, ArrowRight, Landmark, FileText, Download,
 } from "lucide-react";
 import {
@@ -59,6 +59,7 @@ export default function AdminFinancial() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [recomputing, setRecomputing] = useState(false);
   const [payTarget, setPayTarget] = useState<AdminSettlement[] | null>(null);
+  const [unapproveTarget, setUnapproveTarget] = useState<AdminSettlement | null>(null);
   const [trendYear, setTrendYear] = useState<number | undefined>(undefined);
   const selectedTrendYear = trendYear ?? getCurrentMonth().year;
   const perPage = 20;
@@ -125,7 +126,8 @@ export default function AdminFinancial() {
       const pd = s.client_id ? ibanByClient.get(s.client_id) : undefined;
       tot.net += v.net; tot.vat += v.vatAmount; tot.incl += v.inclVat; tot.kwh += Number(s.total_kwh || 0);
       return [
-        `EC-${s.year}${String(s.month).padStart(2, "0")}-${s.clients?.client_number ?? "0000"}`,
+        // Opgeslagen doorlopend nummer (toegekend bij goedkeuring); leeg = nog niet uitgereikt
+        s.invoice_number ?? "",
         periodLabel(s.year, s.month),
         s.clients?.client_number ?? "",
         s.clients?.company_name ?? "",
@@ -298,7 +300,27 @@ export default function AdminFinancial() {
       setSelected(new Set());
       toast.success(`${ids.length} afrekening(en) goedgekeurd`);
     },
-    onError: () => toast.error("Goedkeuren mislukt"),
+    // De RPC blokkeert met een NL-melding die exact opsomt welke factuurgegevens
+    // ontbreken (Wet OB-validatie) — die melding moet de admin bereiken.
+    onError: (err: Error) => toast.error(err.message || "Goedkeuren mislukt", { duration: 12000 }),
+  });
+
+  // Goedkeuring terugdraaien (approved → calculated). Kan zolang er geen
+  // geldstroom is gestart — de RPC dwingt dat server-side af.
+  const unapproveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const rpcClient = supabase as unknown as {
+        rpc(name: "unapprove_settlements", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
+      };
+      const { error } = await rpcClient.rpc("unapprove_settlements", { settlement_ids: [id] });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-client-settlements"] });
+      toast.success("Goedkeuring teruggedraaid — afrekening staat weer op 'berekend'");
+    },
+    onError: (err: Error) => toast.error(err.message || "Terugdraaien mislukt"),
   });
 
   const markPaidMutation = useMutation({
@@ -638,18 +660,32 @@ export default function AdminFinancial() {
                         <td className="p-3 text-right tabular-nums">{fmt(vatInfo(s).net)}</td>
                         <td className="p-3 text-right tabular-nums text-muted-foreground">{fmt(vatInfo(s).vatAmount)}</td>
                         <td className="p-3 text-right tabular-nums font-semibold">{fmt(inclAmount(s))}</td>
-                        <td className="p-3"><SettlementStatusBadge settlement={s} /></td>
+                        <td className="p-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <SettlementStatusBadge settlement={s} />
+                            {s.fee_waived && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-primary/15 text-primary border border-primary/25"
+                                title="Service-fee voor deze maand kwijtgescholden"
+                              >
+                                fee 0
+                              </span>
+                            )}
+                          </span>
+                        </td>
                         <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <RowAction
                             settlement={s}
                             pending={
                               approveMutation.isPending || markPaidMutation.isPending ||
-                              markInvoiceSentMutation.isPending || markInvoicePaidMutation.isPending
+                              markInvoiceSentMutation.isPending || markInvoicePaidMutation.isPending ||
+                              unapproveMutation.isPending
                             }
                             onApprove={() => approveMutation.mutate([s.id])}
                             onPay={() => setPayTarget([s])}
                             onSendInvoice={() => markInvoiceSentMutation.mutate([s])}
                             onInvoicePaid={() => markInvoicePaidMutation.mutate([s])}
+                            onUnapprove={() => setUnapproveTarget(s)}
                           />
                         </td>
                       </tr>
@@ -726,6 +762,35 @@ export default function AdminFinancial() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bevestiging: goedkeuring terugdraaien */}
+      <AlertDialog open={unapproveTarget !== null} onOpenChange={(o) => { if (!o) setUnapproveTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Goedkeuring terugdraaien?</AlertDialogTitle>
+            <AlertDialogDescription>
+              De afrekening{" "}
+              <strong>
+                {unapproveTarget ? periodLabel(unapproveTarget.year, unapproveTarget.month) : ""}
+                {unapproveTarget?.clients?.company_name ? ` van ${unapproveTarget.clients.company_name}` : ""}
+              </strong>{" "}
+              gaat terug naar status <strong>berekend</strong>. Daarna kun je bijvoorbeeld de service-fee
+              kwijtschelden of de cijfers laten herberekenen, en opnieuw goedkeuren. De afrekening is in de
+              tussentijd niet zichtbaar voor de klant.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unapproveMutation.isPending}>Annuleren</AlertDialogCancel>
+            <Button
+              disabled={unapproveMutation.isPending}
+              onClick={() => { if (unapproveTarget) unapproveMutation.mutate(unapproveTarget.id); setUnapproveTarget(null); }}
+            >
+              {unapproveMutation.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+              Terugdraaien
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -749,7 +814,7 @@ function CashKpi({
 }) {
   const accentBg = {
     primary: "bg-primary/10 border-primary/20 text-primary",
-    amber: "bg-amber-400/10 border-amber-400/20 text-amber-400",
+    amber: "bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] text-[hsl(var(--status-amber))]",
     muted: "bg-muted/30 border-border text-muted-foreground",
   }[accent ?? "muted"];
 
@@ -758,7 +823,7 @@ function CashKpi({
       ? "text-muted-foreground"
       : changePositive
       ? "text-primary"
-      : "text-red-400";
+      : "text-[hsl(var(--status-red))]";
 
   return (
     <Card className="portal-card">
@@ -792,24 +857,24 @@ function PaymentPipeline({ pipeline }: { pipeline: PaymentPipelineSummary }) {
       label: "Berekend",
       count: pipeline.calculated.count,
       amount: pipeline.calculated.amount,
-      color: "bg-zinc-400",
-      tone: "text-zinc-300",
+      color: "bg-muted-foreground",
+      tone: "text-foreground/80",
     },
     {
       key: "bankReady",
       label: "Bank klaar",
       count: pipeline.bankReady.count,
       amount: pipeline.bankReady.amount,
-      color: "bg-amber-400",
-      tone: "text-amber-400",
+      color: "bg-[hsl(var(--status-amber))]",
+      tone: "text-[hsl(var(--status-amber))]",
     },
     {
       key: "invoiceOpen",
       label: "Factuur open",
       count: pipeline.invoiceOpen.count,
       amount: pipeline.invoiceOpen.amount,
-      color: "bg-blue-400",
-      tone: "text-blue-400",
+      color: "bg-[hsl(var(--status-blue))]",
+      tone: "text-[hsl(var(--status-blue))]",
     },
     {
       key: "processed",
@@ -826,8 +891,8 @@ function PaymentPipeline({ pipeline }: { pipeline: PaymentPipelineSummary }) {
       <CardContent className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-amber-400/10 border border-amber-400/20 flex items-center justify-center">
-              <Hourglass className="w-4 h-4 text-amber-400" />
+            <div className="w-9 h-9 rounded-lg bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] flex items-center justify-center">
+              <Hourglass className="w-4 h-4 text-[hsl(var(--status-amber))]" />
             </div>
             <div>
               <p className="cockpit-section-label">Betalingsverwerking</p>
@@ -837,7 +902,7 @@ function PaymentPipeline({ pipeline }: { pipeline: PaymentPipelineSummary }) {
             </div>
           </div>
           {pipeline.invoiceToSend.count > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-red-500/15 text-red-400 border border-red-500/25">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-[hsl(var(--status-red)/0.15)] text-[hsl(var(--status-red))] border border-[hsl(var(--status-red)/0.25)]">
               <AlertCircle className="w-3 h-3" />
               {pipeline.invoiceToSend.count} factuur te sturen
             </span>
@@ -901,6 +966,7 @@ function RowAction({
   onPay,
   onSendInvoice,
   onInvoicePaid,
+  onUnapprove,
 }: {
   settlement: AdminSettlement;
   pending: boolean;
@@ -908,6 +974,7 @@ function RowAction({
   onPay: () => void;
   onSendInvoice: () => void;
   onInvoicePaid: () => void;
+  onUnapprove: () => void;
 }) {
   const payout = customerCashflow(settlement);
   let action: { label: string; onClick: () => void } | null = null;
@@ -923,8 +990,23 @@ function RowAction({
       : <span className="text-xs text-muted-foreground/50">—</span>;
   }
   return (
-    <Button size="sm" variant="outline" className="h-7 text-xs whitespace-nowrap" disabled={pending} onClick={action.onClick}>
-      {action.label}
-    </Button>
+    <span className="inline-flex items-center gap-1">
+      <Button size="sm" variant="outline" className="h-7 text-xs whitespace-nowrap" disabled={pending} onClick={action.onClick}>
+        {action.label}
+      </Button>
+      {settlement.status === "approved" && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0"
+          disabled={pending}
+          onClick={onUnapprove}
+          title="Goedkeuring terugdraaien (terug naar 'berekend')"
+          aria-label="Goedkeuring terugdraaien"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+        </Button>
+      )}
+    </span>
   );
 }

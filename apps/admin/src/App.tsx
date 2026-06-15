@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DemoModeProvider } from "@/contexts/DemoModeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -32,8 +33,10 @@ const AdminClientWizard = lazy(() => import("./pages/admin/AdminClientWizard"));
 const AdminClientDetail = lazy(() => import("./pages/admin/AdminClientDetail"));
 const AdminFinancial = lazy(() => import("./pages/admin/AdminFinancial"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
-const AdminInstallations = lazy(() => import("./pages/admin/AdminInstallations"));
+const SalesInstallations = lazy(() => import("./pages/sales/SalesInstallations"));
 const AdminLocationDetail = lazy(() => import("./pages/admin/AdminLocationDetail"));
+const AdminStoringen = lazy(() => import("./pages/admin/AdminStoringen"));
+const AdminStoringDetail = lazy(() => import("./pages/admin/AdminStoringDetail"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminConfiguratorSettings = lazy(() => import("./pages/admin/AdminConfiguratorSettings"));
 
@@ -123,6 +126,22 @@ const App = () => (
                 <Route path="locatie/:id" element={<ClientLocationDetail />} />
               </Route>
 
+              {/* Demo-omgeving voor sales: het volledige klantportaal op fictieve data */}
+              <Route path="/demo" element={
+                <RequireAuth allowedRoles={["admin", "manager", "sales"]}>
+                  <DemoModeProvider>
+                    <ClientLayout />
+                  </DemoModeProvider>
+                </RequireAuth>
+              }>
+                <Route index element={<ClientDashboard />} />
+                <Route path="sessies" element={<ClientSessions />} />
+                <Route path="financieel" element={<ClientFinancial />} />
+                <Route path="gegevens" element={<ClientProfilePage />} />
+                <Route path="berichten" element={<ClientMessages />} />
+                <Route path="locatie/:id" element={<ClientLocationDetail />} />
+              </Route>
+
               {/* Beheer-werkblad */}
               <Route path="/admin" element={
                 <RequireAuth allowedRoles={["admin", "manager", "viewer"]}>
@@ -135,7 +154,10 @@ const App = () => (
                 <Route path="klanten/:id" element={<AdminClientDetail />} />
                 <Route path="locaties" element={<AdminLocations />} />
                 <Route path="locaties/:id" element={<AdminLocationDetail />} />
-                <Route path="installaties" element={<AdminInstallations />} />
+                <Route path="storingen" element={<AdminStoringen />} />
+                <Route path="storingen/:id" element={<AdminStoringDetail />} />
+                {/* Installaties zijn naar het Sales-werkblad verhuisd; redirect voor oude bookmarks */}
+                <Route path="installaties" element={<Navigate to="/sales/installaties" replace />} />
                 <Route path="financieel" element={<AdminFinancial />} />
                 <Route path="instellingen" element={<AdminSettings />} />
                 {/* Configurator verhuisd naar Sales — oude pad blijft werken via redirect */}
@@ -152,6 +174,7 @@ const App = () => (
                 <Route path="leads" element={<SalesLeads />} />
                 <Route path="contacten" element={<SalesContacts />} />
                 <Route path="offertes" element={<SalesOffertes />} />
+                <Route path="installaties" element={<SalesInstallations />} />
                 <Route path="configurator" element={<AdminConfiguratorSettings />} />
               </Route>
 

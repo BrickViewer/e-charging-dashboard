@@ -2,6 +2,8 @@ import type { Json, Tables } from "@/integrations/supabase/types";
 
 export type ActivityLog = Tables<"activity_log">;
 export type ChargePoint = Tables<"charge_points">;
+export type ChargePointFault = Tables<"charge_point_faults">;
+export type ChargePointFaultEvent = Tables<"charge_point_fault_events">;
 export type ChargingSession = Tables<"charging_sessions">;
 export type Client = Tables<"clients">;
 export type ClientPaymentDetails = Tables<"client_payment_details">;
@@ -81,6 +83,9 @@ export type PortalClient = Pick<
   | "billing_address_street"
   | "billing_address_postal"
   | "billing_address_city"
+  | "country"
+  | "vat_status"
+  | "vat_status_confirmed_at"
   | "contract_start_date"
   | "contract_duration_months"
   | "revenue_share_percentage"
@@ -173,4 +178,6 @@ export type PortalSettlement = Pick<
   | "total_sessions"
   | "client_payout"
   | "vat_rate"
+  | "vat_status"
+  | "invoice_number"
 >;

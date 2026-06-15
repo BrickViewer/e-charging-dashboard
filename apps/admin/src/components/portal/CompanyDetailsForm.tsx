@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
+import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { isValidIban } from "@/lib/iban";
 import { cn } from "@/lib/utils";
 import {
@@ -25,8 +27,11 @@ type CompanyDetailsFormProps = {
   paymentDetails?: PortalPaymentDetails | null;
 };
 
+type VatStatusChoice = "vat_liable" | "kor" | "private" | "";
+
 type CompanyFormState = {
   companyName: string;
+  vatStatus: VatStatusChoice;
   kvk: string;
   btwNumber: string;
   contactFirstName: string;
@@ -68,8 +73,7 @@ type PasswordErrors = Partial<Record<keyof PasswordFormState, string>>;
 
 const COMPANY_REQUIRED_FIELDS: Array<keyof CompanyFormState> = [
   "companyName",
-  "kvk",
-  "btwNumber",
+  "vatStatus",
   "contactFirstName",
   "contactLastName",
   "contactEmail",
@@ -109,6 +113,7 @@ function initialCompanyForm(client: PortalClient, details?: PortalPaymentDetails
 
   return {
     companyName: client.company_name ?? "",
+    vatStatus: (client.vat_status as VatStatusChoice) ?? "",
     kvk: client.kvk ?? "",
     btwNumber: client.btw_number ?? "",
     contactFirstName: contactName.firstName,
@@ -169,6 +174,7 @@ function isValidBic(value: string) {
 function normalizeCompanyForm(form: CompanyFormState): CompanyFormState {
   return {
     companyName: form.companyName.trim(),
+    vatStatus: form.vatStatus,
     kvk: normalizeKvk(form.kvk),
     btwNumber: normalizeBtw(form.btwNumber),
     contactFirstName: form.contactFirstName.trim(),
@@ -202,6 +208,13 @@ function validateCompanyForm(form: CompanyFormState): CompanyErrors {
   }
 
   if (normalized.companyName && normalized.companyName.length < 2) errors.companyName = "Vul minimaal 2 tekens in";
+  // KvK verplicht voor BTW-ondernemer en KOR; BTW-nummer alleen voor BTW-ondernemer.
+  if ((normalized.vatStatus === "vat_liable" || normalized.vatStatus === "kor") && !normalized.kvk) {
+    errors.kvk = "Dit veld is verplicht";
+  }
+  if (normalized.vatStatus === "vat_liable" && !normalized.btwNumber) {
+    errors.btwNumber = "Dit veld is verplicht";
+  }
   if (normalized.kvk && !/^[0-9]{8}$/.test(normalized.kvk)) errors.kvk = "Vul een geldig KvK-nummer van 8 cijfers in";
   if (normalized.btwNumber && !isValidDutchVatNumber(normalized.btwNumber)) {
     errors.btwNumber = "Vul een geldig BTW-nummer in, bijvoorbeeld NL123456789B01";
@@ -269,6 +282,7 @@ function applyCompanyServerError(message: string): CompanyErrors {
 }
 
 export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFormProps) {
+  const demo = useDemoMode();
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -375,10 +389,21 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
     const normalized = normalizeCompanyForm(companyForm);
     setCompanyErrors({});
     setCompanyForm(normalized);
+
+    if (demo) {
+      // Demo-omgeving: validatie en UX werken, maar er wordt niets opgeslagen.
+      await new Promise((r) => setTimeout(r, 400));
+      toast.success("Demo-omgeving: wijzigingen worden niet opgeslagen");
+      return;
+    }
+
     setCompanySaving(true);
 
     try {
-      await updatePortalCompanyDetails(normalized);
+      await updatePortalCompanyDetails({
+        ...normalized,
+        vatStatus: normalized.vatStatus === "" ? null : normalized.vatStatus,
+      });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["client-profile"] }),
         queryClient.invalidateQueries({ queryKey: ["client-payment-details", client.id] }),
@@ -406,6 +431,15 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
 
     const normalized = normalizeBankForm(bankForm);
     setBankErrors({});
+
+    if (demo) {
+      // Demo-omgeving: validatie en UX werken, maar er wordt niets opgeslagen.
+      await new Promise((r) => setTimeout(r, 400));
+      toast.success("Demo-omgeving: wijzigingen worden niet opgeslagen");
+      setBankForm((prev) => ({ ...prev, currentPassword: "" }));
+      return;
+    }
+
     setBankSaving(true);
 
     try {
@@ -450,6 +484,13 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
       return;
     }
 
+    if (demo) {
+      await new Promise((r) => setTimeout(r, 400));
+      toast.success("Demo-omgeving: wijzigingen worden niet opgeslagen");
+      setLoginEmailForm((prev) => ({ ...prev, currentPassword: "" }));
+      return;
+    }
+
     setEmailSaving(true);
     setLoginEmailErrors({});
     try {
@@ -485,6 +526,13 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
 
     if (!user?.email) {
       toast.error("Geen huidige login e-mail gevonden");
+      return;
+    }
+
+    if (demo) {
+      await new Promise((r) => setTimeout(r, 400));
+      toast.success("Demo-omgeving: wijzigingen worden niet opgeslagen");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
       return;
     }
 
@@ -540,10 +588,52 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
                 <InfoItem label="Klantnummer" value={client.client_number ? `#${client.client_number}` : "Nog niet bekend"} />
               </dl>
 
+              {/* BTW-status: bepaalt de BTW-behandeling op de vergoedingsfactuur
+                  én welke velden hieronder verplicht zijn. E-Charging bevestigt
+                  de keuze voordat er wordt uitbetaald. */}
+              <div className="space-y-2 rounded-md border border-border/80 px-3 py-3">
+                <Label className="text-sm text-foreground">
+                  BTW-status <span className="text-destructive">*</span>
+                </Label>
+                <RadioGroup
+                  value={companyForm.vatStatus}
+                  onValueChange={(value) => updateCompany("vatStatus", value as VatStatusChoice)}
+                  className="gap-2.5"
+                >
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <RadioGroupItem value="vat_liable" className="mt-0.5" />
+                    <span className="text-sm">
+                      Ik ben BTW-ondernemer
+                      <span className="block text-xs text-muted-foreground">21% BTW op de vergoeding; KvK- en BTW-nummer verplicht</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <RadioGroupItem value="kor" className="mt-0.5" />
+                    <span className="text-sm">
+                      Ik val onder de kleineondernemersregeling (KOR)
+                      <span className="block text-xs text-muted-foreground">Geen BTW op de vergoeding; KvK-nummer verplicht</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <RadioGroupItem value="private" className="mt-0.5" />
+                    <span className="text-sm">
+                      Ik ontvang de vergoeding als particulier
+                      <span className="block text-xs text-muted-foreground">Geen BTW; geen KvK- of BTW-nummer nodig</span>
+                    </span>
+                  </label>
+                </RadioGroup>
+                {companyErrors.vatStatus && <p className="text-xs text-destructive">{companyErrors.vatStatus}</p>}
+                {client.vat_status && !client.vat_status_confirmed_at && (
+                  <p className="text-xs text-[hsl(var(--status-amber))]">
+                    In afwachting van bevestiging door E-Charging — tot die tijd kan er nog niet worden uitbetaald.
+                  </p>
+                )}
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field id="company-name" label="Bedrijfsnaam" value={companyForm.companyName} onChange={(value) => updateCompany("companyName", value)} error={companyErrors.companyName} required />
-                <Field id="kvk" label="KvK-nummer" value={companyForm.kvk} onChange={(value) => updateCompany("kvk", value)} error={companyErrors.kvk} inputMode="numeric" required />
-                <Field id="btw-number" label="BTW-nummer" value={companyForm.btwNumber} onChange={(value) => updateCompany("btwNumber", value)} error={companyErrors.btwNumber} placeholder="NL123456789B01" required />
+                <Field id="kvk" label="KvK-nummer" value={companyForm.kvk} onChange={(value) => updateCompany("kvk", value)} error={companyErrors.kvk} inputMode="numeric" required={companyForm.vatStatus !== "private"} />
+                <Field id="btw-number" label="BTW-nummer" value={companyForm.btwNumber} onChange={(value) => updateCompany("btwNumber", value)} error={companyErrors.btwNumber} placeholder="NL123456789B01" required={companyForm.vatStatus === "vat_liable"} />
                 <Field id="invoice-email" label="Factuurmail" type="email" value={companyForm.invoiceEmail} onChange={(value) => updateCompany("invoiceEmail", value)} error={companyErrors.invoiceEmail} required />
               </div>
 

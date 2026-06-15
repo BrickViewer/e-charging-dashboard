@@ -1,10 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
+import { buildHandoffPayload, validateSiteForHandoff } from "../_shared/installationHandoff.ts";
+import { resolveSecret } from "../_shared/secrets.ts";
+import { EgroupApiError, EgroupClient } from "./egroup-api.ts";
 
-// Overdracht van een installatie-order naar het externe e-groep/e-portal-systeem
-// (werkbonnen). STUB: markeert de order als overgedragen. Zodra de e-portal-API
-// (endpoint + auth) beschikbaar is, wordt hier de echte call ingebouwd.
+// Overdracht van een installatie-order naar de E-Group portal. Bouwt een
+// volledig payload (klant, site-adres, contact, offerte-regels), POST naar de
+// E-Group intake-endpoint en bewaart de E-Group order-referenties. Idempotent:
+// een al verstuurde order wordt niet opnieuw aangemaakt.
 // Body: { order_id }
 
 const corsHeaders = {
@@ -33,31 +37,94 @@ Deno.serve(async (req) => {
     const orderId = typeof body.order_id === "string" ? body.order_id : "";
     if (!orderId) return json({ status: "error", message: "order_id ontbreekt" }, 400);
 
-    const { data: order } = await sb.from("installation_orders").select("*").eq("id", orderId).maybeSingle();
+    const { data: order } = await sb
+      .from("installation_orders")
+      .select(
+        "*, clients(company_name, kvk, btw_number, contact_name, contact_email, contact_phone, billing_address_street, billing_address_postal, billing_address_city, country, client_number), companies(name, kvk, btw_number, address_street, postal_code, city), leads(company_name, kvk, contact_name, contact_email, contact_phone, contact_role, address_street, postal_code, city, estimated_charge_points, charger_type), quotes(quote_number, line_items, total_hardware_cost, total_installation_cost, with_management)",
+      )
+      .eq("id", orderId)
+      .maybeSingle();
     if (!order) return json({ status: "error", message: "Order niet gevonden" }, 404);
 
-    const externalApiUrl = Deno.env.get("EPORTAL_API_URL");
-    let externalRef = order.external_ref as string | null;
-
-    // --- Echte koppeling (later): POST de werkbon naar e-groep/e-portal ---
-    if (externalApiUrl) {
-      // TODO: bouw de echte call zodra endpoint + auth bekend zijn.
-      // const res = await fetch(externalApiUrl, { ... }); externalRef = (await res.json()).id;
-    }
-    if (!externalRef) externalRef = `EPORTAL-PENDING-${orderId.slice(0, 8)}`;
-
-    await sb.from("installation_orders").update({ status: "overgedragen", external_ref: externalRef }).eq("id", orderId);
-
-    if (order.client_id) {
-      await sb.from("activity_log").insert({
-        organization_id: order.organization_id, client_id: order.client_id, user_id: auth.userId ?? null,
-        action: "installation_order_handed_off",
-        description: `Installatie-order overgedragen naar e-portal (${externalRef})`,
-        metadata: { order_id: orderId, external_ref: externalRef },
+    // Al verstuurd: idempotent teruggeven, niet opnieuw aanmaken.
+    if (order.egroup_order_id) {
+      return json({
+        status: "ok",
+        already_sent: true,
+        egroup_order_id: order.egroup_order_id,
+        egroup_order_number: order.egroup_order_number,
       });
     }
 
-    return json({ status: "ok", external_ref: externalRef, configured: !!externalApiUrl });
+    // Site-adres verplicht (E-Group project NOT NULL). Blokkeer netjes als incompleet.
+    const siteCheck = validateSiteForHandoff(order);
+    if (!siteCheck.ok) {
+      return json({
+        status: "validation_error",
+        missing: siteCheck.missing,
+        message: `Vul eerst het site-adres aan: ${siteCheck.missing.join(", ")}`,
+      });
+    }
+
+    // Config (env-first, anders Vault). Niet geconfigureerd: veilig afbreken.
+    const intakeUrl = await resolveSecret(sb, ["EGROUP_INTAKE_URL"], "egroup_intake_url");
+    const sharedSecret = await resolveSecret(sb, ["EGROUP_SHARED_SECRET"], "egroup_shared_secret");
+    if (!intakeUrl || !sharedSecret) {
+      return json({ status: "not_configured", message: "E-Group koppeling is nog niet geconfigureerd" });
+    }
+    const client = new EgroupClient({ intakeUrl, sharedSecret });
+
+    const callbackUrl = `${supabaseUrl}/functions/v1/installation-completion-webhook`;
+    const payload = buildHandoffPayload({
+      order,
+      client: order.clients,
+      company: order.companies,
+      lead: order.leads,
+      quote: order.quotes,
+      callbackUrl,
+    });
+
+    try {
+      const result = await client.intakeOrder(payload, orderId);
+      await sb
+        .from("installation_orders")
+        .update({
+          egroup_order_id: result.order_id,
+          egroup_order_number: result.order_number || null,
+          external_ref: result.order_number || null,
+          status: "overgedragen",
+          handoff_at: new Date().toISOString(),
+          last_sync_error: null,
+        })
+        .eq("id", orderId);
+
+      if (order.client_id) {
+        await sb.from("activity_log").insert({
+          organization_id: order.organization_id,
+          client_id: order.client_id,
+          user_id: auth.userId ?? null,
+          action: "installation_order_handed_off",
+          description: `Installatie-order overgedragen naar E-Group (${result.order_number || result.order_id})`,
+          metadata: { order_id: orderId, egroup_order_id: result.order_id, egroup_order_number: result.order_number },
+        });
+      }
+
+      return json({ status: "ok", egroup_order_id: result.order_id, egroup_order_number: result.order_number });
+    } catch (err) {
+      const message = err instanceof EgroupApiError ? `E-Group ${err.status}: ${err.message}` : (err as Error).message;
+      await sb.from("installation_orders").update({ last_sync_error: message }).eq("id", orderId);
+      if (order.client_id) {
+        await sb.from("activity_log").insert({
+          organization_id: order.organization_id,
+          client_id: order.client_id,
+          user_id: auth.userId ?? null,
+          action: "installation_order_handoff_failed",
+          description: `Overdracht naar E-Group mislukt: ${message}`,
+          metadata: { order_id: orderId },
+        });
+      }
+      return json({ status: "error", message }, 502);
+    }
   } catch (err) {
     return json({ status: "error", message: err instanceof Error ? err.message : "Overdracht mislukt" }, 500);
   }

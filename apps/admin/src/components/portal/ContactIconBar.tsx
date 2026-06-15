@@ -85,7 +85,7 @@ export function ContactIconBar({ phone, email, whatsappPhone, mapsUrl }: Contact
         disabled={!mapsUrl}
       />
       <IconTile
-        icon={<WhatsAppIcon className="w-6 h-6 text-[hsl(140_70%_55%)]" />}
+        icon={<WhatsAppIcon className="w-6 h-6 text-[hsl(var(--gauge-green))]" />}
         label="WhatsApp"
         tooltip={whatsClean ? `Stuur een WhatsApp naar ${whatsappPhone ?? phone}` : "WhatsApp niet beschikbaar"}
         href={whatsClean ? `https://wa.me/${whatsClean.replace(/^\+/, "")}` : undefined}

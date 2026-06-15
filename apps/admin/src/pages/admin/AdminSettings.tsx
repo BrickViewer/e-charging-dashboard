@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminTheme } from "@/hooks/useAdminTheme";
+import { Switch } from "@/components/ui/switch";
 import { useOrganization, useLatestEfluxSync, useCronStatus, useRecentInvitations } from "@/hooks/useAdminData";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -17,6 +19,7 @@ import {
   Save, Building2, Settings2, Users, KeyRound, UserPlus,
   CheckCircle2, AlertCircle, Loader2, Plug, Landmark, Mail,
   Clock, RefreshCw, Activity, ChevronRight, Hourglass, Trash2, ShieldCheck,
+  Sun, Moon, SunMoon, AlertTriangle,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -40,6 +43,7 @@ export default function AdminSettings() {
   const { data: recentInvites } = useRecentInvitations(1);
   const queryClient = useQueryClient();
   const { user, isSuperadmin } = useAuth();
+  const { isLight, setTheme } = useAdminTheme();
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -50,6 +54,7 @@ export default function AdminSettings() {
   const [company, setCompany] = useState({
     name: "", kvk: "", address: "", phone: "", email: "", logo_url: "", dashboard_url: "",
     btw_number: "", iban: "", bic: "",
+    address_street: "", address_postal: "", address_city: "", country: "Nederland",
   });
   const [savingCompany, setSavingCompany] = useState(false);
 
@@ -57,6 +62,13 @@ export default function AdminSettings() {
     default_echarging_fee_per_kwh: "",
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
+
+  const [storingen, setStoringen] = useState({
+    fault_notification_email: "info@e-charging.nl",
+    fault_detection_enabled: true,
+    fault_heartbeat_grace_minutes: "60",
+  });
+  const [savingStoringen, setSavingStoringen] = useState(false);
 
   const [apiKeys, setApiKeys] = useState({
     eflux_provider_id: "", eflux_master_account_id: "",
@@ -97,9 +109,16 @@ export default function AdminSettings() {
       phone: org.phone || "", email: org.email || "", logo_url: org.logo_url || "",
       dashboard_url: org.dashboard_url || "http://localhost:8080",
       btw_number: org.btw_number || "", iban: org.iban || "", bic: org.bic || "",
+      address_street: org.address_street || "", address_postal: org.address_postal || "",
+      address_city: org.address_city || "", country: org.country || "Nederland",
     });
     setDefaults({
       default_echarging_fee_per_kwh: String(org.default_echarging_fee_per_kwh ?? "0.10"),
+    });
+    setStoringen({
+      fault_notification_email: org.fault_notification_email || "info@e-charging.nl",
+      fault_detection_enabled: org.fault_detection_enabled ?? true,
+      fault_heartbeat_grace_minutes: String(org.fault_heartbeat_grace_minutes ?? 60),
     });
     setApiKeys({
       eflux_provider_id: org.eflux_provider_id || "",
@@ -111,8 +130,19 @@ export default function AdminSettings() {
     if (!org) return;
     setSavingCompany(true);
     try {
+      // Legacy enkelvoudig adres meeschrijven (samengesteld) zolang oudere
+      // consumenten dat veld nog lezen; de factuur gebruikt de gesplitste velden.
+      const composedAddress = [
+        company.address_street,
+        [company.address_postal, company.address_city].filter(Boolean).join(" "),
+      ].filter(Boolean).join(", ");
       const { error } = await supabase.from("organizations").update({
-        name: company.name, kvk: company.kvk || null, address: company.address || null,
+        name: company.name, kvk: company.kvk || null,
+        address: composedAddress || company.address || null,
+        address_street: company.address_street || null,
+        address_postal: company.address_postal || null,
+        address_city: company.address_city || null,
+        country: company.country || "Nederland",
         phone: company.phone || null, email: company.email || null, logo_url: company.logo_url || null,
         dashboard_url: company.dashboard_url || null,
         btw_number: company.btw_number || null, iban: company.iban || null, bic: company.bic || null,
@@ -141,6 +171,26 @@ export default function AdminSettings() {
       toast.error(err.message || "Fout bij opslaan");
     } finally {
       setSavingDefaults(false);
+    }
+  };
+
+  const handleSaveStoringen = async () => {
+    if (!org) return;
+    setSavingStoringen(true);
+    try {
+      const grace = parseInt(storingen.fault_heartbeat_grace_minutes, 10);
+      const { error } = await supabase.from("organizations").update({
+        fault_notification_email: storingen.fault_notification_email.trim() || "info@e-charging.nl",
+        fault_detection_enabled: storingen.fault_detection_enabled,
+        fault_heartbeat_grace_minutes: Number.isFinite(grace) && grace > 0 ? grace : 60,
+      }).eq("id", org.id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["admin-organization"] });
+      toast.success("Storingsinstellingen opgeslagen");
+    } catch (err) {
+      toast.error((err as Error).message || "Fout bij opslaan");
+    } finally {
+      setSavingStoringen(false);
     }
   };
 
@@ -343,9 +393,11 @@ export default function AdminSettings() {
         <TabsList>
           <TabsTrigger value="bedrijf"><Building2 className="w-4 h-4 mr-1" />Bedrijf</TabsTrigger>
           <TabsTrigger value="standaardwaarden"><Settings2 className="w-4 h-4 mr-1" />Standaardwaarden</TabsTrigger>
+          <TabsTrigger value="storingen"><AlertTriangle className="w-4 h-4 mr-1" />Storingen</TabsTrigger>
           <TabsTrigger value="gebruikers"><Users className="w-4 h-4 mr-1" />Gebruikers</TabsTrigger>
           <TabsTrigger value="api"><KeyRound className="w-4 h-4 mr-1" />API</TabsTrigger>
           <TabsTrigger value="automatisering"><Activity className="w-4 h-4 mr-1" />Automatisering</TabsTrigger>
+          <TabsTrigger value="voorkeuren"><SunMoon className="w-4 h-4 mr-1" />Voorkeuren</TabsTrigger>
         </TabsList>
 
         {/* Tab: Bedrijf */}
@@ -360,8 +412,21 @@ export default function AdminSettings() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div><Label>Bedrijfsnaam</Label><Input value={company.name} onChange={e => setCompany(p => ({ ...p, name: e.target.value }))} /></div>
-                <div><Label>KVK-nummer</Label><Input value={company.kvk} onChange={e => setCompany(p => ({ ...p, kvk: e.target.value }))} /></div>
-                <div><Label>Adres</Label><Input value={company.address} onChange={e => setCompany(p => ({ ...p, address: e.target.value }))} /></div>
+                <div>
+                  <Label>KVK-nummer</Label>
+                  <Input value={company.kvk} onChange={e => setCompany(p => ({ ...p, kvk: e.target.value }))} />
+                  {(company.kvk === "12345678" || !company.kvk.trim()) && (
+                    <p className="text-[11px] text-[hsl(var(--status-amber))] mt-1.5">
+                      Placeholder/ontbrekend KVK-nummer — vul het echte nummer in; goedkeuren van afrekeningen is anders geblokkeerd.
+                    </p>
+                  )}
+                </div>
+                <div><Label>Straat + huisnummer</Label><Input value={company.address_street} onChange={e => setCompany(p => ({ ...p, address_street: e.target.value }))} placeholder="Stationsplein 1" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Postcode</Label><Input value={company.address_postal} onChange={e => setCompany(p => ({ ...p, address_postal: e.target.value }))} placeholder="5611 AB" /></div>
+                  <div><Label>Plaats</Label><Input value={company.address_city} onChange={e => setCompany(p => ({ ...p, address_city: e.target.value }))} placeholder="Eindhoven" /></div>
+                </div>
+                <div><Label>Land</Label><Input value={company.country} onChange={e => setCompany(p => ({ ...p, country: e.target.value }))} /></div>
                 <div><Label>Telefoon</Label><Input value={company.phone} onChange={e => setCompany(p => ({ ...p, phone: e.target.value }))} /></div>
                 <div><Label>E-mail</Label><Input type="email" value={company.email} onChange={e => setCompany(p => ({ ...p, email: e.target.value }))} /></div>
                 <div><Label>Logo URL</Label><Input value={company.logo_url} onChange={e => setCompany(p => ({ ...p, logo_url: e.target.value }))} placeholder="https://..." /></div>
@@ -423,6 +488,42 @@ export default function AdminSettings() {
               </div>
               <Button onClick={handleSaveDefaults} disabled={savingDefaults}>
                 <Save className="w-4 h-4 mr-2" />{savingDefaults ? "Opslaan…" : "Opslaan"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab: Storingen */}
+        <TabsContent value="storingen">
+          <Card className="portal-card">
+            <CardContent className="p-5 space-y-5">
+              <div>
+                <h2 className="text-base font-semibold">Storingsdetectie & notificaties</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  We detecteren laadpaal-storingen automatisch bij elke e-Flux-sync en sturen een melding voordat de klant het merkt.
+                </p>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-4">
+                <div>
+                  <Label>Automatische storingsdetectie</Label>
+                  <p className="text-[11px] text-muted-foreground mt-1">Open automatisch een storing wanneer een paal van online naar offline gaat.</p>
+                </div>
+                <Switch checked={storingen.fault_detection_enabled} onCheckedChange={(v) => setStoringen(p => ({ ...p, fault_detection_enabled: v }))} />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Notificatie e-mail</Label>
+                  <Input type="email" value={storingen.fault_notification_email} onChange={e => setStoringen(p => ({ ...p, fault_notification_email: e.target.value }))} placeholder="info@e-charging.nl" />
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Naar dit adres gaat bij een storing een branded mail met directe link naar de storing.</p>
+                </div>
+                <div>
+                  <Label>Drempel "verdacht" (minuten zonder hartslag)</Label>
+                  <Input type="number" min="5" value={storingen.fault_heartbeat_grace_minutes} onChange={e => setStoringen(p => ({ ...p, fault_heartbeat_grace_minutes: e.target.value }))} />
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Palen die langer dan dit geen hartslag stuurden worden als "verdacht" gemarkeerd (geen mail).</p>
+                </div>
+              </div>
+              <Button onClick={handleSaveStoringen} disabled={savingStoringen}>
+                <Save className="w-4 h-4 mr-2" />{savingStoringen ? "Opslaan…" : "Opslaan"}
               </Button>
             </CardContent>
           </Card>
@@ -626,12 +727,12 @@ export default function AdminSettings() {
               {testResult && (
                 <div className={`mt-4 p-3 rounded-md border text-sm flex items-start gap-2 ${
                   testResult.status === "ok" ? "border-primary/30 bg-primary/5 text-foreground" :
-                  testResult.status === "not_configured" ? "border-amber-400/30 bg-amber-400/5 text-foreground" :
+                  testResult.status === "not_configured" ? "border-[hsl(var(--status-amber)/0.30)] bg-[hsl(var(--status-amber)/0.05)] text-foreground" :
                   "border-destructive/30 bg-destructive/5 text-foreground"
                 }`}>
                   {testResult.status === "ok"
                     ? <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                    : <AlertCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${testResult.status === "not_configured" ? "text-amber-400" : "text-destructive"}`} />}
+                    : <AlertCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${testResult.status === "not_configured" ? "text-[hsl(var(--status-amber))]" : "text-destructive"}`} />}
                   <div className="space-y-1">
                     <p className="font-medium">{testResult.message}</p>
                     {testResult.provider && (
@@ -827,6 +928,39 @@ export default function AdminSettings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Tab: Voorkeuren */}
+        <TabsContent value="voorkeuren">
+          <Card className="portal-card">
+            <CardContent className="p-5 space-y-4">
+              <div>
+                <h2 className="text-base font-semibold">Weergave</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Persoonlijke voorkeur — gekoppeld aan jouw account, dus op elk apparaat hetzelfde
+                </p>
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-border p-4 max-w-lg">
+                <div className="flex items-center gap-3">
+                  {isLight
+                    ? <Sun className="w-4 h-4 text-muted-foreground" />
+                    : <Moon className="w-4 h-4 text-muted-foreground" />}
+                  <div>
+                    <Label htmlFor="admin-theme-switch">{isLight ? "Dagmodus" : "Nachtmodus"}</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Wordt direct toegepast en bij je account opgeslagen
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="admin-theme-switch"
+                  checked={isLight}
+                  onCheckedChange={(on) => setTheme(on ? "light" : "dark")}
+                  aria-label="Dagmodus aan/uit"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -855,16 +989,16 @@ function IntegrationCard({
       labelClass: "text-primary",
     },
     warning: {
-      bg: "bg-amber-400/10 border-amber-400/20 text-amber-400",
-      dot: "bg-amber-400",
+      bg: "bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] text-[hsl(var(--status-amber))]",
+      dot: "bg-[hsl(var(--status-amber))]",
       label: "Aandacht",
-      labelClass: "text-amber-400",
+      labelClass: "text-[hsl(var(--status-amber))]",
     },
     error: {
-      bg: "bg-red-500/10 border-red-500/20 text-red-400",
-      dot: "bg-red-400",
+      bg: "bg-[hsl(var(--status-red)/var(--status-tile-alpha))] border-[hsl(var(--status-red)/var(--status-tile-border-alpha))] text-[hsl(var(--status-red))]",
+      dot: "bg-[hsl(var(--status-red))]",
       label: "Fout",
-      labelClass: "text-red-400",
+      labelClass: "text-[hsl(var(--status-red))]",
     },
     not_configured: {
       bg: "bg-muted/30 border-border text-muted-foreground",
@@ -917,14 +1051,14 @@ function CronStatusBadge({ status }: { status: string | null }) {
   }
   if (status === "failed" || status === "error") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-red-500/15 text-red-400 border border-red-500/25">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-[hsl(var(--status-red)/0.15)] text-[hsl(var(--status-red))] border border-[hsl(var(--status-red)/0.25)]">
         <AlertCircle className="w-3 h-3" />
         Gefaald
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-amber-400/15 text-amber-400 border border-amber-400/25">
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-[hsl(var(--status-amber)/0.15)] text-[hsl(var(--status-amber))] border border-[hsl(var(--status-amber)/0.25)]">
       {status}
     </span>
   );

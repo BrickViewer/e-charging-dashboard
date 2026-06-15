@@ -7,8 +7,11 @@ import { nl } from "date-fns/locale";
 import { CheckCircle, Clock, Euro, Calendar, Download, Truck } from "lucide-react";
 import { useState, useMemo, Fragment, type ReactNode } from "react";
 import type { PortalSettlement } from "@/types/db";
-import { generateSelfBillingInvoicePdf } from "@/services/invoicePdf";
+import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
 import { getPortalSessions, getAmsterdamMonthBounds } from "@/services/sessions";
+import { getDemoMonthBounds, getDemoSessions } from "@/lib/demoData";
+import { useDemoMode } from "@/contexts/demoModeContextValue";
+import { toast } from "sonner";
 
 // Statusbuckets — de klant denkt in "vergoed" (geld binnen) vs "onderweg"
 // (goedgekeurd / factuur ontvangen, geld komt nog), niet in de interne mechaniek.
@@ -38,7 +41,7 @@ const pillClass = (tone: Tone) =>
   tone === "vergoed"
     ? "border-primary/30 bg-primary/10 text-primary"
     : tone === "onderweg"
-    ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
+    ? "border-[hsl(var(--status-amber)/0.3)] bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] text-[hsl(var(--status-amber))]"
     : "border-border bg-muted/40 text-muted-foreground";
 
 const pillIcon = (tone: Tone) =>
@@ -59,9 +62,9 @@ function KpiTile({
   exclBtw?: boolean;
 }) {
   const badgeCls = accent === "amber"
-    ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
+    ? "bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] text-[hsl(var(--status-amber))]"
     : "bg-primary/10 border-primary/20 text-primary";
-  const numCls = accent === "amber" ? "text-amber-500" : "text-primary";
+  const numCls = accent === "amber" ? "text-[hsl(var(--status-amber))]" : "text-primary";
   return (
     <Card className="portal-card">
       <CardContent className="p-4">
@@ -84,6 +87,7 @@ function KpiTile({
 }
 
 export default function ClientFinancial() {
+  const demo = useDemoMode();
   const { data: client } = useClientProfile();
   const { data: settlements, isLoading } = useClientSettlements(client?.id);
   const { data: invoiceContext } = usePortalInvoiceContext(client?.id);
@@ -93,11 +97,22 @@ export default function ClientFinancial() {
   // server-side uit get_portal_sessions, dus bruto/fee bereiken de browser niet.
   const handleDownloadInvoice = async (s: PortalSettlement) => {
     if (!client) return;
-    // Maandgrenzen op NL-tijd (zelfde bron als de settlement-aggregatie), zodat de
-    // sessie-specificatie exact de vergoeding van deze maand dekt.
-    const { start, end } = await getAmsterdamMonthBounds(s.year, s.month);
-    const sessionLines = await getPortalSessions({ from: start, to: end, limit: 5000 });
-    await generateSelfBillingInvoicePdf(s, client, invoiceContext?.org, invoiceContext?.paymentDetails, sessionLines);
+    try {
+      // Maandgrenzen op NL-tijd (zelfde bron als de settlement-aggregatie), zodat de
+      // sessie-specificatie exact de vergoeding van deze maand dekt. In de demo
+      // komen grenzen en regels uit de fixtures (geen Supabase-calls).
+      const { start, end } = demo ? getDemoMonthBounds(s.year, s.month) : await getAmsterdamMonthBounds(s.year, s.month);
+      const sessionLines = demo
+        ? getDemoSessions({ from: start, to: end, limit: 5000 })
+        : await getPortalSessions({ from: start, to: end, limit: 5000 });
+      await generateSelfBillingInvoicePdf(s, client, invoiceContext?.org, invoiceContext?.paymentDetails, sessionLines);
+    } catch (err) {
+      if (err instanceof InvoiceValidationError) {
+        toast.error(`De factuur kan nog niet worden gemaakt — ontbrekend: ${err.issues.map((i) => i.label).join(", ")}. Vul uw gegevens aan via Mijn gegevens of neem contact op.`, { duration: 12000 });
+      } else {
+        toast.error((err as Error).message || "Factuur downloaden mislukt");
+      }
+    }
   };
 
   // Klant ziet alleen formele vergoedingen (goedgekeurd door E-Charging).
@@ -176,7 +191,7 @@ export default function ClientFinancial() {
             >
               <ToggleGroupItem value="all" className="h-7 px-3 text-xs rounded-md text-muted-foreground data-[state=on]:bg-primary/15 data-[state=on]:text-primary">Alle</ToggleGroupItem>
               <ToggleGroupItem value="paid" className="h-7 px-3 text-xs rounded-md text-muted-foreground data-[state=on]:bg-primary/15 data-[state=on]:text-primary">Vergoed</ToggleGroupItem>
-              <ToggleGroupItem value="pending" className="h-7 px-3 text-xs rounded-md text-muted-foreground data-[state=on]:bg-amber-500/15 data-[state=on]:text-amber-500">Onderweg</ToggleGroupItem>
+              <ToggleGroupItem value="pending" className="h-7 px-3 text-xs rounded-md text-muted-foreground data-[state=on]:bg-[hsl(var(--status-amber)/0.15)] data-[state=on]:text-[hsl(var(--status-amber))]">Onderweg</ToggleGroupItem>
             </ToggleGroup>
           </div>
 

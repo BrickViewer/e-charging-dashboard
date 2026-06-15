@@ -197,10 +197,11 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
   const { period_start, period_end } = monthDateOnly(year, month);
 
   // Opruim-pass: bestaande settlements waarvoor de klant geen gekoppelde sessies meer heeft
-  // worden gedelete (alleen live/calculated; definitieve statussen blijven historisch).
+  // worden gedelete (alleen live/calculated; definitieve statussen blijven historisch;
+  // rijen met een gereserveerd factuurnummer blijven óók staan — doorlopende reeks).
   const { data: existingSettlements } = await supabase
     .from("settlements")
-    .select("id, client_id, status")
+    .select("id, client_id, status, invoice_number")
     .eq("year", year)
     .eq("month", month);
 
@@ -219,7 +220,11 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
   }
 
   for (const setl of existingSettlements ?? []) {
-    if ((setl.status === "live" || setl.status === "calculated") && !clientsWithSessionsInMonth.has(setl.client_id as string)) {
+    if (
+      (setl.status === "live" || setl.status === "calculated")
+      && !setl.invoice_number
+      && !clientsWithSessionsInMonth.has(setl.client_id as string)
+    ) {
       await supabase.from("settlements").delete().eq("id", setl.id);
     }
   }
@@ -260,20 +265,23 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
     .maybeSingle();
   const orgFeePerKwh = Number(org?.default_echarging_fee_per_kwh ?? DEFAULT_ECHARGING_FEE_PER_KWH);
 
-  // Per-klant override van de fee + BTW-plicht (default: BTW-plichtig).
+  // Per-klant override van de fee + BTW-status (vat_status: vat_liable/kor/private;
+  // NULL → legacy vat_liable-boolean als fallback, default BTW-plichtig).
   const clientIds = aggregations.map((a) => a.client_id);
   const clientFee = new Map<string, number>();
   const clientVatLiable = new Map<string, boolean>();
+  const clientVatStatus = new Map<string, string | null>();
   const managedClients = new Set<string>();
   if (clientIds.length > 0) {
     const { data: clients } = await supabase
       .from("clients")
-      .select("id, echarging_fee_per_kwh, vat_liable, managed")
+      .select("id, echarging_fee_per_kwh, vat_liable, vat_status, managed")
       .in("id", clientIds);
     for (const c of clients ?? []) {
       const override = c.echarging_fee_per_kwh;
       clientFee.set(c.id as string, override === null || override === undefined ? orgFeePerKwh : Number(override));
-      clientVatLiable.set(c.id as string, c.vat_liable !== false); // default BTW-plichtig
+      clientVatLiable.set(c.id as string, c.vat_liable !== false); // legacy fallback
+      clientVatStatus.set(c.id as string, (c.vat_status as string | null) ?? null);
       if (c.managed !== false) managedClients.add(c.id as string); // 'zonder beheer' → geen opbrengstdeling
     }
   }
@@ -286,17 +294,19 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
   for (const a of aggregations) {
     // 'Zonder beheer'-klanten (managed=false) krijgen geen maandelijkse opbrengstdeling.
     if (!managedClients.has(a.client_id)) { skipped++; continue; }
-    const feePerKwh = clientFee.get(a.client_id) ?? orgFeePerKwh;
-    const vatRate = (clientVatLiable.get(a.client_id) ?? true) ? 0.21 : 0; // BTW-plichtig → 21%
+    // BTW-tarief uit vat_status; NULL → legacy vat_liable-fallback
+    const vs = clientVatStatus.get(a.client_id) ?? null;
+    const vatRate = vs === "vat_liable"
+      ? 0.21
+      : (vs === "kor" || vs === "private")
+      ? 0
+      : ((clientVatLiable.get(a.client_id) ?? true) ? 0.21 : 0);
 
-    const grossRevenue = a.reimbursement_total;
-    const echargingRevenue = feePerKwh * a.total_kwh; // GEEN minimum
-    const clientPayout = grossRevenue - echargingRevenue;
-
-    // Bestaande rij met definitieve status niet overschrijven
+    // Bestaande rij met definitieve status niet overschrijven; fee_waived
+    // (handmatige kwijtschelding via set_settlement_fee_waived) preserveren.
     const { data: existing } = await supabase
       .from("settlements")
-      .select("id, status")
+      .select("id, status, fee_waived")
       .eq("client_id", a.client_id)
       .eq("year", year)
       .eq("month", month)
@@ -306,6 +316,14 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
       skipped++;
       continue;
     }
+
+    // Kwijtgescholden maand → fee 0; snapshot blijft genuld over her-runs heen
+    const feeWaived = existing?.fee_waived === true;
+    const feePerKwh = feeWaived ? 0 : (clientFee.get(a.client_id) ?? orgFeePerKwh);
+
+    const grossRevenue = a.reimbursement_total;
+    const echargingRevenue = feePerKwh * a.total_kwh; // GEEN minimum
+    const clientPayout = grossRevenue - echargingRevenue;
 
     const newStatus = isMonthStillRunning ? "live" : "calculated";
 
@@ -318,12 +336,13 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
       total_kwh: a.total_kwh,
       total_sessions: a.total_sessions,
       gross_revenue: grossRevenue,
-      echarging_fee_per_kwh: feePerKwh, // snapshot
+      echarging_fee_per_kwh: feePerKwh, // snapshot (0 bij kwijtschelding)
       echarging_revenue: echargingRevenue,
       client_payout: clientPayout,
       vat_rate: vatRate, // BTW-snapshot (0.21 BTW-plichtig, 0 anders)
       ere_estimate: 0, // informatief; portal toont eigen schatting via Laadbeloning
       status: newStatus,
+      fee_waived: feeWaived,
     };
 
     const { error: upErr } = await supabase

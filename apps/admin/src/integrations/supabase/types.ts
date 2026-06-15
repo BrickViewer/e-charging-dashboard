@@ -160,6 +160,117 @@ export type Database = {
           },
         ]
       }
+      charge_point_faults: {
+        Row: {
+          id: string
+          charge_point_id: string
+          location_id: string | null
+          client_id: string | null
+          organization_id: string | null
+          status: Database["public"]["Enums"]["fault_status"]
+          severity: Database["public"]["Enums"]["fault_severity"]
+          detected_at: string
+          fault_reason: string
+          road_connectivity_state: string | null
+          road_operational_status: string | null
+          first_status: string | null
+          resolved_at: string | null
+          auto_recovered: boolean
+          assigned_to: string | null
+          eflux_reported_at: string | null
+          customer_contacted_at: string | null
+          visit_scheduled_at: string | null
+          visit_date: string | null
+          notes: string | null
+          email_sent_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          charge_point_id: string
+          location_id?: string | null
+          client_id?: string | null
+          organization_id?: string | null
+          status?: Database["public"]["Enums"]["fault_status"]
+          severity?: Database["public"]["Enums"]["fault_severity"]
+          detected_at?: string
+          fault_reason: string
+          road_connectivity_state?: string | null
+          road_operational_status?: string | null
+          first_status?: string | null
+          resolved_at?: string | null
+          auto_recovered?: boolean
+          assigned_to?: string | null
+          eflux_reported_at?: string | null
+          customer_contacted_at?: string | null
+          visit_scheduled_at?: string | null
+          visit_date?: string | null
+          notes?: string | null
+          email_sent_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          charge_point_id?: string
+          location_id?: string | null
+          client_id?: string | null
+          organization_id?: string | null
+          status?: Database["public"]["Enums"]["fault_status"]
+          severity?: Database["public"]["Enums"]["fault_severity"]
+          detected_at?: string
+          fault_reason?: string
+          road_connectivity_state?: string | null
+          road_operational_status?: string | null
+          first_status?: string | null
+          resolved_at?: string | null
+          auto_recovered?: boolean
+          assigned_to?: string | null
+          eflux_reported_at?: string | null
+          customer_contacted_at?: string | null
+          visit_scheduled_at?: string | null
+          visit_date?: string | null
+          notes?: string | null
+          email_sent_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      charge_point_fault_events: {
+        Row: {
+          id: string
+          fault_id: string
+          user_id: string | null
+          event_type: string
+          from_status: Database["public"]["Enums"]["fault_status"] | null
+          to_status: Database["public"]["Enums"]["fault_status"] | null
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          fault_id: string
+          user_id?: string | null
+          event_type: string
+          from_status?: Database["public"]["Enums"]["fault_status"] | null
+          to_status?: Database["public"]["Enums"]["fault_status"] | null
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          fault_id?: string
+          user_id?: string | null
+          event_type?: string
+          from_status?: Database["public"]["Enums"]["fault_status"] | null
+          to_status?: Database["public"]["Enums"]["fault_status"] | null
+          note?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       charge_points: {
         Row: {
           brand: string | null
@@ -621,7 +732,11 @@ export type Database = {
           revenue_share_percentage: number | null
           status: string | null
           updated_at: string
+          country: string
           vat_liable: boolean
+          vat_status: string | null
+          vat_status_confirmed_at: string | null
+          vat_status_confirmed_by: string | null
         }
         Insert: {
           auto_renew?: boolean
@@ -663,7 +778,11 @@ export type Database = {
           revenue_share_percentage?: number | null
           status?: string | null
           updated_at?: string
+          country?: string
           vat_liable?: boolean
+          vat_status?: string | null
+          vat_status_confirmed_at?: string | null
+          vat_status_confirmed_by?: string | null
         }
         Update: {
           auto_renew?: boolean
@@ -705,7 +824,11 @@ export type Database = {
           revenue_share_percentage?: number | null
           status?: string | null
           updated_at?: string
+          country?: string
           vat_liable?: boolean
+          vat_status?: string | null
+          vat_status_confirmed_at?: string | null
+          vat_status_confirmed_by?: string | null
         }
         Relationships: [
           {
@@ -1190,45 +1313,90 @@ export type Database = {
         Row: {
           client_id: string | null
           company_id: string | null
+          completed_at: string | null
           created_at: string
           created_by: string | null
+          egroup_order_id: string | null
+          egroup_order_number: string | null
           external_ref: string | null
+          external_status: string | null
+          handoff_at: string | null
           id: string
+          last_sync_error: string | null
           lead_id: string | null
           notes: string | null
           organization_id: string
           quote_id: string | null
           scheduled_date: string | null
+          service_category: string
+          service_summary: string | null
+          site_city: string | null
+          site_contact_email: string | null
+          site_contact_name: string | null
+          site_contact_phone: string | null
+          site_house_number: string | null
+          site_postal: string | null
+          site_street: string | null
           status: string
           updated_at: string
         }
         Insert: {
           client_id?: string | null
           company_id?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          egroup_order_id?: string | null
+          egroup_order_number?: string | null
           external_ref?: string | null
+          external_status?: string | null
+          handoff_at?: string | null
           id?: string
+          last_sync_error?: string | null
           lead_id?: string | null
           notes?: string | null
           organization_id: string
           quote_id?: string | null
           scheduled_date?: string | null
+          service_category?: string
+          service_summary?: string | null
+          site_city?: string | null
+          site_contact_email?: string | null
+          site_contact_name?: string | null
+          site_contact_phone?: string | null
+          site_house_number?: string | null
+          site_postal?: string | null
+          site_street?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
           client_id?: string | null
           company_id?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          egroup_order_id?: string | null
+          egroup_order_number?: string | null
           external_ref?: string | null
+          external_status?: string | null
+          handoff_at?: string | null
           id?: string
+          last_sync_error?: string | null
           lead_id?: string | null
           notes?: string | null
           organization_id?: string
           quote_id?: string | null
           scheduled_date?: string | null
+          service_category?: string
+          service_summary?: string | null
+          site_city?: string | null
+          site_contact_email?: string | null
+          site_contact_name?: string | null
+          site_contact_phone?: string | null
+          site_house_number?: string | null
+          site_postal?: string | null
+          site_street?: string | null
           status?: string
           updated_at?: string
         }
@@ -1761,6 +1929,10 @@ export type Database = {
       organizations: {
         Row: {
           address: string | null
+          address_city: string | null
+          address_postal: string | null
+          address_street: string | null
+          country: string
           bic: string | null
           btw_number: string | null
           created_at: string
@@ -1777,6 +1949,9 @@ export type Database = {
           eflux_master_account_id: string | null
           eflux_provider_id: string | null
           email: string | null
+          fault_detection_enabled: boolean
+          fault_heartbeat_grace_minutes: number
+          fault_notification_email: string
           iban: string | null
           id: string
           kvk: string | null
@@ -1786,8 +1961,15 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          fault_detection_enabled?: boolean
+          fault_heartbeat_grace_minutes?: number
+          fault_notification_email?: string
           address?: string | null
+          address_city?: string | null
+          address_postal?: string | null
+          address_street?: string | null
           bic?: string | null
+          country?: string
           btw_number?: string | null
           created_at?: string
           dashboard_url?: string | null
@@ -1813,7 +1995,11 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          address_city?: string | null
+          address_postal?: string | null
+          address_street?: string | null
           bic?: string | null
+          country?: string
           btw_number?: string | null
           created_at?: string
           dashboard_url?: string | null
@@ -1829,6 +2015,9 @@ export type Database = {
           eflux_master_account_id?: string | null
           eflux_provider_id?: string | null
           email?: string | null
+          fault_detection_enabled?: boolean
+          fault_heartbeat_grace_minutes?: number
+          fault_notification_email?: string
           iban?: string | null
           id?: string
           kvk?: string | null
@@ -2161,6 +2350,8 @@ export type Database = {
           echarging_revenue: number
           eflux_reimbursed_at: string | null
           ere_estimate: number
+          fee_waived: boolean
+          invoice_number: string | null
           gross_revenue: number
           id: string
           invoice_sent_at: string | null
@@ -2173,6 +2364,7 @@ export type Database = {
           total_sessions: number
           updated_at: string
           vat_rate: number
+          vat_status: string | null
           year: number
         }
         Insert: {
@@ -2183,6 +2375,8 @@ export type Database = {
           echarging_revenue?: number
           eflux_reimbursed_at?: string | null
           ere_estimate?: number
+          fee_waived?: boolean
+          invoice_number?: string | null
           gross_revenue?: number
           id?: string
           invoice_sent_at?: string | null
@@ -2195,6 +2389,7 @@ export type Database = {
           total_sessions?: number
           updated_at?: string
           vat_rate?: number
+          vat_status?: string | null
           year: number
         }
         Update: {
@@ -2205,6 +2400,8 @@ export type Database = {
           echarging_revenue?: number
           eflux_reimbursed_at?: string | null
           ere_estimate?: number
+          fee_waived?: boolean
+          invoice_number?: string | null
           gross_revenue?: number
           id?: string
           invoice_sent_at?: string | null
@@ -2217,6 +2414,7 @@ export type Database = {
           total_sessions?: number
           updated_at?: string
           vat_rate?: number
+          vat_status?: string | null
           year?: number
         }
         Relationships: [
@@ -2388,6 +2586,10 @@ export type Database = {
         Args: never
         Returns: {
           org_address: string
+          org_address_city: string
+          org_address_postal: string
+          org_address_street: string
+          org_country: string
           org_bic: string
           org_btw_number: string
           org_email: string
@@ -2461,6 +2663,30 @@ export type Database = {
           paid_count: number
         }[]
       }
+      set_settlement_fee_waived: {
+        Args: { p_settlement_id: string; p_waived: boolean }
+        Returns: {
+          id: string
+          fee_waived: boolean
+          echarging_fee_per_kwh: number
+          echarging_revenue: number
+          client_payout: number
+        }[]
+      }
+      confirm_client_vat_status: {
+        Args: { p_client_id: string; p_vat_status: string }
+        Returns: {
+          id: string
+          vat_status: string
+          vat_status_confirmed_at: string
+        }[]
+      }
+      unapprove_settlements: {
+        Args: { settlement_ids: string[] }
+        Returns: {
+          unapproved_count: number
+        }[]
+      }
       move_stage: { Args: { p_dir: number; p_id: string }; Returns: undefined }
       next_offer_number: { Args: never; Returns: string }
       reorder_leads: { Args: { p_updates: Json }; Returns: undefined }
@@ -2483,6 +2709,7 @@ export type Database = {
           p_contact_phone: string
           p_invoice_email: string
           p_kvk: string
+          p_vat_status?: string
         }
         Returns: undefined
       }
@@ -2495,6 +2722,15 @@ export type Database = {
         | "superadmin"
         | "sales"
         | "marketing"
+      fault_status:
+        | "nieuw"
+        | "eflux_gemeld"
+        | "klant_gecontacteerd"
+        | "bezoek_ingepland"
+        | "opgelost"
+        | "automatisch_hersteld"
+        | "vals_alarm"
+      fault_severity: "storing" | "verdacht"
     }
     CompositeTypes: {
       [_ in never]: never

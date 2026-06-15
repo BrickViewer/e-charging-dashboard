@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { fitGaugeFontSize } from "./gaugeUtils";
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 const ANIM_DURATION_MS = 1100;
@@ -123,6 +124,15 @@ export function CockpitGauge({
   const display = formatValue ? formatValue(value) : value.toLocaleString("nl-NL");
   const labelFmt = formatLabelValue ?? formatTick;
 
+  // Auto-fit: lange bedragen (10k+) krimpen zodat ze netjes binnen de gauge
+  // passen. De bindende grens is niet de boog maar de binnenste tips van de
+  // bijna-horizontale ticks op ±101,25° (x = ±tickInner·cos(11,25°)); 6 units
+  // marge aan weerszijden. Effectief ≈ 300 (xl) / 165 (md) viewBox-units.
+  const valueBaseFontSize = isXl ? 72 : 38;
+  const valueLetterSpacingEm = isXl ? 0.02 : 0.01;
+  const valueMaxWidth = 2 * (tickInner * Math.cos((11.25 * Math.PI) / 180) - 6);
+  const valueFontSize = fitGaugeFontSize(display, valueBaseFontSize, valueMaxWidth, valueLetterSpacingEm);
+
   return (
     <div className="flex flex-col items-center select-none">
       <svg
@@ -135,12 +145,11 @@ export function CockpitGauge({
         className="overflow-visible"
       >
         <defs>
+          {/* Alleen-blur filter; de gloedlaag wordt als apart pad onder de
+              scherpe boog getekend zodat de sterkte per thema dimbaar is
+              (--gauge-glow-opacity: vol in nachtmodus, gedimd in dagmodus). */}
           <filter id={`glow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation={isXl ? 4 : 2.5} result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+            <feGaussianBlur stdDeviation={isXl ? 4 : 2.5} />
           </filter>
         </defs>
 
@@ -195,16 +204,27 @@ export function CockpitGauge({
         })}
 
         {/* Active arc — per frame opnieuw getekend tot animatedProgress, dus de vulling
-            volgt de cirkel (geen CSS-pad-interpolatie). */}
+            volgt de cirkel (geen CSS-pad-interpolatie). Gloed als aparte blur-laag
+            onder de scherpe boog, dimbaar per thema. */}
         {animatedProgress > 0.005 && (
-          <path
-            d={describeArc(cx, cy, -135, -135 + animatedProgress * 270, radius)}
-            fill="none"
-            stroke={arcColor}
-            strokeWidth={strokeWidth + 1}
-            strokeLinecap="round"
-            filter={`url(#glow-${id})`}
-          />
+          <>
+            <path
+              d={describeArc(cx, cy, -135, -135 + animatedProgress * 270, radius)}
+              fill="none"
+              stroke={arcColor}
+              strokeWidth={strokeWidth + 1}
+              strokeLinecap="round"
+              filter={`url(#glow-${id})`}
+              style={{ opacity: "var(--gauge-glow-opacity)" }}
+            />
+            <path
+              d={describeArc(cx, cy, -135, -135 + animatedProgress * 270, radius)}
+              fill="none"
+              stroke={arcColor}
+              strokeWidth={strokeWidth + 1}
+              strokeLinecap="round"
+            />
+          </>
         )}
 
         {/* End-point glow dot — staat per frame op de exacte tip van de boog */}
@@ -222,14 +242,14 @@ export function CockpitGauge({
         {/* Central value */}
         <text
           x={cx}
-          y={cy + (isXl ? 8 : 4)}
+          y={cy + (isXl ? 8 : 4) * (valueFontSize / valueBaseFontSize)}
           textAnchor="middle"
           dominantBaseline="middle"
           fill="hsl(var(--foreground))"
-          fontSize={isXl ? 72 : 38}
+          fontSize={valueFontSize}
           fontWeight="700"
           fontFamily="var(--font-family)"
-          letterSpacing={isXl ? "0.02em" : "0.01em"}
+          letterSpacing={`${valueLetterSpacingEm}em`}
           style={{ fontVariantNumeric: "tabular-nums" }}
         >
           {display}

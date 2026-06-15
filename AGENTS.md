@@ -20,6 +20,7 @@ Uitbetaling klant (client_payout)         = gross_revenue − service-fee
 - De fee staat op `organizations.default_echarging_fee_per_kwh` (default `0.10`) met optionele per-klant override `clients.echarging_fee_per_kwh`. **LET OP: 0.10 = tien cent per kWh, niet 0.001.** Een vitest (`apps/admin/src/services/calculations.test.ts`) faalt als de constante verkeerd staat.
 - Afrekeningen zijn **maandelijks** (`settlements`-tabel, één rij per `client_id, year, month`).
 - De canonieke formule staat in `apps/admin/src/services/calculations.ts` (`calculateSettlement`, `DEFAULT_ECHARGING_FEE_PER_KWH`); de edge function `aggregate-settlements` houdt een identieke Deno-kopie aan.
+- **Kwijtschelding per maand**: `settlements.fee_waived` (RPC `set_settlement_fee_waived`, admin/manager, alleen status live/calculated). Kwijtschelden nult de snapshot (`echarging_fee_per_kwh = 0`, `echarging_revenue = 0`, `client_payout = gross_revenue`) zodat factuur-PDF, CSV-export en portal automatisch kloppen; de aggregatie preserveert de vlag over her-runs heen. `get_portal_sessions` rekent per sessie met de maand-snapshot van de fee (fallback: huidig klanttarief).
 - `clients.revenue_share_percentage` bestaat nog als legacy-kolom maar wordt door settlements genegeerd.
 
 ## User groups & routing
@@ -28,6 +29,9 @@ Uitbetaling klant (client_payout)         = gross_revenue − service-fee
 |---|---|---|---|
 | **Admin / internal** | `/admin/*` | `is_internal()` or `has_role('admin'/'manager')` | All clients, all settlements, all locations, sync controls |
 | **Klant / portal** | `/portal/*` | `clients.portal_user_id = auth.uid()` | Only own data via `get_client_id_for_user()` |
+| **Sales demo** | `/demo/*` | `has_role('admin'/'manager'/'sales')` | Hetzelfde klantportaal op 100% fixtures (`lib/demoData.ts`), nul databasequeries |
+
+**Demo-omgeving**: het Sales-werkblad heeft een "Demo"-item dat `/demo` in een eigen venster opent (configurator-patroon, `NavItem.newTab`). `DemoModeProvider` zet `useDemoMode()` op true; de 7 portal-hooks in `useClientData.ts` schakelen dan naar fixtures voor fictieve klant "Hofstede Vastgoed B.V." (deterministische sessie-generator, verankerd aan "nu" zodat de demo nooit veroudert). Factuur-download werkt echt (fixtures passeren de Wet OB-validatie); opslaan toont een nep-succes-toast; "Demo sluiten" sluit het venster zonder uit te loggen. Consistentie wordt bewaakt door `lib/demoData.test.ts` — pas je settlement-/KPI-shapes aan, houd de fixtures dan in sync.
 
 Klanten worden uitgenodigd via een token-link (`client_invitations` tabel + `send-client-invitation` + `accept-client-invitation` edge functions). Bij accept wordt `clients.portal_user_id` gevuld → klant ziet alleen eigen sessies, settlements, locations.
 
@@ -130,9 +134,19 @@ client_payout                    = gross_revenue − echarging_revenue   (uitbet
 eflux_reimbursed_at              Moment dat e-Flux ONS heeft uitbetaald (voorwaarde voor paid)
 invoice_sent_at, paid_at         Tijdstempels van de geldstroom
 ere_estimate                     Informatief (via Laadbeloning, buiten onze cashflow)
+fee_waived                       Service-fee voor deze maand kwijtgescholden (snapshot genuld)
+invoice_number                   Definitief factuurnummer, toegekend bij goedkeuring (doorlopende
+                                 reeks ECF-YYYY-NNNNN; legacy EC-JJJJMM-klantnr blijft canoniek)
+vat_status                       Snapshot van clients.vat_status bij goedkeuring (factuurvermelding)
 ```
 
-De RPC's `approve_settlements`, `mark_settlements_eflux_reimbursed`, `mark_settlements_paid`, `mark_settlements_invoice_sent`, `mark_settlements_invoice_paid` (SECURITY DEFINER, admin/manager) sturen de transities.
+### Factuur-compliance (Wet OB, self-billing)
+- `clients.vat_status` (vat_liable/kor/private, NULL = nog niet opgegeven): host kiest in het portaal, admin bevestigt via `confirm_client_vat_status` (zet ook legacy `vat_liable`). Een gewijzigde host-keuze reset de bevestiging.
+- `approve_settlements` **blokkeert** goedkeuren zolang factuurgegevens onvolledig zijn (volledige NAW beide partijen, KVK ≠ placeholder, BTW-nr conform status, IBAN, bevestigde BTW-status) en kent dan pas het factuurnummer + vat_status-snapshot toe. Terugdraaien (`unapprove_settlements`) behoudt het gereserveerde nummer; her-goedkeuren hergebruikt het.
+- De PDF (`services/invoicePdf.ts`) valideert vooraf via `services/invoiceValidation.ts` (`InvoiceValidationError` met NL-veldenlijst), toont de wettelijke regel "Factuur uitgereikt door afnemer" en een BTW-vermelding per status (21%-splitsing / KOR-vrijstelling / particulier).
+- `get_portal_sessions` rekent per sessie met de maand-snapshot van de fee; `get_portal_invoice_context` levert de volledige org-identiteit (gesplitst adres + land).
+
+De RPC's `approve_settlements`, `unapprove_settlements` (approved → calculated, zolang er geen geldstroom is), `mark_settlements_eflux_reimbursed`, `mark_settlements_paid`, `mark_settlements_invoice_sent`, `mark_settlements_invoice_paid` en `set_settlement_fee_waived` (SECURITY DEFINER, admin/manager) sturen de transities.
 
 ## RLS-architectuur (security-kritisch)
 
@@ -176,6 +190,9 @@ Allemaal Deno, draaien op Supabase. Auth-handling per function:
 | `eflux-test-connection` | **false** | Handmatig (admin "Test verbinding") | Diagnostic only — exposes probe results |
 | `send-client-invitation` | check current | Admin clickt "uitnodigen" | Resend email API; service-role writes to client_invitations |
 | `accept-client-invitation` | depends | Public landing URL | Verifies token + links auth user → clients.portal_user_id |
+| `order-handoff` | **true** | Knop "Versturen opdracht" (sales/admin) | POST naar E-Group `intake-external-order`; bouwt payload uit installation_orders+joins; secrets via env/Vault |
+| `installation-completion-webhook` | **false** | E-Group `pg_net`-trigger | Inbound statusterugkoppeling; auth via `x-echarging-secret` (Vault `egroup_webhook_secret`) |
+| `send-fault-notification` | **false** | eflux-sync (x-internal-secret) of admin (JWT) | Branded storingsmail gebundeld per locatie; body `{fault_ids, dry_run?}`; ondersteunt `dry_run` |
 
 ⚠️ De `invoke_edge_function()` SQL helper haalt `supabase_anon_key` uit Vault en doet `net.http_post` met Bearer. Dat betekent: chained edge functions worden aangeroepen met **anon-rechten**, niet service-role. Bij `verify_jwt=false` werkt dat; bij `verify_jwt=true` zou je een geldige user-JWT moeten meegeven.
 
@@ -225,6 +242,9 @@ Supabase migrations + edge function deploys gebeuren via de Supabase MCP-tools (
 4. 0.10-guardtest in `services/calculations.test.ts` (faalt bij 0.001).
 5. Klant-onboarding via eigen portaal: bedrijfsgegevens, factuurgegevens en IBAN in `client_payment_details`.
 6. Stripe Connect / SEPA onboarding is verwijderd uit actieve code, database en live Edge Functions.
+7. Sales-demo op `/demo`: volledig klantportaal op fixtures (zie "User groups & routing").
+9. **Storingen-module** (Beheer → `/admin/storingen`): proactieve laadpaal-storingsdetectie. `eflux-sync` detecteert **transitie-gebaseerd** (gezond→storing op `connectivity_state`, via `classifyFault` in `_shared`/`eflux-sync/faults.ts` + app-tweeling `services/faults.ts`); legacy-offline palen geven geen storing. Storingen leven in `charge_point_faults` (+ tijdlijn `charge_point_fault_events`), partial unique index = max één open storing per paal. Auto-herstel sluit automatisch; status-flow `nieuw→eflux_gemeld→klant_gecontacteerd→bezoek_ingepland→opgelost` (+ `automatisch_hersteld`/`vals_alarm`). Bij detectie stuurt `send-fault-notification` een branded mail (gebundeld per locatie) naar `organizations.fault_notification_email` (instelbaar onder Instellingen → Storingen; default info@e-charging.nl) met deeplink naar de storing. Stale heartbeat = zacht "verdacht"-signaal (op read berekend, geen rij/mail). **Deploy-let-op:** `eflux-sync` (gewijzigd) en `send-fault-notification` (nieuw, **verify_jwt=false**) nog via de pipeline deployen.
+8. **Installatie-koppeling E-Charging ⇄ E-Group portal** (aparte Supabase `natxaneygihzzszabmcv`). Getekende offerte → `installation_orders` → knop "Versturen opdracht" (`order-handoff` → E-Group `intake-external-order`) maakt daar org+project+order(+regels) met `service_category='e_charging'` + `source='e_charging_dashboard'` + `external_reference`. Elke E-Group-statuswijziging spiegelt terug via een `pg_net`-trigger → `installation-completion-webhook` (volledige spiegeling, mapping in `_shared/installationHandoff.ts`). Secrets in Vault op beide projecten (env-first), gelezen via service-role RPC `get_integration_secret`. Site-adres is bewerkbaar in het Installaties-overzicht en verplicht vóór verzenden (E-Group `project` is NOT NULL). Volledige docs + de E-Group frontend-prompt: `docs/egroup-integration/`.
 
 ## What's NOT yet built (do not assume)
 

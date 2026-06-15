@@ -11,6 +11,17 @@ import {
   RoadInvoice,
   corsHeaders,
 } from "./road-api.ts";
+import { classifyFault } from "./faults.ts";
+
+// Open storing-statussen (storing is nog niet afgesloten).
+const OPEN_FAULT_STATUSES = ["nieuw", "eflux_gemeld", "klant_gecontacteerd", "bezoek_ingepland"];
+
+interface OrgRow {
+  id: string;
+  eflux_provider_id?: string | null;
+  eflux_master_account_id?: string | null;
+  fault_detection_enabled?: boolean | null;
+}
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -53,7 +64,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: org, error: orgErr } = await supabase
       .from("organizations")
-      .select("id, eflux_provider_id, eflux_master_account_id")
+      .select("id, eflux_provider_id, eflux_master_account_id, fault_detection_enabled")
       .limit(1)
       .maybeSingle();
     if (orgErr) throw orgErr;
@@ -70,8 +81,8 @@ Deno.serve(async (req: Request) => {
 
     const accountId = org.eflux_master_account_id ?? undefined;
 
-    // 1. EVSE-controllers + locations + charge_points
-    const evseResult = await syncEvsesAndLocations(client, supabase, accountId);
+    // 1. EVSE-controllers + locations + charge_points (incl. storingsdetectie)
+    const evseResult = await syncEvsesAndLocations(client, supabase, accountId, org as OrgRow);
 
     // 2. Sessions sinds laatste sync (inclusief reimbursement_amount + client_share
     //    via priceWithFX.originalReimbursementAmount — geen aparte call meer nodig)
@@ -153,6 +164,7 @@ async function syncEvsesAndLocations(
   client: RoadClient,
   supabase: SupabaseClient,
   accountId?: string,
+  org?: OrgRow,
 ): Promise<{ locations: SyncSummary; chargePoints: SyncSummary }> {
   const locSummary: SyncSummary = { fetched: 0, upserted: 0, errors: 0 };
   const cpSummary: SyncSummary = { fetched: 0, upserted: 0, errors: 0 };
@@ -232,7 +244,48 @@ async function syncEvsesAndLocations(
     }
   }
 
-  // 1.5 — upsert charge_points
+  // 1.5a — Pre-sync state ophalen vóór de upsert (de huidige charge_points-rijen
+  //         houden nog de vorige sync-waarde). Nodig voor transitie-detectie.
+  const faultDetectionEnabled = org?.fault_detection_enabled !== false;
+  const prevMap = new Map<string, {
+    cp_id: string; status: string | null; connectivity_state: string | null;
+    operational_status: string | null; is_disabled: boolean | null;
+    location_id: string | null; client_id: string | null;
+  }>();
+  const openFaultCpIds = new Set<string>();
+  if (faultDetectionEnabled) {
+    const controllerIds = allEvses.map((e) => e.id).filter(Boolean);
+    if (controllerIds.length > 0) {
+      const { data: prevRows } = await supabase
+        .from("charge_points")
+        .select("id, eflux_evse_controller_id, status, connectivity_state, operational_status, is_disabled, location_id, locations(client_id)")
+        .in("eflux_evse_controller_id", controllerIds);
+      for (const r of prevRows ?? []) {
+        const row = r as unknown as {
+          id: string; eflux_evse_controller_id: string | null; status: string | null;
+          connectivity_state: string | null; operational_status: string | null; is_disabled: boolean | null;
+          location_id: string | null; locations?: { client_id?: string | null } | null;
+        };
+        if (row.eflux_evse_controller_id) {
+          prevMap.set(row.eflux_evse_controller_id, {
+            cp_id: row.id, status: row.status, connectivity_state: row.connectivity_state,
+            operational_status: row.operational_status, is_disabled: row.is_disabled,
+            location_id: row.location_id, client_id: row.locations?.client_id ?? null,
+          });
+        }
+      }
+    }
+    const { data: openF } = await supabase
+      .from("charge_point_faults")
+      .select("charge_point_id")
+      .in("status", OPEN_FAULT_STATUSES);
+    for (const f of openF ?? []) openFaultCpIds.add((f as { charge_point_id: string }).charge_point_id);
+  }
+
+  // Nieuw geopende storingen, voor de gebundelde notificatie per locatie.
+  const newlyOpened: { fault_id: string; location_id: string | null }[] = [];
+
+  // 1.5b — upsert charge_points + transitie-gebaseerde storingsdetectie
   for (const evse of allEvses) {
     const internalLocId = locMap.get(evse.locationId);
     if (!internalLocId) {
@@ -250,8 +303,93 @@ async function syncEvsesAndLocations(
     if (error) {
       console.error("upsert charge_point failed:", error.message, cpRow);
       cpSummary.errors++;
-    } else {
-      cpSummary.upserted++;
+      continue;
+    }
+    cpSummary.upserted++;
+
+    if (!faultDetectionEnabled) continue;
+    const prev = prevMap.get(evse.id);
+    // Nieuwe paal (geen vorige staat): alleen seeden, nooit een storing openen.
+    if (!prev) continue;
+
+    const newClass = classifyFault({
+      connectivityState: evse.connectivityState,
+      operationalStatus: evse.evseOperationalStatus?.canonicalStatus,
+      isDisabled: evse.isDisabled,
+    });
+    const prevClass = classifyFault({
+      connectivityState: prev.connectivity_state,
+      operationalStatus: prev.operational_status,
+      isDisabled: prev.is_disabled,
+    });
+
+    // gezond -> storing: open een nieuwe storing (als er nog geen open is).
+    if (!prevClass.isFault && newClass.isFault && !openFaultCpIds.has(prev.cp_id)) {
+      const { data: inserted, error: insErr } = await supabase
+        .from("charge_point_faults")
+        .insert({
+          charge_point_id: prev.cp_id,
+          location_id: prev.location_id,
+          client_id: prev.client_id,
+          organization_id: org?.id ?? null,
+          status: "nieuw",
+          severity: "storing",
+          fault_reason: newClass.reason ?? "connectivity",
+          road_connectivity_state: evse.connectivityState ?? null,
+          road_operational_status: evse.evseOperationalStatus?.canonicalStatus ?? null,
+          first_status: cpRow.status,
+        })
+        .select("id")
+        .maybeSingle();
+      if (!insErr && inserted) {
+        openFaultCpIds.add(prev.cp_id);
+        await supabase.from("charge_point_fault_events").insert({
+          fault_id: inserted.id, event_type: "detected", to_status: "nieuw",
+          note: `Storing gedetecteerd (${newClass.reason ?? "connectivity"})`,
+        });
+        newlyOpened.push({ fault_id: inserted.id, location_id: prev.location_id });
+      }
+    } else if (prevClass.isFault && !newClass.isFault && openFaultCpIds.has(prev.cp_id)) {
+      // storing -> gezond: automatisch sluiten.
+      const { data: openRow } = await supabase
+        .from("charge_point_faults")
+        .select("id")
+        .eq("charge_point_id", prev.cp_id)
+        .in("status", OPEN_FAULT_STATUSES)
+        .order("detected_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openRow) {
+        await supabase.from("charge_point_faults")
+          .update({ status: "automatisch_hersteld", auto_recovered: true, resolved_at: new Date().toISOString() })
+          .eq("id", openRow.id);
+        await supabase.from("charge_point_fault_events").insert({
+          fault_id: openRow.id, event_type: "recovered", to_status: "automatisch_hersteld",
+          note: "Paal kwam automatisch weer online",
+        });
+        openFaultCpIds.delete(prev.cp_id);
+      }
+    }
+  }
+
+  // 1.5c — Gebundelde storingsmail per locatie (best-effort).
+  if (newlyOpened.length > 0) {
+    const byLoc = new Map<string, string[]>();
+    for (const f of newlyOpened) {
+      const key = f.location_id ?? "none";
+      const arr = byLoc.get(key) ?? [];
+      arr.push(f.fault_id);
+      byLoc.set(key, arr);
+    }
+    for (const [locKey, faultIds] of byLoc) {
+      try {
+        await invokeSendFaultNotification({
+          location_id: locKey === "none" ? null : locKey,
+          fault_ids: faultIds,
+        });
+      } catch (e) {
+        console.warn("send-fault-notification failed:", (e as Error).message);
+      }
     }
   }
 
@@ -259,6 +397,20 @@ async function syncEvsesAndLocations(
   await logSync(supabase, "charge_points", "success", cpSummary.upserted);
 
   return { locations: locSummary, chargePoints: cpSummary };
+}
+
+async function invokeSendFaultNotification(body: Record<string, unknown>) {
+  const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  if (!internalSecret || !supabaseUrl) throw new Error("INTERNAL_FUNCTION_SECRET of SUPABASE_URL ontbreekt");
+  const headers: Record<string, string> = { "Content-Type": "application/json", "x-internal-secret": internalSecret };
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (anonKey) headers.apikey = anonKey;
+  const res = await fetch(`${supabaseUrl}/functions/v1/send-fault-notification`, {
+    method: "POST", headers, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`send-fault-notification returned ${res.status}`);
+  return { triggered: true };
 }
 
 function mapRoadLocationToRow(eflux_location_id: string, detail: RoadLocation | null) {

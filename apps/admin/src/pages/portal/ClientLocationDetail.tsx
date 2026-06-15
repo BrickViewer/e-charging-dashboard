@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PORTAL_LOCATION_FIELDS } from "@/hooks/useClientData";
 import { getPortalSessions } from "@/services/sessions";
+import { DEMO_LOCATIONS, getDemoSessions } from "@/lib/demoData";
+import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,10 +15,12 @@ import type { PortalLocation } from "@/types/db";
 
 export default function ClientLocationDetail() {
   const { id } = useParams<{ id: string }>();
+  const demo = useDemoMode();
 
   const { data: location, isLoading } = useQuery({
-    queryKey: ["client-location-detail", id],
+    queryKey: demo ? ["demo", "client-location-detail", id] : ["client-location-detail", id],
     queryFn: async () => {
+      if (demo) return DEMO_LOCATIONS.find((loc) => loc.id === id) ?? null;
       const { data, error } = await supabase
         .from("locations")
         .select(PORTAL_LOCATION_FIELDS)
@@ -29,9 +33,9 @@ export default function ClientLocationDetail() {
   });
 
   const { data: sessions } = useQuery({
-    queryKey: ["client-location-sessions", id],
+    queryKey: demo ? ["demo", "client-location-sessions", id] : ["client-location-sessions", id],
     // Netto-only via RPC; bruto/fee bereiken de browser niet.
-    queryFn: async () => getPortalSessions({ locationId: id, limit: 20 }),
+    queryFn: async () => (demo ? getDemoSessions({ locationId: id, limit: 20 }) : getPortalSessions({ locationId: id, limit: 20 })),
     enabled: !!id,
   });
 
@@ -68,7 +72,7 @@ export default function ClientLocationDetail() {
     <div className="space-y-5 animate-fade-in">
       {/* Header met terug-knop en locatie-naam */}
       <div className="flex items-center gap-3">
-        <Link to="/portal">
+        <Link to={demo ? "/demo" : "/portal"}>
           <Button variant="ghost" size="icon" className="rounded-full hover:bg-accent/40">
             <ArrowLeft className="w-4 h-4" />
           </Button>

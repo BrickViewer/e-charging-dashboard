@@ -79,7 +79,7 @@ function PortalStatus({ client }: { client: ClientWithRelations }) {
       ).toLocaleDateString("nl-NL")}`}
       className="inline-flex"
     >
-      <Mail className="w-4 h-4 text-amber-400" />
+      <Mail className="w-4 h-4 text-[hsl(var(--status-amber))]" />
     </span>
   );
 }
@@ -115,8 +115,8 @@ function KpiTile({
 }) {
   const accentBg = {
     primary: "bg-primary/10 border-primary/20 text-primary",
-    amber: "bg-amber-400/10 border-amber-400/20 text-amber-400",
-    blue: "bg-blue-400/10 border-blue-400/20 text-blue-400",
+    amber: "bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] text-[hsl(var(--status-amber))]",
+    blue: "bg-[hsl(var(--status-blue)/var(--status-tile-alpha))] border-[hsl(var(--status-blue)/var(--status-tile-border-alpha))] text-[hsl(var(--status-blue))]",
     muted: "bg-muted/30 border-border text-muted-foreground",
   }[accent ?? "muted"];
 

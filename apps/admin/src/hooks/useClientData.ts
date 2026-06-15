@@ -4,6 +4,16 @@ import { useAuth } from "@/hooks/useAuth";
 import type { PortalClient, PortalLocation, PortalPaymentDetails, PortalSettlement } from "@/types/db";
 import { getPortalSessions } from "@/services/sessions";
 import { MONTH_LABELS_SHORT, getCurrentMonth, prevMonth } from "@/lib/period";
+import { useDemoMode } from "@/contexts/demoModeContextValue";
+import {
+  DEMO_CLIENT,
+  DEMO_INVOICE_CONTEXT,
+  DEMO_KPI_ROWS,
+  DEMO_LOCATIONS,
+  DEMO_PAYMENT_DETAILS,
+  DEMO_SETTLEMENTS,
+  getDemoSessions,
+} from "@/lib/demoData";
 
 export const FINAL_SETTLEMENT_STATUSES = ["approved", "paid", "invoice_sent", "invoice_paid", "charged_back"] as const;
 
@@ -20,6 +30,9 @@ const PORTAL_CLIENT_FIELDS = [
   "billing_address_street",
   "billing_address_postal",
   "billing_address_city",
+  "country",
+  "vat_status",
+  "vat_status_confirmed_at",
   "contract_start_date",
   "contract_duration_months",
   "revenue_share_percentage",
@@ -68,6 +81,8 @@ const PORTAL_SETTLEMENT_FIELDS = [
   "total_sessions",
   "client_payout",
   "vat_rate",
+  "vat_status",
+  "invoice_number",
 ].join(", ");
 
 // Maandnamen (nl, kort) — hergeëxporteerd uit de centrale periode-util (lib/period)
@@ -76,9 +91,11 @@ export const MONTH_LABELS_NL = MONTH_LABELS_SHORT;
 
 export function useClientProfile() {
   const { user } = useAuth();
+  const demo = useDemoMode();
   return useQuery({
-    queryKey: ["client-profile", user?.id],
+    queryKey: demo ? ["demo", "client-profile"] : ["client-profile", user?.id],
     queryFn: async () => {
+      if (demo) return DEMO_CLIENT;
       const { data, error } = await supabase
         .from("clients")
         .select(PORTAL_CLIENT_FIELDS)
@@ -87,7 +104,7 @@ export function useClientProfile() {
       if (error) throw error;
       return data as unknown as PortalClient;
     },
-    enabled: !!user,
+    enabled: demo || !!user,
   });
 }
 
@@ -101,14 +118,16 @@ type PortalPaymentDetailsRpcClient = {
 };
 
 export function useClientPaymentDetails(clientId?: string) {
+  const demo = useDemoMode();
   return useQuery({
-    queryKey: ["client-payment-details", clientId],
+    queryKey: demo ? ["demo", "client-payment-details"] : ["client-payment-details", clientId],
     queryFn: async () => {
+      if (demo) return DEMO_PAYMENT_DETAILS;
       const { data, error } = await (supabase as unknown as PortalPaymentDetailsRpcClient).rpc("get_portal_payment_details");
       if (error) throw error;
       return data?.[0] ?? null;
     },
-    enabled: !!clientId,
+    enabled: demo || !!clientId,
   });
 }
 
@@ -119,6 +138,10 @@ type PortalInvoiceContextRow = {
   org_name: string | null;
   org_kvk: string | null;
   org_address: string | null;
+  org_address_street: string | null;
+  org_address_postal: string | null;
+  org_address_city: string | null;
+  org_country: string | null;
   org_email: string | null;
   org_btw_number: string | null;
   org_iban: string | null;
@@ -137,6 +160,10 @@ export interface PortalInvoiceContext {
     name: string | null;
     kvk: string | null;
     address: string | null;
+    address_street: string | null;
+    address_postal: string | null;
+    address_city: string | null;
+    country: string | null;
     email: string | null;
     btw_number: string | null;
     iban: string | null;
@@ -150,9 +177,11 @@ export interface PortalInvoiceContext {
 }
 
 export function usePortalInvoiceContext(clientId?: string) {
+  const demo = useDemoMode();
   return useQuery({
-    queryKey: ["portal-invoice-context", clientId],
+    queryKey: demo ? ["demo", "portal-invoice-context"] : ["portal-invoice-context", clientId],
     queryFn: async (): Promise<PortalInvoiceContext | null> => {
+      if (demo) return DEMO_INVOICE_CONTEXT;
       const { data, error } = await (supabase as unknown as PortalInvoiceContextRpcClient).rpc("get_portal_invoice_context");
       if (error) throw error;
       const row = data?.[0];
@@ -162,6 +191,10 @@ export function usePortalInvoiceContext(clientId?: string) {
           name: row.org_name,
           kvk: row.org_kvk,
           address: row.org_address,
+          address_street: row.org_address_street,
+          address_postal: row.org_address_postal,
+          address_city: row.org_address_city,
+          country: row.org_country,
           email: row.org_email,
           btw_number: row.org_btw_number,
           iban: row.org_iban,
@@ -174,14 +207,16 @@ export function usePortalInvoiceContext(clientId?: string) {
         },
       };
     },
-    enabled: !!clientId,
+    enabled: demo || !!clientId,
   });
 }
 
 export function useClientLocations(clientId?: string) {
+  const demo = useDemoMode();
   return useQuery({
-    queryKey: ["client-locations", clientId],
+    queryKey: demo ? ["demo", "client-locations"] : ["client-locations", clientId],
     queryFn: async () => {
+      if (demo) return DEMO_LOCATIONS;
       const { data, error } = await supabase
         .from("locations")
         .select(PORTAL_LOCATION_FIELDS)
@@ -189,23 +224,26 @@ export function useClientLocations(clientId?: string) {
       if (error) throw error;
       return (data ?? []) as unknown as PortalLocation[];
     },
-    enabled: !!clientId,
+    enabled: demo || !!clientId,
   });
 }
 
 export function useClientSessions(clientId?: string, limit?: number) {
+  const demo = useDemoMode();
   return useQuery({
-    queryKey: ["client-sessions", clientId, limit],
+    queryKey: demo ? ["demo", "client-sessions", limit] : ["client-sessions", clientId, limit],
     // Netto-only via RPC; bruto/fee bereiken de browser niet.
-    queryFn: async () => getPortalSessions({ limit }),
-    enabled: !!clientId,
+    queryFn: async () => (demo ? getDemoSessions({ limit }) : getPortalSessions({ limit })),
+    enabled: demo || !!clientId,
   });
 }
 
 export function useClientSettlements(clientId?: string) {
+  const demo = useDemoMode();
   return useQuery({
-    queryKey: ["client-settlements", clientId],
+    queryKey: demo ? ["demo", "client-settlements"] : ["client-settlements", clientId],
     queryFn: async () => {
+      if (demo) return DEMO_SETTLEMENTS;
       const { data, error } = await supabase
         .from("settlements")
         .select(PORTAL_SETTLEMENT_FIELDS)
@@ -216,7 +254,7 @@ export function useClientSettlements(clientId?: string) {
       if (error) throw error;
       return (data ?? []) as unknown as PortalSettlement[];
     },
-    enabled: !!clientId,
+    enabled: demo || !!clientId,
   });
 }
 
@@ -266,9 +304,11 @@ function filterKpiRowsByPeriod(rows: PortalDashboardKpiRow[], p: DashboardPeriod
 }
 
 export function usePortalDashboardKpis(clientId?: string) {
+  const demo = useDemoMode();
   return useQuery({
-    queryKey: ["portal-dashboard-kpis", clientId],
+    queryKey: demo ? ["demo", "portal-dashboard-kpis"] : ["portal-dashboard-kpis", clientId],
     queryFn: async () => {
+      if (demo) return DEMO_KPI_ROWS;
       const rpcClient = supabase as unknown as {
         rpc(name: "get_portal_dashboard_kpis"): Promise<{ data: unknown; error: Error | null }>;
       };
@@ -276,7 +316,7 @@ export function usePortalDashboardKpis(clientId?: string) {
       if (error) throw error;
       return (data ?? []) as PortalDashboardKpiRow[];
     },
-    enabled: !!clientId,
+    enabled: demo || !!clientId,
   });
 }
 

@@ -6,10 +6,10 @@ interface ConnectivityIndicatorProps {
 const stateConfig: Record<string, { color: string; label: string }> = {
   connected: { color: 'bg-green-500', label: 'Connected' },
   'maybe-connected': { color: 'bg-yellow-500', label: 'Mogelijk verbonden' },
-  disconnected: { color: 'bg-gray-400', label: 'Niet verbonden' },
+  disconnected: { color: 'bg-muted-foreground', label: 'Niet verbonden' },
   'access-denied': { color: 'bg-red-500', label: 'Toegang geweigerd' },
   'pending-first-connection': { color: 'bg-blue-500', label: 'Wacht op eerste verbinding' },
-  unknown: { color: 'bg-gray-300', label: 'Onbekend' },
+  unknown: { color: 'bg-foreground/75', label: 'Onbekend' },
 };
 
 export function ConnectivityIndicator({ state, showLabel = true }: ConnectivityIndicatorProps) {
