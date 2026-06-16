@@ -108,6 +108,7 @@ export default function WizardPage() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [savedToLead, setSavedToLead] = useState(false);
+  const [savedLeadId, setSavedLeadId] = useState<string | null>(null);
 
   const {
     input,
@@ -227,12 +228,13 @@ export default function WizardPage() {
       const payload = { input, settingsVersion, ere: ereEnabled, investmentMinTotal, investmentMaxTotal };
       // Altijd opslaan op een lead (geen klant). Heeft de sessie nog geen lead,
       // dan maakt de backend er één aan; de klant ontstaat pas bij offerte-acceptatie.
-      await configuratorApi.saveToLead(sessionId, payload);
-      return { kind: "lead" as const };
+      const res = await configuratorApi.saveToLead(sessionId, payload);
+      return { kind: "lead" as const, leadId: res.leadId };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setFinalizeError(null);
       setSavedToLead(true);
+      setSavedLeadId(data.leadId);
     },
     onError: (error) => {
       setFinalizeError(error instanceof Error ? error.message : "Opslaan mislukt.");
@@ -308,6 +310,7 @@ export default function WizardPage() {
           finalizeError={finalizeError}
           leadMode={!!leadId}
           savedToLead={savedToLead}
+          savedLeadId={savedLeadId}
           onClose={() => setSaveOpen(false)}
         />
       )}

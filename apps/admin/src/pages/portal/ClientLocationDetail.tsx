@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PORTAL_LOCATION_FIELDS } from "@/hooks/useClientData";
 import { getPortalSessions } from "@/services/sessions";
-import { DEMO_LOCATIONS, getDemoSessions } from "@/lib/demoData";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
+import { useDemoDatasetOptional } from "@/contexts/demoDatasetContextValue";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,12 @@ import type { PortalLocation } from "@/types/db";
 export default function ClientLocationDetail() {
   const { id } = useParams<{ id: string }>();
   const demo = useDemoMode();
+  const ds = useDemoDatasetOptional();
 
   const { data: location, isLoading } = useQuery({
-    queryKey: demo ? ["demo", "client-location-detail", id] : ["client-location-detail", id],
+    queryKey: demo ? ["demo", ds?.id, "client-location-detail", id] : ["client-location-detail", id],
     queryFn: async () => {
-      if (demo) return DEMO_LOCATIONS.find((loc) => loc.id === id) ?? null;
+      if (demo) return ds!.locations.find((loc) => loc.id === id) ?? null;
       const { data, error } = await supabase
         .from("locations")
         .select(PORTAL_LOCATION_FIELDS)
@@ -33,9 +34,9 @@ export default function ClientLocationDetail() {
   });
 
   const { data: sessions } = useQuery({
-    queryKey: demo ? ["demo", "client-location-sessions", id] : ["client-location-sessions", id],
+    queryKey: demo ? ["demo", ds?.id, "client-location-sessions", id] : ["client-location-sessions", id],
     // Netto-only via RPC; bruto/fee bereiken de browser niet.
-    queryFn: async () => (demo ? getDemoSessions({ locationId: id, limit: 20 }) : getPortalSessions({ locationId: id, limit: 20 })),
+    queryFn: async () => (demo ? ds!.getSessions({ locationId: id, limit: 20 }) : getPortalSessions({ locationId: id, limit: 20 })),
     enabled: !!id,
   });
 

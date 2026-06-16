@@ -1,6 +1,10 @@
 import type { PricingInput } from "@echarging/pricing-engine";
-import { Check, X } from "lucide-react";
+import { Check, X, MonitorPlay } from "lucide-react";
 import { euro } from "./format";
+
+// Admin-app origin voor de demo-deeplink. In dev draait admin op 8080.
+const ADMIN_URL = (import.meta.env.VITE_ADMIN_APP_URL as string | undefined)
+  ?? (import.meta.env.DEV ? "http://localhost:8080" : "https://dashboard.e-charging.nl");
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -22,6 +26,7 @@ export function FinalizePanel({
   finalizeError,
   leadMode,
   savedToLead,
+  savedLeadId,
   onClose,
 }: {
   input: PricingInput;
@@ -34,9 +39,19 @@ export function FinalizePanel({
   finalizeError: string | null;
   leadMode?: boolean;
   savedToLead?: boolean;
+  savedLeadId?: string | null;
   onClose: () => void;
 }) {
   const canSubmit = !finalizing && input.customer.companyName.trim().length > 0;
+
+  const openDemo = () => {
+    if (!savedLeadId) return;
+    window.open(
+      `${ADMIN_URL}/demo?leadId=${encodeURIComponent(savedLeadId)}`,
+      "_blank",
+      "noopener,noreferrer,width=1400,height=900",
+    );
+  };
 
   return (
     <>
@@ -59,6 +74,17 @@ export function FinalizePanel({
             <p className="text-sm text-muted-foreground">
               De configuratie staat nu op de lead. Vanuit de lead stel je hiermee de offerte op; de klant wordt aangemaakt zodra de offerte wordt geaccepteerd.
             </p>
+            {savedLeadId && (
+              <div className="space-y-2 pt-2">
+                <button type="button" className="primary-button w-full inline-flex items-center justify-center gap-2" onClick={openDemo}>
+                  <MonitorPlay size={18} />
+                  Demo openen met deze gegevens
+                </button>
+                <p className="text-xs text-muted-foreground">
+                  Een live dashboard met exact deze configuratie, om aan de klant te laten zien.
+                </p>
+              </div>
+            )}
             <button type="button" className="secondary-button w-full" onClick={onClose}>Sluiten</button>
           </div>
         ) : (

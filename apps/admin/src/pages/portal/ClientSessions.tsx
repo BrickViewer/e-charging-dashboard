@@ -1,8 +1,8 @@
 import { useClientProfile, useClientLocations } from "@/hooks/useClientData";
 import { useQuery } from "@tanstack/react-query";
 import { getPortalSessions } from "@/services/sessions";
-import { getDemoSessions } from "@/lib/demoData";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
+import { useDemoDatasetOptional } from "@/contexts/demoDatasetContextValue";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ function getDateFrom(range: string): string | null {
 
 export default function ClientSessions() {
   const demo = useDemoMode();
+  const ds = useDemoDatasetOptional();
   const { data: client } = useClientProfile();
   const { data: locations } = useClientLocations(client?.id);
   const [search, setSearch] = useState("");
@@ -65,10 +66,10 @@ export default function ClientSessions() {
   const dateFrom = useMemo(() => getDateFrom(dateRange), [dateRange]);
 
   const { data: sessions, isLoading } = useQuery({
-    queryKey: ["client-sessions-filtered", demo ? "demo" : client?.id, dateRange, chargePointFilter],
+    queryKey: ["client-sessions-filtered", demo ? `demo-${ds?.id}` : client?.id, dateRange, chargePointFilter],
     queryFn: async () =>
       demo
-        ? getDemoSessions({
+        ? ds!.getSessions({
             from: dateFrom,
             chargePointId: chargePointFilter === "all" ? null : chargePointFilter,
             limit: 2000,

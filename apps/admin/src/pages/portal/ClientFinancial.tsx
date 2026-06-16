@@ -9,8 +9,8 @@ import { useState, useMemo, Fragment, type ReactNode } from "react";
 import type { PortalSettlement } from "@/types/db";
 import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
 import { getPortalSessions, getAmsterdamMonthBounds } from "@/services/sessions";
-import { getDemoMonthBounds, getDemoSessions } from "@/lib/demoData";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
+import { useDemoDatasetOptional } from "@/contexts/demoDatasetContextValue";
 import { toast } from "sonner";
 
 // Statusbuckets — de klant denkt in "vergoed" (geld binnen) vs "onderweg"
@@ -88,6 +88,7 @@ function KpiTile({
 
 export default function ClientFinancial() {
   const demo = useDemoMode();
+  const ds = useDemoDatasetOptional();
   const { data: client } = useClientProfile();
   const { data: settlements, isLoading } = useClientSettlements(client?.id);
   const { data: invoiceContext } = usePortalInvoiceContext(client?.id);
@@ -101,9 +102,9 @@ export default function ClientFinancial() {
       // Maandgrenzen op NL-tijd (zelfde bron als de settlement-aggregatie), zodat de
       // sessie-specificatie exact de vergoeding van deze maand dekt. In de demo
       // komen grenzen en regels uit de fixtures (geen Supabase-calls).
-      const { start, end } = demo ? getDemoMonthBounds(s.year, s.month) : await getAmsterdamMonthBounds(s.year, s.month);
-      const sessionLines = demo
-        ? getDemoSessions({ from: start, to: end, limit: 5000 })
+      const { start, end } = demo && ds ? ds.getMonthBounds(s.year, s.month) : await getAmsterdamMonthBounds(s.year, s.month);
+      const sessionLines = demo && ds
+        ? ds.getSessions({ from: start, to: end, limit: 5000 })
         : await getPortalSessions({ from: start, to: end, limit: 5000 });
       await generateSelfBillingInvoicePdf(s, client, invoiceContext?.org, invoiceContext?.paymentDetails, sessionLines);
     } catch (err) {

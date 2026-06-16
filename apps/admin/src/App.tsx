@@ -4,7 +4,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { DemoModeProvider } from "@/contexts/DemoModeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -25,6 +24,7 @@ const ClientFinancial = lazy(() => import("./pages/portal/ClientFinancial"));
 const ClientProfilePage = lazy(() => import("./pages/portal/ClientProfilePage"));
 const ClientMessages = lazy(() => import("./pages/portal/ClientMessages"));
 const ClientLocationDetail = lazy(() => import("./pages/portal/ClientLocationDetail"));
+const DemoLayout = lazy(() => import("./layouts/DemoLayout"));
 
 // Admin pages — lazy loaded
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -126,12 +126,11 @@ const App = () => (
                 <Route path="locatie/:id" element={<ClientLocationDetail />} />
               </Route>
 
-              {/* Demo-omgeving voor sales: het volledige klantportaal op fictieve data */}
+              {/* Demo-omgeving voor sales: keuzescherm (5/10/20) of config-gedreven (leadId),
+                  daarna het volledige klantportaal op geparametriseerde fictieve data */}
               <Route path="/demo" element={
                 <RequireAuth allowedRoles={["admin", "manager", "sales"]}>
-                  <DemoModeProvider>
-                    <ClientLayout />
-                  </DemoModeProvider>
+                  <DemoLayout />
                 </RequireAuth>
               }>
                 <Route index element={<ClientDashboard />} />

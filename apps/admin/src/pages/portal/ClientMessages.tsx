@@ -6,17 +6,19 @@ import { Bell, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import type { Notification } from "@/types/db";
-import { buildDemoNotifications } from "@/lib/demoData";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
+import { useDemoDatasetOptional } from "@/contexts/demoDatasetContextValue";
 
 export default function ClientMessages() {
   const { user } = useAuth();
   const demo = useDemoMode();
+  const ds = useDemoDatasetOptional();
   const queryClient = useQueryClient();
+  const notifKey = demo ? ["demo", ds?.id, "notifications"] : ["notifications", user?.id];
   const { data: notifications } = useQuery({
-    queryKey: demo ? ["demo", "notifications"] : ["notifications", user?.id],
+    queryKey: notifKey,
     queryFn: async () => {
-      if (demo) return buildDemoNotifications();
+      if (demo) return ds!.notifications;
       const { data, error } = await supabase
         .from("notifications")
         .select("id, type, title, message, read, created_at")
@@ -34,7 +36,7 @@ export default function ClientMessages() {
     if (demo) {
       // Lokaal markeren: interactief in de demo, zonder Supabase
       queryClient.setQueryData(
-        ["demo", "notifications"],
+        notifKey,
         (rows?: Pick<Notification, "id" | "type" | "title" | "message" | "read" | "created_at">[]) =>
           rows?.map((n) => (n.id === id ? { ...n, read: true } : n)),
       );
