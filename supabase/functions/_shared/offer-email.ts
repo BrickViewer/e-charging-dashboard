@@ -72,16 +72,9 @@ const greet = `<p style="margin:22px 0 0;font-size:15px;line-height:1.65;color:#
 // het formele "Geachte heer/mevrouw,".
 const aanhef = (naam?: string | null) => p(naam && naam.trim() ? `Beste ${naam.trim()},` : "Geachte heer/mevrouw,");
 
-function investBox(total: number): string {
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 20px;border:1px solid #e6e8eb;border-radius:8px;background:#ffffff">
-    <tr><td style="padding:16px 18px;font-family:Arial,Helvetica,sans-serif">
-      <p style="margin:0;font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:#6b7280;font-weight:700">Eenmalige investering</p>
-      <p style="margin:5px 0 0;font-size:22px;font-weight:700;color:#111827">${eur0(total)} <span style="font-size:13px;font-weight:500;color:#6b7280">excl. BTW</span></p>
-      <p style="margin:6px 0 0;font-size:13px;color:#374151">Voor de complete oplevering — hardware, montage, aansluiting, NEN-keuring en activatie.</p>
-    </td></tr></table>`;
-}
-
 // 1) Verstuur-mail (offerte aanbieden). De PDF zit als bijlage wanneer hasAttachment.
+// Bewust GEEN bedrag in de mailtekst: de mail is een korte, adviserende uitnodiging;
+// de volledige offerte (incl. investering) bekijkt de klant via de knop/PDF.
 export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; contact?: string | null; total: number; acceptUrl: string; validUntil?: string | null; hasAttachment?: boolean }): { html: string; text: string } {
   const vu = nlDate(o.validUntil);
   const bijlageZin = o.hasAttachment ? "De volledige offerte vindt u als <strong>PDF-bijlage</strong> bij deze e-mail." : "";
@@ -90,8 +83,7 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
     h1(o.company ? `Voorstel voor ${o.company}` : "Uw voorstel voor laadinfrastructuur") +
     aanhef(o.contact) +
     p(`Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur. ${bijlageZin}`) +
-    investBox(o.total) +
-    p("U kunt de offerte online bekijken en direct digitaal ondertekenen:") +
+    p("In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.") +
     btn(o.acceptUrl, "Offerte bekijken en ondertekenen") +
     fine(`${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."} De Algemene Voorwaarden en Verwerkersovereenkomst E-Charging horen bij deze offerte.`) +
     greet;
@@ -99,7 +91,7 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
 
 Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur.${o.hasAttachment ? " De volledige offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
 
-Eenmalige investering: ${eur0(o.total)} excl. BTW (complete oplevering).
+In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven.
 
 Bekijk en onderteken de offerte online: ${o.acceptUrl}
 ${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."}

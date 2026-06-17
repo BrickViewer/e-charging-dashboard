@@ -49,7 +49,12 @@ const SalesOffertes = lazy(() => import("./pages/sales/SalesOffertes"));
 const MarketingBlogs = lazy(() => import("./pages/marketing/MarketingBlogs"));
 const BlogEditor = lazy(() => import("./pages/marketing/BlogEditor"));
 
-const queryClient = new QueryClient();
+// refetchOnWindowFocus uit: terugkeren naar het tabblad mag geen achtergrond-
+// refetch (en dus geen geflikker / sluitende panelen) veroorzaken. Data blijft
+// vers via mount + mutatie-invalidatie.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { refetchOnWindowFocus: false } },
+});
 
 function PageLoader() {
   return (

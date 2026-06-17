@@ -123,6 +123,15 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
   );
 }
 
+function InfoRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={strong ? "text-right font-bold text-foreground" : "text-right font-medium text-foreground"}>{value}</span>
+    </div>
+  );
+}
+
 export default function OfferAccept() {
   const { token } = useParams<{ token: string }>();
   const [resp, setResp] = useState<Resp | null>(null);
@@ -188,58 +197,76 @@ export default function OfferAccept() {
   const done = accepted || resp?.status === "already_accepted";
   const invalid = resp && !["ok", "already_accepted"].includes(resp.status);
 
+  // Gecentreerde toestanden (laden / getekend / ongeldig).
+  if (loading || done || invalid || !quote) {
+    return (
+      <div className="min-h-screen bg-muted/30 px-4 py-10">
+        <div className="mx-auto max-w-3xl">
+          <img src={logoFull} alt="E-Charging" className="mx-auto mb-8 h-9" />
+          {loading ? (
+            <Skeleton className="h-96 w-full rounded-xl" />
+          ) : done ? (
+            <Card><CardContent className="space-y-3 p-8 text-center">
+              <CheckCircle className="mx-auto h-12 w-12 text-green-600" />
+              <h1 className="text-xl font-bold">Bedankt — uw offerte is getekend</h1>
+              <p className="text-sm text-muted-foreground">Offerte {quote?.quoteNumber} is digitaal ondertekend. U ontvangt per e-mail een bevestiging met de getekende offerte. Wij nemen contact op voor de planning van de installatie.</p>
+            </CardContent></Card>
+          ) : (
+            <Card><CardContent className="space-y-3 p-8 text-center">
+              <AlertCircle className="mx-auto h-12 w-12 text-amber-500" />
+              <h1 className="text-xl font-bold">Offerte niet beschikbaar</h1>
+              <p className="text-sm text-muted-foreground">{resp?.message || "Deze offerte-link is niet (meer) geldig."}</p>
+            </CardContent></Card>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Actieve offerte: DocuSign-achtige twee-kolom — PDF links, info + tekenen rechts.
   return (
-    <div className="min-h-screen bg-muted/30 px-4 py-10">
-      <div className="mx-auto max-w-3xl">
-        <img src={logoFull} alt="E-Charging" className="mx-auto mb-8 h-9" />
+    <div className="flex min-h-[100dvh] flex-col bg-muted/30 lg:h-[100dvh] lg:overflow-hidden">
+      <header className="flex items-center justify-between gap-3 border-b bg-background px-4 py-3 sm:px-6">
+        <img src={logoFull} alt="E-Charging" className="h-7" />
+        <p className="text-xs font-medium text-muted-foreground">Offerte {quote.quoteNumber}</p>
+      </header>
 
-        {loading ? (
-          <Skeleton className="h-96 w-full rounded-xl" />
-        ) : done ? (
-          <Card><CardContent className="space-y-3 p-8 text-center">
-            <CheckCircle className="mx-auto h-12 w-12 text-green-600" />
-            <h1 className="text-xl font-bold">Bedankt — uw offerte is getekend</h1>
-            <p className="text-sm text-muted-foreground">Offerte {quote?.quoteNumber} is digitaal ondertekend. U ontvangt per e-mail een bevestiging met de getekende offerte. Wij nemen contact op voor de planning van de installatie.</p>
-          </CardContent></Card>
-        ) : invalid ? (
-          <Card><CardContent className="space-y-3 p-8 text-center">
-            <AlertCircle className="mx-auto h-12 w-12 text-amber-500" />
-            <h1 className="text-xl font-bold">Offerte niet beschikbaar</h1>
-            <p className="text-sm text-muted-foreground">{resp?.message || "Deze offerte-link is niet (meer) geldig."}</p>
-          </CardContent></Card>
-        ) : quote ? (
-          <div className="space-y-5">
-            {/* Samenvatting */}
-            <Card><CardContent className="flex flex-wrap items-end justify-between gap-4 p-6">
+      <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[1.65fr_1fr]">
+        {/* Links: de volledige offerte als PDF */}
+        <div className="flex min-h-0 flex-col gap-2 bg-muted/40 p-3 sm:p-5">
+          {pdfUrl ? (
+            <iframe title="Offerte" src={`${pdfUrl}#view=FitH`} className="min-h-[60vh] w-full flex-1 rounded-lg border bg-white shadow-sm" />
+          ) : (
+            <div className="flex min-h-[60vh] flex-1 items-center justify-center rounded-lg border bg-white text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Offerte laden…
+            </div>
+          )}
+          {pdfUrl && (
+            <div className="text-center">
+              <a href={pdfUrl} target="_blank" rel="noopener" className="text-xs font-medium text-primary hover:underline">Offerte in nieuw tabblad openen</a>
+            </div>
+          )}
+        </div>
+
+        {/* Rechts: belangrijke info + ondertekenen */}
+        <aside className="flex flex-col border-t bg-background lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
+          <div className="space-y-6 p-5 sm:p-6">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Offerte {quote.quoteNumber}</p>
+              <h1 className="mt-1 text-xl font-bold leading-snug">Wij plaatsen uw laadpalen.</h1>
+              <p className="text-sm text-muted-foreground">Voor {quote.company || "uw organisatie"}</p>
+            </div>
+
+            <div className="space-y-2.5 rounded-xl border bg-muted/30 p-4">
+              <InfoRow label="Eenmalige investering" value={`${euro(quote.total)} excl. BTW`} strong />
+              {quote.numChargePoints ? <InfoRow label="Laadpunten" value={String(quote.numChargePoints)} /> : null}
+              {quote.withManagement && quote.durationMonths ? <InfoRow label="Looptijd beheer" value={`${quote.durationMonths} maanden`} /> : null}
+              <InfoRow label="Geldig t/m" value={fmtNlDate(quote.validUntil)} />
+            </div>
+
+            <div className="space-y-4">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Offerte {quote.quoteNumber}</p>
-                <h1 className="mt-1 text-2xl font-bold">Wij plaatsen uw laadpalen.</h1>
-                <p className="text-sm text-muted-foreground">Voor {quote.company || "uw organisatie"}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Eenmalige investering</p>
-                <p className="text-2xl font-extrabold">{euro(quote.total)} <span className="text-sm font-medium text-muted-foreground">excl. BTW</span></p>
-              </div>
-            </CardContent></Card>
-
-            {/* Volledige offerte (PDF) */}
-            <Card><CardContent className="p-2">
-              {pdfUrl ? (
-                <iframe title="Offerte" src={`${pdfUrl}#view=FitH`} className="h-[70vh] w-full rounded-lg" />
-              ) : (
-                <div className="flex h-40 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Offerte laden…</div>
-              )}
-              {pdfUrl && (
-                <div className="px-3 py-2 text-center">
-                  <a href={pdfUrl} target="_blank" rel="noopener" className="text-xs font-medium text-primary hover:underline">Offerte in nieuw tabblad openen</a>
-                </div>
-              )}
-            </CardContent></Card>
-
-            {/* Akkoord + handtekening */}
-            <Card><CardContent className="space-y-4 p-6">
-              <div>
-                <h2 className="text-lg font-bold">Akkoord geven</h2>
+                <h2 className="text-base font-bold">Akkoord geven</h2>
                 <p className="text-sm text-muted-foreground">Door te ondertekenen gaat u akkoord met deze offerte, de Algemene Voorwaarden en de Verwerkersovereenkomst E-Charging.</p>
               </div>
               <div className="space-y-1.5">
@@ -255,9 +282,9 @@ export default function OfferAccept() {
                 Akkoord &amp; tekenen
               </Button>
               <p className="text-center text-[11px] text-muted-foreground">Deze offerte is geldig t/m {fmtNlDate(quote.validUntil)}.</p>
-            </CardContent></Card>
+            </div>
           </div>
-        ) : null}
+        </aside>
       </div>
     </div>
   );

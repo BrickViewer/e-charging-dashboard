@@ -22,10 +22,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Auth listener — synchroon, geen awaits binnen de callback
   useEffect(() => {
+    // Houd de user-referentie stabiel zolang het dezelfde gebruiker is. Supabase
+    // her-uitzendt bij tab-focus (token-refresh); een nieuwe object-referentie zou
+    // anders de role-fetch + isLoading laten flippen → RequireAuth toont "Laden…"
+    // → de hele route remount → open zijschermen sluiten. Zelfde id = zelfde object.
+    const nextUser = (prev: User | null, session: Session | null) =>
+      prev?.id === session?.user?.id ? prev : (session?.user ?? null);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
-        setUser(session?.user ?? null);
+        setUser((prev) => nextUser(prev, session));
         syncAdminThemeFromUser(session?.user ?? null); // accountgebonden admin-thema (synchroon)
         setSessionRestored(true);
       },
@@ -34,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Restore session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser((prev) => nextUser(prev, session));
       syncAdminThemeFromUser(session?.user ?? null);
       setSessionRestored(true);
     });
@@ -110,7 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
 
     return () => { cancelled = true; };
-  }, [user, sessionRestored]);
+    // Op user?.id (niet de object-referentie): re-fetch alleen bij een ECHT andere
+    // gebruiker, niet bij een her-uitgezonden sessie op tab-focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, sessionRestored]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
