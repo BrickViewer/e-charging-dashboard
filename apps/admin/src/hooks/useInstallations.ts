@@ -4,9 +4,9 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type InstallationOrder = Database["public"]["Tables"]["installation_orders"]["Row"];
 export type OrderWithClient = InstallationOrder & {
-  clients: { company_name: string; client_number: number | null; kvk: string | null; contact_name: string | null; contact_email: string | null } | null;
+  clients: { company_name: string; client_number: number | null; kvk: string | null; contact_name: string | null; contact_email: string | null; contact_phone: string | null } | null;
   quotes: { quote_number: string | null; line_items: unknown; total_hardware_cost: number | null; total_installation_cost: number | null } | null;
-  leads: { estimated_charge_points: number | null; charger_type: string | null; address_street: string | null; postal_code: string | null; city: string | null } | null;
+  leads: { estimated_charge_points: number | null; charger_type: string | null; address_street: string | null; postal_code: string | null; city: string | null; contact_phone: string | null } | null;
 };
 
 export const ORDER_STATUSES = ["nieuw", "overgedragen", "ingepland", "geinstalleerd", "afgerond", "geannuleerd"] as const;
@@ -29,7 +29,7 @@ export function useInstallationOrders() {
       const { data, error } = await supabase
         .from("installation_orders")
         .select(
-          "*, clients(company_name, client_number, kvk, contact_name, contact_email), quotes(quote_number, line_items, total_hardware_cost, total_installation_cost), leads(estimated_charge_points, charger_type, address_street, postal_code, city)",
+          "*, clients(company_name, client_number, kvk, contact_name, contact_email, contact_phone), quotes(quote_number, line_items, total_hardware_cost, total_installation_cost), leads(estimated_charge_points, charger_type, address_street, postal_code, city, contact_phone)",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;

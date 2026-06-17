@@ -111,6 +111,12 @@ export interface HandoffPayload {
     installation_cost: number | null;
     with_management: boolean | null;
   };
+  // Facturering wordt door e-charging gedaan, niet door de E-Portal. De E-Portal
+  // maakt geen klantfactuur aan; e-charging factureert via de settlements-flow.
+  billing: {
+    invoiced_by: "e_charging";
+    e_portal_creates_invoice: false;
+  };
 }
 
 // Minimale shapes van de bronrecords (subset van de DB-rijen).
@@ -284,17 +290,22 @@ export function buildHandoffPayload(input: BuildHandoffInput): HandoffPayload {
       phone: firstNonEmpty(client?.contact_phone, lead?.contact_phone),
     },
     // Contactpersoon op locatie: het bewerkbare snapshot is leidend (wie de
-    // monteur belt / mee aftekent), met terugval op het lead-contact.
+    // monteur belt / mee aftekent), met terugval op het lead-contact en daarna
+    // het algemene klantcontact (zodat het telefoonnummer niet leeg blijft).
     site_contact: {
-      name: firstNonEmpty(order.site_contact_name, lead?.contact_name),
-      phone: firstNonEmpty(order.site_contact_phone, lead?.contact_phone),
-      email: firstNonEmpty(order.site_contact_email, lead?.contact_email),
+      name: firstNonEmpty(order.site_contact_name, lead?.contact_name, client?.contact_name),
+      phone: firstNonEmpty(order.site_contact_phone, lead?.contact_phone, client?.contact_phone),
+      email: firstNonEmpty(order.site_contact_email, lead?.contact_email, client?.contact_email),
     },
     order_lines: lines,
     totals: {
       hardware_cost: quote?.total_hardware_cost ?? null,
       installation_cost: quote?.total_installation_cost ?? null,
       with_management: quote?.with_management ?? null,
+    },
+    billing: {
+      invoiced_by: "e_charging",
+      e_portal_creates_invoice: false,
     },
   };
 }

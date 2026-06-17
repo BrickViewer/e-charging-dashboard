@@ -34,6 +34,7 @@ const AdminClientDetail = lazy(() => import("./pages/admin/AdminClientDetail"));
 const AdminFinancial = lazy(() => import("./pages/admin/AdminFinancial"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
 const SalesInstallations = lazy(() => import("./pages/sales/SalesInstallations"));
+const SalesOnboarding = lazy(() => import("./pages/sales/SalesOnboarding"));
 const AdminLocationDetail = lazy(() => import("./pages/admin/AdminLocationDetail"));
 const AdminStoringen = lazy(() => import("./pages/admin/AdminStoringen"));
 const AdminStoringDetail = lazy(() => import("./pages/admin/AdminStoringDetail"));
@@ -176,6 +177,7 @@ const App = () => (
                 <Route path="contacten" element={<SalesContacts />} />
                 <Route path="offertes" element={<SalesOffertes />} />
                 <Route path="installaties" element={<SalesInstallations />} />
+                <Route path="onboarding" element={<SalesOnboarding />} />
                 <Route path="configurator" element={<AdminConfiguratorSettings />} />
               </Route>
 

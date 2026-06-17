@@ -331,22 +331,25 @@ function DetailSheet({
 
             <SheetFooter className="mt-6 flex-col gap-2 sm:flex-col">
               {!sent && (
-                <Button onClick={() => onSaveSite({
-                  site_street: emptyToNull(form.site_street),
-                  site_house_number: emptyToNull(form.site_house_number),
-                  site_postal: emptyToNull(form.site_postal),
-                  site_city: emptyToNull(form.site_city),
-                  site_contact_name: emptyToNull(form.site_contact_name),
-                  site_contact_email: emptyToNull(form.site_contact_email),
-                  site_contact_phone: emptyToNull(form.site_contact_phone),
-                  service_summary: emptyToNull(form.service_summary),
-                })} disabled={saving} variant="outline">
-                  Site-gegevens opslaan
-                </Button>
-              )}
-              {order.status === "nieuw" && !sent && (
-                <Button onClick={() => onHandoff(order.id)} disabled={handoffPending}>
-                  <Send className="mr-1.5 h-4 w-4" /> Versturen opdracht
+                <Button
+                  onClick={async () => {
+                    // Eerst de site-gegevens opslaan, daarna direct versturen — één actie.
+                    await onSaveSite({
+                      site_street: emptyToNull(form.site_street),
+                      site_house_number: emptyToNull(form.site_house_number),
+                      site_postal: emptyToNull(form.site_postal),
+                      site_city: emptyToNull(form.site_city),
+                      site_contact_name: emptyToNull(form.site_contact_name),
+                      site_contact_email: emptyToNull(form.site_contact_email),
+                      site_contact_phone: emptyToNull(form.site_contact_phone),
+                      service_summary: emptyToNull(form.service_summary),
+                    });
+                    onHandoff(order.id);
+                  }}
+                  disabled={saving || handoffPending}
+                >
+                  <Send className="mr-1.5 h-4 w-4" />
+                  {saving ? "Opslaan…" : handoffPending ? "Versturen…" : "Opslaan en versturen"}
                 </Button>
               )}
             </SheetFooter>
@@ -365,7 +368,7 @@ function initForm(order: OrderWithClient | null): SiteForm {
     site_city: order?.site_city ?? order?.leads?.city ?? "",
     site_contact_name: order?.site_contact_name ?? order?.clients?.contact_name ?? "",
     site_contact_email: order?.site_contact_email ?? order?.clients?.contact_email ?? "",
-    site_contact_phone: order?.site_contact_phone ?? "",
+    site_contact_phone: order?.site_contact_phone ?? order?.clients?.contact_phone ?? order?.leads?.contact_phone ?? "",
     service_summary: order?.service_summary ?? deriveServiceSummary(order?.leads) ?? "",
   };
 }

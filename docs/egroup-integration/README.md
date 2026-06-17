@@ -74,10 +74,13 @@ De Vault-waarden zijn gezet via MCP; de gebruiker kan desgewenst env-secrets zet
   "contact": { "name": "...", "email": "...", "phone": "..." },        // back-office/administratie (uit de klant)
   "site_contact": { "name": "...", "phone": "...", "email": "..." },   // contactpersoon op locatie (uit het bewerkbare site-snapshot)
   "order_lines": [ { "description": "...", "qty": 10, "unit_price": 950, "total": 9500 } ],
-  "totals": { "hardware_cost": 9500, "installation_cost": 4500, "with_management": true }
+  "totals": { "hardware_cost": 9500, "installation_cost": 4500, "with_management": true },
+  "billing": { "invoiced_by": "e_charging", "e_portal_creates_invoice": false }  // facturering door e-charging; E-Portal maakt GEEN klantfactuur
 }
 ```
 Respons: `{ "order_id": "<uuid>", "order_number": "OPD-00023" }`
+
+> **Facturering:** `billing.e_portal_creates_invoice` staat altijd op `false`. Facturen worden door e-charging verstuurd en beheerd (settlements-flow), niet door de E-Portal. De E-Portal voert alleen de installatie/werkbon uit. `site_contact.phone` valt terug op het algemene klantcontact als het site-snapshot leeg is (zodat het telefoonnummer niet leeg binnenkomt). Dedupliceer op `external_reference` (= `installation_orders.id`) en respecteer de `Idempotency-Key`-header zodat een herhaalde POST geen dubbele opdracht aanmaakt.
 
 **Contract 2 — Completion-callback (E-Group → E-Charging `installation-completion-webhook`)**
 ```json

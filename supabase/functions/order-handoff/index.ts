@@ -74,6 +74,22 @@ Deno.serve(async (req) => {
     }
     const client = new EgroupClient({ intakeUrl, sharedSecret });
 
+    // Atomair claimen tegen dubbele verzending: zet handoff_started_at alleen als de
+    // order nog niet verstuurd is én er niet net al een verzending bezig is (of die is
+    // ouder dan 2 min = vastgelopen, dan mag opnieuw). Gelijktijdige aanroepen die de
+    // claim niet winnen, POSTen niet → geen dubbele opdracht in de E-Portal.
+    const staleCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const { data: claimed } = await sb
+      .from("installation_orders")
+      .update({ handoff_started_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .is("egroup_order_id", null)
+      .or(`handoff_started_at.is.null,handoff_started_at.lt.${staleCutoff}`)
+      .select("id");
+    if (!claimed || claimed.length === 0) {
+      return json({ status: "ok", already_sent: true, message: "Verzending is al bezig of afgerond" });
+    }
+
     const callbackUrl = `${supabaseUrl}/functions/v1/installation-completion-webhook`;
     const payload = buildHandoffPayload({
       order,
@@ -112,7 +128,8 @@ Deno.serve(async (req) => {
       return json({ status: "ok", egroup_order_id: result.order_id, egroup_order_number: result.order_number });
     } catch (err) {
       const message = err instanceof EgroupApiError ? `E-Group ${err.status}: ${err.message}` : (err as Error).message;
-      await sb.from("installation_orders").update({ last_sync_error: message }).eq("id", orderId);
+      // Claim vrijgeven zodat opnieuw versturen kan na een fout.
+      await sb.from("installation_orders").update({ last_sync_error: message, handoff_started_at: null }).eq("id", orderId);
       if (order.client_id) {
         await sb.from("activity_log").insert({
           organization_id: order.organization_id,

@@ -136,17 +136,23 @@ export function buildHandoffPayload(input: any): any {
       email: firstNonEmpty(client?.contact_email, lead?.contact_email),
       phone: firstNonEmpty(client?.contact_phone, lead?.contact_phone),
     },
-    // Contactpersoon op locatie: bewerkbare snapshot is leidend, terugval op lead.
+    // Contactpersoon op locatie: bewerkbare snapshot is leidend, terugval op lead
+    // en daarna het algemene klantcontact (telefoon niet leeg laten).
     site_contact: {
-      name: firstNonEmpty(order.site_contact_name, lead?.contact_name),
-      phone: firstNonEmpty(order.site_contact_phone, lead?.contact_phone),
-      email: firstNonEmpty(order.site_contact_email, lead?.contact_email),
+      name: firstNonEmpty(order.site_contact_name, lead?.contact_name, client?.contact_name),
+      phone: firstNonEmpty(order.site_contact_phone, lead?.contact_phone, client?.contact_phone),
+      email: firstNonEmpty(order.site_contact_email, lead?.contact_email, client?.contact_email),
     },
     order_lines: normalizeLines(quote?.line_items),
     totals: {
       hardware_cost: quote?.total_hardware_cost ?? null,
       installation_cost: quote?.total_installation_cost ?? null,
       with_management: quote?.with_management ?? null,
+    },
+    // Facturering door e-charging, niet door de E-Portal.
+    billing: {
+      invoiced_by: "e_charging",
+      e_portal_creates_invoice: false,
     },
   };
 }

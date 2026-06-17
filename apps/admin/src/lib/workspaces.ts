@@ -11,6 +11,7 @@ import {
   Newspaper,
   MonitorPlay,
   AlertTriangle,
+  Rocket,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/contexts/authContextValue";
@@ -55,6 +56,8 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
       { to: "/sales/offertes", icon: FileText, label: "Offertes" },
       // Installaties volgen uit getekende offertes — hoort bij de salesflow
       { to: "/sales/installaties", icon: Wrench, label: "Installaties" },
+      // Onboarding-cockpit: waar staat elke klant na de getekende offerte
+      { to: "/sales/onboarding", icon: Rocket, label: "Onboarding" },
       { to: "/sales/configurator", icon: WandSparkles, label: "Configurator" },
       // Opent het fictieve klantportaal in een eigen venster (configurator-patroon)
       { to: "/demo", icon: MonitorPlay, label: "Demo", newTab: true },
