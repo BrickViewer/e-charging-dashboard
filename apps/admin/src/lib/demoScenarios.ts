@@ -108,6 +108,25 @@ export interface LeadConfiguration {
   ere?: boolean; // ERE-subsidie aan/uit zoals in de configurator gekozen
 }
 
+// ── Demo-config in de link (no-login demo) ───────────────────────────────────
+// De configurator codeert de geconfigureerde data in de demo-URL, zodat de demo
+// volledig client-side draait zonder DB-query/login. base64url van JSON; de
+// configurator gebruikt exact hetzelfde schema voor encoderen.
+export interface DemoConfigPayload {
+  leadId?: string | null;
+  config: LeadConfiguration;
+}
+
+export function encodeDemoConfig(payload: DemoConfigPayload): string {
+  const json = JSON.stringify(payload);
+  return btoa(encodeURIComponent(json)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function decodeDemoConfig(s: string): DemoConfigPayload {
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+  return JSON.parse(decodeURIComponent(atob(b64))) as DemoConfigPayload;
+}
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 function hashSeed(s: string): number {

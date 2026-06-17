@@ -8,6 +8,7 @@ import logoBright from "../assets/logo-bright.svg";
 import { useWizardStore } from "./store";
 import { TariffControls } from "./TariffControls";
 import { FinalizePanel } from "./FinalizePanel";
+import { encodeDemoCfg } from "./demoLink";
 import { IsometricSite } from "../scene/IsometricSite";
 import { useCountUp } from "../scene/useCountUp";
 import { euro, jaren, roundToHalf } from "./format";
@@ -127,6 +128,20 @@ export default function WizardPage() {
   } = useWizardStore();
 
   const pricing = useMemo(() => calculatePricing(input, settings), [input, settings]);
+
+  // Config-in-de-link voor de no-login demo: codeer exact deze configuratie zodat
+  // de demo zonder login/DB-query opent met de klantgegevens.
+  const demoCfg = useMemo(() => {
+    if (!savedLeadId) return null;
+    return encodeDemoCfg({
+      leadId: savedLeadId,
+      config: {
+        pricing_input: input,
+        pricing_result: { customerNetPerChargePointMonth: pricing.customerNetPerChargePointMonth },
+        ere: ereEnabled,
+      },
+    });
+  }, [savedLeadId, input, pricing.customerNetPerChargePointMonth, ereEnabled]);
 
   const sockets = input.hardware.chargePoints;
   const intensity = Math.min(1, input.usage.kwhPerChargePointMonth / settings.inputRanges.intensityDivisor);
@@ -310,7 +325,7 @@ export default function WizardPage() {
           finalizeError={finalizeError}
           leadMode={!!leadId}
           savedToLead={savedToLead}
-          savedLeadId={savedLeadId}
+          demoCfg={demoCfg}
           onClose={() => setSaveOpen(false)}
         />
       )}

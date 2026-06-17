@@ -126,13 +126,10 @@ const App = () => (
                 <Route path="locatie/:id" element={<ClientLocationDetail />} />
               </Route>
 
-              {/* Demo-omgeving voor sales: keuzescherm (5/10/20) of config-gedreven (leadId),
-                  daarna het volledige klantportaal op geparametriseerde fictieve data */}
-              <Route path="/demo" element={
-                <RequireAuth allowedRoles={["admin", "manager", "sales"]}>
-                  <DemoLayout />
-                </RequireAuth>
-              }>
+              {/* Demo-omgeving voor sales: keuzescherm (5/10/20) of config-gedreven (?cfg=),
+                  daarna het volledige klantportaal op geparametriseerde fictieve data.
+                  PUBLIEK (geen login): de config zit in de link, dus geen DB-query nodig. */}
+              <Route path="/demo" element={<DemoLayout />}>
                 <Route index element={<ClientDashboard />} />
                 <Route path="sessies" element={<ClientSessions />} />
                 <Route path="financieel" element={<ClientFinancial />} />

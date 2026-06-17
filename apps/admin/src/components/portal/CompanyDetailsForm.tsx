@@ -736,7 +736,7 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
           <div className="space-y-3">
             <SecurityActionRow
               label="Login e-mail"
-              value={user?.email ?? "Niet bekend"}
+              value={demo ? (client?.contact_email ?? "klant@voorbeeld.nl") : (user?.email ?? "Niet bekend")}
               actionLabel="Wijzigen"
               active={activeSecurityAction === "email"}
               onAction={() => openSecurityAction("email")}
