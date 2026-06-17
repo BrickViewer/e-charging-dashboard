@@ -67,9 +67,9 @@ const SITES_20: DemoSiteSpec[] = [
 ];
 
 export const DEMO_SCENARIOS: Record<ScenarioKey, DemoParams> = {
-  5: { id: "scenario-5", chargePoints: 5, kwhPerCpMonth: 420, sessionsPerCpMonth: 35, netRatePerKwh: NET, customer: CUSTOMER_5, sites: SITES_5, monthsOfHistory: 14, seed: 5 },
-  10: { id: "scenario-10", chargePoints: 10, kwhPerCpMonth: 520, sessionsPerCpMonth: 45, netRatePerKwh: NET, customer: CUSTOMER_10, sites: SITES_10, monthsOfHistory: 14, seed: 10 },
-  20: { id: "scenario-20", chargePoints: 20, kwhPerCpMonth: 480, sessionsPerCpMonth: 38, netRatePerKwh: NET, customer: CUSTOMER_20, sites: SITES_20, monthsOfHistory: 14, seed: 20 },
+  5: { id: "scenario-5", chargePoints: 5, kwhPerCpMonth: 420, sessionsPerCpMonth: 35, netRatePerKwh: NET, customer: CUSTOMER_5, sites: SITES_5, monthsAhead: 12, seed: 5 },
+  10: { id: "scenario-10", chargePoints: 10, kwhPerCpMonth: 520, sessionsPerCpMonth: 45, netRatePerKwh: NET, customer: CUSTOMER_10, sites: SITES_10, monthsAhead: 12, seed: 10 },
+  20: { id: "scenario-20", chargePoints: 20, kwhPerCpMonth: 480, sessionsPerCpMonth: 38, netRatePerKwh: NET, customer: CUSTOMER_20, sites: SITES_20, monthsAhead: 12, seed: 20 },
 };
 
 export function isScenarioKey(v: unknown): v is ScenarioKey {
@@ -105,6 +105,7 @@ export interface LeadPricingResult {
 export interface LeadConfiguration {
   pricing_input?: LeadPricingInput;
   pricing_result?: LeadPricingResult;
+  ere?: boolean; // ERE-subsidie aan/uit zoals in de configurator gekozen
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -161,7 +162,8 @@ export function demoParamsFromConfiguration(
     hardwareInvestment: hw.hardwareInvestment,
     customer,
     chargerPowerKw: power >= 20 ? 22 : 11,
-    monthsOfHistory: 14,
+    monthsAhead: 12,
+    ereEnabled: config?.ere === true, // ERE uit de configuratie overnemen
     seed: hashSeed(leadId),
     // geen sites → single-site demo op het adres van de klant (faithful aan de configuratie)
   };

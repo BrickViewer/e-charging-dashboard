@@ -3,6 +3,7 @@ import { buildDemoDataset, type DemoDataset } from "./demoData";
 import { DEMO_SCENARIOS, SCENARIO_KEYS, demoParamsFromConfiguration } from "./demoScenarios";
 import { INVOICE_NUMBER_RE, validateSelfBillingInvoiceData } from "@/services/invoiceValidation";
 import { buildSelfBillingInvoicePdf } from "@/services/invoicePdf";
+import { getCurrentMonth, shiftMonth } from "@/lib/period";
 
 const CO2_KG_PER_KWH = 0.306; // moet gelijk zijn aan de echte dashboard-RPC
 
@@ -87,14 +88,23 @@ describe.each(datasets)("demoData scenario $key", ({ key, ds }) => {
     }
   });
 
-  it("14 maanden: 12 uitbetaald + 2 onderweg", () => {
-    expect(ds.settlements.length).toBe(14);
-    expect(ds.settlements.filter((s) => s.status === "paid").length).toBe(12);
-    expect(ds.settlements.filter((s) => s.status === "approved").length).toBe(2);
-    for (const s of ds.settlements) {
-      if (s.status === "paid") expect(s.paid_at).toBeTruthy();
-      else expect(s.paid_at).toBeNull();
-    }
+  it("12 maanden vooruit: allemaal projectie (approved, niets uitbetaald) vanaf de huidige maand", () => {
+    expect(ds.settlements.length).toBe(12);
+    expect(ds.settlements.every((s) => s.status === "approved")).toBe(true);
+    expect(ds.settlements.every((s) => s.paid_at === null)).toBe(true);
+    expect(ds.settlements.every((s) => s.eflux_reimbursed_at === null)).toBe(true);
+    // De reeks loopt van de huidige maand t/m +11; geen enkele maand in het verleden.
+    const cur = getCurrentMonth();
+    const last = shiftMonth(cur, 11);
+    const keys = ds.settlements.map((s) => s.year * 100 + s.month).sort((a, b) => a - b);
+    expect(keys[0]).toBe(cur.year * 100 + cur.month);
+    expect(keys[keys.length - 1]).toBe(last.year * 100 + last.month);
+    expect(new Set(keys).size).toBe(12);
+  });
+
+  it("ERE: scenario toont de indicatieve ERE-schatting (default aan)", () => {
+    expect(ds.client.calculate_ere_enabled).toBe(true);
+    expect(ds.kpiRows.every((k) => Number(k.ere_estimate) > 0)).toBe(true);
   });
 
   it("sessie-filters werken (locatie en laadpunt)", () => {
@@ -156,5 +166,19 @@ describe("demoParamsFromConfiguration", () => {
     expect(p.customer.companyName).toBe("Lege Lead BV");
     // determinisme: zelfde lead → zelfde params
     expect(demoParamsFromConfiguration("x", {}, "Lege Lead BV")).toEqual(p);
+  });
+
+  it("neemt ERE over uit de configuratie (aan/uit)", () => {
+    const on = demoParamsFromConfiguration("e1", { ere: true });
+    expect(on.ereEnabled).toBe(true);
+    const dsOn = buildDemoDataset(on);
+    expect(dsOn.client.calculate_ere_enabled).toBe(true);
+    expect(dsOn.kpiRows.every((k) => Number(k.ere_estimate) > 0)).toBe(true);
+
+    const off = demoParamsFromConfiguration("e2", { ere: false });
+    expect(off.ereEnabled).toBe(false);
+    const dsOff = buildDemoDataset(off);
+    expect(dsOff.client.calculate_ere_enabled).toBe(false);
+    expect(dsOff.kpiRows.every((k) => Number(k.ere_estimate) === 0)).toBe(true);
   });
 });

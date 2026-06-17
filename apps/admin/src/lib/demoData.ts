@@ -34,7 +34,7 @@ export const DEMO_CLIENT_ID = "demo-client-hofstede";
 const DEFAULT_NET_RATE_PER_KWH = 0.581; // netto vergoeding per kWh (fictief, realistisch)
 const DEFAULT_CO2_KG_PER_KWH = 0.306;   // identiek aan de echte dashboard-RPC
 const DEFAULT_ERE_RATE_PER_KWH = 0.10;
-const DEFAULT_MONTHS = 14;
+const DEFAULT_MONTHS_AHEAD = 12; // projectie: huidige maand + 11 maanden vooruit
 const RAMP_START = 0.20; // eerste maand ≈ 20% van het volwassen niveau (realistische opstart)
 const MONTH_NOISE = 0.10; // ±10% deterministische maand-op-maand schommeling (geen rechte lijn)
 
@@ -86,9 +86,10 @@ export interface DemoParams {
   netRatePerKwh?: number;        // klantvergoeding €/kWh (default 0,581)
   co2KgPerKwh?: number;          // default 0,306
   ereRatePerKwh?: number;        // default 0,10
+  ereEnabled?: boolean;          // ERE-schatting tonen? default true (config-demo zet dit uit config)
   hardwareInvestment?: number;   // optioneel; alleen cosmetisch
   customer: DemoCustomer;
-  monthsOfHistory?: number;      // default 14
+  monthsAhead?: number;          // aantal maanden vooruit vanaf nu; default 12
   seed?: number;                 // basis-seed; default 1
   chargerPowerKw?: number;       // voor single-site (config) demo, default 22
   chargerBrand?: string;         // single-site merk
@@ -204,9 +205,12 @@ function chargePointPool(locations: PortalLocation[]): DemoChargePoint[] {
   );
 }
 
-// ── Groeicurve ───────────────────────────────────────────────────────────────
+// ── Groeicurve (vooruitkijkende projectie) ──────────────────────────────────
+// De demo kijkt VOORUIT: vanaf de huidige maand (i=0) tot en met +(months-1).
+// Zo proeft een prospect hoe zijn portaal er straks uitziet terwijl het opbouwt.
+// Er is nog niets uitbetaald → elke maand staat als "approved" (verwacht/onderweg).
 function buildMonths(params: DemoParams): DemoMonth[] {
-  const months = params.monthsOfHistory ?? DEFAULT_MONTHS;
+  const months = params.monthsAhead ?? DEFAULT_MONTHS_AHEAD;
   const netRate = params.netRatePerKwh ?? DEFAULT_NET_RATE_PER_KWH;
   const peakKwh = params.chargePoints * params.kwhPerCpMonth;
   const peakSessions = Math.max(1, Math.round(params.chargePoints * params.sessionsPerCpMonth));
@@ -217,25 +221,23 @@ function buildMonths(params: DemoParams): DemoMonth[] {
   // params.seed → elke reload toont exact dezelfde reeks.
   const noiseRng = mulberry32((((params.seed ?? 1) * 2654435761) ^ 0x5f3759df) >>> 0);
 
-  // offset = maanden geleden (months..1); index 0 = oudste, months-1 = vorige maand.
+  // i = maanden vooruit (0..months-1); i=0 = huidige maand, i=months-1 = laatste.
   const out: DemoMonth[] = [];
   for (let i = 0; i < months; i++) {
-    const offset = months - i; // months..1
-    const t = months > 1 ? (months - offset) / (months - 1) : 1; // 0..1
+    const t = months > 1 ? i / (months - 1) : 1; // 0..1
     const ramp = RAMP_START + (1 - RAMP_START) * t; // 0,20 → 1,00 groeicurve
     const noise = 1 + (noiseRng() - 0.5) * 2 * MONTH_NOISE; // [1-MONTH_NOISE, 1+MONTH_NOISE]
     const factor = ramp * noise;
     const kwh = Math.max(1, Math.round(peakKwh * factor));
     const sessions = Math.max(1, Math.round(peakSessions * factor));
-    const { year, month } = shiftMonth(cur, -offset);
-    const status: "paid" | "approved" = offset <= 2 ? "approved" : "paid";
+    const { year, month } = shiftMonth(cur, i);
     out.push({
       year,
       month,
       kwh,
       yield_: round2(kwh * netRate),
       sessions,
-      status,
+      status: "approved", // projectie: verwacht/onderweg, nog niets uitbetaald
       invoiceNumber: `ECF-${year}-${String(invoiceBase + i * 13).padStart(5, "0")}`,
       periodStart: dateOnly(year, month, 1),
       periodEnd: dateOnly(year, month, daysInMonth(year, month)),
@@ -266,7 +268,7 @@ function buildClient(params: DemoParams, contractStart: { year: number; month: n
     contract_start_date: dateOnly(contractStart.year, contractStart.month, 1),
     contract_duration_months: 120,
     revenue_share_percentage: null,
-    calculate_ere_enabled: true,
+    calculate_ere_enabled: params.ereEnabled ?? true,
     status: "active",
   } as PortalClient;
 }
@@ -324,8 +326,9 @@ function buildNotifications(
   locations: PortalLocation[],
   contractStart: { year: number; month: number },
 ): DemoNotification[] {
-  const newest = newestFirst[0];
-  const paidRecent = newestFirst.find((m) => m.status === "paid");
+  // Vooruitkijkende demo: de eerste projectiemaand is de huidige maand (= oudste
+  // in newestFirst). Berichten zijn verwacht/aankomend i.p.v. uitbetaald.
+  const first = newestFirst[newestFirst.length - 1];
   const lastLoc = locations[locations.length - 1];
   const lastCp = (lastLoc?.charge_points ?? [])[(lastLoc?.charge_points?.length ?? 1) - 1];
   const fmt = (v: number) => v.toLocaleString("nl-NL", { minimumFractionDigits: 2 });
@@ -333,10 +336,10 @@ function buildNotifications(
     {
       id: "demo-msg-1",
       type: "settlement_approved",
-      title: `Vergoeding ${monthFullLabel(newest.year, newest.month)} goedgekeurd`,
-      message: `Uw vergoeding van €${fmt(newest.yield_)} over ${monthFullLabel(newest.year, newest.month)} is goedgekeurd en wordt binnenkort uitbetaald. Bekijk de specificatie onder Financieel.`,
+      title: `Verwachte vergoeding ${monthFullLabel(first.year, first.month)}`,
+      message: `Op basis van uw verbruik verwachten we een vergoeding van €${fmt(first.yield_)} over ${monthFullLabel(first.year, first.month)}. Volg de opbouw onder Financieel.`,
       read: false,
-      created_at: daysAgo(2),
+      created_at: daysAgo(1),
     },
     {
       id: "demo-msg-2",
@@ -344,17 +347,15 @@ function buildNotifications(
       title: `Nieuwe laadpaal online op ${lastLoc?.name ?? "uw locatie"}`,
       message: `Laadpunt ${lastCp?.name ?? "het nieuwste laadpunt"} is succesvol opgeleverd en neemt vanaf nu deel aan uw vergoedingsoverzicht.`,
       read: false,
-      created_at: daysAgo(6),
+      created_at: daysAgo(3),
     },
     {
       id: "demo-msg-3",
       type: "payout_processed",
-      title: paidRecent ? `Uitbetaling ${monthFullLabel(paidRecent.year, paidRecent.month)} verwerkt` : "Uitbetaling verwerkt",
-      message: paidRecent
-        ? `€${fmt(paidRecent.yield_)} is overgemaakt naar uw rekening eindigend op 4628.`
-        : "Uw vergoeding is overgemaakt.",
+      title: "Eerste uitbetaling in aantocht",
+      message: `Uw eerste vergoeding wordt na afloop van ${monthFullLabel(first.year, first.month)} verwerkt en overgemaakt naar uw rekening.`,
       read: true,
-      created_at: daysAgo(16),
+      created_at: daysAgo(5),
     },
     {
       id: "demo-msg-4",
@@ -362,7 +363,7 @@ function buildNotifications(
       title: "Welkom in uw E-Charging portaal",
       message: "Hier volgt u uw laadsessies, vergoedingen en locaties. Vragen? We staan voor u klaar.",
       read: true,
-      created_at: iso(new Date(contractStart.year, contractStart.month - 1, 21, 14, 0)),
+      created_at: iso(new Date(contractStart.year, contractStart.month - 1, 1, 9, 0)),
     },
   ];
 }
@@ -436,7 +437,8 @@ export function buildDemoDataset(params: DemoParams): DemoDataset {
 
   const months = buildMonths(params);
   const newestFirst = [...months].sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month));
-  const contractStart = shiftMonth(getCurrentMonth(), -((params.monthsOfHistory ?? DEFAULT_MONTHS) + 1));
+  // Vooruitkijkende demo: het contract / verdienen start ~nu (de eerste projectiemaand).
+  const contractStart = getCurrentMonth();
 
   const locations = buildLocations(params);
   const pool = chargePointPool(locations);
@@ -444,6 +446,7 @@ export function buildDemoDataset(params: DemoParams): DemoDataset {
 
   const client = buildClient(params, contractStart);
 
+  const ereOn = params.ereEnabled ?? true;
   const kpiRows: PortalDashboardKpiRow[] = newestFirst.map((m) => ({
     year: m.year,
     month: m.month,
@@ -455,58 +458,43 @@ export function buildDemoDataset(params: DemoParams): DemoDataset {
     total_customer_cashflow: m.yield_,
     estimated_client_yield: m.yield_,
     co2_kg_avoided: round2(m.kwh * co2Rate),
-    ere_estimate: round2(m.kwh * ereRate),
+    ere_estimate: ereOn ? round2(m.kwh * ereRate) : 0,
   }));
 
-  const settlements: PortalSettlement[] = newestFirst.map((m) => {
-    const next = shiftMonth({ year: m.year, month: m.month }, 1);
-    return {
-      id: `demo-settlement-${m.year}-${m.month}`,
-      client_id: DEMO_CLIENT_ID,
-      year: m.year,
-      month: m.month,
-      period_start: m.periodStart,
-      period_end: m.periodEnd,
-      status: m.status,
-      paid_at: m.status === "paid" ? iso(new Date(next.year, next.month - 1, 14, 9, 30)) : null,
-      eflux_reimbursed_at: m.status === "paid" ? iso(new Date(next.year, next.month - 1, 10, 8, 0)) : null,
-      invoice_sent_at: null,
-      total_kwh: m.kwh,
-      total_sessions: m.sessions,
-      client_payout: m.yield_,
-      vat_rate: 0.21,
-      vat_status: "vat_liable",
-      invoice_number: m.invoiceNumber,
-    };
-  });
+  // Vooruitkijkende projectie: nog niets uitbetaald → elke settlement staat als
+  // "approved" (verwacht/onderweg), zonder uitbetaal-/reimbursement-datum.
+  const settlements: PortalSettlement[] = newestFirst.map((m) => ({
+    id: `demo-settlement-${m.year}-${m.month}`,
+    client_id: DEMO_CLIENT_ID,
+    year: m.year,
+    month: m.month,
+    period_start: m.periodStart,
+    period_end: m.periodEnd,
+    status: m.status,
+    paid_at: null,
+    eflux_reimbursed_at: null,
+    invoice_sent_at: null,
+    total_kwh: m.kwh,
+    total_sessions: m.sessions,
+    client_payout: m.yield_,
+    vat_rate: 0.21,
+    vat_status: "vat_liable",
+    invoice_number: m.invoiceNumber,
+  }));
 
   const paymentDetails = buildPaymentDetails(params, contractStart);
   const invoiceContext = buildInvoiceContext(params);
   const notifications = buildNotifications(newestFirst, locations, contractStart);
 
-  // Sessies: lazily gegenereerd + gecached binnen deze dataset.
+  // Sessies: lazily gegenereerd + gecached binnen deze dataset. Elke maand (incl.
+  // de huidige) is een volledige projectie; sessies schalen exact op het maandtotaal.
   let cache: PortalSessionNet[] | null = null;
-  const peakKwh = params.chargePoints * params.kwhPerCpMonth;
-  const peakSessions = Math.max(4, Math.round(params.chargePoints * params.sessionsPerCpMonth));
 
   function allSessions(): PortalSessionNet[] {
     if (cache) return cache;
     const rows: PortalSessionNet[] = [];
     for (const m of months) {
       rows.push(...generateMonthSessions(m.year, m.month, m.kwh, m.sessions, pool, netRate, baseSeed));
-    }
-    // Lopende maand: tot en met gisteren, pro-rata van de piek.
-    const now = new Date();
-    const cur = getCurrentMonth();
-    const dim = daysInMonth(cur.year, cur.month);
-    const elapsedDays = Math.max(0, now.getDate() - 1);
-    if (elapsedDays > 0) {
-      const proRataKwh = Math.round((peakKwh * elapsedDays) / dim);
-      const proRataCount = Math.max(4, Math.round((peakSessions * elapsedDays) / dim));
-      rows.push(
-        ...generateMonthSessions(cur.year, cur.month, proRataKwh, proRataCount, pool, netRate, baseSeed)
-          .filter((s) => s.started_at !== null && new Date(s.started_at) < now),
-      );
     }
     rows.sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""));
     cache = rows;
