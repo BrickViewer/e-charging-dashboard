@@ -84,8 +84,7 @@ export default function DemoLayout() {
       // No-login: config staat in de link, geen Supabase-call.
       try {
         const payload = decodeDemoConfig(cfg);
-        const company = payload.config?.pricing_input?.customer?.companyName ?? null;
-        const params = demoParamsFromConfiguration(payload.leadId || "demo", payload.config, company);
+        const params = demoParamsFromConfiguration(payload.leadId || "demo", payload.config);
         return buildDemoDataset(params);
       } catch {
         return null;
@@ -96,7 +95,6 @@ export default function DemoLayout() {
       const params = demoParamsFromConfiguration(
         leadId,
         leadQuery.data.configuration as LeadConfiguration | null,
-        leadQuery.data.company_name,
       );
       return buildDemoDataset(params);
     }

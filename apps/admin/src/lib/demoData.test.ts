@@ -21,25 +21,19 @@ describe.each(datasets)("demoData scenario $key", ({ key, ds }) => {
     expect(cps.every((cp) => cp.status === "online" || cp.status === "in_use")).toBe(true);
   });
 
-  it("opbouw is realistisch: lage start, groei naar de piek, en schommeling (geen rechte lijn)", () => {
+  it("verbruik ligt conform de inschatting met een lichte stijging (geen rechte lijn)", () => {
     // settlements zijn newest-first → chronologisch = omgekeerd (oudste eerst).
     const chrono = [...ds.settlements].reverse().map((s) => Number(s.total_kwh));
-    const peak = key * params.kwhPerCpMonth; // volwassen niveau = laadpalen × kWh/paal
+    const estimate = key * params.kwhPerCpMonth; // de inschatting (laadpalen × kWh/paal)
     const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
-    // (a) lage start: de eerste maand ligt ruim onder de piek (~20% + ruis).
-    expect(chrono[0]).toBeLessThan(peak * 0.45);
-    // (b) groei: de laatste 3 maanden gemiddeld rond de piek en duidelijk boven de eerste 3.
-    const early = avg(chrono.slice(0, 3));
-    const mature = avg(chrono.slice(-3));
-    expect(mature).toBeGreaterThan(early * 1.8);
-    expect(mature).toBeGreaterThan(peak * 0.8);
-    expect(mature).toBeLessThan(peak * 1.15);
-    // (c) schommeling: niet alle maanden gelijk en niet op een perfect rechte ramp-lijn.
+    // (a) conform inschatting: elke maand binnen een realistische band rond de inschatting
+    //     (dus geen opbouw vanaf ~0; de palen worden vanaf de oplevering gebruikt).
+    expect(chrono.every((v) => v > estimate * 0.7 && v < estimate * 1.35)).toBe(true);
+    // (b) lichte stijging: de laatste maanden gemiddeld hoger dan de eerste.
+    expect(avg(chrono.slice(-4))).toBeGreaterThan(avg(chrono.slice(0, 4)));
+    // (c) schommeling: niet alle maanden gelijk (geen rechte lijn).
     expect(new Set(chrono).size).toBeGreaterThan(1);
-    const rampExp = chrono.map((_, j) => peak * (0.20 + 0.80 * (j / (chrono.length - 1))));
-    const maxDeviation = Math.max(...chrono.map((v, j) => Math.abs(v - rampExp[j]) / peak));
-    expect(maxDeviation).toBeGreaterThan(0.02); // minstens één maand wijkt >2% van de rechte lijn af
   });
 
   it("elke settlement passeert de Wet OB-validatie", () => {
@@ -88,18 +82,23 @@ describe.each(datasets)("demoData scenario $key", ({ key, ds }) => {
     }
   });
 
-  it("12 maanden vooruit: allemaal projectie (approved, niets uitbetaald) vanaf de huidige maand", () => {
-    expect(ds.settlements.length).toBe(12);
-    expect(ds.settlements.every((s) => s.status === "approved")).toBe(true);
-    expect(ds.settlements.every((s) => s.paid_at === null)).toBe(true);
-    expect(ds.settlements.every((s) => s.eflux_reimbursed_at === null)).toBe(true);
-    // De reeks loopt van de huidige maand t/m +11; geen enkele maand in het verleden.
+  it("tijdlijn: historie t/m de aankomende maand; deel al uitbetaald, lopende + aankomende onderweg", () => {
+    expect(ds.settlements.length).toBe(14);
     const cur = getCurrentMonth();
-    const last = shiftMonth(cur, 11);
+    const upcoming = shiftMonth(cur, 1);
     const keys = ds.settlements.map((s) => s.year * 100 + s.month).sort((a, b) => a - b);
-    expect(keys[0]).toBe(cur.year * 100 + cur.month);
-    expect(keys[keys.length - 1]).toBe(last.year * 100 + last.month);
-    expect(new Set(keys).size).toBe(12);
+    // Nieuwste maand = de aankomende maand (waar het dashboard op opent).
+    expect(keys[keys.length - 1]).toBe(upcoming.year * 100 + upcoming.month);
+    // 12 afgeronde maanden al uitbetaald (met uitbetaaldatum), 2 onderweg (lopend + aankomend).
+    const paid = ds.settlements.filter((s) => s.status === "paid");
+    const approved = ds.settlements.filter((s) => s.status === "approved");
+    expect(paid.length).toBe(12);
+    expect(approved.length).toBe(2);
+    expect(paid.every((s) => s.paid_at !== null && s.eflux_reimbursed_at !== null)).toBe(true);
+    expect(approved.every((s) => s.paid_at === null)).toBe(true);
+    // De aankomende + lopende maand zijn de twee 'approved'-maanden.
+    const approvedKeys = approved.map((s) => s.year * 100 + s.month).sort((a, b) => a - b);
+    expect(approvedKeys).toEqual([cur.year * 100 + cur.month, upcoming.year * 100 + upcoming.month]);
   });
 
   it("ERE: scenario toont de indicatieve ERE-schatting (default aan)", () => {
@@ -135,7 +134,7 @@ describe("demoData — factuur-PDF", () => {
 });
 
 describe("demoParamsFromConfiguration", () => {
-  it("mapt een volledige configuratie naar parameters", () => {
+  it("neemt instellingen + inschatting over, maar NIET de klantgegevens", () => {
     const p = demoParamsFromConfiguration("lead-123", {
       pricing_input: {
         hardware: { chargePoints: 8, hardwareInvestment: 22500 },
@@ -144,28 +143,29 @@ describe("demoParamsFromConfiguration", () => {
       },
       pricing_result: { customerNetPerChargePointMonth: 267.26 }, // 267.26/460 ≈ 0,581
     });
+    // Instellingen + inschatting overgenomen:
     expect(p.chargePoints).toBe(8);
     expect(p.kwhPerCpMonth).toBe(460);
-    expect(p.customer.companyName).toBe("Acme BV");
-    expect(p.customer.city).toBe("Utrecht");
     expect(p.netRatePerKwh).toBeCloseTo(0.581, 2);
     expect(p.chargerPowerKw).toBe(22);
     expect(p.id).toBe("lead-lead-123");
-    // Bouwt een geldige, consistente dataset (single-site op het klantadres).
+    // Klantgegevens NIET overgenomen → vaste demo-naam, niet "Acme BV"/"Industrieweg 5".
+    expect(p.customer.companyName).not.toBe("Acme BV");
+    expect(p.customer.companyName.length).toBeGreaterThan(0);
     const ds = buildDemoDataset(p);
     expect(ds.locations.length).toBe(1);
     expect(ds.locations[0].charge_points?.length).toBe(8);
-    expect(ds.locations[0].address).toBe("Industrieweg 5");
+    expect(ds.locations[0].address).not.toBe("Industrieweg 5");
   });
 
   it("valt veilig terug bij lege configuratie", () => {
-    const p = demoParamsFromConfiguration("x", {}, "Lege Lead BV");
+    const p = demoParamsFromConfiguration("x", {});
     expect(p.chargePoints).toBeGreaterThanOrEqual(1);
     expect(p.netRatePerKwh).toBeGreaterThan(0);
     expect(Number.isFinite(p.kwhPerCpMonth)).toBe(true);
-    expect(p.customer.companyName).toBe("Lege Lead BV");
+    expect(p.customer.companyName.length).toBeGreaterThan(0); // vaste demo-naam
     // determinisme: zelfde lead → zelfde params
-    expect(demoParamsFromConfiguration("x", {}, "Lege Lead BV")).toEqual(p);
+    expect(demoParamsFromConfiguration("x", {})).toEqual(p);
   });
 
   it("neemt ERE over uit de configuratie (aan/uit)", () => {

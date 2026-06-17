@@ -129,19 +129,36 @@ export default function WizardPage() {
 
   const pricing = useMemo(() => calculatePricing(input, settings), [input, settings]);
 
-  // Config-in-de-link voor de no-login demo: codeer exact deze configuratie zodat
-  // de demo zonder login/DB-query opent met de klantgegevens.
+  // Config-in-de-link voor de no-login demo. We nemen ALLEEN de instellingen + de
+  // rendementsinschatting mee (laadpunten, kWh/sessies, netto tarief, ERE) — geen
+  // klantgegevens. De demo gebruikt vaste demo-namen.
   const demoCfg = useMemo(() => {
     if (!savedLeadId) return null;
     return encodeDemoCfg({
       leadId: savedLeadId,
       config: {
-        pricing_input: input,
+        pricing_input: {
+          hardware: { chargePoints: input.hardware.chargePoints, hardwareInvestment: input.hardware.hardwareInvestment },
+          usage: {
+            kwhPerChargePointMonth: input.usage.kwhPerChargePointMonth,
+            sessionsPerChargePointMonth: input.usage.sessionsPerChargePointMonth,
+            effectiveChargingPowerKw: input.usage.effectiveChargingPowerKw,
+          },
+        },
         pricing_result: { customerNetPerChargePointMonth: pricing.customerNetPerChargePointMonth },
         ere: ereEnabled,
       },
     });
-  }, [savedLeadId, input, pricing.customerNetPerChargePointMonth, ereEnabled]);
+  }, [
+    savedLeadId,
+    input.hardware.chargePoints,
+    input.hardware.hardwareInvestment,
+    input.usage.kwhPerChargePointMonth,
+    input.usage.sessionsPerChargePointMonth,
+    input.usage.effectiveChargingPowerKw,
+    pricing.customerNetPerChargePointMonth,
+    ereEnabled,
+  ]);
 
   const sockets = input.hardware.chargePoints;
   const intensity = Math.min(1, input.usage.kwhPerChargePointMonth / settings.inputRanges.intensityDivisor);

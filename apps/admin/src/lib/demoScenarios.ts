@@ -67,9 +67,9 @@ const SITES_20: DemoSiteSpec[] = [
 ];
 
 export const DEMO_SCENARIOS: Record<ScenarioKey, DemoParams> = {
-  5: { id: "scenario-5", chargePoints: 5, kwhPerCpMonth: 420, sessionsPerCpMonth: 35, netRatePerKwh: NET, customer: CUSTOMER_5, sites: SITES_5, monthsAhead: 12, seed: 5 },
-  10: { id: "scenario-10", chargePoints: 10, kwhPerCpMonth: 520, sessionsPerCpMonth: 45, netRatePerKwh: NET, customer: CUSTOMER_10, sites: SITES_10, monthsAhead: 12, seed: 10 },
-  20: { id: "scenario-20", chargePoints: 20, kwhPerCpMonth: 480, sessionsPerCpMonth: 38, netRatePerKwh: NET, customer: CUSTOMER_20, sites: SITES_20, monthsAhead: 12, seed: 20 },
+  5: { id: "scenario-5", chargePoints: 5, kwhPerCpMonth: 420, sessionsPerCpMonth: 35, netRatePerKwh: NET, customer: CUSTOMER_5, sites: SITES_5, monthsWindow: 14, seed: 5 },
+  10: { id: "scenario-10", chargePoints: 10, kwhPerCpMonth: 520, sessionsPerCpMonth: 45, netRatePerKwh: NET, customer: CUSTOMER_10, sites: SITES_10, monthsWindow: 14, seed: 10 },
+  20: { id: "scenario-20", chargePoints: 20, kwhPerCpMonth: 480, sessionsPerCpMonth: 38, netRatePerKwh: NET, customer: CUSTOMER_20, sites: SITES_20, monthsWindow: 14, seed: 20 },
 };
 
 export function isScenarioKey(v: unknown): v is ScenarioKey {
@@ -129,6 +129,19 @@ export function decodeDemoConfig(s: string): DemoConfigPayload {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+// Vaste demo-klant voor de configuratie-demo: we nemen alleen de instellingen en
+// de rendementsinschatting over, NIET de gegevens van de echte klant. Standaard
+// demo-namen dus.
+const DEMO_CONFIG_CUSTOMER: DemoCustomer = {
+  companyName: "Demo Laadplein B.V.",
+  contactName: "Alex de Boer",
+  contactEmail: "demo@e-charging.nl",
+  contactPhone: "+31 30 123 4567",
+  address: "Energieweg 12",
+  postalCode: "3542 AB",
+  city: "Utrecht",
+};
+
 function hashSeed(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
@@ -138,16 +151,19 @@ function hashSeed(s: string): number {
   return (h >>> 0) % 100000;
 }
 
-/** Bouwt demo-parameters uit een opgeslagen configuratie van een lead. */
+/**
+ * Bouwt demo-parameters uit een opgeslagen configuratie van een lead. Neemt ALLEEN
+ * de instellingen + de rendementsinschatting over (laadpunten, kWh/sessies, netto
+ * tarief, ERE); de klantgegevens worden NIET overgenomen — de demo gebruikt vaste
+ * demo-namen (DEMO_CONFIG_CUSTOMER).
+ */
 export function demoParamsFromConfiguration(
   leadId: string,
   config: LeadConfiguration | null | undefined,
-  fallbackCompanyName?: string | null,
 ): DemoParams {
   const pin = config?.pricing_input ?? {};
   const usage = pin.usage ?? {};
   const hw = pin.hardware ?? {};
-  const cust = pin.customer ?? {};
   const result = config?.pricing_result;
 
   const chargePoints = clamp(Math.round(hw.chargePoints ?? 10), 1, 200);
@@ -162,15 +178,6 @@ export function demoParamsFromConfiguration(
   }
 
   const power = usage.effectiveChargingPowerKw ?? 11;
-  const customer: DemoCustomer = {
-    companyName: (cust.companyName || fallbackCompanyName || "Demo klant B.V.").trim(),
-    contactName: cust.contactName || "Contactpersoon",
-    contactEmail: cust.contactEmail || "contact@demo.nl",
-    contactPhone: cust.contactPhone || "+31330000000",
-    address: cust.locationAddress || "Locatieadres",
-    postalCode: cust.postalCode || "",
-    city: cust.city || "Nederland",
-  };
 
   return {
     id: `lead-${leadId}`,
@@ -179,12 +186,12 @@ export function demoParamsFromConfiguration(
     sessionsPerCpMonth,
     netRatePerKwh: netRate,
     hardwareInvestment: hw.hardwareInvestment,
-    customer,
+    customer: DEMO_CONFIG_CUSTOMER, // vaste demo-klant; klantgegevens worden niet overgenomen
     chargerPowerKw: power >= 20 ? 22 : 11,
-    monthsAhead: 12,
+    monthsWindow: 14,
     ereEnabled: config?.ere === true, // ERE uit de configuratie overnemen
     seed: hashSeed(leadId),
-    // geen sites → single-site demo op het adres van de klant (faithful aan de configuratie)
+    // geen sites → single-site demo op het demo-adres
   };
 }
 
