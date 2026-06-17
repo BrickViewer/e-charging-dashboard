@@ -116,6 +116,16 @@ export const useWizardStore = create<WizardStore>()(
         state.investmentMaxTotal = band.max;
         state.input.hardware.hardwareInvestment = band.avg;
         state.ereEnabled = settings.ereEnabledByDefault;
+        // Tariefdefaults uit de admin-instellingen toepassen (laad-/stroomtarief +
+        // start- en blokkeertarief, incl. of ze standaard aan staan). Bij een
+        // opgeslagen lead overschrijft hydrateFromSaved dit hierna (keuze: herstellen).
+        state.input.tariffs.chargeTariffPerKwh = settings.defaultChargeTariffPerKwh;
+        state.input.tariffs.energyCostPerKwh = settings.defaultEnergyCostPerKwh;
+        state.input.tariffs.startFeeEnabled = settings.defaultStartFeeEnabled;
+        state.input.tariffs.startFeePerSession = settings.defaultStartFeePerSession;
+        state.input.tariffs.idleFeeEnabled = settings.defaultIdleFeeEnabled;
+        state.input.tariffs.idleFeePerMinute = settings.defaultIdleFeePerMinute;
+        state.input.tariffs.idleGraceMinutes = settings.defaultIdleGraceMinutes;
       }),
     updateInput: (updater) => set((state) => updater(state.input)),
     setSockets: (count) =>
