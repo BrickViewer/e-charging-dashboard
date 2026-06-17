@@ -87,9 +87,10 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = {
   defaultNoticePeriodMonths: 3,
   defaultChargeTariffPerKwh: 0.58,
   defaultEnergyCostPerKwh: 0.25,
-  defaultStartFeeEnabled: true,
+  // Start- en blokkeertarief staan standaard UIT (identiek aan de pricing-engine).
+  defaultStartFeeEnabled: false,
   defaultStartFeePerSession: 0.5,
-  defaultIdleFeeEnabled: true,
+  defaultIdleFeeEnabled: false,
   defaultIdleFeePerMinute: 0.05,
   defaultIdleGraceMinutes: 60,
   ereSubsidyPerKwh: 0.10,

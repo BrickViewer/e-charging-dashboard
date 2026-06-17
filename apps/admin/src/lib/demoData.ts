@@ -35,7 +35,8 @@ const DEFAULT_NET_RATE_PER_KWH = 0.581; // netto vergoeding per kWh (fictief, re
 const DEFAULT_CO2_KG_PER_KWH = 0.306;   // identiek aan de echte dashboard-RPC
 const DEFAULT_ERE_RATE_PER_KWH = 0.10;
 const DEFAULT_MONTHS = 14;
-const RAMP_START = 0.44; // eerste maand ≈ 44% van de piek (zoals 2450/5610 in het oude demo)
+const RAMP_START = 0.20; // eerste maand ≈ 20% van het volwassen niveau (realistische opstart)
+const MONTH_NOISE = 0.10; // ±10% deterministische maand-op-maand schommeling (geen rechte lijn)
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -211,14 +212,20 @@ function buildMonths(params: DemoParams): DemoMonth[] {
   const peakSessions = Math.max(1, Math.round(params.chargePoints * params.sessionsPerCpMonth));
   const invoiceBase = 100 + ((params.seed ?? 1) % 60);
   const cur = getCurrentMonth();
+  // Deterministische maand-op-maand ruis bovenop de groeicurve, zodat maandtotalen
+  // realistisch schommelen i.p.v. een perfect rechte lijn te vormen. Geseed op
+  // params.seed → elke reload toont exact dezelfde reeks.
+  const noiseRng = mulberry32((((params.seed ?? 1) * 2654435761) ^ 0x5f3759df) >>> 0);
 
   // offset = maanden geleden (months..1); index 0 = oudste, months-1 = vorige maand.
   const out: DemoMonth[] = [];
   for (let i = 0; i < months; i++) {
     const offset = months - i; // months..1
     const t = months > 1 ? (months - offset) / (months - 1) : 1; // 0..1
-    const factor = RAMP_START + (1 - RAMP_START) * t;
-    const kwh = Math.round(peakKwh * factor);
+    const ramp = RAMP_START + (1 - RAMP_START) * t; // 0,20 → 1,00 groeicurve
+    const noise = 1 + (noiseRng() - 0.5) * 2 * MONTH_NOISE; // [1-MONTH_NOISE, 1+MONTH_NOISE]
+    const factor = ramp * noise;
+    const kwh = Math.max(1, Math.round(peakKwh * factor));
     const sessions = Math.max(1, Math.round(peakSessions * factor));
     const { year, month } = shiftMonth(cur, -offset);
     const status: "paid" | "approved" = offset <= 2 ? "approved" : "paid";

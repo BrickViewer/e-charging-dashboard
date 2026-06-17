@@ -20,9 +20,25 @@ describe.each(datasets)("demoData scenario $key", ({ key, ds }) => {
     expect(cps.every((cp) => cp.status === "online" || cp.status === "in_use")).toBe(true);
   });
 
-  it("piekmaand = laadpalen × kWh/paal", () => {
-    const peak = Math.max(...ds.settlements.map((s) => Number(s.total_kwh)));
-    expect(peak).toBe(key * params.kwhPerCpMonth);
+  it("opbouw is realistisch: lage start, groei naar de piek, en schommeling (geen rechte lijn)", () => {
+    // settlements zijn newest-first → chronologisch = omgekeerd (oudste eerst).
+    const chrono = [...ds.settlements].reverse().map((s) => Number(s.total_kwh));
+    const peak = key * params.kwhPerCpMonth; // volwassen niveau = laadpalen × kWh/paal
+    const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+    // (a) lage start: de eerste maand ligt ruim onder de piek (~20% + ruis).
+    expect(chrono[0]).toBeLessThan(peak * 0.45);
+    // (b) groei: de laatste 3 maanden gemiddeld rond de piek en duidelijk boven de eerste 3.
+    const early = avg(chrono.slice(0, 3));
+    const mature = avg(chrono.slice(-3));
+    expect(mature).toBeGreaterThan(early * 1.8);
+    expect(mature).toBeGreaterThan(peak * 0.8);
+    expect(mature).toBeLessThan(peak * 1.15);
+    // (c) schommeling: niet alle maanden gelijk en niet op een perfect rechte ramp-lijn.
+    expect(new Set(chrono).size).toBeGreaterThan(1);
+    const rampExp = chrono.map((_, j) => peak * (0.20 + 0.80 * (j / (chrono.length - 1))));
+    const maxDeviation = Math.max(...chrono.map((v, j) => Math.abs(v - rampExp[j]) / peak));
+    expect(maxDeviation).toBeGreaterThan(0.02); // minstens één maand wijkt >2% van de rechte lijn af
   });
 
   it("elke settlement passeert de Wet OB-validatie", () => {

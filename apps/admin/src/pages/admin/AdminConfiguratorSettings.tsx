@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import {
+  calculatePricing,
   configuratorSettingsSchema,
   defaultConfiguratorSettings,
+  pricingInputSchema,
   type ConfiguratorSettings,
+  type PricingResult,
 } from "@echarging/pricing-engine";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,6 +59,40 @@ function uniqueKey(base: string, existing: string[]) {
   let n = 2;
   while (existing.includes(key)) key = `${base}-${n++}`;
   return key;
+}
+
+const eur = (v: number) => `€ ${v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const minutesLabel = (v: number) => `${Math.round(v).toLocaleString("nl-NL")} min`;
+
+// Rekent de blokkeertarief-opbrengst per laadpunt/maand door met exact dezelfde
+// pricing-engine als de configurator, zodat het voorbeeld 1-op-1 klopt. Voor het
+// voorbeeld forceren we idleFeeEnabled=true (toont de potentiële opbrengst, ook als
+// het blokkeertarief standaard uit staat). Geeft null terug bij tussentijds ongeldige
+// invoer (bv. laadvermogen 0), zodat de tabel niet crasht tijdens het typen.
+function idlePreview(usage: UsageDefaults, settings: ConfiguratorSettings): PricingResult | null {
+  try {
+    const input = pricingInputSchema.parse({
+      customer: { companyName: "preview", locationType: "workplace" },
+      hardware: { chargePoints: 1, socketsPerChargePoint: 1 },
+      usage,
+      contract: {
+        durationMonths: settings.defaultContractDurationMonths,
+        noticePeriodMonths: settings.defaultNoticePeriodMonths,
+      },
+      tariffs: {
+        chargeTariffPerKwh: settings.defaultChargeTariffPerKwh,
+        energyCostPerKwh: settings.defaultEnergyCostPerKwh,
+        startFeeEnabled: settings.defaultStartFeeEnabled,
+        startFeePerSession: settings.defaultStartFeePerSession,
+        idleFeeEnabled: true,
+        idleFeePerMinute: settings.defaultIdleFeePerMinute,
+        idleGraceMinutes: settings.defaultIdleGraceMinutes,
+      },
+    });
+    return calculatePricing(input, settings);
+  } catch {
+    return null;
+  }
 }
 
 function CurrencyInput({
@@ -358,9 +395,67 @@ export default function AdminConfiguratorSettings() {
                 <CurrencyInput label="Grace in minuten" value={settings.defaultIdleGraceMinutes} onChange={(value) => updateSettings((c) => ({ ...c, defaultIdleGraceMinutes: value }))} />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <ToggleField label="Starttarief standaard aan" checked={settings.defaultStartFeeEnabled} onChange={(checked) => updateSettings((c) => ({ ...c, defaultStartFeeEnabled: checked }))} />
-                <ToggleField label="Blokkeertarief standaard aan" checked={settings.defaultIdleFeeEnabled} onChange={(checked) => updateSettings((c) => ({ ...c, defaultIdleFeeEnabled: checked }))} />
+                <ToggleField label="Starttarief standaard aan" description="Standaard uit; per nieuwe configuratie aan/uit te zetten." checked={settings.defaultStartFeeEnabled} onChange={(checked) => updateSettings((c) => ({ ...c, defaultStartFeeEnabled: checked }))} />
+                <ToggleField label="Blokkeertarief standaard aan" description="Standaard uit; per nieuwe configuratie aan/uit te zetten." checked={settings.defaultIdleFeeEnabled} onChange={(checked) => updateSettings((c) => ({ ...c, defaultIdleFeeEnabled: checked }))} />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOKKEERTARIEF — BEREKENING & OPBRENGST */}
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Blokkeertarief — berekening &amp; opbrengst</CardTitle>
+              <CardDescription>
+                Zo rekent de configurator de opbrengst van het blokkeertarief uit. De waarden hierboven
+                (blokkeertarief per minuut en gratis minuten) plus de sessieduur en het laadvermogen per
+                locatietype (tab Locatietypes) bepalen het resultaat.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-1.5 rounded-lg border bg-muted/40 p-4 text-sm">
+                <p className="font-medium">Berekening per laadpunt</p>
+                <p className="text-muted-foreground">1. Laadtijd per sessie = kWh per sessie / laadvermogen (kW)</p>
+                <p className="text-muted-foreground">2. Idle-minuten per sessie = sessieduur min laadtijd</p>
+                <p className="text-muted-foreground">3. Belastbare minuten = idle-minuten min gratis minuten (grace), minimaal 0</p>
+                <p className="text-muted-foreground">4. Opbrengst per laadpunt/maand = belastbare minuten x sessies/maand x blokkeertarief per minuut</p>
+                <p className="pt-1 text-xs">
+                  Huidige waarden: <span className="font-medium">{eur(settings.defaultIdleFeePerMinute)} per minuut</span>, gratis{" "}
+                  <span className="font-medium">{minutesLabel(settings.defaultIdleGraceMinutes)}</span>.
+                  {!settings.defaultIdleFeeEnabled && " Let op: blokkeertarief staat standaard uit; het voorbeeld toont de potentiele opbrengst."}
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="py-2 pr-3 font-medium">Locatietype</th>
+                      <th className="px-3 py-2 text-right font-medium">Idle-min/sessie</th>
+                      <th className="px-3 py-2 text-right font-medium">Belastbaar/sessie</th>
+                      <th className="px-3 py-2 text-right font-medium">Sessies/mnd</th>
+                      <th className="py-2 pl-3 text-right font-medium">Opbrengst/laadpunt/mnd</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {settings.locationTypes.map((entry) => {
+                      const usage = settings.locationTypeDefaults[entry.key] ?? FALLBACK_USAGE;
+                      const preview = idlePreview(usage, settings);
+                      return (
+                        <tr key={entry.key} className="border-b last:border-0">
+                          <td className="py-2 pr-3">{entry.label}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{preview ? minutesLabel(preview.idleMinutesPerSession) : "-"}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{preview ? minutesLabel(preview.billableIdleMinutesPerSession) : "-"}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{Math.round(usage.sessionsPerChargePointMonth)}</td>
+                          <td className="py-2 pl-3 text-right font-medium tabular-nums">{preview ? eur(preview.idleFeeRevenuePerChargePointMonth) : "-"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Opbrengst is per laadpunt per maand en stijgt mee met het aantal laadpunten in de configuratie.
+                Pas het tarief of de gratis minuten hierboven aan en de voorbeeld-opbrengst verandert direct mee.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
