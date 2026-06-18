@@ -6,11 +6,12 @@ import { PublicClientApplication, LogLevel, type Configuration } from "@azure/ms
 // zodat een willekeurig werk/school-account kan inloggen.
 // Azure-app "E-Charging Dashboard – SharePoint" (SPA, multi-tenant). De client-ID is
 // niet geheim (zit toch in de browser-bundle); override kan via VITE_MS_CLIENT_ID.
-const CLIENT_ID = (import.meta.env.VITE_MS_CLIENT_ID as string | undefined) || "d40ca273-8812-4b94-89cc-9f2ddbadaf78";
+// E-group Azure-app "E-Charging Dashboard (SSO + SharePoint)" — single-tenant. Client-ID is
+// niet geheim (zit in de browser-bundle). Override kan via VITE_MS_CLIENT_ID.
+const CLIENT_ID = (import.meta.env.VITE_MS_CLIENT_ID as string | undefined) || "714191c3-9afe-4e0f-bf45-be3f069b4923";
 
-// Tenant van de authority. Default "organizations" (multi-tenant, huidig gedrag). Voor de
-// e-group-SSO zetten we VITE_MS_TENANT_ID = de e-group-tenant-id (single-tenant) bij de build.
-const TENANT = (import.meta.env.VITE_MS_TENANT_ID as string | undefined) || "organizations";
+// Tenant van de authority = de e-group-tenant (single-tenant → alleen e-group-accounts).
+const TENANT = (import.meta.env.VITE_MS_TENANT_ID as string | undefined) || "af84c294-b910-43a4-b2ea-b177995720e4";
 
 // Placeholder-GUID zodat MSAL kan construeren/initialiseren ook als de env-var nog
 // niet gezet is; echt inloggen is gated op `msalConfigured`.
@@ -46,8 +47,6 @@ export const loginRequest = { scopes: graphScopes };
 export const msalInstance = new PublicClientApplication(msalConfig);
 export const msalConfigured = !!CLIENT_ID;
 
-// Microsoft-SSO als app-login (staf). Pas AAN bij go-live: zet VITE_MS_SSO_ENABLED=true
-// nadat de e-group Azure-app + Supabase Azure-provider + admin-consent geregeld zijn.
-// Tot die tijd false → de "Inloggen met Microsoft"-knop blijft verborgen en alles werkt
-// als vanouds (e-mail/wachtwoord).
-export const msSsoEnabled = (import.meta.env.VITE_MS_SSO_ENABLED as string | undefined) === "true";
+// Microsoft-SSO als app-login (staf) — LIVE. Standaard aan; alleen uit te zetten met
+// VITE_MS_SSO_ENABLED=false (noodrem). Klanten blijven op e-mail/wachtwoord.
+export const msSsoEnabled = (import.meta.env.VITE_MS_SSO_ENABLED as string | undefined) !== "false";

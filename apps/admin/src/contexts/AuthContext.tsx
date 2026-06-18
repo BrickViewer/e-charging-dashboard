@@ -134,7 +134,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "azure",
       options: {
-        scopes: "openid profile email offline_access User.Read Files.ReadWrite.All Sites.ReadWrite.All",
+        // Alleen basis-scopes voor de login zelf (geen admin-consent nodig) → inloggen werkt
+        // meteen. De Graph/SharePoint-scopes (Files/Sites.ReadWrite.All) vraagt MSAL apart op;
+        // die hebben de e-group admin-consent nodig.
+        scopes: "openid profile email",
         redirectTo: window.location.origin,
       },
     });
