@@ -159,9 +159,14 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
     try {
       const data = pdfData();
-      // 1) SharePoint-dossier + ongetekende OFF (client-side, blokkerend).
-      const offPdfBase64 = await offerPdfBase64(data);
-      await ensureDossierAndUploadOff(graphFetch, quote.id, offPdfBase64);
+      // 1) SharePoint-dossier + ongetekende OFF (best-effort: mag het versturen NOOIT blokkeren).
+      try {
+        const offPdfBase64 = await offerPdfBase64(data);
+        await ensureDossierAndUploadOff(graphFetch, quote.id, offPdfBase64);
+      } catch (e) {
+        console.error("[SharePoint] OFF-dossier mislukt:", e);
+        toast.warning("Let op: het SharePoint-dossier kon niet worden aangemaakt (Microsoft-verbinding). De offerte wordt wél verstuurd.");
+      }
       // 2) Getekende PDF voor de klantmail + versturen.
       const pdfBase64 = await offerPdfBase64(data, {
         echargingSignatureDataUrl: selfAdmin.signatureDataUrl,
@@ -179,9 +184,14 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
     if (!selectedAdmin.hasSignature) { toast.error(`${selectedAdmin.fullName} heeft nog geen handtekening ingesteld`); return; }
     await save();
     try {
-      // SharePoint-dossier + ongetekende OFF (client-side, blokkerend) vóór het versturen.
-      const offPdfBase64 = await offerPdfBase64(pdfData());
-      await ensureDossierAndUploadOff(graphFetch, quote.id, offPdfBase64);
+      // SharePoint-dossier + ongetekende OFF (best-effort: mag het versturen NOOIT blokkeren).
+      try {
+        const offPdfBase64 = await offerPdfBase64(pdfData());
+        await ensureDossierAndUploadOff(graphFetch, quote.id, offPdfBase64);
+      } catch (e) {
+        console.error("[SharePoint] OFF-dossier mislukt:", e);
+        toast.warning("Let op: het SharePoint-dossier kon niet worden aangemaakt (Microsoft-verbinding). De offerte wordt wél ter ondertekening gestuurd.");
+      }
       await requestSignoff.mutateAsync({ quoteId: quote.id });
       toast.success(`Ter ondertekening gestuurd naar ${selectedAdmin.fullName}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
