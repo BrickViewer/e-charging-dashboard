@@ -10,10 +10,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
 import { useGraphApi } from "@/hooks/useGraphApi";
-import { getSharepointConfig, saveSharepointConfig } from "@/lib/sharepoint";
+import { getSharepointConfig, saveSharepointConfig, listLibraryFolders } from "@/lib/sharepoint";
 
 type Site = { id: string; displayName: string; webUrl: string };
 type Drive = { id: string; name: string; driveType?: string };
+type Folder = { id: string; name: string };
 
 export function Microsoft365Card() {
   const { user } = useAuth();
@@ -22,15 +23,18 @@ export function Microsoft365Card() {
 
   const [sites, setSites] = useState<Site[]>([]);
   const [drives, setDrives] = useState<Drive[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [siteId, setSiteId] = useState("");
   const [driveId, setDriveId] = useState("");
+  const [folderId, setFolderId] = useState("root");
   const [loadingSites, setLoadingSites] = useState(false);
   const [loadingDrives, setLoadingDrives] = useState(false);
+  const [loadingFolders, setLoadingFolders] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const { data: cfg } = useQuery({ queryKey: ["sharepoint-config"], queryFn: getSharepointConfig });
-  useEffect(() => { if (cfg) { setSiteId(cfg.siteId ?? ""); setDriveId(cfg.driveId ?? ""); } }, [cfg]);
+  useEffect(() => { if (cfg) { setSiteId(cfg.siteId ?? ""); setDriveId(cfg.driveId ?? ""); setFolderId(cfg.rootItemId ?? "root"); } }, [cfg]);
 
   const loadSites = useCallback(async () => {
     setLoadingSites(true);
@@ -45,13 +49,21 @@ export function Microsoft365Card() {
   useEffect(() => { if (isConnected) void loadSites(); }, [isConnected, loadSites]);
 
   const onSelectSite = async (id: string) => {
-    setSiteId(id); setDriveId(""); setDrives([]); setLoadingDrives(true);
+    setSiteId(id); setDriveId(""); setDrives([]); setFolders([]); setFolderId("root"); setLoadingDrives(true);
     try {
       const res = await graphFetch(`/sites/${id}/drives`);
       const list = (res?.value ?? []) as Array<{ id: string; name: string; driveType?: string }>;
       setDrives(list.map((d) => ({ id: d.id, name: d.name, driveType: d.driveType })));
     } catch (e) { toast.error(e instanceof Error ? e.message : "Documentbibliotheken laden mislukt"); }
     finally { setLoadingDrives(false); }
+  };
+
+  const onSelectDrive = async (id: string) => {
+    setDriveId(id); setFolders([]); setFolderId("root"); setLoadingFolders(true);
+    try {
+      setFolders(await listLibraryFolders(graphFetch, id));
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Mappen laden mislukt"); }
+    finally { setLoadingFolders(false); }
   };
 
   const doLogin = async () => { setBusy(true); try { await login(); } catch (e) { toast.error(e instanceof Error ? e.message : "Inloggen mislukt"); } finally { setBusy(false); } };
@@ -66,7 +78,8 @@ export function Microsoft365Card() {
     try {
       const { data: prof } = await supabase.from("profiles").select("organization_id").eq("user_id", user.id).maybeSingle();
       if (!prof?.organization_id) throw new Error("Geen organisatie gevonden");
-      await saveSharepointConfig(prof.organization_id, { site_id: site.id, drive_id: drive.id, site_url: site.webUrl, site_name: site.displayName });
+      const rootItemId = folderId && folderId !== "root" ? folderId : null;
+      await saveSharepointConfig(prof.organization_id, { site_id: site.id, drive_id: drive.id, site_url: site.webUrl, site_name: site.displayName, root_item_id: rootItemId });
       toast.success("SharePoint-koppeling opgeslagen");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
     finally { setSaving(false); }
@@ -111,12 +124,23 @@ export function Microsoft365Card() {
               </div>
               <div className="space-y-1">
                 <Label>Documentbibliotheek</Label>
-                <Select value={driveId} onValueChange={setDriveId} disabled={!siteId || loadingDrives}>
+                <Select value={driveId} onValueChange={onSelectDrive} disabled={!siteId || loadingDrives}>
                   <SelectTrigger>{loadingDrives ? <span className="text-muted-foreground">Bibliotheken laden…</span> : <SelectValue placeholder="Kies een bibliotheek…" />}</SelectTrigger>
                   <SelectContent>
                     {drives.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Doelmap (waar de dossiers komen)</Label>
+                <Select value={folderId} onValueChange={setFolderId} disabled={!driveId || loadingFolders}>
+                  <SelectTrigger>{loadingFolders ? <span className="text-muted-foreground">Mappen laden…</span> : <SelectValue placeholder="Kies een map…" />}</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="root">(Hoofdmap van de bibliotheek)</SelectItem>
+                    {folders.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Bijv. "06 Locaties". De dossiermappen komen hierin te staan.</p>
               </div>
               <div>
                 <Button onClick={save} disabled={saving || !siteId || !driveId}>

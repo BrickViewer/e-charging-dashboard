@@ -16,7 +16,9 @@ export function useMicrosoftAuth() {
   const { instance, accounts } = useMsal();
   const isMsalAuthenticated = useIsAuthenticated();
 
-  const account = instance.getActiveAccount() ?? accounts[0] ?? null;
+  // Gememoïseerd: anders krijgt elke render een nieuwe account-referentie → getAccessToken/
+  // graphFetch veranderen → effecten die daarvan afhangen (sites laden) blijven herladen.
+  const account = useMemo(() => instance.getActiveAccount() ?? accounts[0] ?? null, [instance, accounts]);
   const isConnected = isMsalAuthenticated && !!account;
 
   const microsoftUser = useMemo(() => {

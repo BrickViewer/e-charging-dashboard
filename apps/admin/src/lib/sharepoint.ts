@@ -14,7 +14,7 @@ export interface SharePointItem {
   file?: { mimeType: string };
 }
 
-export type SharepointConfig = { siteId: string | null; driveId: string | null; siteUrl: string | null; siteName: string | null } | null;
+export type SharepointConfig = { siteId: string | null; driveId: string | null; siteUrl: string | null; siteName: string | null; rootItemId: string | null } | null;
 
 // SharePoint-verboden tekens strippen.
 export function sanitizeName(s: string): string {
@@ -40,28 +40,36 @@ export function formatFileSize(bytes?: number): string {
 export async function getSharepointConfig(): Promise<SharepointConfig> {
   const { data } = await supabase
     .from("organizations")
-    .select("sharepoint_site_id, sharepoint_drive_id, sharepoint_site_url, sharepoint_site_name")
+    .select("sharepoint_site_id, sharepoint_drive_id, sharepoint_site_url, sharepoint_site_name, sharepoint_root_item_id")
     .not("sharepoint_drive_id", "is", null)
     .limit(1)
     .maybeSingle();
   if (!data) return null;
-  return { siteId: data.sharepoint_site_id, driveId: data.sharepoint_drive_id, siteUrl: data.sharepoint_site_url, siteName: data.sharepoint_site_name };
+  return { siteId: data.sharepoint_site_id, driveId: data.sharepoint_drive_id, siteUrl: data.sharepoint_site_url, siteName: data.sharepoint_site_name, rootItemId: data.sharepoint_root_item_id };
 }
 
-// Sla de gekozen site/drive op de organisatie op.
-export async function saveSharepointConfig(orgId: string, cfg: { site_id: string; drive_id: string; site_url: string; site_name: string }) {
+// Sla de gekozen site/drive + doelmap op de organisatie op.
+export async function saveSharepointConfig(orgId: string, cfg: { site_id: string; drive_id: string; site_url: string; site_name: string; root_item_id: string | null }) {
   const { error } = await supabase.from("organizations").update({
     sharepoint_site_id: cfg.site_id,
     sharepoint_drive_id: cfg.drive_id,
     sharepoint_site_url: cfg.site_url,
     sharepoint_site_name: cfg.site_name,
+    sharepoint_root_item_id: cfg.root_item_id,
   }).eq("id", orgId);
   if (error) throw error;
 }
 
-// Maak de dossiermap + 6 submappen in de drive-root. Geeft de Opdracht-submap-id terug.
-export async function createDossierFolder(graphFetch: GraphFetchFn, driveId: string, folderName: string): Promise<{ id: string; webUrl: string; opdrachtId: string }> {
-  const root = await graphFetch(`/drives/${driveId}/root/children`, {
+// Top-level mappen van de bibliotheek (voor de doelmap-keuze in instellingen).
+export async function listLibraryFolders(graphFetch: GraphFetchFn, driveId: string): Promise<{ id: string; name: string }[]> {
+  const result = await graphFetch(`/drives/${driveId}/root/children?$select=id,name,folder&$top=400`);
+  return ((result?.value ?? []) as Array<{ id: string; name: string; folder?: unknown }>).filter((x) => x.folder).map((x) => ({ id: x.id, name: x.name }));
+}
+
+// Maak de dossiermap + 6 submappen. Onder parentItemId (de gekozen doelmap) of anders de drive-root.
+export async function createDossierFolder(graphFetch: GraphFetchFn, driveId: string, folderName: string, parentItemId?: string | null): Promise<{ id: string; webUrl: string; opdrachtId: string }> {
+  const parentPath = parentItemId ? `/drives/${driveId}/items/${parentItemId}/children` : `/drives/${driveId}/root/children`;
+  const root = await graphFetch(parentPath, {
     method: "POST",
     body: JSON.stringify({ name: folderName, folder: {}, "@microsoft.graph.conflictBehavior": "rename" }),
   });
@@ -178,7 +186,7 @@ export async function ensureDossierAndUploadOff(graphFetch: GraphFetchFn, quoteI
   let folderId = loc.folder_item_id;
   if (!folderId) {
     const folderName = sanitizeName(`${addrLabel} (${locNumber})`);
-    const dossier = await createDossierFolder(graphFetch, cfg.driveId, folderName);
+    const dossier = await createDossierFolder(graphFetch, cfg.driveId, folderName, cfg.rootItemId);
     folderId = dossier.id;
     await supabase.from("project_locations").update({
       display_name: folderName, folder_item_id: dossier.id, folder_web_url: dossier.webUrl,
