@@ -4,7 +4,9 @@ import { PublicClientApplication, LogLevel, type Configuration } from "@azure/ms
 // De client-ID komt uit de env (VITE_MS_CLIENT_ID) zodat we per omgeving een
 // andere Azure-app-registratie kunnen gebruiken. Multi-tenant ("organizations")
 // zodat een willekeurig werk/school-account kan inloggen.
-const CLIENT_ID = (import.meta.env.VITE_MS_CLIENT_ID as string | undefined) ?? "";
+// Azure-app "E-Charging Dashboard – SharePoint" (SPA, multi-tenant). De client-ID is
+// niet geheim (zit toch in de browser-bundle); override kan via VITE_MS_CLIENT_ID.
+const CLIENT_ID = (import.meta.env.VITE_MS_CLIENT_ID as string | undefined) || "d40ca273-8812-4b94-89cc-9f2ddbadaf78";
 
 // Placeholder-GUID zodat MSAL kan construeren/initialiseren ook als de env-var nog
 // niet gezet is; echt inloggen is gated op `msalConfigured`.
