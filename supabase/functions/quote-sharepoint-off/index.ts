@@ -124,10 +124,9 @@ Deno.serve(async (req) => {
       await sb.from("quotes").update({ document_number: docNum }).eq("id", quoteId);
     }
 
-    // Upload de ongetekende OFF in de dossier-root.
-    const yy = String(new Date().getFullYear()).slice(-2);
-    const doc2 = String(docNum).padStart(2, "0");
-    const offName = sanitizeName(`${locNumber}-${doc2}-${yy} OFF ${addrLabel}`) + ".pdf";
+    // Upload de ongetekende OFF in de dossier-root. Bestandsnaam = offertenummer (201-01-26).
+    const offNumber = quote.quote_number ?? `${locNumber}-${String(docNum).padStart(2, "0")}-${String(new Date().getFullYear()).slice(-2)}`;
+    const offName = sanitizeName(`${offNumber} OFF ${addrLabel}`) + ".pdf";
     const off = await gc.uploadFile(driveId, folderId!, offName, base64ToBytes(offPdfBase64));
     await sb.from("quotes").update({ off_item_id: off.id, off_web_url: off.webUrl }).eq("id", quoteId);
 

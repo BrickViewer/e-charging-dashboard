@@ -94,6 +94,37 @@ Deno.serve(async (req) => {
       addressCity: lead.city ?? null,
     };
 
+    // Offertenummer = locatie-document-jaar (bv. 201-01-26), gelijk aan de SharePoint-dossiers.
+    // Resolve/maak de project_location (dossier) op bedrijf+adres → zelfde locatie = zelfde
+    // locatienummer, nieuw documentnummer (201-01 → 201-02). Toegekend bij het opstellen.
+    const street = (lead.address_street ?? "").trim();
+    const city = (lead.city ?? "").trim();
+    const postal = (lead.postal_code ?? "").trim();
+    let locId: string | null = null;
+    let locNumber: number | null = null;
+    if (street && city) {
+      let mq = serviceClient.from("project_locations").select("id, location_number")
+        .eq("organization_id", lead.organization_id).ilike("address_street", street).ilike("city", city).limit(1);
+      mq = lead.company_id ? mq.eq("company_id", lead.company_id) : mq.is("company_id", null);
+      const { data: match } = await mq.maybeSingle();
+      if (match) { locId = match.id; locNumber = Number(match.location_number); }
+    }
+    if (!locId) {
+      const addrLabel = [street, city].filter(Boolean).join(" ") || lead.company_name || "Onbekende locatie";
+      const { data: createdLoc, error: locErr } = await serviceClient.from("project_locations").insert({
+        organization_id: lead.organization_id, display_name: addrLabel,
+        address_street: street || null, postal_code: postal || null, city: city || null,
+        company_id: lead.company_id ?? null, lead_id: lead.id,
+      }).select("id, location_number").single();
+      if (locErr) throw locErr;
+      locId = createdLoc.id; locNumber = Number(createdLoc.location_number);
+    }
+    const { data: docSeq, error: docErr } = await serviceClient.rpc("assign_document_number", { p_location_id: locId });
+    if (docErr) throw docErr;
+    const docNum = Number(docSeq);
+    const yy = String(new Date().getFullYear()).slice(-2);
+    const quoteNumber = `${locNumber}-${String(docNum).padStart(2, "0")}-${yy}`;
+
     const { data: quote, error } = await serviceClient
       .from("quotes")
       .insert({
@@ -106,6 +137,9 @@ Deno.serve(async (req) => {
         prospect_contact: lead.contact_name,
         prospect_email: lead.contact_email,
         status: "concept",
+        quote_number: quoteNumber,
+        project_location_id: locId,
+        document_number: docNum,
         with_management: withManagement,
         valid_until: validUntil,
         num_charge_points: numChargePoints,

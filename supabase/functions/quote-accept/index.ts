@@ -235,10 +235,9 @@ Deno.serve(async (req) => {
         const { data: loc } = await sb.from("project_locations")
           .select("opdracht_item_id, location_number, address_street, city").eq("id", quote.project_location_id).maybeSingle();
         if (loc?.opdracht_item_id) {
-          const yy = String(new Date(quote.sent_at ?? new Date().toISOString()).getFullYear()).slice(-2);
-          const doc2 = String(quote.document_number ?? 1).padStart(2, "0");
           const addrLabel = [loc.address_street, loc.city].filter(Boolean).join(" ") || String(quote.prospect_company ?? "");
-          const opdName = sanitizeName(`${loc.location_number}-${doc2}-${yy} OPD ${addrLabel}`) + ".pdf";
+          const opdNumber = quote.quote_number ?? `${loc.location_number}-${String(quote.document_number ?? 1).padStart(2, "0")}-${String(new Date(quote.sent_at ?? new Date().toISOString()).getFullYear()).slice(-2)}`;
+          const opdName = sanitizeName(`${opdNumber} OPD ${addrLabel}`) + ".pdf";
           const opd = await gc.uploadFile(driveId, loc.opdracht_item_id, opdName, base64ToBytes(signedPdfB64));
           opdWebUrl = opd.webUrl;
           await sb.from("quotes").update({ opd_item_id: opd.id, opd_web_url: opd.webUrl }).eq("id", quote.id);

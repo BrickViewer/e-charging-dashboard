@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     // Kandidaten: getekend, nog geen OPD in SharePoint, wel een getekende PDF in storage + een dossier.
     const { data: quotes, error: qErr } = await sb.from("quotes")
-      .select("id, signed_pdf_path, document_number, sent_at, organization_id, project_location_id, prospect_company")
+      .select("id, quote_number, signed_pdf_path, document_number, sent_at, organization_id, project_location_id, prospect_company")
       .eq("status", "getekend")
       .is("opd_item_id", null)
       .not("signed_pdf_path", "is", null)
@@ -61,10 +61,9 @@ Deno.serve(async (req) => {
         if (dErr || !blob) { skipped++; continue; }
         const bytes = new Uint8Array(await blob.arrayBuffer());
 
-        const yy = String(new Date(q.sent_at ?? new Date().toISOString()).getFullYear()).slice(-2);
-        const doc2 = String(q.document_number ?? 1).padStart(2, "0");
         const addrLabel = [loc.address_street, loc.city].filter(Boolean).join(" ") || String(q.prospect_company ?? "");
-        const opdName = sanitizeName(`${loc.location_number}-${doc2}-${yy} OPD ${addrLabel}`) + ".pdf";
+        const opdNumber = q.quote_number ?? `${loc.location_number}-${String(q.document_number ?? 1).padStart(2, "0")}-${String(new Date(q.sent_at ?? new Date().toISOString()).getFullYear()).slice(-2)}`;
+        const opdName = sanitizeName(`${opdNumber} OPD ${addrLabel}`) + ".pdf";
         const opd = await gc.uploadFile(driveId, loc.opdracht_item_id, opdName, bytes);
         // Alleen zetten als nog null (race met de directe upload in quote-accept).
         await sb.from("quotes").update({ opd_item_id: opd.id, opd_web_url: opd.webUrl }).eq("id", q.id).is("opd_item_id", null);
