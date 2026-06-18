@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { renderSignedConfirmation, renderInternalSignedNotice } from "../_shared/offer-email.ts";
 import { normalizeSettings } from "../_shared/configurator.ts";
-import { clientFromEnv, sanitizeName } from "./sharepoint.ts";
+import { GraphClient, sanitizeName } from "./sharepoint.ts";
+import { resolveSecret } from "../_shared/secrets.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
 // offerte-samenvatting (genoeg om de PDF te renderen). POST accordeert: slaat de
@@ -212,7 +213,11 @@ Deno.serve(async (req) => {
     // SharePoint: getekend exemplaar (OPD) in de Opdracht-submap. BLOKKEREND indien geconfigureerd.
     let opdWebUrl: string | null = (quote.opd_web_url as string | null) ?? null;
     {
-      const gc = clientFromEnv();
+      // App-only Graph-client: secrets uit edge-env (voorrang) óf de Vault.
+      const spTenant = await resolveSecret(sb, ["SHAREPOINT_TENANT_ID"], "sharepoint_tenant_id");
+      const spClient = await resolveSecret(sb, ["SHAREPOINT_CLIENT_ID"], "sharepoint_client_id");
+      const spSecret = await resolveSecret(sb, ["SHAREPOINT_CLIENT_SECRET"], "sharepoint_client_secret");
+      const gc = (spTenant && spClient && spSecret) ? new GraphClient(spTenant, spClient, spSecret) : null;
       const { data: org2 } = await sb.from("organizations").select("sharepoint_drive_id").eq("id", org).maybeSingle();
       const driveId = org2?.sharepoint_drive_id as string | null;
       if (gc && driveId && quote.project_location_id && signedPdfB64 && !quote.opd_item_id) {
