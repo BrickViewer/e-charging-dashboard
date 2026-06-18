@@ -1358,6 +1358,7 @@ export type Database = {
           external_status: string | null
           handoff_at: string | null
           id: string
+          invoiced_at: string | null
           last_sync_error: string | null
           lead_id: string | null
           notes: string | null
@@ -1388,6 +1389,7 @@ export type Database = {
           external_status?: string | null
           handoff_at?: string | null
           id?: string
+          invoiced_at?: string | null
           last_sync_error?: string | null
           lead_id?: string | null
           notes?: string | null
@@ -1418,6 +1420,7 @@ export type Database = {
           external_status?: string | null
           handoff_at?: string | null
           id?: string
+          invoiced_at?: string | null
           last_sync_error?: string | null
           lead_id?: string | null
           notes?: string | null

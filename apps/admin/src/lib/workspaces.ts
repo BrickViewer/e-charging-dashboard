@@ -7,7 +7,6 @@ import {
   FileText,
   WandSparkles,
   Contact,
-  Wrench,
   Newspaper,
   MonitorPlay,
   AlertTriangle,
@@ -54,9 +53,7 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
       { to: "/sales/leads", icon: Target, label: "Leads" },
       { to: "/sales/contacten", icon: Contact, label: "Contacten" },
       { to: "/sales/offertes", icon: FileText, label: "Offertes" },
-      // Installaties volgen uit getekende offertes — hoort bij de salesflow
-      { to: "/sales/installaties", icon: Wrench, label: "Installaties" },
-      // Onboarding-cockpit: waar staat elke klant na de getekende offerte
+      // Onboarding-pijplijn: de hele flow na de getekende offerte (incl. installateur-handoff)
       { to: "/sales/onboarding", icon: Rocket, label: "Onboarding" },
       { to: "/sales/configurator", icon: WandSparkles, label: "Configurator" },
       // Opent het fictieve klantportaal in een eigen venster (configurator-patroon)

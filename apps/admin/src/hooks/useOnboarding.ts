@@ -3,24 +3,45 @@ import { supabase } from "@/integrations/supabase/client";
 import { linkLocationToClient } from "@/services/locations";
 
 // De onboarding-fase wordt AFGELEID uit de echte status (geen handmatig bijhouden).
-// Per fase staat in de cockpit de juiste vervolgactie.
-export type OnboardingPhase =
+// Pijplijn: getekend → bij installateur → opgeleverd → locaties koppelen →
+// klant uitnodigen → gegevens toevoegen → archief.
+export type OnboardingStage =
   | "getekend"
   | "bij_installateur"
   | "opgeleverd"
-  | "portaal"
-  | "operationeel";
+  | "locaties_koppelen"
+  | "klant_uitnodigen"
+  | "gegevens"
+  | "archief";
 
-export const ONBOARDING_PHASES: { key: OnboardingPhase; label: string; color: string; hint: string }[] = [
-  { key: "getekend", label: "Getekend", color: "#3b82f6", hint: "Installatie-opdracht versturen" },
+export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: string; hint: string }[] = [
+  { key: "getekend", label: "Getekend", color: "#3b82f6", hint: "Doorsturen naar installateur" },
   { key: "bij_installateur", label: "Bij installateur", color: "#f59e0b", hint: "Wacht op oplevering" },
-  { key: "opgeleverd", label: "Opgeleverd", color: "#06b6d4", hint: "Laadpunten koppelen aan locatie" },
-  { key: "portaal", label: "Portaal activeren", color: "#8b5cf6", hint: "Portaal-uitnodiging versturen" },
-  { key: "operationeel", label: "Operationeel", color: "#22c55e", hint: "Live in het portaal" },
+  { key: "opgeleverd", label: "Opgeleverd", color: "#06b6d4", hint: "Factureren" },
+  { key: "locaties_koppelen", label: "Locaties koppelen", color: "#8b5cf6", hint: "Laadlocatie koppelen" },
+  { key: "klant_uitnodigen", label: "Klant uitnodigen", color: "#ec4899", hint: "Portaal-uitnodiging versturen" },
+  { key: "gegevens", label: "Gegevens toevoegen", color: "#14b8a6", hint: "Wacht op gegevens van klant" },
+  { key: "archief", label: "Archief", color: "#22c55e", hint: "Onboarding afgerond" },
 ];
 
-type OnbOrder = { id: string; status: string | null; egroup_order_id: string | null; completed_at: string | null };
-type OnbLocation = { id: string; charge_points: { id: string }[] | null };
+export type OnbOrder = {
+  id: string;
+  status: string | null;
+  egroup_order_id: string | null;
+  egroup_order_number: string | null;
+  external_status: string | null;
+  completed_at: string | null;
+  invoiced_at: string | null;
+  site_street: string | null;
+  site_house_number: string | null;
+  site_postal: string | null;
+  site_city: string | null;
+  site_contact_name: string | null;
+  site_contact_email: string | null;
+  site_contact_phone: string | null;
+  service_summary: string | null;
+};
+type OnbLocation = { id: string };
 type OnbInvite = { id: string; status: string | null };
 
 export type OnboardingClient = {
@@ -32,10 +53,24 @@ export type OnboardingClient = {
   contact_email: string | null;
   contact_name: string | null;
   created_at: string;
+  payment_onboarding_status: string | null;
+  vat_status: string | null;
+  kvk: string | null;
+  btw_number: string | null;
+  billing_address_street: string | null;
+  billing_address_postal: string | null;
+  billing_address_city: string | null;
   installation_orders: OnbOrder[] | null;
   locations: OnbLocation[] | null;
   client_invitations: OnbInvite[] | null;
 };
+
+const CLIENT_SELECT =
+  "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, created_at, " +
+  "payment_onboarding_status, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
+  "installation_orders(id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
+  "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary), " +
+  "locations(id), client_invitations(id, status)";
 
 export function useOnboardingClients() {
   return useQuery({
@@ -43,9 +78,7 @@ export function useOnboardingClients() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select(
-          "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, created_at, installation_orders(id, status, egroup_order_id, completed_at), locations(id, charge_points(id)), client_invitations(id, status)",
-        )
+        .select(CLIENT_SELECT)
         .neq("status", "verwijderd")
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -54,23 +87,44 @@ export function useOnboardingClients() {
   });
 }
 
-/** Leidt de huidige onboarding-fase af uit installatie-/locatie-/portaalstatus. */
-export function deriveOnboardingPhase(c: OnboardingClient): OnboardingPhase {
-  if (c.portal_user_id) return "operationeel";
+/** Klant heeft betaal- (IBAN) + bedrijfsgegevens compleet → onboarding klaar. */
+export function isDetailsComplete(c: OnboardingClient): boolean {
+  const company =
+    !!c.company_name && !!c.vat_status &&
+    !!c.billing_address_street && !!c.billing_address_postal && !!c.billing_address_city;
+  const kvkOk = c.vat_status === "private" || !!c.kvk;
+  const btwOk = c.vat_status !== "vat_liable" || !!c.btw_number;
+  const bankOk = ["saved", "needs_review", "verified"].includes(c.payment_onboarding_status ?? "");
+  return company && kvkOk && btwOk && bankOk;
+}
+
+/** Leidt de huidige onboarding-stage af uit installatie-/factuur-/locatie-/portaalstatus. */
+export function deriveStage(c: OnboardingClient): OnboardingStage {
   const orders = c.installation_orders ?? [];
-  const delivered = orders.some((o) => !!o.completed_at || o.status === "afgerond");
   const handedOff = orders.some((o) => !!o.egroup_order_id);
-  const hasChargePoints = (c.locations ?? []).some((l) => (l.charge_points ?? []).length > 0);
-  if (delivered) return hasChargePoints ? "portaal" : "opgeleverd";
+  const delivered = orders.some((o) => !!o.completed_at || o.status === "afgerond");
+  const invoiced = orders.some((o) => !!o.invoiced_at);
+  const hasLocation = (c.locations ?? []).length > 0;
+
+  if (isDetailsComplete(c)) return "archief";
+  if (c.portal_user_id) return "gegevens";        // uitnodiging geaccepteerd, gegevens nog niet compleet
+  if (hasLocation) return "klant_uitnodigen";
+  if (invoiced) return "locaties_koppelen";
+  if (delivered) return "opgeleverd";
   if (handedOff) return "bij_installateur";
   return "getekend";
+}
+
+/** De installatie-order van de klant (de eerste/primaire). */
+export function primaryOrder(c: OnboardingClient): OnbOrder | null {
+  return (c.installation_orders ?? [])[0] ?? null;
 }
 
 export function hasPendingInvite(c: OnboardingClient): boolean {
   return (c.client_invitations ?? []).some((i) => i.status === "pending");
 }
 
-// Nog niet aan een klant gekoppelde locaties (voor de 'laadpunten koppelen'-dialog).
+// Nog niet aan een klant gekoppelde locaties (voor de 'locaties koppelen'-dialog).
 export type UnlinkedLocation = { id: string; name: string | null; address: string | null; city: string | null; charge_points: { id: string }[] | null };
 
 export function useUnlinkedLocations(enabled = true) {
@@ -97,6 +151,21 @@ export function useLinkLocationToClient() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
       qc.invalidateQueries({ queryKey: ["unlinked-locations"] });
+    },
+  });
+}
+
+/** Markeer de installatie-order als gefactureerd → kaart schuift naar 'Locaties koppelen'. */
+export function useMarkInvoiced() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await supabase.from("installation_orders").update({ invoiced_at: new Date().toISOString() }).eq("id", orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
+      qc.invalidateQueries({ queryKey: ["installation-orders"] });
     },
   });
 }

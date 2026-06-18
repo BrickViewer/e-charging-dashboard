@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Send, Plug, MailPlus, ExternalLink, Clock, ArrowRight } from "lucide-react";
+import { Send, Plug, MailPlus, ExternalLink, Clock, ArrowRight, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -9,35 +9,48 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ONBOARDING_PHASES, deriveOnboardingPhase, hasPendingInvite,
-  useOnboardingClients, useUnlinkedLocations, useLinkLocationToClient, useSendOnboardingInvite,
-  type OnboardingClient, type OnboardingPhase,
+  ONBOARDING_STAGES, deriveStage, hasPendingInvite, primaryOrder,
+  useOnboardingClients, useUnlinkedLocations, useLinkLocationToClient, useSendOnboardingInvite, useMarkInvoiced,
+  type OnboardingClient, type OnboardingStage,
 } from "@/hooks/useOnboarding";
+import { OnboardingHandoffDialog } from "@/components/sales/OnboardingHandoffDialog";
 
 function NextAction({
-  client, phase, onLink, onInvite, inviting, navigate,
+  client, stage, onLink, onInvite, onHandoff, onMarkInvoiced, inviting, invoicing, navigate,
 }: {
   client: OnboardingClient;
-  phase: OnboardingPhase;
+  stage: OnboardingStage;
   onLink: (c: OnboardingClient) => void;
   onInvite: (c: OnboardingClient) => void;
+  onHandoff: (c: OnboardingClient) => void;
+  onMarkInvoiced: (c: OnboardingClient) => void;
   inviting: boolean;
+  invoicing: boolean;
   navigate: (to: string) => void;
 }) {
-  switch (phase) {
+  const order = primaryOrder(client);
+  switch (stage) {
     case "getekend":
-      return <Button size="sm" className="w-full" onClick={() => navigate("/sales/installaties")}><Send className="mr-1.5 h-3.5 w-3.5" /> Installatie versturen</Button>;
+      return <Button size="sm" className="w-full" disabled={!order} onClick={() => onHandoff(client)}><Send className="mr-1.5 h-3.5 w-3.5" /> Doorsturen naar installateur</Button>;
     case "bij_installateur":
-      return <Button size="sm" variant="outline" className="w-full" onClick={() => navigate("/sales/installaties")}><Clock className="mr-1.5 h-3.5 w-3.5" /> Bekijk installatie</Button>;
+      return (
+        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Clock className="h-3.5 w-3.5" /> Verstuurd{order?.egroup_order_number ? ` · ${order.egroup_order_number}` : ""} — wacht op oplevering
+        </p>
+      );
     case "opgeleverd":
-      return <Button size="sm" className="w-full" onClick={() => onLink(client)}><Plug className="mr-1.5 h-3.5 w-3.5" /> Laadpunten koppelen</Button>;
-    case "portaal":
+      return <Button size="sm" className="w-full" disabled={invoicing || !order} onClick={() => onMarkInvoiced(client)}><Receipt className="mr-1.5 h-3.5 w-3.5" /> Markeer gefactureerd</Button>;
+    case "locaties_koppelen":
+      return <Button size="sm" className="w-full" onClick={() => onLink(client)}><Plug className="mr-1.5 h-3.5 w-3.5" /> Locaties koppelen</Button>;
+    case "klant_uitnodigen":
       return (
         <Button size="sm" variant={hasPendingInvite(client) ? "outline" : "default"} className="w-full" disabled={inviting} onClick={() => onInvite(client)}>
-          <MailPlus className="mr-1.5 h-3.5 w-3.5" /> {hasPendingInvite(client) ? "Uitnodiging opnieuw" : "Portaal-uitnodiging"}
+          <MailPlus className="mr-1.5 h-3.5 w-3.5" /> {hasPendingInvite(client) ? "Uitnodiging opnieuw" : "Uitnodiging versturen"}
         </Button>
       );
-    case "operationeel":
+    case "gegevens":
+      return <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Clock className="h-3.5 w-3.5" /> Wacht op gegevens van de klant</p>;
+    case "archief":
       return <Button size="sm" variant="ghost" className="w-full" onClick={() => navigate(`/admin/klanten/${client.id}`)}><ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Bekijk klant</Button>;
   }
 }
@@ -53,7 +66,7 @@ function LinkLocationDialog({ client, onClose }: { client: OnboardingClient | nu
     if (!client || !selected) return;
     try {
       await link.mutateAsync({ locationId: selected, clientId: client.id });
-      toast.success("Laadpunten gekoppeld aan de klant");
+      toast.success("Locatie gekoppeld aan de klant");
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Koppelen mislukt");
@@ -64,7 +77,7 @@ function LinkLocationDialog({ client, onClose }: { client: OnboardingClient | nu
     <Dialog open={!!client} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Laadpunten koppelen</DialogTitle>
+          <DialogTitle>Locaties koppelen</DialogTitle>
           <DialogDescription>
             Koppel de opgeleverde locatie (uit e-Flux) aan {client?.company_name}. De laadsessies tellen daarna mee voor deze klant.
           </DialogDescription>
@@ -98,15 +111,18 @@ export default function SalesOnboarding() {
   const navigate = useNavigate();
   const { data: clients, isLoading } = useOnboardingClients();
   const sendInvite = useSendOnboardingInvite();
+  const markInvoiced = useMarkInvoiced();
   const [linkFor, setLinkFor] = useState<OnboardingClient | null>(null);
+  const [handoffFor, setHandoffFor] = useState<OnboardingClient | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
-  const [showOperational, setShowOperational] = useState(false);
+  const [invoicingId, setInvoicingId] = useState<string | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
 
-  const byPhase = useMemo(() => {
-    const map: Record<OnboardingPhase, OnboardingClient[]> = {
-      getekend: [], bij_installateur: [], opgeleverd: [], portaal: [], operationeel: [],
+  const byStage = useMemo(() => {
+    const map: Record<OnboardingStage, OnboardingClient[]> = {
+      getekend: [], bij_installateur: [], opgeleverd: [], locaties_koppelen: [], klant_uitnodigen: [], gegevens: [], archief: [],
     };
-    for (const c of clients ?? []) map[deriveOnboardingPhase(c)].push(c);
+    for (const c of clients ?? []) map[deriveStage(c)].push(c);
     return map;
   }, [clients]);
 
@@ -114,7 +130,7 @@ export default function SalesOnboarding() {
     setInvitingId(c.id);
     try {
       const res = await sendInvite.mutateAsync(c.id);
-      if (res.status === "sent") toast.success(`Portaal-uitnodiging verstuurd naar ${res.to ?? c.contact_email ?? "de klant"}`);
+      if (res.status === "sent") toast.success(`Uitnodiging verstuurd naar ${res.to ?? c.contact_email ?? "de klant"}`);
       else if (res.status === "already_linked") toast.info("Klant heeft al een actief portaal-account");
       else if (res.status === "not_configured") toast.warning("E-mail (Resend) is nog niet geconfigureerd");
       else toast.error(res.message ?? "Versturen mislukt");
@@ -125,7 +141,21 @@ export default function SalesOnboarding() {
     }
   };
 
-  const phases = ONBOARDING_PHASES.filter((p) => showOperational || p.key !== "operationeel");
+  const onMarkInvoiced = async (c: OnboardingClient) => {
+    const order = primaryOrder(c);
+    if (!order) return;
+    setInvoicingId(c.id);
+    try {
+      await markInvoiced.mutateAsync(order.id);
+      toast.success("Gemarkeerd als gefactureerd");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Markeren mislukt");
+    } finally {
+      setInvoicingId(null);
+    }
+  };
+
+  const stages = ONBOARDING_STAGES.filter((s) => showArchive || s.key !== "archief");
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -136,8 +166,8 @@ export default function SalesOnboarding() {
             Elke klant in zijn fase — de fase volgt automatisch de echte status. Voer per kaart de volgende stap uit.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setShowOperational((v) => !v)}>
-          {showOperational ? "Verberg operationeel" : "Toon operationeel"}
+        <Button variant="outline" size="sm" onClick={() => setShowArchive((v) => !v)}>
+          {showArchive ? "Verberg archief" : "Toon archief"}
         </Button>
       </div>
 
@@ -147,18 +177,18 @@ export default function SalesOnboarding() {
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-2">
-          {phases.map((p) => {
-            const items = byPhase[p.key];
+          {stages.map((s) => {
+            const items = byStage[s.key];
             return (
-              <div key={p.key} className="flex w-72 flex-shrink-0 flex-col rounded-xl border bg-card">
+              <div key={s.key} className="flex w-72 flex-shrink-0 flex-col rounded-xl border bg-card">
                 <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />
-                    <span className="text-sm font-semibold">{p.label}</span>
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
+                    <span className="text-sm font-semibold">{s.label}</span>
                   </div>
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{items.length}</span>
                 </div>
-                <p className="px-3 pt-2 text-[11px] uppercase tracking-wide text-muted-foreground">{p.hint}</p>
+                <p className="px-3 pt-2 text-[11px] uppercase tracking-wide text-muted-foreground">{s.hint}</p>
                 <div className="flex flex-col gap-2 p-3">
                   {items.length === 0 && <p className="py-6 text-center text-xs text-muted-foreground">Geen klanten</p>}
                   {items.map((c) => (
@@ -172,7 +202,11 @@ export default function SalesOnboarding() {
                           <ArrowRight className="h-4 w-4" />
                         </button>
                       </div>
-                      <NextAction client={c} phase={p.key} onLink={setLinkFor} onInvite={onInvite} inviting={invitingId === c.id} navigate={navigate} />
+                      <NextAction
+                        client={c} stage={s.key}
+                        onLink={setLinkFor} onInvite={onInvite} onHandoff={setHandoffFor} onMarkInvoiced={onMarkInvoiced}
+                        inviting={invitingId === c.id} invoicing={invoicingId === c.id} navigate={navigate}
+                      />
                     </div>
                   ))}
                 </div>
@@ -183,6 +217,7 @@ export default function SalesOnboarding() {
       )}
 
       <LinkLocationDialog client={linkFor} onClose={() => setLinkFor(null)} />
+      <OnboardingHandoffDialog client={handoffFor} onClose={() => setHandoffFor(null)} />
     </div>
   );
 }
