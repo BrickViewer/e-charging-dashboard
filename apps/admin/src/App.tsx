@@ -16,6 +16,7 @@ import InviteAccept from "./pages/InviteAccept";
 import OfferAccept from "./pages/OfferAccept";
 import OfferInternalSign from "./pages/OfferInternalSign";
 import ResetPassword from "./pages/ResetPassword";
+import NoAccess from "./pages/NoAccess";
 import { workspacesForRole } from "@/lib/workspaces";
 
 // Client portal pages
@@ -75,7 +76,8 @@ function AuthRedirect() {
   if (workspaces.includes("sales")) return <Navigate to="/sales" replace />;
   if (workspaces.includes("marketing")) return <Navigate to="/marketing" replace />;
   if (role === "client") return <Navigate to="/portal" replace />;
-  return <Navigate to="/login" replace />;
+  // Ingelogd maar geen rol (bv. e-group-account zonder toegekende rol) → wachtpagina.
+  return <Navigate to="/geen-toegang" replace />;
 }
 
 function InactiveAccountRedirect() {
@@ -114,6 +116,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<AuthRedirect />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/geen-toegang" element={<NoAccess />} />
               <Route path="/wachtwoord-herstellen" element={<ResetPassword />} />
               <Route path="/uitnodiging/:token" element={<InviteAccept />} />
               <Route path="/offerte/:token" element={<OfferAccept />} />

@@ -8,6 +8,7 @@ import { Eye, EyeOff, Power, Loader2 } from "lucide-react";
 import { CockpitArc } from "@/components/portal/CockpitArc";
 import logoBright from "@/assets/icon-bright.svg";
 import { requestPasswordReset } from "@/services/clientPaymentDetails";
+import { msSsoEnabled } from "@/lib/msal";
 import { toast } from "sonner";
 
 type Phase = "idle" | "submitting" | "ignition" | "ready" | "error";
@@ -19,8 +20,9 @@ export default function Login() {
   const [errMsg, setErrMsg] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [resetSending, setResetSending] = useState(false);
+  const [msStarting, setMsStarting] = useState(false);
 
-  const { signIn, user, role, isLoading, isInternal } = useAuth();
+  const { signIn, signInWithMicrosoft, user, role, isLoading, isInternal } = useAuth();
   const navigate = useNavigate();
 
   // Bij ignition: na 2.6s pulseringssequentie redirect uitvoeren
@@ -46,6 +48,22 @@ export default function Login() {
     if (isInternal) return <Navigate to="/admin" replace />;
     if (role === "client") return <Navigate to="/portal" replace />;
   }
+  // Ingelogd (bv. via Microsoft) maar nog geen rol → naar de wachtpagina.
+  if (!isLoading && user && !role && phase === "idle") {
+    return <Navigate to="/geen-toegang" replace />;
+  }
+
+  const handleMicrosoft = async () => {
+    setErrMsg("");
+    setMsStarting(true);
+    const { error } = await signInWithMicrosoft();
+    if (error) {
+      setErrMsg(error.message || "Inloggen met Microsoft mislukt");
+      setPhase("error");
+      setMsStarting(false);
+    }
+    // Bij succes volgt een volledige redirect naar Microsoft; geen verdere actie nodig.
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +142,8 @@ export default function Login() {
             onSubmit={handleSubmit}
             onPasswordReset={handlePasswordReset}
             resetSending={resetSending}
+            onMicrosoft={handleMicrosoft}
+            msStarting={msStarting}
           />
         )}
 
@@ -152,8 +172,10 @@ function LoginForm(props: {
   onSubmit: (e: React.FormEvent) => void;
   onPasswordReset: () => void;
   resetSending: boolean;
+  onMicrosoft: () => void;
+  msStarting: boolean;
 }) {
-  const { email, setEmail, password, setPassword, showPw, setShowPw, phase, errMsg, onSubmit, onPasswordReset, resetSending } = props;
+  const { email, setEmail, password, setPassword, showPw, setShowPw, phase, errMsg, onSubmit, onPasswordReset, resetSending, onMicrosoft, msStarting } = props;
   const submitting = phase === "submitting";
 
   return (
@@ -178,6 +200,34 @@ function LoginForm(props: {
           className="relative portal-card rounded-3xl bg-card/80 backdrop-blur-md p-7 space-y-5 border-border/60"
           style={{ boxShadow: "0 0 60px rgba(5,165,0,0.06), 0 1px 0 rgba(255,255,255,0.04) inset" }}
         >
+          {msSsoEnabled && (
+            <>
+              <button
+                type="button"
+                onClick={onMicrosoft}
+                disabled={msStarting}
+                className="flex w-full items-center justify-center gap-2.5 h-12 rounded-lg border border-border bg-background/70 text-sm font-medium transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {msStarting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 21 21" aria-hidden="true">
+                    <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                    <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                    <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                    <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                  </svg>
+                )}
+                Inloggen met Microsoft
+              </button>
+              <div className="flex items-center gap-3 text-[11px] uppercase tracking-widest text-muted-foreground/60">
+                <span className="h-px flex-1 bg-border" />
+                Klant? Log in met e-mail
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            </>
+          )}
+
           <div>
             <Label htmlFor="email" className="cockpit-section-label">
               E-mailadres

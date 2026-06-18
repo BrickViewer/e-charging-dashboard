@@ -127,6 +127,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  // Microsoft/Entra-login voor staf. De Azure-provider (Supabase-dashboard) is op de
+  // e-group-tenant gezet → alleen e-group-accounts kunnen de OAuth voltooien. We vragen
+  // meteen de Graph-scopes mee, zodat dezelfde login ook SharePoint-toegang oplevert.
+  const signInWithMicrosoft = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: {
+        scopes: "openid profile email offline_access User.Read Files.ReadWrite.All Sites.ReadWrite.All",
+        redirectTo: window.location.origin,
+      },
+    });
+    return { error };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setRole(null);
@@ -137,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, role, isInternal, isSuperadmin, isLoading, signIn, signOut }}
+      value={{ session, user, role, isInternal, isSuperadmin, isLoading, signIn, signInWithMicrosoft, signOut }}
     >
       {children}
     </AuthContext.Provider>

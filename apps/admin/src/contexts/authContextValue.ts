@@ -13,6 +13,9 @@ export interface AuthContextType {
   isSuperadmin: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  // Staf-login via Microsoft/Entra (OAuth). Volle redirect; sessie + rol worden daarna
+  // langs de normale weg geladen. Gated op msSsoEnabled in de UI.
+  signInWithMicrosoft: () => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 }
 

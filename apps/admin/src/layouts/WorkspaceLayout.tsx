@@ -13,6 +13,8 @@ import {
   workspacesForRole,
   canAccessBeheer,
 } from "@/lib/workspaces";
+import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
+import { msSsoEnabled } from "@/lib/msal";
 
 // Gedeelde nav-link voor de sidebar. Hybride accent: de massieve active-balk +
 // icoon blijven merkgroen (#05A500), de gloed/halo eromheen gebruikt het
@@ -90,6 +92,7 @@ function SidebarNavLink({
 
 export default function WorkspaceLayout() {
   const { signOut, role, user } = useAuth();
+  const { connectSilently, isConnected } = useMicrosoftAuth();
   const { isLight } = useAdminTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,6 +125,17 @@ export default function WorkspaceLayout() {
         });
     }
   }, [user]);
+
+  // Eén Microsoft-login voor app + SharePoint: na een Azure-app-login warmen we MSAL stil op
+  // (ssoSilent) zodat SharePoint-acties meteen een Graph-token hebben — geen aparte koppel-stap.
+  // No-op als SSO uit staat, MSAL al verbonden is, of de gebruiker niet via Microsoft inlogde.
+  useEffect(() => {
+    if (!msSsoEnabled || isConnected) return;
+    const email = user?.email;
+    const providers = user?.app_metadata?.providers;
+    const viaAzure = user?.app_metadata?.provider === "azure" || (Array.isArray(providers) && providers.includes("azure"));
+    if (email && viaAzure) void connectSilently(email);
+  }, [user, isConnected, connectSilently]);
 
   const handleSignOut = async () => {
     await signOut();

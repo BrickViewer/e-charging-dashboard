@@ -48,6 +48,20 @@ export function useMicrosoftAuth() {
     });
   }, [instance, account]);
 
+  // Stille koppeling na een Microsoft-app-login: probeer Graph-tokens te verkrijgen via de
+  // bestaande Microsoft-sessie (ssoSilent), zónder extra prompt. Mislukt het (bv. browser
+  // blokkeert de 3rd-party-cookie in het iframe), dan blijft de expliciete koppel-knop over.
+  const connectSilently = useCallback(async (loginHint: string): Promise<boolean> => {
+    if (!msalConfigured || !loginHint) return false;
+    try {
+      const result = await instance.ssoSilent({ scopes: graphScopes, loginHint });
+      if (result?.account) instance.setActiveAccount(result.account);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [instance]);
+
   const getAccessToken = useCallback(async (): Promise<string> => {
     if (!account) throw new Error("Geen Microsoft-account verbonden");
     try {
@@ -66,5 +80,5 @@ export function useMicrosoftAuth() {
     }
   }, [instance, account]);
 
-  return { login, logout, getAccessToken, isConnected, microsoftUser, account, configured: msalConfigured };
+  return { login, logout, getAccessToken, connectSilently, isConnected, microsoftUser, account, configured: msalConfigured };
 }
