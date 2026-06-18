@@ -6,25 +6,32 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Eye, Plus, Send, Trash2 } from "lucide-react";
-import { useQuote, useUpdateQuote, useSendQuote, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
+import { Eye, Plus, Send, Trash2, PenLine } from "lucide-react";
+import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
-import { offerPdfBlob, offerPdfBase64, type OfferPdfData } from "@/services/offerPdf";
+import { useAuth } from "@/hooks/useAuth";
+import { useSignableAdmins } from "@/hooks/useSignableAdmins";
+import { SignerStatusPanel } from "@/components/sales/SignerStatusPanel";
+import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
 import type { OfferDetails, OfferTemplateValues } from "@/services/offerTypes";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
-const STATUS_LABEL: Record<string, string> = { concept: "Concept", verstuurd: "Verstuurd", getekend: "Getekend", verlopen: "Verlopen", afgewezen: "Afgewezen" };
+const STATUS_LABEL: Record<string, string> = { concept: "Concept", intern_ter_ondertekening: "Ter ondertekening", verstuurd: "Verstuurd", getekend: "Getekend", verlopen: "Verlopen", afgewezen: "Afgewezen" };
 
 export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: string | null; open: boolean; onOpenChange: (v: boolean) => void }) {
   const quoteQ = useQuote(open ? quoteId ?? undefined : undefined);
   const settingsQ = useConfiguratorSettings();
   const update = useUpdateQuote();
   const send = useSendQuote();
+  const requestSignoff = useRequestSignoff();
   const del = useDeleteQuote();
+  const { user } = useAuth();
+  const adminsQ = useSignableAdmins();
   const quote = quoteQ.data;
   const tpl = settingsQ.data?.offerTemplate;
+  const admins = adminsQ.data ?? [];
 
   const [items, setItems] = useState<QuoteLineItem[]>([]);
   const [email, setEmail] = useState("");
@@ -34,6 +41,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   const [idleFee, setIdleFee] = useState("");
   const [idleGrace, setIdleGrace] = useState("");
   const [od, setOd] = useState<OfferDetails>({});
+  const [signerUserId, setSignerUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (quote) {
@@ -46,6 +54,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       setIdleFee(td.idleFeePerMinute != null ? String(td.idleFeePerMinute) : "");
       setIdleGrace(td.idleGraceMinutes != null ? String(td.idleGraceMinutes) : "");
       setOd(((quote as unknown as { offer_details?: OfferDetails }).offer_details ?? {}) as OfferDetails);
+      setSignerUserId(quote.internal_signer_user_id ?? null);
     }
   }, [quote]);
 
@@ -88,6 +97,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
           charge_rate_per_kwh: withManagement ? numOr(chargeRate) : null,
           tariff_data: tariffData as unknown as never,
           offer_details: od as unknown as never,
+          internal_signer_user_id: signerUserId,
         },
       });
       toast.success("Offerte opgeslagen");
@@ -127,15 +137,62 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
     } catch (e) { toast.error(e instanceof Error ? e.message : "Preview mislukt"); }
   };
 
-  const doSend = async () => {
-    if (!quote) return;
+  const selfAdmin = admins.find((a) => a.userId === user?.id) ?? null;
+  const selectedAdmin = admins.find((a) => a.userId === signerUserId) ?? null;
+  const selfSelected = !!signerUserId && signerUserId === user?.id;
+
+  const echargingFromQuote = (): Partial<OfferSignature> => ({
+    echargingSignatureDataUrl: quote?.internal_signature_data_url ?? null,
+    echargingSignerName: quote?.internal_signer_name ?? null,
+    echargingSignerFunction: quote?.internal_signer_function ?? null,
+  });
+
+  // Zelf tekenen: stempel eigen handtekening op de PDF en verstuur direct naar de klant.
+  const signAndSend = async () => {
+    if (!quote || !selfAdmin) return;
+    if (!selfAdmin.signatureDataUrl) { toast.error("Stel eerst je handtekening in bij Instellingen › Mijn handtekening"); return; }
     if (grandTotal <= 0 && !window.confirm("Het offertetotaal is €0. Toch versturen?")) return;
-    if (isConcept) await save();
+    await save();
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
     try {
-      const pdfBase64 = await offerPdfBase64(pdfData());
+      const pdfBase64 = await offerPdfBase64(pdfData(), {
+        echargingSignatureDataUrl: selfAdmin.signatureDataUrl,
+        echargingSignerName: selfAdmin.fullName,
+        echargingSignerFunction: selfAdmin.signerTitle,
+      });
+      await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64, internalSelfSign: true });
+      toast.success(`Ondertekend en verstuurd naar ${email.trim()}`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
+  };
+
+  // Ander tekent: stuur ter ondertekening (mail met link).
+  const sendForSignoff = async () => {
+    if (!quote || !selectedAdmin) return;
+    if (!selectedAdmin.hasSignature) { toast.error(`${selectedAdmin.fullName} heeft nog geen handtekening ingesteld`); return; }
+    await save();
+    try {
+      await requestSignoff.mutateAsync({ quoteId: quote.id });
+      toast.success(`Ter ondertekening gestuurd naar ${selectedAdmin.fullName}`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
+  };
+
+  // Opnieuw naar de klant versturen (offerte is al intern getekend).
+  const resendToCustomer = async () => {
+    if (!quote) return;
+    if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
+    try {
+      const pdfBase64 = await offerPdfBase64(pdfData(), { ...echargingFromQuote() });
       await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64 });
-      toast.success(`Offerte verstuurd naar ${email.trim()}`);
+      toast.success(`Offerte opnieuw verstuurd naar ${email.trim()}`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
+  };
+
+  // Opnieuw ter ondertekening sturen (zelfde of nieuwe ondertekenaar).
+  const resendSignoff = async () => {
+    if (!quote) return;
+    try {
+      await requestSignoff.mutateAsync({ quoteId: quote.id });
+      toast.success("Opnieuw ter ondertekening gestuurd");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
   };
 
@@ -265,17 +322,13 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                     <div className="space-y-1"><Label className="text-xs">Ingangsdatum</Label><Input type="date" value={dateVal("ingangsdatum")} disabled={!isConcept} onChange={(e) => setDate("ingangsdatum", e.target.value)} /></div>
                   </div>
                 </div>
-                {/* Betaling & ondertekenaar (overrides) */}
+                {/* Betaling (overrides). De ondertekenaar kies je onderaan bij "Ondertekenaars". */}
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold text-foreground">Betaling &amp; ondertekenaar</p>
+                  <p className="mb-1.5 text-[11px] font-semibold text-foreground">Betaling</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="space-y-1"><Label className="text-xs">% bij opdracht</Label><Input inputMode="numeric" value={odStr("betaalBijOpdrachtPct")} placeholder={String(tpl?.betaalBijOpdrachtPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijOpdrachtPct", e.target.value)} /></div>
                     <div className="space-y-1"><Label className="text-xs">% bij start</Label><Input inputMode="numeric" value={odStr("betaalBijStartPct")} placeholder={String(tpl?.betaalBijStartPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijStartPct", e.target.value)} /></div>
                     <div className="space-y-1"><Label className="text-xs">% na werk</Label><Input inputMode="numeric" value={odStr("betaalNaWerkPct")} placeholder={String(tpl?.betaalNaWerkPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalNaWerkPct", e.target.value)} /></div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div className="space-y-1"><Label className="text-xs">Ondertekenaar (naam)</Label><Input value={odStr("echargingSignerName")} placeholder={tpl?.echargingSignerName || ""} disabled={!isConcept} onChange={(e) => setStr("echargingSignerName", e.target.value)} /></div>
-                    <div className="space-y-1"><Label className="text-xs">Ondertekenaar (functie)</Label><Input value={odStr("echargingSignerFunction")} placeholder={tpl?.echargingSignerFunction || ""} disabled={!isConcept} onChange={(e) => setStr("echargingSignerFunction", e.target.value)} /></div>
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground">Leeg gelaten velden gebruiken automatisch de standaard uit Configurator &gt; Offerte-sjabloon.</p>
@@ -292,15 +345,43 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={quote.status === "getekend"} />
             </div>
 
+            <SignerStatusPanel
+              status={quote.status ?? "concept"}
+              internalSignerName={quote.internal_signer_name}
+              internalSignedAt={quote.internal_signed_at}
+              customerCompany={quote.prospect_company}
+              customerContact={quote.prospect_contact}
+              customerSignerName={quote.signer_name}
+              customerSignedAt={quote.signed_at}
+              admins={admins}
+              signerUserId={signerUserId}
+              onSignerChange={setSignerUserId}
+              currentUserId={user?.id}
+              editable={isConcept}
+            />
+
             <div className="flex items-center justify-between gap-2 border-t pt-4">
               <div className="flex items-center gap-2">
                 {isConcept && <Button variant="outline" onClick={save} disabled={update.isPending}>Opslaan</Button>}
                 <Button variant="outline" onClick={doPreview}><Eye className="mr-1.5 h-4 w-4" /> Bekijken</Button>
               </div>
-              {quote.status !== "getekend" && (
-                <Button onClick={doSend} disabled={send.isPending || update.isPending}>
-                  <Send className="mr-1.5 h-4 w-4" />
-                  {quote.status === "verstuurd" ? "Opnieuw versturen" : "Versturen"}
+              {quote.status === "concept" && (
+                <Button
+                  onClick={selfSelected ? signAndSend : sendForSignoff}
+                  disabled={!signerUserId || !selectedAdmin?.hasSignature || send.isPending || requestSignoff.isPending || update.isPending}
+                >
+                  {selfSelected ? <PenLine className="mr-1.5 h-4 w-4" /> : <Send className="mr-1.5 h-4 w-4" />}
+                  {selfSelected ? "Onderteken & verstuur" : "Stuur ter ondertekening"}
+                </Button>
+              )}
+              {quote.status === "intern_ter_ondertekening" && (
+                <Button variant="outline" onClick={resendSignoff} disabled={requestSignoff.isPending}>
+                  <Send className="mr-1.5 h-4 w-4" /> Opnieuw sturen
+                </Button>
+              )}
+              {quote.status === "verstuurd" && (
+                <Button onClick={resendToCustomer} disabled={send.isPending}>
+                  <Send className="mr-1.5 h-4 w-4" /> Opnieuw versturen
                 </Button>
               )}
             </div>

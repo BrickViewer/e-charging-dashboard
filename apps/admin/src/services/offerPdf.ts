@@ -18,9 +18,13 @@ import { buildOfferPages, PAGE_W, PAGE_H, type OfferTemplateData, type OfferTemp
 export type OfferPdfData = OfferTemplateData;
 
 export interface OfferSignature {
-  signerName: string;
-  signatureDataUrl: string; // PNG data-URL van het handtekening-canvas
+  signerName?: string; // klant-naam (rechts); leeg bij interne/preview-render
+  signatureDataUrl?: string; // PNG data-URL van het klant-handtekening-canvas
   date?: string | null; // ISO; default vandaag
+  // E-Charging mede-ondertekening (links).
+  echargingSignatureDataUrl?: string | null;
+  echargingSignerName?: string | null;
+  echargingSignerFunction?: string | null;
 }
 
 const COVER_URL = "/offer-cover.jpg";
@@ -111,7 +115,14 @@ export async function generateOfferPdf(data: OfferPdfData, signature?: OfferSign
   const [logoDataUrl, coverUrl] = await Promise.all([rasterizeLogo(logoUrl), preloadCover(COVER_URL)]);
 
   const sig: OfferTemplateSignature | undefined = signature
-    ? { signerName: signature.signerName, signatureDataUrl: signature.signatureDataUrl, date: signature.date ?? new Date().toISOString() }
+    ? {
+        signerName: signature.signerName,
+        signatureDataUrl: signature.signatureDataUrl,
+        date: signature.signatureDataUrl ? (signature.date ?? new Date().toISOString()) : (signature.date ?? null),
+        echargingSignatureDataUrl: signature.echargingSignatureDataUrl ?? null,
+        echargingSignerName: signature.echargingSignerName ?? null,
+        echargingSignerFunction: signature.echargingSignerFunction ?? null,
+      }
     : undefined;
 
   const pages = buildOfferPages(data, { logoUrl: logoDataUrl, coverUrl }, sig);

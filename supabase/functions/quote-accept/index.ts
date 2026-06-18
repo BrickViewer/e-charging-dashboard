@@ -108,6 +108,10 @@ Deno.serve(async (req) => {
       acceptanceStatus: acc.status,
       offerDetails: (quote.offer_details ?? {}) as Record<string, unknown>,
       offerTemplate,
+      // E-Charging mede-ondertekening — zodat de klant de al getekende offerte ziet.
+      internalSignatureDataUrl: quote.internal_signature_data_url ?? null,
+      internalSignerName: quote.internal_signer_name ?? null,
+      internalSignerFunction: quote.internal_signer_function ?? null,
     };
 
     if (req.method === "GET") {

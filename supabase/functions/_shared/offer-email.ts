@@ -142,3 +142,27 @@ Investering: ${eur0(o.total)} excl. BTW
 Klantaccount + installatie-order automatisch aangemaakt. Getekende offerte als bijlage.`;
   return { html: shell(o.supabaseUrl, inner), text };
 }
+
+// 4) Verzoek aan een interne ondertekenaar om de offerte te beoordelen en te tekenen.
+export function renderInternalSignoffRequest(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; signerName: string; total: number; reviewUrl: string }): { html: string; text: string } {
+  const inner =
+    eyebrow(`Offerte ${o.quoteNumber}`) +
+    h1("Offerte ter ondertekening") +
+    aanhef(o.signerName) +
+    p(`Er staat een offerte voor ${o.company || "een klant"} klaar die jouw akkoord nodig heeft (eenmalige investering ${eur0(o.total)} excl. BTW).`) +
+    p("Bekijk de offerte, controleer of alles klopt en onderteken digitaal. Klopt er iets niet? Kies dan voor 'Wijzigen' — de offerte komt dan terug op concept zodat je 'm kunt aanpassen. Zodra je tekent, gaat de offerte automatisch naar de klant.") +
+    btn(o.reviewUrl, "Offerte beoordelen en ondertekenen") +
+    fine("Je moet ingelogd zijn met je eigen E-Charging account om te kunnen tekenen.") +
+    greet;
+  const text = `Beste ${o.signerName},
+
+Er staat een offerte voor ${o.company || "een klant"} klaar die jouw akkoord nodig heeft (eenmalige investering ${eur0(o.total)} excl. BTW).
+
+Bekijk en onderteken de offerte: ${o.reviewUrl}
+
+Klopt er iets niet? Kies 'Wijzigen' — de offerte komt dan terug op concept. Zodra je tekent, gaat de offerte automatisch naar de klant. Je moet ingelogd zijn met je eigen E-Charging account.
+
+Met vriendelijke groet,
+Team E-Charging`;
+  return { html: shell(o.supabaseUrl, inner), text };
+}

@@ -19,8 +19,9 @@ import {
   Save, Building2, Settings2, Users, KeyRound, UserPlus,
   CheckCircle2, AlertCircle, Loader2, Plug, Landmark, Mail,
   Clock, RefreshCw, Activity, ChevronRight, Hourglass, Trash2, ShieldCheck,
-  Sun, Moon, SunMoon, AlertTriangle,
+  Sun, Moon, SunMoon, AlertTriangle, PenLine,
 } from "lucide-react";
+import { MySignatureCard } from "@/components/admin/MySignatureCard";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
 import type { CronJobStatus, EfluxSyncLog, Profile } from "@/types/db";
@@ -406,6 +407,7 @@ export default function AdminSettings() {
           <TabsTrigger value="gebruikers"><Users className="w-4 h-4 mr-1" />Gebruikers</TabsTrigger>
           <TabsTrigger value="api"><KeyRound className="w-4 h-4 mr-1" />API</TabsTrigger>
           <TabsTrigger value="automatisering"><Activity className="w-4 h-4 mr-1" />Automatisering</TabsTrigger>
+          <TabsTrigger value="handtekening"><PenLine className="w-4 h-4 mr-1" />Mijn handtekening</TabsTrigger>
           <TabsTrigger value="voorkeuren"><SunMoon className="w-4 h-4 mr-1" />Voorkeuren</TabsTrigger>
         </TabsList>
 
@@ -936,6 +938,11 @@ export default function AdminSettings() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Tab: Mijn handtekening */}
+        <TabsContent value="handtekening">
+          <MySignatureCard />
         </TabsContent>
 
         {/* Tab: Voorkeuren */}

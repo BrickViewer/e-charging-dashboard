@@ -29,7 +29,11 @@ export default function Login() {
       const timer = setTimeout(() => {
         setPhase("ready");
         setTimeout(() => {
-          if (isInternal) navigate("/admin");
+          // Terug naar een opgeslagen bestemming (bv. een interne tekenlink) als die er is.
+          let dest = "";
+          try { dest = sessionStorage.getItem("ec_post_login") ?? ""; if (dest) sessionStorage.removeItem("ec_post_login"); } catch { /* ignore */ }
+          if (dest) navigate(dest);
+          else if (isInternal) navigate("/admin");
           else if (role === "client") navigate("/portal");
           else navigate("/");
         }, 400);

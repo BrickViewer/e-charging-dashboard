@@ -14,6 +14,7 @@ import WorkspaceLayout from "./layouts/WorkspaceLayout";
 import NotFound from "./pages/NotFound";
 import InviteAccept from "./pages/InviteAccept";
 import OfferAccept from "./pages/OfferAccept";
+import OfferInternalSign from "./pages/OfferInternalSign";
 import ResetPassword from "./pages/ResetPassword";
 import { workspacesForRole } from "@/lib/workspaces";
 
@@ -116,6 +117,7 @@ const App = () => (
               <Route path="/wachtwoord-herstellen" element={<ResetPassword />} />
               <Route path="/uitnodiging/:token" element={<InviteAccept />} />
               <Route path="/offerte/:token" element={<OfferAccept />} />
+              <Route path="/offerte/intern/:token" element={<OfferInternalSign />} />
 
               {/* Client Portal */}
               <Route path="/portal" element={

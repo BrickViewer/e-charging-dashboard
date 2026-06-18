@@ -104,10 +104,10 @@ export function useCreateQuoteFromLead() {
 export function useSendQuote() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ quoteId, email, pdfBase64 }: { quoteId: string; email?: string; pdfBase64?: string }) => {
+    mutationFn: async ({ quoteId, email, pdfBase64, internalSelfSign }: { quoteId: string; email?: string; pdfBase64?: string; internalSelfSign?: boolean }) => {
       const { data, error } = await supabase.functions.invoke<{ status: string; message?: string; acceptUrl?: string }>(
         "quote-send",
-        { body: { quote_id: quoteId, email, pdf_base64: pdfBase64 } },
+        { body: { quote_id: quoteId, email, pdf_base64: pdfBase64, internal_self_sign: internalSelfSign } },
       );
       if (error) throw error;
       if (data?.status && data.status !== "sent") throw new Error(data.message || "Versturen mislukt");
@@ -117,6 +117,26 @@ export function useSendQuote() {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["quote", quoteId] });
       qc.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+}
+
+// Stuurt de offerte ter ondertekening naar de gekozen interne ondertekenaar (een ander dan jij).
+export function useRequestSignoff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ quoteId }: { quoteId: string }) => {
+      const { data, error } = await supabase.functions.invoke<{ status: string; message?: string; to?: string }>(
+        "quote-request-signoff",
+        { body: { quote_id: quoteId } },
+      );
+      if (error) throw error;
+      if (data?.status && data.status !== "requested") throw new Error(data.message || "Versturen ter ondertekening mislukt");
+      return data;
+    },
+    onSuccess: (_d, { quoteId }) => {
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["quote", quoteId] });
     },
   });
 }

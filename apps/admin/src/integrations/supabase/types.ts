@@ -2108,6 +2108,8 @@ export type Database = {
           full_name: string | null
           id: string
           organization_id: string | null
+          signature_data_url: string | null
+          signer_title: string | null
           user_id: string
         }
         Insert: {
@@ -2115,6 +2117,8 @@ export type Database = {
           full_name?: string | null
           id?: string
           organization_id?: string | null
+          signature_data_url?: string | null
+          signer_title?: string | null
           user_id: string
         }
         Update: {
@@ -2122,6 +2126,8 @@ export type Database = {
           full_name?: string | null
           id?: string
           organization_id?: string | null
+          signature_data_url?: string | null
+          signer_title?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2185,6 +2191,60 @@ export type Database = {
           },
         ]
       }
+      quote_internal_signings: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          organization_id: string
+          quote_id: string
+          signed_at: string | null
+          signer_user_id: string
+          status: string
+          token_hash: string
+          token_last4: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          organization_id: string
+          quote_id: string
+          signed_at?: string | null
+          signer_user_id: string
+          status?: string
+          token_hash: string
+          token_last4?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          quote_id?: string
+          signed_at?: string | null
+          signer_user_id?: string
+          status?: string
+          token_hash?: string
+          token_last4?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_internal_signings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_internal_signings_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotes: {
         Row: {
           calculation_data: Json | null
@@ -2199,6 +2259,11 @@ export type Database = {
           estimated_kwh_per_point: number | null
           has_solar: boolean | null
           id: string
+          internal_signature_data_url: string | null
+          internal_signed_at: string | null
+          internal_signer_function: string | null
+          internal_signer_name: string | null
+          internal_signer_user_id: string | null
           lead_id: string | null
           line_items: Json
           locations_data: Json | null
@@ -2239,6 +2304,11 @@ export type Database = {
           estimated_kwh_per_point?: number | null
           has_solar?: boolean | null
           id?: string
+          internal_signature_data_url?: string | null
+          internal_signed_at?: string | null
+          internal_signer_function?: string | null
+          internal_signer_name?: string | null
+          internal_signer_user_id?: string | null
           lead_id?: string | null
           line_items?: Json
           locations_data?: Json | null
@@ -2278,6 +2348,11 @@ export type Database = {
           estimated_kwh_per_point?: number | null
           has_solar?: boolean | null
           id?: string
+          internal_signature_data_url?: string | null
+          internal_signed_at?: string | null
+          internal_signer_function?: string | null
+          internal_signer_name?: string | null
+          internal_signer_user_id?: string | null
           lead_id?: string | null
           line_items?: Json
           locations_data?: Json | null

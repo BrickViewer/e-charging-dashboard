@@ -8,7 +8,7 @@ import { renderOfferEmail } from "../_shared/offer-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const RESEND_API = "https://api.resend.com/emails";
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
   const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://dashboard.e-charging.nl").replace(/\/+$/, "");
 
   try {
-    const auth = await requireAdminOrInternal(req, serviceClient, corsHeaders, { allowInternal: false, allowSales: true });
+    const auth = await requireAdminOrInternal(req, serviceClient, corsHeaders, { allowInternal: true, allowSales: true });
     if (!auth.ok) return auth.response;
 
     const body = await req.json().catch(() => ({}));
@@ -48,6 +48,27 @@ Deno.serve(async (req) => {
     if (!quote) return json({ status: "error", message: "Offerte niet gevonden" }, 404);
     const recipient = (typeof body.email === "string" && body.email.trim()) || quote.prospect_email;
     if (!recipient) return json({ status: "error", message: "Geen e-mailadres bekend voor deze offerte" }, 400);
+
+    // Zelf-ondertekenen: stempel de eigen (server-side gelezen) handtekening op de offerte
+    // voordat die naar de klant gaat. Alleen voor ingelogde admin/superadmin.
+    if (body.internal_self_sign === true) {
+      if (auth.kind !== "user" || !auth.userId) return json({ status: "error", message: "Zelf-ondertekenen vereist een ingelogde gebruiker" }, 403);
+      const { data: roleRows } = await serviceClient.from("user_roles").select("role").eq("user_id", auth.userId);
+      const roles = (roleRows ?? []).map((r: { role?: string }) => r.role);
+      if (!roles.includes("admin") && !roles.includes("superadmin")) {
+        return json({ status: "error", message: "Alleen admin/superadmin kan namens E-Charging tekenen" }, 403);
+      }
+      const { data: prof } = await serviceClient.from("profiles").select("full_name, signer_title, signature_data_url").eq("user_id", auth.userId).maybeSingle();
+      if (!prof?.signature_data_url) return json({ status: "no_signature", message: "Stel eerst je handtekening in bij Instellingen › Mijn handtekening" }, 422);
+      await serviceClient.from("quotes").update({
+        internal_signer_user_id: auth.userId,
+        internal_signer_name: prof.full_name ?? null,
+        internal_signer_function: prof.signer_title ?? null,
+        internal_signature_data_url: prof.signature_data_url,
+        internal_signed_at: new Date().toISOString(),
+      }).eq("id", quoteId);
+      await serviceClient.from("quote_internal_signings").update({ status: "revoked" }).eq("quote_id", quoteId).eq("status", "pending");
+    }
 
     // Oude pending acceptaties intrekken.
     await serviceClient.from("quote_acceptances").update({ status: "revoked" }).eq("quote_id", quoteId).eq("status", "pending");
