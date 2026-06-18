@@ -85,6 +85,15 @@ Deno.serve(async (req) => {
     // 2 maanden geldig — consistent met de offerte-PDF en de ondertekenlink.
     const validUntil = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+    // Offerte-sjabloon: adres uit de lead voorvullen. De overige velden vallen bij
+    // het renderen terug op de org-standaarden (Configurator > Offerte-sjabloon),
+    // zodat die centraal beheerbaar blijven.
+    const offerDetails: Record<string, unknown> = {
+      addressStreet: lead.address_street ?? null,
+      addressPostalCode: lead.postal_code ?? null,
+      addressCity: lead.city ?? null,
+    };
+
     const { data: quote, error } = await serviceClient
       .from("quotes")
       .insert({
@@ -109,6 +118,7 @@ Deno.serve(async (req) => {
         line_items: lineItems,
         total_hardware_cost: hardwareTotal,
         total_installation_cost: installationTotal,
+        offer_details: offerDetails,
       })
       .select("id, quote_number")
       .single();

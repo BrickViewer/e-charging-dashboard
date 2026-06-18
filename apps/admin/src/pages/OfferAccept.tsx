@@ -9,6 +9,7 @@ import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import logoFull from "@/assets/logo-full-color.svg";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData } from "@/services/offerPdf";
+import type { OfferDetails, OfferTemplateValues } from "@/services/offerTypes";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 const fmtNlDate = (iso?: string | null) => { if (!iso) return "—"; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }); };
@@ -25,9 +26,12 @@ type QuoteSummary = {
   noticeMonths?: number | null;
   chargeTariffPerKwh?: number | null;
   idleFeePerMinute?: number | null;
+  startFeePerSession?: number | null;
   idleGraceMinutes?: number | null;
   validUntil?: string | null;
   date?: string | null;
+  offerDetails?: OfferDetails | null;
+  offerTemplate?: OfferTemplateValues | null;
 };
 type Resp = { status: string; message?: string; quote?: QuoteSummary };
 
@@ -47,8 +51,11 @@ const toPdfData = (q: QuoteSummary): OfferPdfData => ({
   noticeMonths: q.noticeMonths ?? null,
   chargeTariffPerKwh: q.chargeTariffPerKwh ?? null,
   idleFeePerMinute: q.idleFeePerMinute ?? null,
+  startFeePerSession: q.startFeePerSession ?? null,
   idleGraceMinutes: q.idleGraceMinutes ?? null,
   validUntil: q.validUntil ?? null,
+  offerDetails: q.offerDetails ?? null,
+  offerTemplate: q.offerTemplate ?? null,
 });
 
 // Klein, zelfstandig handtekening-tekenvlak (geen externe dependency).

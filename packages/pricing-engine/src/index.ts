@@ -38,6 +38,34 @@ export const inputRangesSchema = z.object({
   intensityDivisor: z.number().positive().default(650),
 }).default({});
 
+// Org-standaarden voor de offerte-PDF. Deze "vaste" waarden vullen automatisch
+// elke offerte; ze zijn per offerte te overschrijven in het offerte-bewerkscherm.
+export const offerTemplateSchema = z.object({
+  // Scope-defaults (levering en installatie).
+  defaultChargerModel: z.string().default("Zaptec Go 2 Asphalt Black"),
+  loadBalancerModel: z.string().default("Zaptec Sense"),
+  defaultEindgroepen: z.number().int().min(0).default(1),
+  defaultEindgroepAmperage: z.number().min(0).default(32),
+  defaultStelpostGraafwerk: z.number().min(0).default(0),
+  // Tarieven (offerte-voorwaarden).
+  serviceFeePerKwh: z.number().min(0).default(0.10),
+  servicemonteurPerHour: z.number().min(0).default(0),
+  voorrijkostenPerKm: z.number().min(0).default(0),
+  toeslagWerkuur: z.number().min(0).default(0),
+  activatiekostenPerSocket: z.number().min(0).default(0),
+  // Betaalregeling (3 termijnen, samen idealiter 100%).
+  betaalBijOpdrachtPct: z.number().min(0).max(100).default(50),
+  betaalBijStartPct: z.number().min(0).max(100).default(0),
+  betaalNaWerkPct: z.number().min(0).max(100).default(50),
+  // Ondertekenaar namens E-Charging.
+  echargingSignerName: z.string().default("Willi-Jan Jonkers"),
+  echargingSignerFunction: z.string().default("Directeur"),
+  // Tekstsjablonen voor de briefkoppen.
+  defaultObjectTemplate: z.string().default(""),
+  defaultBetreftTemplate: z.string().default("Offerte laadinfrastructuur"),
+  defaultAanhef: z.string().default("heer/mevrouw"),
+}).default({});
+
 export const configuratorSettingsSchema = z.object({
   // e-charging-marge: vast bedrag per kWh dat e-charging op het verbruik verdient.
   echargingMarginPerKwh: z.number().min(0).default(0.05),
@@ -69,6 +97,7 @@ export const configuratorSettingsSchema = z.object({
     { key: "other", label: "Anders" },
   ]),
   locationTypeDefaults: z.record(z.string(), locationTypeDefaultsSchema),
+  offerTemplate: offerTemplateSchema,
 });
 
 export const pricingInputSchema = z.object({
@@ -104,6 +133,7 @@ export const pricingInputSchema = z.object({
 });
 
 export type LocationType = z.infer<typeof locationTypeSchema>;
+export type OfferTemplate = z.infer<typeof offerTemplateSchema>;
 export type ConfiguratorSettings = z.infer<typeof configuratorSettingsSchema>;
 export type PricingInput = z.infer<typeof pricingInputSchema>;
 

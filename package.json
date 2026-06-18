@@ -63,6 +63,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^11.18.2",
+    "html2canvas": "^1.4.1",
     "immer": "^10.1.1",
     "input-otp": "^1.4.2",
     "jspdf": "^4.2.1",

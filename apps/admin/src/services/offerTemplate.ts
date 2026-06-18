@@ -1,0 +1,485 @@
+// ===========================================================================
+// Offerte-sjabloon — HTML/CSS-pagina's die 1:1 "OFF laadpaal - Systeem.pdf"
+// volgen (cover uit het "Black and white"-ontwerp + 4 briefpagina's). Elke
+// pagina is een losse, off-screen A4-node (794 x 1123 px @ 96dpi) die
+// offerPdf.ts met html2canvas naar een PDF-pagina rendert.
+//
+// De VASTE copy hieronder is verbatim overgenomen uit het bronsjabloon. Alle
+// {placeholders} komen uit de offerte/instellingen (zie resolve()).
+// ===========================================================================
+
+import type { OfferDetails, OfferTemplateValues } from "./offerTypes";
+
+const GREEN = "#05A500";
+const GREEN_DARK = "#0a7d12";
+const INK = "#3a3a3a";       // bodytekst (gemeten op de bron ~rgb(58,58,58))
+const HEAD = "#1f1f1f";      // grote koppen + donkere sectiekoppen (pagina 3-4, gemeten ~rgb(28,28,28))
+const MUTED = "#5b5b5b";
+const FAINT = "#9a9a9a";
+const BULLET = "#8f8d85";    // ☞-handje is grijs in de bron (~rgb(148,146,136))
+const FOOT = "#565656";      // voettekst (gemeten ~rgb(54,54,54))
+const HAIRLINE = "#D7D7D7";
+
+export const PAGE_W = 794; // 210mm @ 96dpi
+export const PAGE_H = 1123; // 297mm @ 96dpi
+const PAD = 72; // marge l/r — gemeten op de bron (tekstkolom ~648px breed → zelfde regelafbreking)
+
+const SENDER_CITY = "Zaltbommel";
+const COMPANY_FOOTER = {
+  left: ["Dwarsweg 8", "5301 KT Zaltbommel", "Telefoon: 0418 - 684272"],
+  mid: ["www.e-charging.nl", "info@e-charging.nl"],
+  right: ["KvK: 30241843", "BTW: NL8213.92.402.B01", "IBAN: NL33RABO0143928449"],
+};
+
+const FALLBACK_TEMPLATE: OfferTemplateValues = {
+  defaultChargerModel: "Zaptec Go 2 Asphalt Black",
+  loadBalancerModel: "Zaptec Sense",
+  defaultEindgroepen: 1,
+  defaultEindgroepAmperage: 32,
+  defaultStelpostGraafwerk: 0,
+  serviceFeePerKwh: 0.1,
+  servicemonteurPerHour: 0,
+  voorrijkostenPerKm: 0,
+  toeslagWerkuur: 0,
+  activatiekostenPerSocket: 0,
+  betaalBijOpdrachtPct: 50,
+  betaalBijStartPct: 0,
+  betaalNaWerkPct: 50,
+  echargingSignerName: "Willi-Jan Jonkers",
+  echargingSignerFunction: "Directeur",
+  defaultObjectTemplate: "",
+  defaultBetreftTemplate: "Offerte laadinfrastructuur",
+  defaultAanhef: "heer/mevrouw",
+};
+
+// --------------------------------------------------------------------------
+export interface OfferTemplateData {
+  quoteNumber: string;
+  date?: string | null;
+  company: string;
+  contactName?: string | null;
+  addressLine?: string | null; // legacy "straat, postcode plaats"
+  numChargePoints?: number | null;
+  totalInvestment: number;
+  withManagement?: boolean;
+  durationMonths?: number | null;
+  noticeMonths?: number | null;
+  chargeTariffPerKwh?: number | null; // laadkosten
+  idleFeePerMinute?: number | null; // blokkeertarief
+  startFeePerSession?: number | null; // starttarief
+  idleGraceMinutes?: number | null;
+  validUntil?: string | null;
+  offerDetails?: OfferDetails | null;
+  offerTemplate?: OfferTemplateValues | null;
+}
+
+export interface OfferTemplateSignature {
+  signerName: string;
+  signatureDataUrl: string;
+  date?: string | null;
+}
+
+// --------------------------------------------------------------------------
+const num2 = (n: number) => Number(n || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const int0 = (n: number) => Math.round(n || 0).toLocaleString("nl-NL");
+const money2 = (n: number | null) => (n == null ? "—" : `€ ${num2(n)}`);
+const invFmt = (n: number) => `€ ${int0(n)},--`;
+const stelFmt = (n: number) => `€ ${int0(n)},-`;
+
+function fmtDateShort(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("T")[0].split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}-${m}-${y}`;
+}
+function fmtDateLong(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+}
+function esc(v: unknown): string {
+  return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Geel markeren wanneer een veld leeg/niet ingesteld is — interne controle zodat
+// alle informatie compleet in de offerte staat vóór versturen.
+const HL = "#fff59d";
+const yel = (t: string) => `<span style="background:${HL};border-radius:2px;padding:0 2px">${t}</span>`;
+const mStr = (val: string, placeholder: string) => (val && val.trim()) ? esc(val) : yel(esc(placeholder));
+const mEur = (val: number | null | undefined) => (val != null && val !== 0) ? money2(val) : yel(money2(0));
+const mInv = (val: number) => val ? invFmt(val) : yel(invFmt(0));
+const mStel = (val: number) => val ? stelFmt(val) : yel(stelFmt(0));
+
+// --------------------------------------------------------------------------
+interface ResolvedModel {
+  company: string; contactName: string; addr1: string; addr2: string;
+  dateLong: string; dateShort: string; reference: string;
+  onzeReferentie: string; object: string; betreft: string; aanhef: string;
+  numChargePoints: number; numPoles: number; chargerModel: string; loadBalancer: string;
+  eindgroepen: number; eindgroepAmperage: number; leveringText: string; totalInvestment: number; stelpost: number;
+  serviceFeePerKwh: number; laadkosten: number | null; blokkeertarief: number | null; starttarief: number | null;
+  overlegNaam: string; overlegDatum: string;
+  servicemonteurPerHour: number; voorrijkostenPerKm: number; toeslagWerkuur: number; activatiekostenPerSocket: number;
+  ingangsdatum: string;
+  betaalBijOpdracht: number; betaalBijStart: number; betaalNaWerk: number;
+  signerName: string;
+}
+
+function firstStr(...vals: Array<string | null | undefined>): string {
+  for (const v of vals) if (typeof v === "string" && v.trim() !== "") return v;
+  return "";
+}
+function firstNum(...vals: Array<number | null | undefined>): number | null {
+  for (const v of vals) if (typeof v === "number" && Number.isFinite(v)) return v;
+  return null;
+}
+
+function resolve(data: OfferTemplateData): ResolvedModel {
+  const od: OfferDetails = data.offerDetails ?? {};
+  const tpl: OfferTemplateValues = data.offerTemplate ?? FALLBACK_TEMPLATE;
+  const n = firstNum(data.numChargePoints) ?? 0;
+
+  let addr1 = firstStr(od.addressStreet);
+  let addr2 = firstStr([od.addressPostalCode, od.addressCity].filter(Boolean).join(" "));
+  if (!addr1 && !addr2 && data.addressLine) {
+    const parts = data.addressLine.split(",").map((s) => s.trim());
+    addr1 = parts[0] ?? "";
+    addr2 = parts.slice(1).join(", ");
+  }
+  const dateIso = firstStr(od.offerDate, data.date) || new Date().toISOString();
+
+  return {
+    company: data.company || "",
+    contactName: firstStr(od.tav, data.contactName),
+    addr1, addr2,
+    dateLong: fmtDateLong(dateIso),
+    dateShort: fmtDateShort(dateIso),
+    reference: data.quoteNumber || "",
+    onzeReferentie: firstStr(od.onzeReferentie, data.quoteNumber),
+    object: firstStr(od.object, tpl.defaultObjectTemplate),
+    betreft: firstStr(od.betreft, tpl.defaultBetreftTemplate),
+    aanhef: firstStr(od.aanhef, tpl.defaultAanhef),
+    numChargePoints: n,
+    numPoles: firstNum(od.numPoles, n) ?? n,
+    chargerModel: firstStr(od.chargerModel, tpl.defaultChargerModel),
+    loadBalancer: firstStr(od.loadBalancerModel, tpl.loadBalancerModel),
+    eindgroepen: firstNum(od.eindgroepen, tpl.defaultEindgroepen) ?? tpl.defaultEindgroepen,
+    eindgroepAmperage: firstNum(od.eindgroepAmperage, tpl.defaultEindgroepAmperage) ?? tpl.defaultEindgroepAmperage,
+    leveringText: firstStr(od.leveringText, DEFAULT_LEVERING_TEXT),
+    totalInvestment: data.totalInvestment || 0,
+    stelpost: firstNum(od.stelpostGraafwerk, tpl.defaultStelpostGraafwerk) ?? 0,
+    serviceFeePerKwh: firstNum(od.serviceFeePerKwh, tpl.serviceFeePerKwh) ?? tpl.serviceFeePerKwh,
+    laadkosten: firstNum(data.chargeTariffPerKwh),
+    blokkeertarief: firstNum(data.idleFeePerMinute),
+    starttarief: firstNum(od.startFeePerSession, data.startFeePerSession),
+    overlegNaam: firstStr(od.overlegNaam),
+    overlegDatum: od.overlegDatum ? fmtDateLong(od.overlegDatum) : "",
+    servicemonteurPerHour: firstNum(od.servicemonteurPerHour, tpl.servicemonteurPerHour) ?? 0,
+    voorrijkostenPerKm: firstNum(od.voorrijkostenPerKm, tpl.voorrijkostenPerKm) ?? 0,
+    toeslagWerkuur: firstNum(od.toeslagWerkuur, tpl.toeslagWerkuur) ?? 0,
+    activatiekostenPerSocket: firstNum(od.activatiekostenPerSocket, tpl.activatiekostenPerSocket) ?? 0,
+    ingangsdatum: od.ingangsdatum ? fmtDateLong(od.ingangsdatum) : "",
+    betaalBijOpdracht: firstNum(od.betaalBijOpdrachtPct, tpl.betaalBijOpdrachtPct) ?? 0,
+    betaalBijStart: firstNum(od.betaalBijStartPct, tpl.betaalBijStartPct) ?? 0,
+    betaalNaWerk: firstNum(od.betaalNaWerkPct, tpl.betaalNaWerkPct) ?? 0,
+    signerName: firstStr(od.echargingSignerName, tpl.echargingSignerName),
+  };
+}
+
+// ===========================================================================
+// VASTE COPY — verbatim uit "OFF laadpaal - Systeem.pdf".
+// ===========================================================================
+const BEHEER_POINTS: Array<[string, string]> = [
+  ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u realtime wat uw palen doen: opbrengsten, verbruik en gebruik per paal. Eén plek voor inzicht, controle en rapportage. 24/7 inzichtelijk."],
+  ["Uw palen blijven up en running", "Wij krijgen direct een melding bij een storing en lossen het meestal op voordat u het in de gaten heeft. Eerst op afstand; lukt dat niet, dan komen wij ter plaatse voor een diagnose. U en uw laadgebruikers kunnen de helpdesk 24/7 bereiken."],
+  ["Doorlopende optimalisatie van rendement", "Wij analyseren continu het werkelijke gebruik van uw palen en stellen tarieven, blokkeerregels en tijdsvensters daarop af, met behulp van AI. Zo brengen uw palen het maximale op, ook als de markt of het gebruik verandert."],
+  ["Hulp met ERE-onboarding", "Wij koppelen u aan onze partner die u begeleidt bij de ERE-aanvraag. De gegevens van uw laadpalen worden door ons rechtstreeks aan de ERE-inboeker verstrekt, zodat u hier geen omkijken naar heeft."],
+  ["Elke maand geld op uw rekening", "Wij verzorgen transactieverwerking, facturatie en uitbetaling. Elke maand ontvangt u uw self-billing factuur en wij betalen uw opbrengst uit."],
+  ["Prioriteit op reparaties", "Gaat er echter iets mis en is een bezoek op locatie nodig, dan komen wij met voorrang langs om uw paal weer aan de praat te krijgen. Hiervoor gelden vaste, vooraf bekende tarieven (zie de prijsstelling), zodat u nooit voor verrassingen komt te staan."],
+];
+
+// Standaard "Levering en installatie"-tekst (verbatim uit het sjabloon). Dit is de
+// DEFAULT; per offerte te overschrijven via offer_details.leveringText (vrije tekst,
+// alinea's gescheiden door een lege regel).
+const LEVERING_INSTALLATIE: string[] = [
+  "Het leveren, monteren en aansluiten van 10 stuks Zaptec Go 2 Asphalt Black gemonteerd op 5 stuks nieuwe laadpalen.",
+  "T.b.v. de load balancing wordt er in de meterkast Zaptec Sense geplaatst. Deze Sense regelt het vermogen wat voor de laadpaal beschikbaar wordt gesteld t.o.v. het totaal afgenomen vermogen van de aansluiting. Tevens kan hiermee ook bij een dynamisch energiecontract op de voordeligste momenten van de dag worden geladen. Ook met opgewekte zonne-energie kan geladen worden.",
+  "Meterkast wordt uitgebreid met 5 eindgroepen van 32A.",
+];
+export const DEFAULT_LEVERING_TEXT = LEVERING_INSTALLATIE.join("\n\n");
+
+const AANSPRAKELIJKHEID = "Iedere aansprakelijkheid van E-Charging B.V. is beperkt tot het bedrag dat in de desbetreffende gebeurtenis onder haar aansprakelijkheidsverzekering wordt uitbetaald.";
+const AANPAK = "Voor de realisatie en beheer van uw laadpalen stellen wij een contactpersoon aan die de schakel vormt tussen u als opdrachtgever en E-Charging. Deze heeft tot taak om de met u gemaakte afspraken op een correcte manier uit te voeren en de realisatie aan te sturen.";
+
+// ===========================================================================
+// HTML-bouwstenen.
+// ===========================================================================
+function pageEl(inner: string, fontSize = 13): HTMLElement {
+  const el = document.createElement("div");
+  el.style.cssText = [
+    `width:${PAGE_W}px`, `height:${PAGE_H}px`, "box-sizing:border-box",
+    "background:#ffffff", `color:${INK}`, "font-family:'Outfit',Arial,sans-serif",
+    `font-size:${fontSize}px`, "line-height:1.4", "position:relative", "overflow:hidden",
+    "-webkit-font-smoothing:antialiased",
+  ].join(";");
+  el.innerHTML = inner;
+  return el;
+}
+
+const sq = `<span style="display:inline-block;width:6px;height:6px;background:#8c8c8c;margin-left:8px;vertical-align:middle"></span>`;
+const g = (t: string) => `<span style="color:${GREEN}">${t}</span>`;
+
+function header(m: ResolvedModel, logoUrl: string | null, pageNum: number, total: number): string {
+  const logo = logoUrl
+    ? `<img src="${logoUrl}" alt="E-Charging" style="height:72px;display:block" />`
+    : `<div style="font-weight:600;color:${GREEN};font-size:34px">e-charging</div>`;
+  // Flex-rij per regel zodat het vierkantje verticaal gecentreerd recht achter de tekst staat.
+  const ln = (t: string) => `<div style="display:flex;align-items:center;justify-content:flex-end;height:19px"><span>${t}</span>${sq}</div>`;
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>${logo}</div>
+    <div style="color:${FAINT};font-size:10.5px">
+      ${ln(esc(m.dateShort) || "datum")}
+      ${ln(esc(m.reference) || "referentie")}
+      ${ln(`Pagina ${pageNum} van ${total}`)}
+    </div>
+  </div>
+  <div style="border-top:1px solid ${HAIRLINE};margin-top:16px"></div>`;
+}
+
+function footer(): string {
+  const col = (lines: string[], align: string) =>
+    `<div style="text-align:${align};color:${FOOT};font-size:9px;line-height:1.6">${lines.map(esc).join("<br/>")}</div>`;
+  return `
+  <div style="position:absolute;left:${PAD}px;right:${PAD}px;bottom:34px">
+    <div style="border-top:1px solid ${HAIRLINE};margin-bottom:8px"></div>
+    <div style="display:flex;justify-content:space-between">
+      ${col(COMPANY_FOOTER.left, "left")}${col(COMPANY_FOOTER.mid, "center")}${col(COMPANY_FOOTER.right, "right")}
+    </div>
+  </div>`;
+}
+
+// A4-geometrie voor de auto-paginering van de brief (tekstkader start op y172).
+const CONTENT_TOP = 172;
+const CONTENT_BOTTOM = 84;
+const LETTER_FONT = 12.5;
+const CONTENT_W = PAGE_W - 2 * PAD;
+
+// Een blok = één atomair stuk brief. marginTop staat LOS van de html zodat we 'm per
+// pagina kunnen resetten (eerste blok op een vervolgpagina krijgt geen gat). keep =
+// "houd bij het volgende blok" (geen weeskop onderaan een pagina).
+interface Block { html: string; mt: number; keep?: boolean; brk?: boolean }
+
+const bSec = (t: string, mt = 24, color: string = GREEN): Block =>
+  ({ html: `<div style="font-weight:700;color:${color};text-decoration:underline">${esc(t)}</div>`, mt, keep: true });
+const bBig = (html: string, mt = 34): Block =>
+  ({ html: `<div style="text-align:center;font-size:26px;font-weight:700;color:${HEAD}">${html}</div>`, mt });
+const bP = (html: string, mt = 22): Block => ({ html: `<p style="margin:0">${html}</p>`, mt });
+// ☞-bullet (wijzende hand) — grijs, niet groen.
+const bFb = (html: string, mt = 5): Block =>
+  ({ html: `<div style="display:flex;gap:9px"><span style="color:${BULLET};flex:0 0 auto">☞</span><span>${html}</span></div>`, mt });
+const bSub = (html: string, mt = 2): Block =>
+  ({ html: `<div style="margin-left:30px;display:flex;gap:8px"><span style="color:${MUTED}">o</span><span>${html}</span></div>`, mt });
+const bRaw = (html: string, mt: number, keep = false): Block => ({ html, mt, keep });
+
+// Bouwt één briefpagina-node uit de toegewezen blokken. Eerste blok op een
+// vervolgpagina (pageNum>1) krijgt margin-top 0; op pagina 1 behoudt het z'n eigen mt.
+function assembleLetterPage(m: ResolvedModel, logoUrl: string | null, pageNum: number, total: number, blocks: Block[]): HTMLElement {
+  const content = blocks
+    .map((b, i) => `<div style="margin-top:${i === 0 ? (pageNum === 1 ? b.mt : 0) : b.mt}px">${b.html}</div>`)
+    .join("");
+  return pageEl(
+    `<div style="position:absolute;left:${PAD}px;right:${PAD}px;top:62px">${header(m, logoUrl, pageNum, total)}</div>` +
+    `<div style="position:absolute;left:${PAD}px;right:${PAD}px;top:${CONTENT_TOP}px;bottom:${CONTENT_BOTTOM}px">${content}</div>` +
+    footer(),
+    LETTER_FONT,
+  );
+}
+
+// ===========================================================================
+// PAGINA'S.
+// ===========================================================================
+function coverPage(m: ResolvedModel, logoUrl: string | null, coverUrl: string | null): HTMLElement {
+  // De cover is het kant-en-klare "Black and white"-ontwerp (offer-cover.jpg, met logo +
+  // "Offerte" + titel ingebakken). We leggen alleen de dynamische bedrijfsgegevens
+  // linksonder op het lichte paneel, op de plek van het lege placeholder-vlak.
+  const addr = `
+    <div style="position:absolute;left:138px;bottom:96px;color:#2d2d2d;font-size:15px;line-height:1.6">
+      <div style="font-weight:600">${esc(m.company)}</div>
+      ${m.addr1 ? `<div>${esc(m.addr1)}</div>` : ""}
+      ${m.addr2 ? `<div>${esc(m.addr2)}</div>` : ""}
+    </div>`;
+
+  if (coverUrl) {
+    return pageEl(`
+      <img src="${coverUrl}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />
+      ${addr}
+    `);
+  }
+
+  // Terugval als offer-cover.jpg ontbreekt: groen ontwerp dat het origineel benadert.
+  const logo = logoUrl
+    ? `<img src="${logoUrl}" alt="E-Charging" style="position:absolute;top:130px;left:138px;height:52px" />`
+    : `<div style="position:absolute;top:130px;left:138px;font-weight:600;color:${GREEN};font-size:26px">e-charging</div>`;
+  return pageEl(`
+    <div style="position:absolute;inset:0;background:${GREEN_DARK}"></div>
+    <div style="position:absolute;top:0;left:80px;bottom:0;width:52%;background:rgba(233,240,233,0.9)"></div>
+    ${logo}
+    <div style="position:absolute;top:455px;left:138px;font-style:italic;color:${MUTED};font-size:34px">Offerte</div>
+    <div style="position:absolute;top:705px;left:138px;line-height:1.18">
+      <div style="font-size:38px;font-weight:700;color:${INK}">Wij plaatsen</div>
+      <div style="font-size:38px;font-weight:700;color:${INK}">uw laadpalen,</div>
+      <div style="font-size:38px;font-weight:700;font-style:italic;color:${GREEN}">U verdient eraan</div>
+    </div>
+    ${addr}
+  `);
+}
+
+// De volledige brief als geordende lijst losse blokken (sectie-kop = keep-with-next).
+function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Block[] {
+  const blocks: Block[] = [];
+
+  // --- Briefkop + Levering en installatie ---
+  const recipient = [
+    `<div>${mStr(m.company, "Bedrijfsnaam")}</div>`,
+    `<div>T.a.v. ${mStr(m.contactName, "tav")}</div>`,
+    `<div>${mStr(m.addr1, "Adres")}</div>`,
+    `<div>${mStr(m.addr2, "Postcode en woonplaats")}</div>`,
+  ].join("");
+  const refRow = (lbl: string, valHtml: string) =>
+    `<div style="display:flex"><div style="width:128px">${esc(lbl)}</div><div>: ${valHtml}</div></div>`;
+  blocks.push(bRaw(`<div style="line-height:1.5">${recipient}</div>`, 14));
+  blocks.push(bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, 96));
+  blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:20px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, 18));
+  blocks.push(bRaw(`<div>Geachte ${esc(m.aanhef)},</div>`, 84));
+  blocks.push(bP("Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren, aansluiten en beheren van uw laadpalen.", 12));
+  blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
+  blocks.push(bSec("Levering en installatie", 30, GREEN));
+  // De scope-tekst is bewerkbare vrije tekst (offer_details.leveringText); alinea's
+  // gescheiden door een lege regel → losse blokken zodat alles netjes herpagineert.
+  m.leveringText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
+    .forEach((para, i) => blocks.push(bP(esc(para).replace(/\n/g, "<br/>"), i === 0 ? 8 : 22)));
+  blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (totaal excl. BTW)</div></div>`, 24));
+  blocks.push(bRaw(`<div style="font-style:italic">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`, 30));
+
+  // --- Beheermodule ---
+  blocks.push({ ...bSec("Beheermodule laadpalen", 0, GREEN), brk: true });
+  blocks.push(bP("Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:", 10));
+  BEHEER_POINTS.forEach(([t, b], i) => blocks.push(bRaw(
+    `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
+    i === 0 ? 14 : 22)));
+  blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
+  blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
+  blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
+  const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:95px">${esc(lbl)}</div><div>${val}</div></div>`;
+  blocks.push(bRaw(tariff("Laadkosten:", `${mEur(m.laadkosten)} per kWh`), 4));
+  blocks.push(bRaw(tariff("Blokkeertarief:", `${mEur(m.blokkeertarief)} per minuut`), 4));
+  blocks.push(bRaw(tariff("Starttarief:", `${mEur(m.starttarief)} per keer`), 4));
+
+  // --- Uitgangspunten / voorwaarden ---
+  const row2 = (l: string, r: string) => `<div style="display:flex"><div style="width:330px">${l}</div><div>${r}</div></div>`;
+  blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
+  blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
+  blocks.push(bSec("Prijsstelling", 19, HEAD));
+  blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", 8));
+  blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
+  blocks.push(bSec("Storingen", 19, HEAD));
+  blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
+  blocks.push(bRaw(row2("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 6));
+  blocks.push(bRaw(row2("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
+  blocks.push(bRaw(row2("Voor werktijden tussen 17.00 uur en 08.00 uur", "75 % toeslag."), 12));
+  blocks.push(bRaw(row2("Voor zaterdagen", "75 % toeslag."), 1));
+  blocks.push(bRaw(row2("Zon en feestdagen", "125 % toeslag."), 1));
+  blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend.", 16));
+  blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
+  blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 19, HEAD));
+  blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
+  blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.toeslagWerkuur)} gehanteerd worden:`));
+  blocks.push(bSub("50% Avonduren (17.00 &ndash; 23.00 uur)"));
+  blocks.push(bSub("75% Nachturen (23.00 &ndash; 07.00 uur) en zaterdag (normale werkuren)"));
+  blocks.push(bSub("125% Zon- en feestdagen (normale werkuren)"));
+  blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
+  blocks.push(bSec("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule", 19, HEAD));
+  blocks.push(bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8));
+  blocks.push(bFb(`De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
+  blocks.push(bFb("De overeenkomst wordt aangegaan voor een periode van één (1) jaar, te rekenen vanaf de ingangsdatum. Na afloop van deze periode wordt de overeenkomst telkens stilzwijgend verlengd met een periode van één (1) jaar, tenzij opdrachtgever of aannemer de overeenkomst schriftelijk opzegt met inachtneming van een opzegtermijn van drie (3) maanden vóór het einde van de lopende contractperiode."));
+  blocks.push(bSec("Niet in deze aanbieding opgenomen", 19, HEAD));
+  blocks.push(bFb("Hak-, graaf-, frees-, breek-, timmer-, schilder-, kit-, metsel- en stucadoorswerk, tenzij anders omschreven.", 8));
+
+  // --- Aansprakelijkheid / aanpak / handtekening ---
+  const sigImg = signature?.signatureDataUrl
+    ? `<img src="${signature.signatureDataUrl}" alt="" style="max-height:64px;max-width:90%;display:block" />`
+    : "";
+  const sigDate = signature?.date ? fmtDateShort(signature.date) : "";
+  const dots = "………………….…………";
+  blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", 0, HEAD), brk: true });
+  blocks.push(bFb(esc(AANSPRAKELIJKHEID), 9));
+  blocks.push(bFb(`Betalingen levering en installatie: ${esc(m.betaalBijOpdracht)}% bij opdracht, ${esc(m.betaalBijStart)}% bij start werkzaamheden en ${esc(m.betaalNaWerk)}% na werkzaamheden.`));
+  blocks.push(bFb("Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte self-billing factuur."));
+  blocks.push(bFb("Betalingen binnen 14 dagen na factuurdatum."));
+  blocks.push(bSec("Onze aanpak", 24, HEAD));
+  blocks.push(bP(esc(AANPAK), 9));
+  blocks.push(bRaw(`<div style="text-align:center"><div>Heeft u nog vragen of opmerkingen naar aanleiding van deze aanbieding?</div><div style="margin-top:4px">Neem dan gerust contact met ons op.</div></div>`, 40));
+  blocks.push(bRaw(`<div style="display:flex;gap:40px"><div style="flex:1"><div>Met vriendelijke groet,</div><div style="height:72px"></div><div style="font-weight:600">${esc(m.signerName) || "Naam ondertekenaar"}</div><div style="margin-top:2px">E-Charging B.V.</div></div><div style="flex:1"><div>Voor akkoord getekend,</div><div style="height:72px;display:flex;align-items:flex-end">${sigImg}</div><div>Dhr./Mevr: ${esc(signature?.signerName) || dots}</div><div style="margin-top:6px">d.d. ${esc(sigDate) || dots}</div></div></div>`, 44));
+
+  return blocks;
+}
+
+// Verdeel de blokken greedy over A4-pagina's (header/footer per pagina herhaald).
+function paginateLetter(blocks: Block[], heights: number[]): Block[][] {
+  const contentH = PAGE_H - CONTENT_TOP - CONTENT_BOTTOM;
+  const pages: Block[][] = [];
+  let cur: Block[] = [];
+  let used = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    // Geforceerde paginabreuk vóór een sectie die altijd boven aan een nieuwe pagina hoort.
+    if (b.brk && cur.length) { pages.push(cur); cur = []; used = 0; }
+    const first = cur.length === 0;
+    const selfAdd = heights[i] + (first ? 0 : b.mt);
+    let needed = selfAdd;
+    if (b.keep && i + 1 < blocks.length) needed += heights[i + 1] + blocks[i + 1].mt;
+    if (!first && used + needed > contentH) {
+      pages.push(cur);
+      cur = [b];
+      used = heights[i];
+    } else {
+      cur.push(b);
+      used += selfAdd;
+    }
+  }
+  if (cur.length) pages.push(cur);
+  return pages;
+}
+
+// ===========================================================================
+// Cover (vast) + automatisch gepagineerde brief. Meet elk blok off-screen op
+// contentbreedte (zelfde font als de pagina) en verdeel ze over zoveel A4-pagina's
+// als nodig — zo schuift langere/kortere "Levering en installatie"-tekst netjes door.
+export function buildOfferPages(
+  data: OfferTemplateData,
+  assets: { logoUrl: string | null; coverUrl: string | null },
+  signature?: OfferTemplateSignature,
+): HTMLElement[] {
+  const m = resolve(data);
+  const cover = coverPage(m, assets.logoUrl, assets.coverUrl);
+  const blocks = letterBlocks(m, signature);
+
+  const measure = document.createElement("div");
+  measure.style.cssText = `position:fixed;left:-10000px;top:0;width:${CONTENT_W}px;font-family:'Outfit',Arial,sans-serif;font-size:${LETTER_FONT}px;line-height:1.4;color:${INK}`;
+  const nodes = blocks.map((b) => {
+    const d = document.createElement("div");
+    d.innerHTML = b.html;
+    measure.appendChild(d);
+    return d;
+  });
+  document.body.appendChild(measure);
+  const heights = nodes.map((d) => d.offsetHeight);
+  document.body.removeChild(measure);
+
+  const pages = paginateLetter(blocks, heights);
+  const total = pages.length;
+  const letterNodes = pages.map((pageBlocks, idx) => assembleLetterPage(m, assets.logoUrl, idx + 1, total, pageBlocks));
+  return [cover, ...letterNodes];
+}

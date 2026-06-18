@@ -256,7 +256,16 @@ export default function AdminSettings() {
       const { data, error } = await supabase.functions.invoke("invite-team-member", {
         body: { email: inviteEmail.trim(), name: inviteName.trim() || undefined, role: inviteRole },
       });
-      if (error) throw error;
+      if (error) {
+        // Bij een non-2xx geeft supabase-js een generieke fout; lees de echte
+        // boodschap uit de response-body van de edge function.
+        let msg = error.message;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          if (body?.message) msg = body.message;
+        } catch { /* body niet leesbaar — val terug op generieke melding */ }
+        throw new Error(msg);
+      }
       const res = data as { status?: string; message?: string; to?: string };
       if (res?.status === "error") throw new Error(res.message || "Uitnodigen mislukt");
       return res;

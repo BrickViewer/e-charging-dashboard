@@ -74,15 +74,24 @@ Deno.serve(async (req: Request) => {
     const redirectTo = `${PUBLIC_URL}/wachtwoord-herstellen`;
 
     // Maak/uitnodig de auth-user + krijg de actie-link (geen mail via Supabase zelf).
-    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+    let { data: linkData } = await admin.auth.admin.generateLink({
       type: "invite",
       email,
       options: { redirectTo, data: { full_name: name || undefined, invited_role: role } },
     });
-    if (linkErr || !linkData?.user) {
-      return json({ status: "error", message: linkErr?.message ?? "Uitnodiging aanmaken mislukt (bestaat dit e-mailadres al?)" }, 400);
+    // Bestaat dit e-mailadres al als gebruiker? Dan faalt 'invite'. Val terug op een
+    // 'recovery'-link, zodat een bestaande (rolloze) gebruiker alsnog de rol + toegang
+    // krijgt en zijn wachtwoord kan (her)instellen.
+    let reinvite = false;
+    if (!linkData?.user) {
+      const recovery = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo } });
+      if (recovery.error || !recovery.data?.user) {
+        return json({ status: "error", message: recovery.error?.message ?? "Uitnodiging aanmaken mislukt" }, 400);
+      }
+      linkData = recovery.data;
+      reinvite = true;
     }
-    const invitedId = linkData.user.id;
+    const invitedId = linkData.user!.id;
     const actionLink = linkData.properties?.action_link;
     if (!actionLink) return json({ status: "error", message: "Geen actie-link ontvangen" }, 500);
 
@@ -108,7 +117,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           from: `${FROM_NAME} <${FROM_EMAIL}>`,
           to: [email],
-          subject: "Uitnodiging — E-Charging beheer-portaal",
+          subject: reinvite ? "Je toegang tot het E-Charging beheer-portaal" : "Uitnodiging — E-Charging beheer-portaal",
           html,
           text,
           reply_to: "info@e-charging.nl",

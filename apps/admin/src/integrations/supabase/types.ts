@@ -2205,6 +2205,7 @@ export type Database = {
           monthly_projection: Json | null
           notes: string | null
           num_charge_points: number | null
+          offer_details: Json
           organization_id: string
           person_id: string | null
           prospect_company: string | null
@@ -2283,6 +2284,7 @@ export type Database = {
           monthly_projection?: Json | null
           notes?: string | null
           num_charge_points?: number | null
+          offer_details?: Json
           organization_id?: string
           person_id?: string | null
           prospect_company?: string | null

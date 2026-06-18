@@ -199,6 +199,9 @@ export default function AdminConfiguratorSettings() {
   const setRange = (field: keyof ConfiguratorSettings["inputRanges"], value: number) =>
     updateSettings((current) => ({ ...current, inputRanges: { ...current.inputRanges, [field]: value } }));
 
+  const setOffer = (patch: Partial<ConfiguratorSettings["offerTemplate"]>) =>
+    updateSettings((current) => ({ ...current, offerTemplate: { ...current.offerTemplate, ...patch } }));
+
   const save = async () => {
     setSaving(true);
     try {
@@ -295,12 +298,13 @@ export default function AdminConfiguratorSettings() {
       </div>
 
       <Tabs defaultValue="defaults">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           <TabsTrigger value="defaults">Defaults</TabsTrigger>
           <TabsTrigger value="locations">Locatietypes</TabsTrigger>
           <TabsTrigger value="tariffs">Tarieven</TabsTrigger>
           <TabsTrigger value="investment">ERE &amp; investering</TabsTrigger>
           <TabsTrigger value="ranges">Invoergrenzen</TabsTrigger>
+          <TabsTrigger value="offer">Offerte-sjabloon</TabsTrigger>
         </TabsList>
 
         {/* DEFAULTS */}
@@ -518,6 +522,61 @@ export default function AdminConfiguratorSettings() {
                 <CurrencyInput label="Investeringsslider — vloer (max)" value={settings.inputRanges.investmentSliderFloor} onChange={(v) => setRange("investmentSliderFloor", v)} />
                 <CurrencyInput label="Investeringsslider — stap" value={settings.inputRanges.investmentSliderStep} onChange={(v) => setRange("investmentSliderStep", Math.max(1, v))} />
                 <CurrencyInput label="Intensiteit-deler (scène-flow)" value={settings.inputRanges.intensityDivisor} onChange={(v) => setRange("intensityDivisor", Math.max(1, v))} />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* OFFERTE-SJABLOON */}
+        <TabsContent value="offer" className="mt-6">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Investering-standaard</CardTitle>
+                <CardDescription>De "Levering en installatie"-tekst is vaste sjabloontekst. Alleen de stelpost graafwerk is een standaardbedrag (per offerte aan te passen).</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 md:grid-cols-3">
+                <CurrencyInput label="Stelpost graafwerk (€)" value={settings.offerTemplate.defaultStelpostGraafwerk} onChange={(v) => setOffer({ defaultStelpostGraafwerk: Math.max(0, v) })} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Tarieven (offerte)</CardTitle>
+                <CardDescription>Service-fee en storingstarieven die in de offerte-voorwaarden komen te staan.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 md:grid-cols-3">
+                <CurrencyInput label="Service-fee / kWh (€)" value={settings.offerTemplate.serviceFeePerKwh} onChange={(v) => setOffer({ serviceFeePerKwh: Math.max(0, v) })} />
+                <CurrencyInput label="Servicemonteur / uur (€)" value={settings.offerTemplate.servicemonteurPerHour} onChange={(v) => setOffer({ servicemonteurPerHour: Math.max(0, v) })} />
+                <CurrencyInput label="Voorrijkosten / km (€)" value={settings.offerTemplate.voorrijkostenPerKm} onChange={(v) => setOffer({ voorrijkostenPerKm: Math.max(0, v) })} />
+                <CurrencyInput label="Toeslag per werkuur (€)" value={settings.offerTemplate.toeslagWerkuur} onChange={(v) => setOffer({ toeslagWerkuur: Math.max(0, v) })} />
+                <CurrencyInput label="Activatiekosten / socket (€)" value={settings.offerTemplate.activatiekostenPerSocket} onChange={(v) => setOffer({ activatiekostenPerSocket: Math.max(0, v) })} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Betaalregeling</CardTitle>
+                <CardDescription>Percentages levering en installatie. Samen idealiter 100%.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 md:grid-cols-3">
+                <CurrencyInput label="% bij opdracht" value={settings.offerTemplate.betaalBijOpdrachtPct} onChange={(v) => setOffer({ betaalBijOpdrachtPct: Math.min(100, Math.max(0, v)) })} />
+                <CurrencyInput label="% bij start werkzaamheden" value={settings.offerTemplate.betaalBijStartPct} onChange={(v) => setOffer({ betaalBijStartPct: Math.min(100, Math.max(0, v)) })} />
+                <CurrencyInput label="% na werkzaamheden" value={settings.offerTemplate.betaalNaWerkPct} onChange={(v) => setOffer({ betaalNaWerkPct: Math.min(100, Math.max(0, v)) })} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Ondertekenaar &amp; teksten</CardTitle>
+                <CardDescription>Ondertekenaar namens E-Charging en de standaard briefkoppen.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 md:grid-cols-2">
+                <TextField label="Ondertekenaar (naam)" value={settings.offerTemplate.echargingSignerName} onChange={(v) => setOffer({ echargingSignerName: v })} />
+                <TextField label="Ondertekenaar (functie)" value={settings.offerTemplate.echargingSignerFunction} onChange={(v) => setOffer({ echargingSignerFunction: v })} />
+                <TextField label="Standaard 'Locatie'" value={settings.offerTemplate.defaultObjectTemplate} onChange={(v) => setOffer({ defaultObjectTemplate: v })} />
+                <TextField label="Standaard 'Betreft'" value={settings.offerTemplate.defaultBetreftTemplate} onChange={(v) => setOffer({ defaultBetreftTemplate: v })} />
+                <TextField label="Standaard aanhef" value={settings.offerTemplate.defaultAanhef} onChange={(v) => setOffer({ defaultAanhef: v })} />
               </CardContent>
             </Card>
           </div>

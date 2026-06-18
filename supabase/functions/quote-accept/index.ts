@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { renderSignedConfirmation, renderInternalSignedNotice } from "../_shared/offer-email.ts";
+import { normalizeSettings } from "../_shared/configurator.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
 // offerte-samenvatting (genoeg om de PDF te renderen). POST accordeert: slaat de
@@ -79,6 +80,13 @@ Deno.serve(async (req) => {
     const tariffs = (quote.tariff_data ?? {}) as Record<string, any>;
     const snap = (quote.calculation_snapshot ?? {}) as Record<string, any>;
     const addr = lead ? [lead.address_street, [lead.postal_code, lead.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
+
+    // Offerte-sjabloon-standaarden ophalen (voor de placeholders die niet in de offerte zelf staan).
+    const { data: settingsRow } = await sb.from("configurator_settings")
+      .select("settings").eq("organization_id", quote.organization_id).eq("is_active", true)
+      .order("version", { ascending: false }).limit(1).maybeSingle();
+    const offerTemplate = normalizeSettings(settingsRow?.settings).offerTemplate;
+
     // Samenvatting met alle velden die de publieke pagina nodig heeft om de PDF te renderen.
     const summary = {
       quoteNumber: quote.quote_number,
@@ -92,11 +100,14 @@ Deno.serve(async (req) => {
       noticeMonths: snap?.pricing_input?.contract?.noticePeriodMonths ?? null,
       chargeTariffPerKwh: num(quote.charge_rate_per_kwh) ?? num(tariffs.chargeTariffPerKwh),
       idleFeePerMinute: num(tariffs.idleFeePerMinute),
+      startFeePerSession: num(tariffs.startFeePerSession),
       idleGraceMinutes: num(tariffs.idleGraceMinutes),
       validUntil: quote.valid_until,
       date: quote.sent_at ?? quote.created_at ?? null,
       status: quote.status,
       acceptanceStatus: acc.status,
+      offerDetails: (quote.offer_details ?? {}) as Record<string, unknown>,
+      offerTemplate,
     };
 
     if (req.method === "GET") {

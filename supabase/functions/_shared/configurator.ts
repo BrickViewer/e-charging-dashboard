@@ -42,6 +42,50 @@ export type ConfiguratorSettings = {
     averageSessionDurationHours: number;
     effectiveChargingPowerKw: number;
   }>;
+  offerTemplate: OfferTemplate;
+};
+
+// Org-standaarden voor de offerte-PDF (mirror van de Zod-versie in de pricing-engine).
+export type OfferTemplate = {
+  defaultChargerModel: string;
+  loadBalancerModel: string;
+  defaultEindgroepen: number;
+  defaultEindgroepAmperage: number;
+  defaultStelpostGraafwerk: number;
+  serviceFeePerKwh: number;
+  servicemonteurPerHour: number;
+  voorrijkostenPerKm: number;
+  toeslagWerkuur: number;
+  activatiekostenPerSocket: number;
+  betaalBijOpdrachtPct: number;
+  betaalBijStartPct: number;
+  betaalNaWerkPct: number;
+  echargingSignerName: string;
+  echargingSignerFunction: string;
+  defaultObjectTemplate: string;
+  defaultBetreftTemplate: string;
+  defaultAanhef: string;
+};
+
+export const defaultOfferTemplate: OfferTemplate = {
+  defaultChargerModel: "Zaptec Go 2 Asphalt Black",
+  loadBalancerModel: "Zaptec Sense",
+  defaultEindgroepen: 1,
+  defaultEindgroepAmperage: 32,
+  defaultStelpostGraafwerk: 0,
+  serviceFeePerKwh: 0.10,
+  servicemonteurPerHour: 0,
+  voorrijkostenPerKm: 0,
+  toeslagWerkuur: 0,
+  activatiekostenPerSocket: 0,
+  betaalBijOpdrachtPct: 50,
+  betaalBijStartPct: 0,
+  betaalNaWerkPct: 50,
+  echargingSignerName: "Willi-Jan Jonkers",
+  echargingSignerFunction: "Directeur",
+  defaultObjectTemplate: "",
+  defaultBetreftTemplate: "Offerte laadinfrastructuur",
+  defaultAanhef: "heer/mevrouw",
 };
 
 export type PricingInput = {
@@ -122,6 +166,7 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = {
     public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11 },
     other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8 },
   },
+  offerTemplate: defaultOfferTemplate,
 };
 
 function numberOr(value: unknown, fallback: number) {
@@ -143,6 +188,8 @@ export function normalizeSettings(value: unknown): ConfiguratorSettings {
       ...defaultConfiguratorSettings.locationTypeDefaults,
       ...(raw.locationTypeDefaults ?? {}),
     },
+    // Oude rijen missen offerTemplate → val veld-voor-veld terug op de standaarden.
+    offerTemplate: { ...defaultOfferTemplate, ...(raw.offerTemplate ?? {}) },
   };
 }
 
