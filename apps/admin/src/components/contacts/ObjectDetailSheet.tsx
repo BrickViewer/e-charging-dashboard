@@ -1,22 +1,36 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { FileText } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
-import { useProjectLocation, useQuotesForLocation, useUpdateProjectLocation } from "@/hooks/useProjectLocations";
+import { useProjectLocation, useQuotesForLocation, useUpdateProjectLocation, useDeleteProjectLocation } from "@/hooks/useProjectLocations";
 
 // Detail van een Object (project_location): adres, offertehistorie en SharePoint-dossier.
 export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: string | null; open: boolean; onOpenChange: (v: boolean) => void }) {
   const locQ = useProjectLocation(open ? objectId ?? undefined : undefined);
   const quotesQ = useQuotesForLocation(open ? objectId ?? undefined : undefined);
   const update = useUpdateProjectLocation();
+  const del = useDeleteProjectLocation();
   const loc = locQ.data;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteSp, setDeleteSp] = useState(true);
+
+  const doDelete = async () => {
+    if (!loc) return;
+    try {
+      await del.mutateAsync({ id: loc.id, deleteSharepoint: deleteSp });
+      toast.success("Object verwijderd");
+      setConfirmOpen(false);
+      onOpenChange(false);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Verwijderen mislukt"); }
+  };
 
   const [form, setForm] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -76,7 +90,10 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
               <Field label="Plaats"><Input value={t("city")} onChange={(e) => set("city")(e.target.value)} /></Field>
             </div>
             <Field label="Notities"><Textarea rows={3} value={t("notes")} onChange={(e) => set("notes")(e.target.value)} /></Field>
-            <div className="flex justify-end border-t pt-4">
+            <div className="flex items-center justify-between border-t pt-4">
+              <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => setConfirmOpen(true)} disabled={!loc}>
+                <Trash2 className="mr-1.5 h-4 w-4" />Verwijderen
+              </Button>
               <Button onClick={save} disabled={update.isPending || !loc}>{update.isPending ? "Opslaan…" : "Opslaan"}</Button>
             </div>
           </TabsContent>
@@ -105,6 +122,26 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
             {loc ? <DossierDocuments location={loc} /> : <p className="text-sm text-muted-foreground">Laden…</p>}
           </TabsContent>
         </Tabs>
+
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle>Object verwijderen?</DialogTitle></DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>Object <strong>{loc?.location_number}</strong> ({loc?.display_name}) wordt verwijderd. Het nummer komt weer vrij voor een volgend object.</p>
+              {(quotesQ.data?.length ?? 0) > 0 && (
+                <p className="rounded-md bg-amber-50 p-2 text-amber-800">Let op: {quotesQ.data!.length} offerte(s) verliezen hun koppeling met dit object (ze blijven verder bestaan).</p>
+              )}
+              <label className="flex items-center gap-2">
+                <input type="checkbox" className="h-4 w-4" checked={deleteSp} onChange={(e) => setDeleteSp(e.target.checked)} />
+                Ook de SharePoint-map verwijderen
+              </label>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={del.isPending}>Annuleren</Button>
+              <Button variant="destructive" onClick={doDelete} disabled={del.isPending}>{del.isPending ? "Verwijderen…" : "Verwijderen"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SheetContent>
     </Sheet>
   );

@@ -169,3 +169,21 @@ export function useUpdateProjectLocation() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["project-locations"] }); },
   });
 }
+
+// Verwijder een object (en optioneel de SharePoint-map) via de edge-functie.
+export function useDeleteProjectLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, deleteSharepoint }: { id: string; deleteSharepoint: boolean }) => {
+      const { data, error } = await supabase.functions.invoke("object-delete", { body: { object_id: id, delete_sharepoint: deleteSharepoint } });
+      if (error) {
+        let msg = error.message;
+        try { const b = await (error as { context?: Response }).context?.json(); if (b?.message) msg = b.message; } catch { /* body niet leesbaar */ }
+        throw new Error(msg);
+      }
+      const res = data as { status?: string; message?: string };
+      if (res?.status !== "ok") throw new Error(res?.message || "Verwijderen mislukt");
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["project-locations"] }); },
+  });
+}
