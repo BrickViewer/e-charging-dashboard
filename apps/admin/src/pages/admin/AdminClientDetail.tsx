@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useClientById, useClientSettlements, useClientActivity, useClientInvitation, useOrganization } from "@/hooks/useAdminData";
 import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { DossierDocuments } from "@/components/documents/DossierDocuments";
 import { FeeWaiverControl } from "@/components/admin/financial/FeeWaiverControl";
 import { formatEuro, formatNumber, settlementVat } from "@/services/calculations";
 import { monthFullLabel } from "@/lib/period";
@@ -946,12 +947,12 @@ export default function AdminClientDetail() {
           })}
         </TabsContent>
 
-        {/* Tab 4: Documenten */}
+        {/* Tab 4: Documenten — SharePoint-dossiers */}
         <TabsContent value="documenten">
           <Card>
-            <CardContent className="py-12 text-center">
-              <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">Documentbeheer wordt binnenkort beschikbaar</p>
+            <CardHeader><CardTitle className="text-base">Dossiers (SharePoint)</CardTitle></CardHeader>
+            <CardContent>
+              <DossierDocuments clientId={id} />
             </CardContent>
           </Card>
         </TabsContent>

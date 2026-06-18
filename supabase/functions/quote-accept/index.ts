@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { renderSignedConfirmation, renderInternalSignedNotice } from "../_shared/offer-email.ts";
 import { normalizeSettings } from "../_shared/configurator.ts";
+import { clientFromEnv, sanitizeName } from "./sharepoint.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
 // offerte-samenvatting (genoeg om de PDF te renderen). POST accordeert: slaat de
@@ -180,38 +181,62 @@ Deno.serve(async (req) => {
       clientId = created.id;
     }
 
-    // Configuratie-snapshot op het account (nieuwe versie).
-    const cfg = (quote.calculation_snapshot ?? null) as Record<string, any> | null;
-    if (cfg?.pricing_input && cfg?.pricing_result) {
-      const { data: maxV } = await sb.from("customer_configurations").select("version").eq("client_id", clientId)
-        .order("version", { ascending: false }).limit(1).maybeSingle();
-      await sb.from("customer_configurations").insert({
-        client_id: clientId, organization_id: org, version: (maxV?.version ?? 0) + 1,
-        settings_version: num(cfg.settings_version) ?? 1, pricing_input: cfg.pricing_input,
-        pricing_result: cfg.pricing_result, status: "agreed",
-      });
+    // Idempotentie: configuratie + installatie-order alleen bij de eerste afronding.
+    const isFirstFinalize = !quote.client_id;
+    // Koppel het account vroeg, zodat een retry na een SharePoint-blip niets dubbel doet.
+    await sb.from("quotes").update({ client_id: clientId }).eq("id", quote.id);
+
+    if (isFirstFinalize) {
+      // Configuratie-snapshot op het account (nieuwe versie).
+      const cfg = (quote.calculation_snapshot ?? null) as Record<string, any> | null;
+      if (cfg?.pricing_input && cfg?.pricing_result) {
+        const { data: maxV } = await sb.from("customer_configurations").select("version").eq("client_id", clientId)
+          .order("version", { ascending: false }).limit(1).maybeSingle();
+        await sb.from("customer_configurations").insert({
+          client_id: clientId, organization_id: org, version: (maxV?.version ?? 0) + 1,
+          settings_version: num(cfg.settings_version) ?? 1, pricing_input: cfg.pricing_input,
+          pricing_result: cfg.pricing_result, status: "agreed",
+        });
+      }
+      // Installatie-order (exact één per offerte).
+      const { data: existingOrder } = await sb.from("installation_orders").select("id").eq("quote_id", quote.id).maybeSingle();
+      if (!existingOrder) {
+        await sb.from("installation_orders").insert({
+          organization_id: org, client_id: clientId, quote_id: quote.id, lead_id: quote.lead_id ?? null,
+          company_id: companyId, status: "nieuw",
+          notes: `Vanuit getekende offerte ${quote.quote_number}`,
+        });
+      }
     }
 
-    // Installatie-order.
-    await sb.from("installation_orders").insert({
-      organization_id: org, client_id: clientId, quote_id: quote.id, lead_id: quote.lead_id ?? null,
-      company_id: companyId, status: "nieuw",
-      notes: `Vanuit getekende offerte ${quote.quote_number}`,
-    });
-
-    // Getekende PDF opslaan (privé bucket). Mag de acceptatie niet blokkeren.
-    let signedPath: string | null = null;
-    if (signedPdfB64) {
-      const path = `signed/${quote.id}.pdf`;
-      const { error: upErr } = await sb.storage.from("quote-documents")
-        .upload(path, base64ToBytes(signedPdfB64), { contentType: "application/pdf", upsert: true });
-      if (!upErr) signedPath = path;
+    // SharePoint: getekend exemplaar (OPD) in de Opdracht-submap. BLOKKEREND indien geconfigureerd.
+    let opdWebUrl: string | null = (quote.opd_web_url as string | null) ?? null;
+    {
+      const gc = clientFromEnv();
+      const { data: org2 } = await sb.from("organizations").select("sharepoint_drive_id").eq("id", org).maybeSingle();
+      const driveId = org2?.sharepoint_drive_id as string | null;
+      if (gc && driveId && quote.project_location_id && signedPdfB64 && !quote.opd_item_id) {
+        const { data: loc } = await sb.from("project_locations")
+          .select("opdracht_item_id, location_number, address_street, city").eq("id", quote.project_location_id).maybeSingle();
+        if (loc?.opdracht_item_id) {
+          const yy = String(new Date(quote.sent_at ?? new Date().toISOString()).getFullYear()).slice(-2);
+          const doc2 = String(quote.document_number ?? 1).padStart(2, "0");
+          const addrLabel = [loc.address_street, loc.city].filter(Boolean).join(" ") || String(quote.prospect_company ?? "");
+          const opdName = sanitizeName(`${loc.location_number}-${doc2}-${yy} OPD ${addrLabel}`) + ".pdf";
+          const opd = await gc.uploadFile(driveId, loc.opdracht_item_id, opdName, base64ToBytes(signedPdfB64));
+          opdWebUrl = opd.webUrl;
+          await sb.from("quotes").update({ opd_item_id: opd.id, opd_web_url: opd.webUrl }).eq("id", quote.id);
+        }
+      }
+      // Dossier aan het klantaccount koppelen (alleen bij beheer).
+      if (quote.project_location_id && quote.with_management !== false) {
+        await sb.from("project_locations").update({ client_id: clientId }).eq("id", quote.project_location_id);
+      }
     }
 
-    // Offerte + acceptatie afronden.
+    // Offerte + acceptatie afronden (PAS NU 'getekend' zodat een mislukte OPD-upload herhaalbaar blijft).
     await sb.from("quotes").update({
-      status: "getekend", signed_at: new Date().toISOString(), client_id: clientId,
-      signer_name: signerName, signed_pdf_path: signedPath,
+      status: "getekend", signed_at: new Date().toISOString(), client_id: clientId, signer_name: signerName,
     }).eq("id", quote.id);
     await sb.from("quote_acceptances").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", acc.id);
 
@@ -231,7 +256,7 @@ Deno.serve(async (req) => {
     }
     await sb.from("activity_log").insert({
       organization_id: org, client_id: clientId, action: "quote_signed",
-      details: { quote_id: quote.id, quote_number: quote.quote_number, signer_name: signerName, signed_pdf_path: signedPath },
+      details: { quote_id: quote.id, quote_number: quote.quote_number, signer_name: signerName, opd_web_url: opdWebUrl },
     });
 
     // Mails: klant-bevestiging (met getekende PDF) + interne melding.

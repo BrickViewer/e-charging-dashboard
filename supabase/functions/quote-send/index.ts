@@ -20,6 +20,21 @@ function bytesToHex(b: Uint8Array) { return Array.from(b, (x) => x.toString(16).
 function generateToken() { const b = new Uint8Array(32); crypto.getRandomValues(b); return bytesToHex(b); }
 async function sha256Hex(v: string) { return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))); }
 
+// Chaint naar quote-sharepoint-init (maakt dossier + uploadt de ongetekende OFF).
+async function chainToSharepointInit(quoteId: string, offB64: string): Promise<{ status: string; message?: string }> {
+  const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  if (!internalSecret || !supabaseUrl) return { status: "error", message: "INTERNAL_FUNCTION_SECRET ontbreekt" };
+  const headers: Record<string, string> = { "Content-Type": "application/json", "x-internal-secret": internalSecret };
+  const anon = Deno.env.get("SUPABASE_ANON_KEY"); if (anon) headers.apikey = anon;
+  const res = await fetch(`${supabaseUrl}/functions/v1/quote-sharepoint-init`, { method: "POST", headers, body: JSON.stringify({ quote_id: quoteId, off_pdf_base64: offB64 }) });
+  const text = await res.text();
+  let payload: { status?: string; message?: string } = {};
+  try { payload = text ? JSON.parse(text) : {}; } catch { payload = { status: "error", message: text }; }
+  if (!res.ok) return { status: "error", message: payload.message || `init ${res.status}` };
+  return { status: payload.status ?? "error", message: payload.message };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ status: "error", message: "Method not allowed" }, 405);
@@ -41,6 +56,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const quoteId = typeof body.quote_id === "string" ? body.quote_id : "";
     const pdfBase64 = typeof body.pdf_base64 === "string" ? body.pdf_base64.replace(/^data:[^,]+,/, "") : "";
+    const offB64 = typeof body.off_pdf_base64 === "string" ? body.off_pdf_base64 : "";
     if (!quoteId) return json({ status: "error", message: "quote_id ontbreekt" }, 400);
 
     const { data: quote, error: qErr } = await serviceClient.from("quotes").select("*").eq("id", quoteId).maybeSingle();
@@ -68,6 +84,12 @@ Deno.serve(async (req) => {
         internal_signed_at: new Date().toISOString(),
       }).eq("id", quoteId);
       await serviceClient.from("quote_internal_signings").update({ status: "revoked" }).eq("quote_id", quoteId).eq("status", "pending");
+    }
+
+    // SharePoint-dossier + ongetekende OFF (eerste verzending; blokkerend indien geconfigureerd).
+    if (quote.status === "concept" && !quote.off_item_id) {
+      const init = await chainToSharepointInit(quoteId, offB64);
+      if (init.status !== "ok") return json({ status: "error", message: init.message || "SharePoint-init mislukt" }, 502);
     }
 
     // Oude pending acceptaties intrekken.

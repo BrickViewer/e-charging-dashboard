@@ -22,6 +22,7 @@ import {
   Sun, Moon, SunMoon, AlertTriangle, PenLine,
 } from "lucide-react";
 import { MySignatureCard } from "@/components/admin/MySignatureCard";
+import { SharepointSettingsCard } from "@/components/admin/SharepointSettingsCard";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
 import type { CronJobStatus, EfluxSyncLog, Profile } from "@/types/db";
@@ -784,6 +785,7 @@ export default function AdminSettings() {
               )}
             </CardContent>
           </Card>
+          <SharepointSettingsCard />
         </TabsContent>
 
         {/* Tab: Automatisering / Cron */}

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ExternalLink, MapPin, Star, Trash2, X } from "lucide-react";
 import { PersonPicker } from "./PersonPicker";
+import { DossierDocuments } from "@/components/documents/DossierDocuments";
 import {
   useUpdateCompany,
   useDeleteCompany,
@@ -98,11 +99,12 @@ export function CompanyDetailSheet({
         </SheetHeader>
 
         <Tabs defaultValue="gegevens" className="mt-5">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="gegevens">Gegevens</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="personen">Personen{persons.data ? ` (${persons.data.length})` : ""}</TabsTrigger>
             <TabsTrigger value="leads">Leads{leads.data ? ` (${leads.data.length})` : ""}</TabsTrigger>
+            <TabsTrigger value="mappen">Mappen</TabsTrigger>
           </TabsList>
 
           <TabsContent value="gegevens" className="mt-4 space-y-3">
@@ -204,6 +206,10 @@ export function CompanyDetailSheet({
               ))}
               {leads.data?.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Geen leads.</p>}
             </div>
+          </TabsContent>
+
+          <TabsContent value="mappen" className="mt-4">
+            <DossierDocuments companyId={company.id} />
           </TabsContent>
         </Tabs>
       </SheetContent>

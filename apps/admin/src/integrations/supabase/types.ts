@@ -1958,6 +1958,10 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          sharepoint_drive_id: string | null
+          sharepoint_root_item_id: string | null
+          sharepoint_site_id: string | null
+          sharepoint_site_url: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1991,6 +1995,10 @@ export type Database = {
           logo_url?: string | null
           name: string
           phone?: string | null
+          sharepoint_drive_id?: string | null
+          sharepoint_root_item_id?: string | null
+          sharepoint_site_id?: string | null
+          sharepoint_site_url?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2024,6 +2032,10 @@ export type Database = {
           logo_url?: string | null
           name?: string
           phone?: string | null
+          sharepoint_drive_id?: string | null
+          sharepoint_root_item_id?: string | null
+          sharepoint_site_id?: string | null
+          sharepoint_site_url?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -2139,6 +2151,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      project_locations: {
+        Row: {
+          address_street: string | null
+          city: string | null
+          client_id: string | null
+          company_id: string | null
+          created_at: string
+          descriptive_label: string | null
+          display_name: string
+          doc_seq: number
+          folder_item_id: string | null
+          folder_web_url: string | null
+          id: string
+          lead_id: string | null
+          location_number: number
+          opdracht_item_id: string | null
+          organization_id: string
+          postal_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          address_street?: string | null
+          city?: string | null
+          client_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          descriptive_label?: string | null
+          display_name: string
+          doc_seq?: number
+          folder_item_id?: string | null
+          folder_web_url?: string | null
+          id?: string
+          lead_id?: string | null
+          location_number?: number
+          opdracht_item_id?: string | null
+          organization_id: string
+          postal_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address_street?: string | null
+          city?: string | null
+          client_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          descriptive_label?: string | null
+          display_name?: string
+          doc_seq?: number
+          folder_item_id?: string | null
+          folder_web_url?: string | null
+          id?: string
+          lead_id?: string | null
+          location_number?: number
+          opdracht_item_id?: string | null
+          organization_id?: string
+          postal_code?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       quote_acceptances: {
         Row: {
@@ -2289,6 +2361,12 @@ export type Database = {
           total_installation_cost: number | null
           updated_at: string | null
           valid_until: string | null
+          document_number: number | null
+          off_item_id: string | null
+          off_web_url: string | null
+          opd_item_id: string | null
+          opd_web_url: string | null
+          project_location_id: string | null
           with_management: boolean
         }
         Insert: {
@@ -2333,6 +2411,12 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
+          document_number?: number | null
+          off_item_id?: string | null
+          off_web_url?: string | null
+          opd_item_id?: string | null
+          opd_web_url?: string | null
+          project_location_id?: string | null
           with_management?: boolean
         }
         Update: {
@@ -2378,6 +2462,12 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
+          document_number?: number | null
+          off_item_id?: string | null
+          off_web_url?: string | null
+          opd_item_id?: string | null
+          opd_web_url?: string | null
+          project_location_id?: string | null
           with_management?: boolean
         }
         Relationships: [
