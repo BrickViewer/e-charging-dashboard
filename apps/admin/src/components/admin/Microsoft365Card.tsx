@@ -1,101 +1,43 @@
-import { useState, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, CheckCircle2, LogOut, Save, Plug } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, CheckCircle2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
-import { useGraphApi } from "@/hooks/useGraphApi";
-import { getSharepointConfig, saveSharepointConfig, listLibraryFolders, findOrCreateFolderByName, DEFAULT_TARGET_FOLDER } from "@/lib/sharepoint";
+import { getSharepointConfig } from "@/lib/sharepoint";
 
-type Site = { id: string; displayName: string; webUrl: string };
-type Drive = { id: string; name: string; driveType?: string };
-type Folder = { id: string; name: string };
-
+// SharePoint-doelmap (org-breed). Wordt SERVER-SIDE ingesteld via de app-only Microsoft-app
+// (geen aparte Microsoft-login of mapkiezer in de browser nodig). Alleen de superadmin ziet dit.
 export function Microsoft365Card() {
-  const { user } = useAuth();
-  const { login, logout, isConnected, microsoftUser, configured } = useMicrosoftAuth();
-  const { graphFetch } = useGraphApi();
-
-  const [sites, setSites] = useState<Site[]>([]);
-  const [drives, setDrives] = useState<Drive[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [siteId, setSiteId] = useState("");
-  const [driveId, setDriveId] = useState("");
-  const [folderId, setFolderId] = useState("auto");
-  const [loadingSites, setLoadingSites] = useState(false);
-  const [loadingDrives, setLoadingDrives] = useState(false);
-  const [loadingFolders, setLoadingFolders] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [busy, setBusy] = useState(false);
-
+  const queryClient = useQueryClient();
   const { data: cfg } = useQuery({ queryKey: ["sharepoint-config"], queryFn: getSharepointConfig });
-  useEffect(() => { if (cfg) { setSiteId(cfg.siteId ?? ""); setDriveId(cfg.driveId ?? ""); setFolderId(cfg.rootItemId ?? "auto"); } }, [cfg]);
-
-  const loadSites = useCallback(async () => {
-    setLoadingSites(true);
-    try {
-      const res = await graphFetch("/sites?search=*");
-      const list = (res?.value ?? []) as Array<{ id: string; displayName?: string; name?: string; webUrl: string }>;
-      setSites(list.map((s) => ({ id: s.id, displayName: s.displayName ?? s.name ?? s.id, webUrl: s.webUrl })));
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Sites laden mislukt"); }
-    finally { setLoadingSites(false); }
-  }, [graphFetch]);
-
-  useEffect(() => { if (isConnected) void loadSites(); }, [isConnected, loadSites]);
-
-  const onSelectSite = async (id: string) => {
-    setSiteId(id); setDriveId(""); setDrives([]); setFolders([]); setFolderId("root"); setLoadingDrives(true);
-    try {
-      const res = await graphFetch(`/sites/${id}/drives`);
-      const list = (res?.value ?? []) as Array<{ id: string; name: string; driveType?: string }>;
-      setDrives(list.map((d) => ({ id: d.id, name: d.name, driveType: d.driveType })));
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Documentbibliotheken laden mislukt"); }
-    finally { setLoadingDrives(false); }
-  };
-
-  const onSelectDrive = async (id: string) => {
-    setDriveId(id); setFolders([]); setFolderId("root"); setLoadingFolders(true);
-    try {
-      setFolders(await listLibraryFolders(graphFetch, id));
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Mappen laden mislukt"); }
-    finally { setLoadingFolders(false); }
-  };
-
-  const doLogin = async () => { setBusy(true); try { await login(); } catch (e) { toast.error(e instanceof Error ? e.message : "Inloggen mislukt"); } finally { setBusy(false); } };
-  const doLogout = async () => { try { await logout(); } catch { /* ignore */ } };
+  const [site, setSite] = useState("E-Charging");
+  const [library, setLibrary] = useState("Documenten");
+  const [folder, setFolder] = useState("02 Locaties");
+  const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (!user?.id) return;
-    const site = sites.find((s) => s.id === siteId);
-    const drive = drives.find((d) => d.id === driveId);
-    if (!site || !drive) { toast.error("Kies eerst een site en documentbibliotheek"); return; }
     setSaving(true);
     try {
-      const { data: prof } = await supabase.from("profiles").select("organization_id").eq("user_id", user.id).maybeSingle();
-      let orgId = prof?.organization_id ?? null;
-      if (!orgId) {
-        // Vangnet: zonder org op het profiel terugvallen op de (enige) organisatie.
-        const { data: anyOrg } = await supabase.from("organizations").select("id").limit(1).maybeSingle();
-        orgId = anyOrg?.id ?? null;
+      const { data, error } = await supabase.functions.invoke("sharepoint-setup", {
+        body: { site_query: site.trim(), drive_name: library.trim(), folder_name: folder.trim() },
+      });
+      if (error) {
+        let msg = error.message;
+        try { const b = await (error as { context?: Response }).context?.json(); if (b?.message) msg = b.message; } catch { /* body niet leesbaar */ }
+        throw new Error(msg);
       }
-      if (!orgId) throw new Error("Geen organisatie gevonden");
-      // "auto" → de standaardmap "02 Locaties" zoeken/aanmaken; "root" → hoofdmap; anders de gekozen map.
-      let rootItemId: string | null;
-      if (folderId === "auto") {
-        rootItemId = (await findOrCreateFolderByName(graphFetch, drive.id)).id;
-      } else if (folderId && folderId !== "root") {
-        rootItemId = folderId;
-      } else {
-        rootItemId = null;
+      const res = data as { status?: string; message?: string; site?: string; drive?: string; folder?: string; folders_found?: string[]; drives_found?: string[] };
+      if (res?.status !== "ok") {
+        const extra = res?.folders_found ? ` (gevonden mappen: ${res.folders_found.join(", ")})` : res?.drives_found ? ` (gevonden bibliotheken: ${res.drives_found.join(", ")})` : "";
+        throw new Error((res?.message || "Instellen mislukt") + extra);
       }
-      await saveSharepointConfig(orgId, { site_id: site.id, drive_id: drive.id, site_url: site.webUrl, site_name: site.displayName, root_item_id: rootItemId });
-      toast.success("SharePoint-koppeling opgeslagen");
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
+      queryClient.invalidateQueries({ queryKey: ["sharepoint-config"] });
+      toast.success(`Gekoppeld: ${res.site} › ${res.drive} › ${res.folder}`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Instellen mislukt"); }
     finally { setSaving(false); }
   };
 
@@ -103,69 +45,33 @@ export function Microsoft365Card() {
     <Card className="portal-card mt-4">
       <CardContent className="p-5 space-y-4">
         <div>
-          <h2 className="text-base font-semibold">Microsoft 365 / SharePoint (offerte-dossiers)</h2>
+          <h2 className="text-base font-semibold">SharePoint — offerte-dossiers</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Log in met je Microsoft-account en kies de SharePoint-site + documentbibliotheek waar de offerte-dossiers komen.
-            Bij het versturen van een offerte maakt de app automatisch de map + ongetekende offerte aan.
+            Org-breed: alle offerte-dossiers komen in deze map. Wordt server-side via de Microsoft-app
+            ingesteld — geen aparte Microsoft-login of mapkiezer nodig. Geldt voor álle medewerkers.
           </p>
         </div>
 
-        {!configured ? (
-          <p className="text-sm text-amber-600">Microsoft-koppeling is nog niet geconfigureerd (VITE_MS_CLIENT_ID ontbreekt in de build-env).</p>
-        ) : !isConnected ? (
-          <Button onClick={doLogin} disabled={busy}>
-            {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plug className="w-4 h-4 mr-2" />} Koppelen met Microsoft 365
-          </Button>
+        {cfg?.driveId ? (
+          <div className="flex items-center gap-2 rounded-md border p-3 text-sm max-w-lg">
+            <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+            <span>Ingesteld: <span className="font-medium">{cfg.siteName}</span> › {library} › {folder}</span>
+          </div>
         ) : (
-          <>
-            <div className="flex items-center justify-between rounded-md border p-3 max-w-lg">
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className="w-4 h-4 text-primary" />
-                <span>Verbonden als <span className="font-medium">{microsoftUser?.email}</span></span>
-              </div>
-              <Button variant="ghost" size="sm" onClick={doLogout}><LogOut className="w-4 h-4 mr-1" /> Loskoppelen</Button>
-            </div>
-
-            <div className="grid max-w-lg grid-cols-1 gap-3">
-              <div className="space-y-1">
-                <Label>SharePoint-site</Label>
-                <Select value={siteId} onValueChange={onSelectSite}>
-                  <SelectTrigger>{loadingSites ? <span className="text-muted-foreground">Sites laden…</span> : <SelectValue placeholder="Kies een site…" />}</SelectTrigger>
-                  <SelectContent>
-                    {sites.map((s) => <SelectItem key={s.id} value={s.id}>{s.displayName}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Documentbibliotheek</Label>
-                <Select value={driveId} onValueChange={onSelectDrive} disabled={!siteId || loadingDrives}>
-                  <SelectTrigger>{loadingDrives ? <span className="text-muted-foreground">Bibliotheken laden…</span> : <SelectValue placeholder="Kies een bibliotheek…" />}</SelectTrigger>
-                  <SelectContent>
-                    {drives.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Doelmap (waar de dossiers komen)</Label>
-                <Select value={folderId} onValueChange={setFolderId} disabled={!driveId || loadingFolders}>
-                  <SelectTrigger>{loadingFolders ? <span className="text-muted-foreground">Mappen laden…</span> : <SelectValue placeholder="Kies een map…" />}</SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">{DEFAULT_TARGET_FOLDER} (automatisch aanmaken/koppelen)</SelectItem>
-                    <SelectItem value="root">(Hoofdmap van de bibliotheek)</SelectItem>
-                    {folders.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">Standaard "{DEFAULT_TARGET_FOLDER}": alle dossiers komen hierin (wordt aangemaakt als 'ie nog niet bestaat). Geldt voor iedereen.</p>
-              </div>
-              <div>
-                <Button onClick={save} disabled={saving || !siteId || !driveId}>
-                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />} Opslaan
-                </Button>
-              </div>
-              {cfg?.driveId ? <p className="text-xs text-muted-foreground">Huidige map: <span className="font-medium">{cfg.siteName}</span></p> : null}
-            </div>
-          </>
+          <p className="text-sm text-amber-600">Nog niet ingesteld — controleer de waarden en klik "Instellen".</p>
         )}
+
+        <div className="grid max-w-lg grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="space-y-1"><Label className="text-xs">Site</Label><Input value={site} onChange={(e) => setSite(e.target.value)} className="h-9" /></div>
+          <div className="space-y-1"><Label className="text-xs">Bibliotheek</Label><Input value={library} onChange={(e) => setLibrary(e.target.value)} className="h-9" /></div>
+          <div className="space-y-1"><Label className="text-xs">Doelmap</Label><Input value={folder} onChange={(e) => setFolder(e.target.value)} className="h-9" /></div>
+        </div>
+
+        <Button onClick={save} disabled={saving}>
+          {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+          {cfg?.driveId ? "Opnieuw instellen" : "Instellen"}
+        </Button>
+        <p className="text-[11px] text-muted-foreground">De doelmap moet bestaan in de bibliotheek. Standaard: E-Charging › Documenten › 02 Locaties.</p>
       </CardContent>
     </Card>
   );

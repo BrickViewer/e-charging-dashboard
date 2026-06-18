@@ -15,8 +15,7 @@ import { SignerStatusPanel } from "@/components/sales/SignerStatusPanel";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
 import type { OfferDetails, OfferTemplateValues } from "@/services/offerTypes";
-import { useGraphApi } from "@/hooks/useGraphApi";
-import { ensureDossierAndUploadOff } from "@/lib/sharepoint";
+import { supabase } from "@/integrations/supabase/client";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
@@ -31,7 +30,6 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   const del = useDeleteQuote();
   const { user } = useAuth();
   const adminsQ = useSignableAdmins();
-  const { graphFetch } = useGraphApi();
   const quote = quoteQ.data;
   const tpl = settingsQ.data?.offerTemplate;
   const admins = adminsQ.data ?? [];
@@ -162,10 +160,12 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       // 1) SharePoint-dossier + ongetekende OFF (best-effort: mag het versturen NOOIT blokkeren).
       try {
         const offPdfBase64 = await offerPdfBase64(data);
-        await ensureDossierAndUploadOff(graphFetch, quote.id, offPdfBase64);
+        const { data: spRes, error: spErr } = await supabase.functions.invoke("quote-sharepoint-off", { body: { quote_id: quote.id, off_pdf_base64: offPdfBase64 } });
+        if (spErr) throw spErr;
+        if ((spRes as { status?: string })?.status === "error") throw new Error((spRes as { message?: string }).message || "SharePoint-dossier mislukt");
       } catch (e) {
         console.error("[SharePoint] OFF-dossier mislukt:", e);
-        toast.warning("Let op: het SharePoint-dossier kon niet worden aangemaakt (Microsoft-verbinding). De offerte wordt wél verstuurd.");
+        toast.warning("Let op: het SharePoint-dossier kon niet worden aangemaakt. De offerte wordt wél verstuurd.");
       }
       // 2) Getekende PDF voor de klantmail + versturen.
       const pdfBase64 = await offerPdfBase64(data, {
@@ -187,10 +187,12 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       // SharePoint-dossier + ongetekende OFF (best-effort: mag het versturen NOOIT blokkeren).
       try {
         const offPdfBase64 = await offerPdfBase64(pdfData());
-        await ensureDossierAndUploadOff(graphFetch, quote.id, offPdfBase64);
+        const { data: spRes, error: spErr } = await supabase.functions.invoke("quote-sharepoint-off", { body: { quote_id: quote.id, off_pdf_base64: offPdfBase64 } });
+        if (spErr) throw spErr;
+        if ((spRes as { status?: string })?.status === "error") throw new Error((spRes as { message?: string }).message || "SharePoint-dossier mislukt");
       } catch (e) {
         console.error("[SharePoint] OFF-dossier mislukt:", e);
-        toast.warning("Let op: het SharePoint-dossier kon niet worden aangemaakt (Microsoft-verbinding). De offerte wordt wél ter ondertekening gestuurd.");
+        toast.warning("Let op: het SharePoint-dossier kon niet worden aangemaakt. De offerte wordt wél ter ondertekening gestuurd.");
       }
       await requestSignoff.mutateAsync({ quoteId: quote.id });
       toast.success(`Ter ondertekening gestuurd naar ${selectedAdmin.fullName}`);
