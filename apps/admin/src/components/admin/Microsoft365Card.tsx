@@ -77,9 +77,15 @@ export function Microsoft365Card() {
     setSaving(true);
     try {
       const { data: prof } = await supabase.from("profiles").select("organization_id").eq("user_id", user.id).maybeSingle();
-      if (!prof?.organization_id) throw new Error("Geen organisatie gevonden");
+      let orgId = prof?.organization_id ?? null;
+      if (!orgId) {
+        // Vangnet: zonder org op het profiel terugvallen op de (enige) organisatie.
+        const { data: anyOrg } = await supabase.from("organizations").select("id").limit(1).maybeSingle();
+        orgId = anyOrg?.id ?? null;
+      }
+      if (!orgId) throw new Error("Geen organisatie gevonden");
       const rootItemId = folderId && folderId !== "root" ? folderId : null;
-      await saveSharepointConfig(prof.organization_id, { site_id: site.id, drive_id: drive.id, site_url: site.webUrl, site_name: site.displayName, root_item_id: rootItemId });
+      await saveSharepointConfig(orgId, { site_id: site.id, drive_id: drive.id, site_url: site.webUrl, site_name: site.displayName, root_item_id: rootItemId });
       toast.success("SharePoint-koppeling opgeslagen");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
     finally { setSaving(false); }
