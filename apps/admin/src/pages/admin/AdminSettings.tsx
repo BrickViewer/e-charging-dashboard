@@ -44,13 +44,10 @@ export default function AdminSettings() {
   const { data: cronJobs, isLoading: cronLoading } = useCronStatus();
   const { data: recentInvites } = useRecentInvitations(1);
   const queryClient = useQueryClient();
-  const { user, isSuperadmin } = useAuth();
+  const { user, isSuperadmin, role } = useAuth();
   const { isLight, setTheme } = useAdminTheme();
 
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteName, setInviteName] = useState("");
-  const [inviteRole, setInviteRole] = useState("admin");
+  const [requestRoles, setRequestRoles] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
 
   const [company, setCompany] = useState({
@@ -92,6 +89,17 @@ export default function AdminSettings() {
     queryKey: ["admin-user-roles"],
     queryFn: async () => {
       const { data, error } = await supabase.from("user_roles").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Openstaande toegangsverzoeken (e-groupers die inlogden maar nog geen rol hebben).
+  const { data: pendingRequests } = useQuery({
+    queryKey: ["access-requests"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("access_requests")
+        .select("*").eq("status", "pending").order("requested_at", { ascending: true });
       if (error) throw error;
       return data;
     },
@@ -253,14 +261,20 @@ export default function AdminSettings() {
   const canDeleteUser = (userId: string) =>
     isSuperadmin && userId !== user?.id && !isSuperadminUser(userId);
 
-  const inviteMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("invite-team-member", {
-        body: { email: inviteEmail.trim(), name: inviteName.trim() || undefined, role: inviteRole },
+  // Welke rollen mag de huidige gebruiker toekennen? Admin/manager alleen de superadmin.
+  const assignableRoles: Array<[string, string]> = isSuperadmin
+    ? [["admin", "Admin"], ["manager", "Manager"], ["sales", "Sales"], ["marketing", "Marketing"], ["viewer", "Viewer"]]
+    : [["sales", "Sales"], ["marketing", "Marketing"], ["viewer", "Viewer"]];
+  // admin of superadmin mag verzoeken afhandelen (role is 'admin' voor beide).
+  const canHandleRequests = role === "admin";
+
+  // Toegangsverzoek goedkeuren (rol toekennen) of weigeren via de edge-functie.
+  const decisionMutation = useMutation({
+    mutationFn: async (vars: { requestId: string; action: "approve" | "deny"; role?: string }) => {
+      const { data, error } = await supabase.functions.invoke("assign-user-role", {
+        body: { request_id: vars.requestId, action: vars.action, role: vars.role },
       });
       if (error) {
-        // Bij een non-2xx geeft supabase-js een generieke fout; lees de echte
-        // boodschap uit de response-body van de edge function.
         let msg = error.message;
         try {
           const body = await (error as { context?: Response }).context?.json();
@@ -268,20 +282,17 @@ export default function AdminSettings() {
         } catch { /* body niet leesbaar — val terug op generieke melding */ }
         throw new Error(msg);
       }
-      const res = data as { status?: string; message?: string; to?: string };
-      if (res?.status === "error") throw new Error(res.message || "Uitnodigen mislukt");
+      const res = data as { status?: string; message?: string };
+      if (res?.status !== "approved" && res?.status !== "denied") throw new Error(res?.message || "Mislukt");
       return res;
     },
     onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["access-requests"] });
       queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
       queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-recent-invitations"] });
-      setInviteOpen(false);
-      setInviteEmail(""); setInviteName(""); setInviteRole("admin");
-      if (res?.status === "sent_no_email") toast.warning(res.message || "Teamlid aangemaakt; deel de activatielink handmatig.");
-      else toast.success(`Uitnodiging verstuurd naar ${res?.to ?? inviteEmail}`);
+      toast.success(res?.status === "approved" ? "Rol toegekend" : "Verzoek geweigerd");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Uitnodigen mislukt"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Mislukt"),
   });
 
   const deleteMutation = useMutation({
@@ -543,22 +554,62 @@ export default function AdminSettings() {
 
         {/* Tab: Gebruikers */}
         <TabsContent value="gebruikers">
+          {canHandleRequests && (pendingRequests ?? []).length > 0 && (
+            <Card className="portal-card mb-4 border-amber-500/30">
+              <CardContent className="p-0">
+                <div className="p-5 border-b border-border">
+                  <h2 className="text-base font-semibold inline-flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-amber-500" /> Toegangsverzoeken
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    E-group-medewerkers die hebben ingelogd en op een rol wachten. Ken een rol toe → ze kunnen meteen werken.
+                    {!isSuperadmin && " Admin/manager kan alleen de superadmin toekennen."}
+                  </p>
+                </div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {(pendingRequests ?? []).map((reqRow) => (
+                      <tr key={reqRow.id} className="border-b border-border last:border-0">
+                        <td className="p-3">
+                          <div className="font-medium">{reqRow.full_name || reqRow.email}</div>
+                          <div className="text-xs text-muted-foreground">{reqRow.email}</div>
+                        </td>
+                        <td className="p-3">
+                          <Select value={requestRoles[reqRow.id] ?? "viewer"} onValueChange={(v) => setRequestRoles((m) => ({ ...m, [reqRow.id]: v }))}>
+                            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {assignableRoles.map(([val, label]) => <SelectItem key={val} value={val}>{label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="p-3 text-right space-x-2 whitespace-nowrap">
+                          <Button size="sm" disabled={decisionMutation.isPending}
+                            onClick={() => decisionMutation.mutate({ requestId: reqRow.id, action: "approve", role: requestRoles[reqRow.id] ?? "viewer" })}>
+                            {decisionMutation.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}Toekennen
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={decisionMutation.isPending}
+                            onClick={() => decisionMutation.mutate({ requestId: reqRow.id, action: "deny" })}>
+                            Weigeren
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="portal-card">
             <CardContent className="p-0">
               <div className="flex flex-row items-center justify-between p-5 border-b border-border">
                 <div>
                   <h2 className="text-base font-semibold">Interne gebruikers</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {isSuperadmin
-                      ? "Jij (superadmin) beheert het team. Nieuwe leden zijn admin; alleen jij kunt teamleden verwijderen."
-                      : "Admins en medewerkers met toegang tot dit beheer-portaal"}
+                    Medewerkers loggen in via Microsoft (e-group). Nieuwe medewerkers verschijnen hierboven als toegangsverzoek; ken een rol toe om ze toegang te geven.
+                    {isSuperadmin ? " Alleen jij (superadmin) kunt teamleden verwijderen." : ""}
                   </p>
                 </div>
-                {isSuperadmin && (
-                  <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
-                    <UserPlus className="w-4 h-4 mr-2" />Gebruiker uitnodigen
-                  </Button>
-                )}
               </div>
               <table className="w-full text-sm">
                 <thead>
@@ -628,47 +679,6 @@ export default function AdminSettings() {
               </table>
             </CardContent>
           </Card>
-
-          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Teamlid uitnodigen</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div>
-                  <Label htmlFor="invite-email">E-mailadres</Label>
-                  <Input id="invite-email" type="email" placeholder="naam@bedrijf.nl" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} className="mt-1.5" />
-                </div>
-                <div>
-                  <Label htmlFor="invite-name">Naam (optioneel)</Label>
-                  <Input id="invite-name" value={inviteName} onChange={e => setInviteName(e.target.value)} className="mt-1.5" />
-                </div>
-                <div>
-                  <Label>Rol</Label>
-                  <Select value={inviteRole} onValueChange={setInviteRole}>
-                    <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Admin — volledige toegang</SelectItem>
-                      <SelectItem value="manager">Manager — beheer &amp; financieel</SelectItem>
-                      <SelectItem value="sales">Sales — alleen het Sales-werkblad</SelectItem>
-                      <SelectItem value="marketing">Marketing — alleen het Marketing-werkblad</SelectItem>
-                      <SelectItem value="viewer">Viewer — alleen lezen</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Het teamlid krijgt een e-mail om een wachtwoord in te stellen en kan daarna inloggen op het beheer-portaal.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviteMutation.isPending}>Annuleren</Button>
-                <Button onClick={() => inviteMutation.mutate()} disabled={inviteMutation.isPending || !inviteEmail.includes("@")}>
-                  {inviteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Uitnodiging versturen
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
 
           <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
             <DialogContent>
@@ -785,7 +795,8 @@ export default function AdminSettings() {
               )}
             </CardContent>
           </Card>
-          <Microsoft365Card />
+          {/* SharePoint-instelling is org-breed en alleen voor de superadmin; admins werken automatisch mee. */}
+          {isSuperadmin && <Microsoft365Card />}
         </TabsContent>
 
         {/* Tab: Automatisering / Cron */}

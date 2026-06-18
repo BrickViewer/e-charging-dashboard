@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,11 @@ import { Eye, EyeOff, Power, Loader2 } from "lucide-react";
 import { CockpitArc } from "@/components/portal/CockpitArc";
 import logoBright from "@/assets/icon-bright.svg";
 import { requestPasswordReset } from "@/services/clientPaymentDetails";
-import { msSsoEnabled } from "@/lib/msal";
 import { toast } from "sonner";
 
 type Phase = "idle" | "submitting" | "ignition" | "ready" | "error";
 
-export default function Login() {
+export default function Login({ mode = "client" }: { mode?: "client" | "admin" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -144,6 +143,7 @@ export default function Login() {
             resetSending={resetSending}
             onMicrosoft={handleMicrosoft}
             msStarting={msStarting}
+            mode={mode}
           />
         )}
 
@@ -174,8 +174,9 @@ function LoginForm(props: {
   resetSending: boolean;
   onMicrosoft: () => void;
   msStarting: boolean;
+  mode: "client" | "admin";
 }) {
-  const { email, setEmail, password, setPassword, showPw, setShowPw, phase, errMsg, onSubmit, onPasswordReset, resetSending, onMicrosoft, msStarting } = props;
+  const { email, setEmail, password, setPassword, showPw, setShowPw, phase, errMsg, onSubmit, onPasswordReset, resetSending, onMicrosoft, msStarting, mode } = props;
   const submitting = phase === "submitting";
 
   return (
@@ -200,7 +201,7 @@ function LoginForm(props: {
           className="relative portal-card rounded-3xl bg-card/80 backdrop-blur-md p-7 space-y-5 border-border/60"
           style={{ boxShadow: "0 0 60px rgba(5,165,0,0.06), 0 1px 0 rgba(255,255,255,0.04) inset" }}
         >
-          {msSsoEnabled && (
+          {mode === "admin" ? (
             <>
               <button
                 type="button"
@@ -220,94 +221,101 @@ function LoginForm(props: {
                 )}
                 Inloggen met Microsoft
               </button>
-              <div className="flex items-center gap-3 text-[11px] uppercase tracking-widest text-muted-foreground/60">
-                <span className="h-px flex-1 bg-border" />
-                Klant? Log in met e-mail
-                <span className="h-px flex-1 bg-border" />
+              {errMsg && (
+                <div className="px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive">
+                  {errMsg}
+                </div>
+              )}
+              <p className="text-[10px] text-center text-muted-foreground/70 tracking-widest uppercase pt-2">
+                Alleen voor medewerkers · E-Group Microsoft 365
+              </p>
+            </>
+          ) : (
+            <>
+              <div>
+                <Label htmlFor="email" className="cockpit-section-label">
+                  E-mailadres
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="uw@email.nl"
+                  required
+                  autoComplete="email"
+                  disabled={submitting}
+                  className="mt-2 h-11 bg-background/60 border-border focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="password" className="cockpit-section-label">
+                  Wachtwoord
+                </Label>
+                <div className="relative mt-2">
+                  <Input
+                    id="password"
+                    type={showPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    autoComplete="current-password"
+                    disabled={submitting}
+                    className="h-11 pr-11 bg-background/60 border-border focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(!showPw)}
+                    tabIndex={-1}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+                  >
+                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onPasswordReset}
+                disabled={submitting || resetSending}
+                className="text-xs text-muted-foreground transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {resetSending ? "Herstel-link versturen..." : "Wachtwoord vergeten?"}
+              </button>
+
+              {errMsg && (
+                <div className="px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive">
+                  {errMsg}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="ignition-button w-full h-12 text-sm font-semibold tracking-[0.18em] uppercase mt-1 relative overflow-hidden"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Inloggen…
+                  </>
+                ) : (
+                  <>
+                    <Power className="w-4 h-4 mr-2" />
+                    Inloggen
+                  </>
+                )}
+              </Button>
+
+              <div className="text-center pt-1">
+                <Link to="/login/admin" className="text-xs text-muted-foreground transition hover:text-primary">
+                  Medewerker? Log in via Microsoft
+                </Link>
               </div>
             </>
           )}
-
-          <div>
-            <Label htmlFor="email" className="cockpit-section-label">
-              E-mailadres
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="uw@email.nl"
-              required
-              autoComplete="email"
-              disabled={submitting}
-              className="mt-2 h-11 bg-background/60 border-border focus-visible:ring-primary/50 focus-visible:ring-offset-0"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="password" className="cockpit-section-label">
-              Wachtwoord
-            </Label>
-            <div className="relative mt-2">
-              <Input
-                id="password"
-                type={showPw ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-                disabled={submitting}
-                className="h-11 pr-11 bg-background/60 border-border focus-visible:ring-primary/50 focus-visible:ring-offset-0"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw(!showPw)}
-                tabIndex={-1}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
-              >
-                {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onPasswordReset}
-            disabled={submitting || resetSending}
-            className="text-xs text-muted-foreground transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {resetSending ? "Herstel-link versturen..." : "Wachtwoord vergeten?"}
-          </button>
-
-          {errMsg && (
-            <div className="px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive">
-              {errMsg}
-            </div>
-          )}
-
-          <Button
-            type="submit"
-            disabled={submitting}
-            className="ignition-button w-full h-12 text-sm font-semibold tracking-[0.18em] uppercase mt-1 relative overflow-hidden"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Inloggen…
-              </>
-            ) : (
-              <>
-                <Power className="w-4 h-4 mr-2" />
-                Inloggen
-              </>
-            )}
-          </Button>
-
-          <p className="text-[10px] text-center text-muted-foreground/70 tracking-widest uppercase pt-2">
-            Authentication via Supabase · TLS 1.3
-          </p>
         </form>
       </div>
     </div>

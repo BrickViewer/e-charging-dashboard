@@ -66,6 +66,29 @@ export async function listLibraryFolders(graphFetch: GraphFetchFn, driveId: stri
   return ((result?.value ?? []) as Array<{ id: string; name: string; folder?: unknown }>).filter((x) => x.folder).map((x) => ({ id: x.id, name: x.name }));
 }
 
+// Standaard-doelmap waar alle dossiers in komen.
+export const DEFAULT_TARGET_FOLDER = "02 Locaties";
+
+// Zoek de top-level map met deze naam in de bibliotheek; maak 'm aan als 'ie niet bestaat.
+// Race-veilig: bij een 409 (net door iemand anders aangemaakt) opnieuw zoeken.
+export async function findOrCreateFolderByName(graphFetch: GraphFetchFn, driveId: string, name = DEFAULT_TARGET_FOLDER): Promise<{ id: string; name: string }> {
+  const existing = await listLibraryFolders(graphFetch, driveId);
+  const hit = existing.find((f) => f.name.toLowerCase() === name.toLowerCase());
+  if (hit) return hit;
+  try {
+    const created = await graphFetch(`/drives/${driveId}/root/children`, {
+      method: "POST",
+      body: JSON.stringify({ name, folder: {}, "@microsoft.graph.conflictBehavior": "fail" }),
+    });
+    return { id: created.id, name: created.name };
+  } catch {
+    const again = await listLibraryFolders(graphFetch, driveId);
+    const hit2 = again.find((f) => f.name.toLowerCase() === name.toLowerCase());
+    if (hit2) return hit2;
+    throw new Error(`Map "${name}" kon niet worden aangemaakt`);
+  }
+}
+
 // Maak de dossiermap + 6 submappen. Onder parentItemId (de gekozen doelmap) of anders de drive-root.
 export async function createDossierFolder(graphFetch: GraphFetchFn, driveId: string, folderName: string, parentItemId?: string | null): Promise<{ id: string; webUrl: string; opdrachtId: string }> {
   const parentPath = parentItemId ? `/drives/${driveId}/items/${parentItemId}/children` : `/drives/${driveId}/root/children`;

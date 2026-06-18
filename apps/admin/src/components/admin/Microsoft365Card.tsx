@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
 import { useGraphApi } from "@/hooks/useGraphApi";
-import { getSharepointConfig, saveSharepointConfig, listLibraryFolders } from "@/lib/sharepoint";
+import { getSharepointConfig, saveSharepointConfig, listLibraryFolders, findOrCreateFolderByName, DEFAULT_TARGET_FOLDER } from "@/lib/sharepoint";
 
 type Site = { id: string; displayName: string; webUrl: string };
 type Drive = { id: string; name: string; driveType?: string };
@@ -26,7 +26,7 @@ export function Microsoft365Card() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [siteId, setSiteId] = useState("");
   const [driveId, setDriveId] = useState("");
-  const [folderId, setFolderId] = useState("root");
+  const [folderId, setFolderId] = useState("auto");
   const [loadingSites, setLoadingSites] = useState(false);
   const [loadingDrives, setLoadingDrives] = useState(false);
   const [loadingFolders, setLoadingFolders] = useState(false);
@@ -34,7 +34,7 @@ export function Microsoft365Card() {
   const [busy, setBusy] = useState(false);
 
   const { data: cfg } = useQuery({ queryKey: ["sharepoint-config"], queryFn: getSharepointConfig });
-  useEffect(() => { if (cfg) { setSiteId(cfg.siteId ?? ""); setDriveId(cfg.driveId ?? ""); setFolderId(cfg.rootItemId ?? "root"); } }, [cfg]);
+  useEffect(() => { if (cfg) { setSiteId(cfg.siteId ?? ""); setDriveId(cfg.driveId ?? ""); setFolderId(cfg.rootItemId ?? "auto"); } }, [cfg]);
 
   const loadSites = useCallback(async () => {
     setLoadingSites(true);
@@ -84,7 +84,15 @@ export function Microsoft365Card() {
         orgId = anyOrg?.id ?? null;
       }
       if (!orgId) throw new Error("Geen organisatie gevonden");
-      const rootItemId = folderId && folderId !== "root" ? folderId : null;
+      // "auto" → de standaardmap "02 Locaties" zoeken/aanmaken; "root" → hoofdmap; anders de gekozen map.
+      let rootItemId: string | null;
+      if (folderId === "auto") {
+        rootItemId = (await findOrCreateFolderByName(graphFetch, drive.id)).id;
+      } else if (folderId && folderId !== "root") {
+        rootItemId = folderId;
+      } else {
+        rootItemId = null;
+      }
       await saveSharepointConfig(orgId, { site_id: site.id, drive_id: drive.id, site_url: site.webUrl, site_name: site.displayName, root_item_id: rootItemId });
       toast.success("SharePoint-koppeling opgeslagen");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
@@ -142,11 +150,12 @@ export function Microsoft365Card() {
                 <Select value={folderId} onValueChange={setFolderId} disabled={!driveId || loadingFolders}>
                   <SelectTrigger>{loadingFolders ? <span className="text-muted-foreground">Mappen laden…</span> : <SelectValue placeholder="Kies een map…" />}</SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="auto">{DEFAULT_TARGET_FOLDER} (automatisch aanmaken/koppelen)</SelectItem>
                     <SelectItem value="root">(Hoofdmap van de bibliotheek)</SelectItem>
                     {folders.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-muted-foreground">Bijv. "06 Locaties". De dossiermappen komen hierin te staan.</p>
+                <p className="text-[11px] text-muted-foreground">Standaard "{DEFAULT_TARGET_FOLDER}": alle dossiers komen hierin (wordt aangemaakt als 'ie nog niet bestaat). Geldt voor iedereen.</p>
               </div>
               <div>
                 <Button onClick={save} disabled={saving || !siteId || !driveId}>

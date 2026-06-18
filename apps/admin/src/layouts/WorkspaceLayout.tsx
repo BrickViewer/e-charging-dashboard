@@ -139,7 +139,7 @@ export default function WorkspaceLayout() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/login");
+    navigate("/login/admin");
   };
 
   const switchWorkspace = (home: string) => {

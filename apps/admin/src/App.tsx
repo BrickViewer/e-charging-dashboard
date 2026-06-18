@@ -96,12 +96,17 @@ function InactiveAccountRedirect() {
   return <Navigate to="/login" replace />;
 }
 
-function RequireAuth({ children, allowedRoles }: { children: React.ReactNode; allowedRoles: string[] }) {
+function RequireAuth({ children, allowedRoles, loginPath = "/login" }: { children: React.ReactNode; allowedRoles: string[]; loginPath?: string }) {
   const { isLoading, user, role } = useAuth();
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Laden...</div>;
-  if (!user) return <Navigate to="/login" replace />;
-  if (!role && allowedRoles.includes("client")) return <InactiveAccountRedirect />;
-  if (!role || !allowedRoles.includes(role)) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to={loginPath} replace />;
+  if (!role) {
+    // Ingelogd zonder rol: in het portaal = inactief klantaccount; in een staf-gebied = wacht op rol.
+    if (allowedRoles.includes("client")) return <InactiveAccountRedirect />;
+    return <Navigate to="/geen-toegang" replace />;
+  }
+  // Verkeerde rol → terug naar "/" zodat AuthRedirect naar het juiste werkblad stuurt (geen lus).
+  if (!allowedRoles.includes(role)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -115,7 +120,8 @@ const App = () => (
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<AuthRedirect />} />
-              <Route path="/login" element={<Login />} />
+              <Route path="/login" element={<Login mode="client" />} />
+              <Route path="/login/admin" element={<Login mode="admin" />} />
               <Route path="/geen-toegang" element={<NoAccess />} />
               <Route path="/wachtwoord-herstellen" element={<ResetPassword />} />
               <Route path="/uitnodiging/:token" element={<InviteAccept />} />
@@ -151,7 +157,7 @@ const App = () => (
 
               {/* Beheer-werkblad */}
               <Route path="/admin" element={
-                <RequireAuth allowedRoles={["admin", "manager", "viewer"]}>
+                <RequireAuth allowedRoles={["admin", "manager", "viewer"]} loginPath="/login/admin">
                   <WorkspaceLayout />
                 </RequireAuth>
               }>
@@ -173,7 +179,7 @@ const App = () => (
 
               {/* Sales-werkblad */}
               <Route path="/sales" element={
-                <RequireAuth allowedRoles={["admin", "manager", "sales"]}>
+                <RequireAuth allowedRoles={["admin", "manager", "sales"]} loginPath="/login/admin">
                   <WorkspaceLayout />
                 </RequireAuth>
               }>
@@ -188,7 +194,7 @@ const App = () => (
 
               {/* Marketing-werkblad */}
               <Route path="/marketing" element={
-                <RequireAuth allowedRoles={["admin", "manager", "marketing"]}>
+                <RequireAuth allowedRoles={["admin", "manager", "marketing"]} loginPath="/login/admin">
                   <WorkspaceLayout />
                 </RequireAuth>
               }>

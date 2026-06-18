@@ -88,7 +88,7 @@ export default function OfferInternalSign() {
   useEffect(() => {
     if (!authLoading && !user) {
       try { sessionStorage.setItem("ec_post_login", location.pathname); } catch { /* ignore */ }
-      navigate("/login");
+      navigate("/login/admin");
     }
   }, [authLoading, user, location.pathname, navigate]);
 
