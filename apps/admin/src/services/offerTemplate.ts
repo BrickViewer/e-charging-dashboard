@@ -227,23 +227,28 @@ function pageEl(inner: string, fontSize = 13): HTMLElement {
   return el;
 }
 
-const sq = `<span style="display:inline-block;width:6px;height:6px;background:#8c8c8c;margin-left:8px;vertical-align:middle"></span>`;
+// Eén header-regel als tabelrij: tekst-cel (rechts) + smalle cel met het vierkantje.
+// html2canvas (1.4.1) negeert flexbox-align-items én top:% / top:px op absolute elementen,
+// maar rendert table-cell vertical-align:middle wél correct -> betrouwbare verticale centrering.
+const headerRow = (t: string) =>
+  `<tr>` +
+  `<td style="vertical-align:middle;text-align:right;height:19px;line-height:19px;padding:0 8px 0 0;white-space:nowrap">${t}</td>` +
+  `<td style="vertical-align:middle;padding:0;width:6px"><div style="padding-top:4px"><div style="width:6px;height:6px;background:#8c8c8c"></div></div></td>` +
+  `</tr>`;
 const g = (t: string) => `<span style="color:${GREEN}">${t}</span>`;
 
 function header(m: ResolvedModel, logoUrl: string | null, pageNum: number, total: number): string {
   const logo = logoUrl
     ? `<img src="${logoUrl}" alt="E-Charging" style="height:72px;display:block" />`
     : `<div style="font-weight:600;color:${GREEN};font-size:34px">e-charging</div>`;
-  // Flex-rij per regel zodat het vierkantje verticaal gecentreerd recht achter de tekst staat.
-  const ln = (t: string) => `<div style="display:flex;align-items:center;justify-content:flex-end;height:19px"><span>${t}</span>${sq}</div>`;
   return `
   <div style="display:flex;justify-content:space-between;align-items:flex-start">
     <div>${logo}</div>
-    <div style="color:${FAINT};font-size:10.5px">
-      ${ln(esc(m.dateShort) || "datum")}
-      ${ln(esc(m.reference) || "referentie")}
-      ${ln(`Pagina ${pageNum} van ${total}`)}
-    </div>
+    <table style="border-collapse:collapse;margin-left:auto;color:${FAINT};font-size:10.5px"><tbody>
+      ${headerRow(esc(m.dateShort) || "datum")}
+      ${headerRow(esc(m.reference) || "referentie")}
+      ${headerRow(`Pagina ${pageNum} van ${total}`)}
+    </tbody></table>
   </div>
   <div style="border-top:1px solid ${HAIRLINE};margin-top:16px"></div>`;
 }
