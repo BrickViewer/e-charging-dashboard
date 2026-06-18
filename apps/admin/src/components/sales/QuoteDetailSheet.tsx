@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -234,6 +235,11 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       <SheetContent side="right" className="ec-scroll w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader>
           <SheetTitle className="text-xl">Offerte {quote?.quote_number ?? ""}</SheetTitle>
+          {quote?.project_location_id ? (
+            <Link to={`/sales/objecten/${quote.project_location_id}`} className="text-xs text-primary hover:underline">
+              Object / locatie bekijken →
+            </Link>
+          ) : null}
         </SheetHeader>
 
         {!quote ? (

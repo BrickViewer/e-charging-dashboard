@@ -55,17 +55,17 @@ function DossierCard({ loc }: { loc: ProjectLocation }) {
   );
 }
 
-// Toont de SharePoint-dossiers (project_locations) van een klant of bedrijf, met een
-// live bestandslijst (via Microsoft Graph) + deeplinks. Geef clientId óf companyId mee.
-export function DossierDocuments({ clientId, companyId }: { clientId?: string; companyId?: string }) {
-  const byClient = useProjectLocationsByClient(clientId);
-  const byCompany = useProjectLocationsByCompany(companyId);
+// Toont de SharePoint-dossiers (project_locations) van een klant of bedrijf, of één object.
+// Live bestandslijst (via Microsoft Graph) + deeplinks. Geef clientId, companyId óf location mee.
+export function DossierDocuments({ clientId, companyId, location }: { clientId?: string; companyId?: string; location?: ProjectLocation }) {
+  const byClient = useProjectLocationsByClient(location ? undefined : clientId);
+  const byCompany = useProjectLocationsByCompany(location ? undefined : companyId);
   const { isConnected } = useMicrosoftAuth();
   const q = clientId ? byClient : byCompany;
-  const locs = q.data ?? [];
+  const locs = location ? [location] : (q.data ?? []);
 
-  if (q.isLoading) return <p className="text-sm text-muted-foreground">Laden…</p>;
-  if (locs.length === 0) return <p className="text-sm text-muted-foreground">Nog geen dossiers/locaties gekoppeld. Een SharePoint-map wordt aangemaakt zodra de eerste offerte voor deze {clientId ? "klant" : "organisatie"} wordt verstuurd.</p>;
+  if (!location && q.isLoading) return <p className="text-sm text-muted-foreground">Laden…</p>;
+  if (locs.length === 0) return <p className="text-sm text-muted-foreground">Nog geen dossier-map. Een SharePoint-map wordt aangemaakt zodra de eerste offerte voor dit object/deze {clientId ? "klant" : "organisatie"} wordt verstuurd.</p>;
   return (
     <div className="space-y-3">
       {!isConnected ? <p className="text-xs text-amber-600">Verbind met Microsoft 365 in Instellingen om de bestanden in de mappen te zien.</p> : null}

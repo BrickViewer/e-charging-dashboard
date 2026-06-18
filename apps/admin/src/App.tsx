@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -77,6 +77,12 @@ function AuthRedirect() {
   if (role === "client") return <Navigate to="/portal" replace />;
   // Ingelogd maar geen rol (bv. e-group-account zonder toegekende rol) → wachtpagina.
   return <Navigate to="/geen-toegang" replace />;
+}
+
+// Deeplink naar een object → open het in de Objecten-tab onder Contacten.
+function ObjectRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/sales/contacten?object=${id ?? ""}`} replace />;
 }
 
 function InactiveAccountRedirect() {
@@ -185,6 +191,7 @@ const App = () => (
                 <Route index element={<Navigate to="/sales/leads" replace />} />
                 <Route path="leads" element={<SalesLeads />} />
                 <Route path="contacten" element={<SalesContacts />} />
+                <Route path="objecten/:id" element={<ObjectRedirect />} />
                 <Route path="offertes" element={<SalesOffertes />} />
                 <Route path="installaties" element={<Navigate to="/sales/onboarding" replace />} />
                 <Route path="onboarding" element={<SalesOnboarding />} />

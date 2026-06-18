@@ -2206,12 +2206,17 @@ export type Database = {
           doc_seq: number
           folder_item_id: string | null
           folder_web_url: string | null
+          house_number: string | null
           id: string
           lead_id: string | null
           location_number: number
+          normalized_postal: string | null
+          normalized_street: string | null
+          notes: string | null
           opdracht_item_id: string | null
           organization_id: string
           postal_code: string | null
+          status: string
           updated_at: string
         }
         Insert: {
@@ -2225,12 +2230,15 @@ export type Database = {
           doc_seq?: number
           folder_item_id?: string | null
           folder_web_url?: string | null
+          house_number?: string | null
           id?: string
           lead_id?: string | null
           location_number?: number
+          notes?: string | null
           opdracht_item_id?: string | null
           organization_id: string
           postal_code?: string | null
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -2244,12 +2252,15 @@ export type Database = {
           doc_seq?: number
           folder_item_id?: string | null
           folder_web_url?: string | null
+          house_number?: string | null
           id?: string
           lead_id?: string | null
           location_number?: number
+          notes?: string | null
           opdracht_item_id?: string | null
           organization_id?: string
           postal_code?: string | null
+          status?: string
           updated_at?: string
         }
         Relationships: []

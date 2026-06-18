@@ -1,6 +1,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
+import { resolveProjectLocation } from "../_shared/projectLocation.ts";
 import { GraphClient, sanitizeName, base64ToBytes } from "./sharepoint.ts";
 
 // quote-sharepoint-off — maakt server-side (app-only) het dossier + de ongetekende OFF aan.
@@ -70,32 +71,19 @@ Deno.serve(async (req) => {
       const { data } = await sb.from("project_locations").select("location_number, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
       loc = data;
     }
-    if (!loc && street.trim() && city.trim()) {
-      let mq = sb.from("project_locations")
-        .select("id, location_number, folder_item_id, opdracht_item_id, folder_web_url")
-        .eq("organization_id", quote.organization_id)
-        .ilike("address_street", street.trim())
-        .ilike("city", city.trim())
-        .limit(1);
-      mq = quote.company_id ? mq.eq("company_id", quote.company_id) : mq.is("company_id", null);
-      const { data: match } = await mq.maybeSingle();
-      if (match) {
-        locId = match.id;
-        loc = { location_number: match.location_number, folder_item_id: match.folder_item_id, opdracht_item_id: match.opdracht_item_id, folder_web_url: match.folder_web_url };
-        await sb.from("quotes").update({ project_location_id: locId }).eq("id", quoteId);
-      }
-    }
     if (!loc) {
-      const { data: created, error } = await sb.from("project_locations").insert({
-        organization_id: quote.organization_id, display_name: addrLabel,
-        address_street: street || null, postal_code: postal || null, city: city || null,
-        company_id: quote.company_id ?? null, lead_id: quote.lead_id ?? null,
-      }).select("id, location_number, folder_item_id, opdracht_item_id, folder_web_url").single();
-      if (error) throw error;
-      locId = created.id;
-      loc = created;
+      // Legacy/zonder vooraf gekoppeld object: resolve via de gedeelde helper (genormaliseerde match).
+      const resolved = await resolveProjectLocation(sb, {
+        org: quote.organization_id, company: quote.company_id ?? null,
+        street, postal, city, lead: quote.lead_id ?? null, fallbackLabel: quote.prospect_company ?? undefined,
+      });
+      locId = resolved.id;
+      const { data } = await sb.from("project_locations")
+        .select("location_number, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
+      loc = data;
       await sb.from("quotes").update({ project_location_id: locId }).eq("id", quoteId);
     }
+    if (!loc) return json({ status: "error", message: "Locatie kon niet worden bepaald" }, 500);
     const locNumber = Number(loc.location_number);
 
     // Dossiermap + 6 submappen onder de doelmap (idempotent: hergebruik folder_item_id).

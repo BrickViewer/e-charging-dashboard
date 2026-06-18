@@ -85,10 +85,10 @@ export function useDeleteQuote() {
 export function useCreateQuoteFromLead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (leadId: string) => {
+    mutationFn: async ({ leadId, projectLocationId }: { leadId: string; projectLocationId?: string | null }) => {
       const { data, error } = await supabase.functions.invoke<{ quoteId: string; quoteNumber: string }>(
         "quote-create-from-lead",
-        { body: { lead_id: leadId } },
+        { body: { lead_id: leadId, project_location_id: projectLocationId ?? undefined } },
       );
       if (error) throw error;
       if (!data?.quoteId) throw new Error("Offerte aanmaken mislukt");

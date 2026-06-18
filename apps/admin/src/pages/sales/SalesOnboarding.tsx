@@ -176,11 +176,12 @@ export default function SalesOnboarding() {
           {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-96 w-72 flex-shrink-0 rounded-xl" />)}
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-2">
+        <div className="relative">
+          <div className="flex gap-3 overflow-x-auto pb-2">
           {stages.map((s) => {
             const items = byStage[s.key];
             return (
-              <div key={s.key} className="flex w-72 flex-shrink-0 flex-col rounded-xl border bg-card">
+              <div key={s.key} className="flex min-w-[210px] max-w-[300px] flex-1 flex-col rounded-xl border bg-card">
                 <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
@@ -213,6 +214,8 @@ export default function SalesOnboarding() {
               </div>
             );
           })}
+          </div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-6 rounded-r-xl bg-gradient-to-l from-background to-transparent" />
         </div>
       )}
 

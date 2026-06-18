@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
+import { resolveProjectLocation } from "../_shared/projectLocation.ts";
 
 // Maakt een concept-offerte vanuit de opgeslagen configuratie van een lead.
 // Regels worden voorgevuld vanuit de investeringsband; de verkoper kan ze bewerken.
@@ -95,29 +96,29 @@ Deno.serve(async (req) => {
     };
 
     // Offertenummer = locatie-document-jaar (bv. 201-01-26), gelijk aan de SharePoint-dossiers.
-    // Resolve/maak de project_location (dossier) op bedrijf+adres → zelfde locatie = zelfde
-    // locatienummer, nieuw documentnummer (201-01 → 201-02). Toegekend bij het opstellen.
-    const street = (lead.address_street ?? "").trim();
-    const city = (lead.city ?? "").trim();
-    const postal = (lead.postal_code ?? "").trim();
+    // Object (project_location) komt van de picker (project_location_id) of wordt afgeleid uit
+    // het lead-adres (genormaliseerde best-match → zelfde locatie = 201-02, anders nieuw 201/202).
     let locId: string | null = null;
     let locNumber: number | null = null;
-    if (street && city) {
-      let mq = serviceClient.from("project_locations").select("id, location_number")
-        .eq("organization_id", lead.organization_id).ilike("address_street", street).ilike("city", city).limit(1);
-      mq = lead.company_id ? mq.eq("company_id", lead.company_id) : mq.is("company_id", null);
-      const { data: match } = await mq.maybeSingle();
-      if (match) { locId = match.id; locNumber = Number(match.location_number); }
+    const explicitLocationId = typeof body.project_location_id === "string" ? body.project_location_id : "";
+    if (explicitLocationId) {
+      const { data: chosen } = await serviceClient.from("project_locations")
+        .select("id, location_number").eq("id", explicitLocationId).maybeSingle();
+      if (chosen) {
+        locId = chosen.id; locNumber = Number(chosen.location_number);
+        // Koppel het object aan deze lead/bedrijf als dat nog niet zo is.
+        await serviceClient.from("project_locations")
+          .update({ lead_id: lead.id, company_id: lead.company_id ?? null })
+          .eq("id", chosen.id).is("lead_id", null);
+      }
     }
     if (!locId) {
-      const addrLabel = [street, city].filter(Boolean).join(" ") || lead.company_name || "Onbekende locatie";
-      const { data: createdLoc, error: locErr } = await serviceClient.from("project_locations").insert({
-        organization_id: lead.organization_id, display_name: addrLabel,
-        address_street: street || null, postal_code: postal || null, city: city || null,
-        company_id: lead.company_id ?? null, lead_id: lead.id,
-      }).select("id, location_number").single();
-      if (locErr) throw locErr;
-      locId = createdLoc.id; locNumber = Number(createdLoc.location_number);
+      const resolved = await resolveProjectLocation(serviceClient, {
+        org: lead.organization_id, company: lead.company_id ?? null,
+        street: lead.address_street ?? "", postal: lead.postal_code ?? "", city: lead.city ?? "",
+        lead: lead.id, fallbackLabel: lead.company_name ?? undefined,
+      });
+      locId = resolved.id; locNumber = resolved.location_number;
     }
     const { data: docSeq, error: docErr } = await serviceClient.rpc("assign_document_number", { p_location_id: locId });
     if (docErr) throw docErr;

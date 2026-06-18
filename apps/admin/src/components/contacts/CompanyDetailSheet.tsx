@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ExternalLink, MapPin, Star, Trash2, X } from "lucide-react";
 import { PersonPicker } from "./PersonPicker";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
+import { useProjectLocationsByCompany } from "@/hooks/useProjectLocations";
 import {
   useUpdateCompany,
   useDeleteCompany,
@@ -37,6 +38,7 @@ export function CompanyDetailSheet({
   const leads = useLeadsForContact("company_id", open ? company?.id : undefined);
   const account = useClientForCompany(open ? company?.id : undefined);
   const locations = useClientLocations(open ? account.data?.id : undefined);
+  const objecten = useProjectLocationsByCompany(open ? company?.id : undefined);
   const link = useLinkPersonToCompany();
   const unlink = useUnlinkPersonFromCompany();
   const navigate = useNavigate();
@@ -208,7 +210,21 @@ export function CompanyDetailSheet({
             </div>
           </TabsContent>
 
-          <TabsContent value="mappen" className="mt-4">
+          <TabsContent value="mappen" className="mt-4 space-y-4">
+            {(objecten.data ?? []).length > 0 && (
+              <div>
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Objecten</p>
+                <div className="space-y-1.5">
+                  {(objecten.data ?? []).map((o) => (
+                    <button key={o.id} onClick={() => navigate(`/sales/contacten?object=${o.id}`)} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
+                      <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="flex-1 truncate">{o.location_number} · {[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</span>
+                      <span className="text-[11px] text-muted-foreground">{o.quotes?.[0]?.count ?? 0} offertes</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <DossierDocuments companyId={company.id} />
           </TabsContent>
         </Tabs>

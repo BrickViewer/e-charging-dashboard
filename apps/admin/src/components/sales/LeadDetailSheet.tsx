@@ -25,6 +25,7 @@ import {
   Pencil, Plus, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
 } from "lucide-react";
 import { useCreateQuoteFromLead, useLeadQuotes } from "@/hooks/useQuotes";
+import { ObjectSelectDialog } from "@/components/contacts/ObjectSelectDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessBeheer } from "@/lib/workspaces";
@@ -89,6 +90,7 @@ export function LeadDetailSheet({
   const deleteLead = useDeleteLead();
   const convert = useConvertLeadToClient();
   const createQuote = useCreateQuoteFromLead();
+  const [objectDialogOpen, setObjectDialogOpen] = useState(false);
   const addTask = useAddTask();
   const toggleTask = useToggleTask();
   const deleteTask = useDeleteTask();
@@ -228,10 +230,12 @@ export function LeadDetailSheet({
       toast.success(`Klant${client.clientNumber ? ` #${client.clientNumber}` : ""} aangemaakt`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Converteren mislukt"); }
   };
-  const makeOffer = async () => {
+  const makeOffer = () => setObjectDialogOpen(true);
+  const confirmObject = async (projectLocationId: string | null) => {
     try {
-      const { quoteId } = await createQuote.mutateAsync(lead.id);
+      const { quoteId } = await createQuote.mutateAsync({ leadId: lead.id, projectLocationId });
       toast.success("Offerte aangemaakt");
+      setObjectDialogOpen(false);
       onOpenChange(false);
       navigate(`/sales/offertes?quote=${quoteId}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Offerte aanmaken mislukt"); }
@@ -593,6 +597,14 @@ export function LeadDetailSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ObjectSelectDialog
+        open={objectDialogOpen}
+        onClose={() => setObjectDialogOpen(false)}
+        lead={{ id: lead.id, organization_id: lead.organization_id, company_id: lead.company_id, company_name: lead.company_name, address_street: lead.address_street, postal_code: lead.postal_code, city: lead.city }}
+        onConfirm={confirmObject}
+        pending={createQuote.isPending}
+      />
     </>
   );
 }

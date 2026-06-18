@@ -1,0 +1,34 @@
+// Gedeelde object/locatie-resolutie (e-portal-stijl): vind een bestaand object op
+// genormaliseerd adres via de RPC find_matching_project_location, anders maak een
+// nieuw object aan. Eén bron van waarheid voor quote-create-from-lead + quote-sharepoint-off.
+
+// deno-lint-ignore no-explicit-any
+type SB = any;
+
+export interface ResolvedLocation { id: string; location_number: number }
+
+export async function resolveProjectLocation(
+  sb: SB,
+  args: { org: string; company: string | null; street: string; postal: string; city: string; house?: string | null; lead?: string | null; fallbackLabel?: string },
+): Promise<ResolvedLocation> {
+  const street = (args.street ?? "").trim();
+  const city = (args.city ?? "").trim();
+  const postal = (args.postal ?? "").trim();
+
+  // 1) Bestaand object zoeken (genormaliseerde best-match).
+  const { data: matches } = await sb.rpc("find_matching_project_location", {
+    p_org: args.org, p_company: args.company ?? null, p_street: street, p_postal: postal, p_city: city, p_house: args.house ?? null,
+  });
+  const hit = Array.isArray(matches) ? matches[0] : null;
+  if (hit) return { id: hit.id, location_number: Number(hit.location_number) };
+
+  // 2) Nieuw object.
+  const addrLabel = [street, city].filter(Boolean).join(" ") || args.fallbackLabel || "Onbekende locatie";
+  const { data: created, error } = await sb.from("project_locations").insert({
+    organization_id: args.org, display_name: addrLabel,
+    address_street: street || null, postal_code: postal || null, city: city || null,
+    house_number: args.house ?? null, company_id: args.company ?? null, lead_id: args.lead ?? null,
+  }).select("id, location_number").single();
+  if (error) throw error;
+  return { id: created.id, location_number: Number(created.location_number) };
+}
