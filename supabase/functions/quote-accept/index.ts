@@ -210,10 +210,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // SharePoint: getekend exemplaar (OPD) in de Opdracht-submap. BLOKKEREND indien geconfigureerd.
+    // Getekende PDF ALTIJD in Supabase opslaan (zo hebben we 'm zeker + kunnen we mailen);
+    // van daaruit gaat 'ie naar SharePoint. Een storage-fout mag de klant niet blokkeren.
+    let signedPath: string | null = (quote.signed_pdf_path as string | null) ?? null;
+    if (signedPdfB64 && !signedPath) {
+      const path = `signed/${quote.id}.pdf`;
+      const { error: upErr } = await sb.storage.from("quote-documents")
+        .upload(path, base64ToBytes(signedPdfB64), { contentType: "application/pdf", upsert: true });
+      if (!upErr) signedPath = path;
+      else console.error("[quote-accept] getekende PDF opslaan mislukt:", upErr.message);
+    }
+
+    // SharePoint: getekend exemplaar (OPD) in de Opdracht-submap. BEST-EFFORT — nooit blokkerend.
+    // Mislukt het, dan haalt de cron 'quote-opd-sync' het later op uit Supabase.
     let opdWebUrl: string | null = (quote.opd_web_url as string | null) ?? null;
-    {
-      // App-only Graph-client: secrets uit edge-env (voorrang) óf de Vault.
+    try {
       const spTenant = await resolveSecret(sb, ["SHAREPOINT_TENANT_ID"], "sharepoint_tenant_id");
       const spClient = await resolveSecret(sb, ["SHAREPOINT_CLIENT_ID"], "sharepoint_client_id");
       const spSecret = await resolveSecret(sb, ["SHAREPOINT_CLIENT_SECRET"], "sharepoint_client_secret");
@@ -233,15 +244,18 @@ Deno.serve(async (req) => {
           await sb.from("quotes").update({ opd_item_id: opd.id, opd_web_url: opd.webUrl }).eq("id", quote.id);
         }
       }
-      // Dossier aan het klantaccount koppelen (alleen bij beheer).
-      if (quote.project_location_id && quote.with_management !== false) {
-        await sb.from("project_locations").update({ client_id: clientId }).eq("id", quote.project_location_id);
-      }
+    } catch (e) {
+      console.error("[quote-accept] OPD naar SharePoint mislukt (cron probeert later opnieuw):", e instanceof Error ? e.message : e);
     }
 
-    // Offerte + acceptatie afronden (PAS NU 'getekend' zodat een mislukte OPD-upload herhaalbaar blijft).
+    // Dossier aan het klantaccount koppelen (alleen bij beheer).
+    if (quote.project_location_id && quote.with_management !== false) {
+      await sb.from("project_locations").update({ client_id: clientId }).eq("id", quote.project_location_id);
+    }
+
+    // Offerte + acceptatie afronden — ALTIJD (ook als SharePoint nog faalde; OPD volgt via de cron).
     await sb.from("quotes").update({
-      status: "getekend", signed_at: new Date().toISOString(), client_id: clientId, signer_name: signerName,
+      status: "getekend", signed_at: new Date().toISOString(), client_id: clientId, signer_name: signerName, signed_pdf_path: signedPath,
     }).eq("id", quote.id);
     await sb.from("quote_acceptances").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", acc.id);
 

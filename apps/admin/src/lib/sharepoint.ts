@@ -144,6 +144,23 @@ export async function ensureDossierAndUploadOff(graphFetch: GraphFetchFn, quoteI
     const { data } = await supabase.from("project_locations").select("location_number, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
     loc = data;
   }
+  // Tweede offerte voor dezelfde locatie (zelfde bedrijf + adres) → hergebruik de bestaande
+  // locatie/map; het documentnummer telt door (201-01 → 201-02). Alleen bij een echt adres.
+  if (!loc && street.trim() && city.trim()) {
+    let mq = supabase.from("project_locations")
+      .select("id, location_number, folder_item_id, opdracht_item_id, folder_web_url")
+      .eq("organization_id", quote.organization_id)
+      .ilike("address_street", street.trim())
+      .ilike("city", city.trim())
+      .limit(1);
+    mq = quote.company_id ? mq.eq("company_id", quote.company_id) : mq.is("company_id", null);
+    const { data: match } = await mq.maybeSingle();
+    if (match) {
+      locId = match.id;
+      loc = { location_number: match.location_number, folder_item_id: match.folder_item_id, opdracht_item_id: match.opdracht_item_id, folder_web_url: match.folder_web_url };
+      await supabase.from("quotes").update({ project_location_id: locId }).eq("id", quoteId);
+    }
+  }
   if (!loc) {
     const { data: created, error } = await supabase.from("project_locations").insert({
       organization_id: quote.organization_id, display_name: addrLabel,
