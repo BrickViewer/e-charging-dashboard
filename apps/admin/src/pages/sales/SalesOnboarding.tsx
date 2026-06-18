@@ -29,29 +29,32 @@ function NextAction({
   navigate: (to: string) => void;
 }) {
   const order = primaryOrder(client);
+  // Compacte, niet-overlopende actieknop: smalle kolom-proof (mag desnoods afbreken i.p.v. buiten de kaart vallen).
+  const btn = "h-auto min-h-8 w-full whitespace-normal px-2 py-1 text-xs leading-tight";
+  const ico = "mr-1.5 h-3.5 w-3.5 shrink-0";
   switch (stage) {
     case "getekend":
-      return <Button size="sm" className="w-full" disabled={!order} onClick={() => onHandoff(client)}><Send className="mr-1.5 h-3.5 w-3.5" /> Doorsturen naar installateur</Button>;
+      return <Button size="sm" className={btn} disabled={!order} onClick={() => onHandoff(client)}><Send className={ico} /> Doorsturen</Button>;
     case "bij_installateur":
       return (
-        <div className="flex h-8 items-center justify-center gap-1.5 rounded-md bg-muted/60 px-2 text-center text-[11px] text-muted-foreground">
+        <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-center text-[11px] leading-tight text-muted-foreground">
           <Clock className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{order?.egroup_order_number ? `Verstuurd · ${order.egroup_order_number}` : "Verstuurd — wacht op oplevering"}</span>
         </div>
       );
     case "opgeleverd":
-      return <Button size="sm" className="w-full" disabled={invoicing || !order} onClick={() => onMarkInvoiced(client)}><Receipt className="mr-1.5 h-3.5 w-3.5" /> Markeer gefactureerd</Button>;
+      return <Button size="sm" className={btn} disabled={invoicing || !order} onClick={() => onMarkInvoiced(client)}><Receipt className={ico} /> Markeer gefactureerd</Button>;
     case "locaties_koppelen":
-      return <Button size="sm" className="w-full" onClick={() => onLink(client)}><Plug className="mr-1.5 h-3.5 w-3.5" /> Locaties koppelen</Button>;
+      return <Button size="sm" className={btn} onClick={() => onLink(client)}><Plug className={ico} /> Locaties koppelen</Button>;
     case "klant_uitnodigen":
       return (
-        <Button size="sm" variant={hasPendingInvite(client) ? "outline" : "default"} className="w-full" disabled={inviting} onClick={() => onInvite(client)}>
-          <MailPlus className="mr-1.5 h-3.5 w-3.5" /> {hasPendingInvite(client) ? "Uitnodiging opnieuw" : "Uitnodiging versturen"}
+        <Button size="sm" variant={hasPendingInvite(client) ? "outline" : "default"} className={btn} disabled={inviting} onClick={() => onInvite(client)}>
+          <MailPlus className={ico} /> {hasPendingInvite(client) ? "Opnieuw uitnodigen" : "Uitnodigen"}
         </Button>
       );
     case "gegevens":
-      return <div className="flex h-8 items-center justify-center gap-1.5 rounded-md bg-muted/60 px-2 text-[11px] text-muted-foreground"><Clock className="h-3.5 w-3.5 shrink-0" /> Wacht op gegevens van de klant</div>;
+      return <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-center text-[11px] leading-tight text-muted-foreground"><Clock className="h-3.5 w-3.5 shrink-0" /> Wacht op gegevens</div>;
     case "archief":
-      return <Button size="sm" variant="ghost" className="w-full" onClick={() => navigate(`/admin/klanten/${client.id}`)}><ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Bekijk klant</Button>;
+      return <Button size="sm" variant="ghost" className={btn} onClick={() => navigate(`/admin/klanten/${client.id}`)}><ExternalLink className={ico} /> Bekijk klant</Button>;
   }
 }
 
