@@ -4,6 +4,15 @@ import path from "path";
 
 export default defineConfig({
   envDir: path.resolve(__dirname, "../.."),
+  // Tweede entry: redirect.html is de MSAL-popup-redirect-URI.
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        redirect: path.resolve(__dirname, "redirect.html"),
+      },
+    },
+  },
   server: {
     host: "::",
     port: 8080,

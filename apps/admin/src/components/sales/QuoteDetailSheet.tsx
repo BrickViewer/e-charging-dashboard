@@ -15,6 +15,8 @@ import { SignerStatusPanel } from "@/components/sales/SignerStatusPanel";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
 import type { OfferDetails, OfferTemplateValues } from "@/services/offerTypes";
+import { useGraphApi } from "@/hooks/useGraphApi";
+import { ensureDossierAndUploadOff } from "@/lib/sharepoint";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
@@ -29,6 +31,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   const del = useDeleteQuote();
   const { user } = useAuth();
   const adminsQ = useSignableAdmins();
+  const { graphFetch } = useGraphApi();
   const quote = quoteQ.data;
   const tpl = settingsQ.data?.offerTemplate;
   const admins = adminsQ.data ?? [];
@@ -156,14 +159,16 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
     try {
       const data = pdfData();
-      // Getekende PDF voor de klantmail; ongetekende OFF voor het SharePoint-dossier.
+      // 1) SharePoint-dossier + ongetekende OFF (client-side, blokkerend).
+      const offPdfBase64 = await offerPdfBase64(data);
+      await ensureDossierAndUploadOff(graphFetch, quote.id, offPdfBase64);
+      // 2) Getekende PDF voor de klantmail + versturen.
       const pdfBase64 = await offerPdfBase64(data, {
         echargingSignatureDataUrl: selfAdmin.signatureDataUrl,
         echargingSignerName: selfAdmin.fullName,
         echargingSignerFunction: selfAdmin.signerTitle,
       });
-      const offPdfBase64 = await offerPdfBase64(data);
-      await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64, offPdfBase64, internalSelfSign: true });
+      await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64, internalSelfSign: true });
       toast.success(`Ondertekend en verstuurd naar ${email.trim()}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
   };
@@ -174,8 +179,10 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
     if (!selectedAdmin.hasSignature) { toast.error(`${selectedAdmin.fullName} heeft nog geen handtekening ingesteld`); return; }
     await save();
     try {
-      const offPdfBase64 = await offerPdfBase64(pdfData()); // ongetekende OFF voor het dossier
-      await requestSignoff.mutateAsync({ quoteId: quote.id, offPdfBase64 });
+      // SharePoint-dossier + ongetekende OFF (client-side, blokkerend) vóór het versturen.
+      const offPdfBase64 = await offerPdfBase64(pdfData());
+      await ensureDossierAndUploadOff(graphFetch, quote.id, offPdfBase64);
+      await requestSignoff.mutateAsync({ quoteId: quote.id });
       toast.success(`Ter ondertekening gestuurd naar ${selectedAdmin.fullName}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
   };

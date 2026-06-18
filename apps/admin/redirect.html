@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Inloggen…</title>
+</head>
+<body>
+  <p>Bezig met inloggen…</p>
+  <script type="module">
+    import { broadcastResponseToMainFrame } from "@azure/msal-browser/redirect-bridge";
+    broadcastResponseToMainFrame().catch((error) => {
+      console.error("Error broadcasting response:", error);
+    });
+  </script>
+</body>
+</html>

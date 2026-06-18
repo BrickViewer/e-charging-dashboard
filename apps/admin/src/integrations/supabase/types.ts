@@ -1961,6 +1961,7 @@ export type Database = {
           sharepoint_drive_id: string | null
           sharepoint_root_item_id: string | null
           sharepoint_site_id: string | null
+          sharepoint_site_name: string | null
           sharepoint_site_url: string | null
           updated_at: string | null
         }
@@ -1998,6 +1999,7 @@ export type Database = {
           sharepoint_drive_id?: string | null
           sharepoint_root_item_id?: string | null
           sharepoint_site_id?: string | null
+          sharepoint_site_name?: string | null
           sharepoint_site_url?: string | null
           updated_at?: string | null
         }
@@ -2035,6 +2037,7 @@ export type Database = {
           sharepoint_drive_id?: string | null
           sharepoint_root_item_id?: string | null
           sharepoint_site_id?: string | null
+          sharepoint_site_name?: string | null
           sharepoint_site_url?: string | null
           updated_at?: string | null
         }
@@ -2671,6 +2674,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_document_number: {
+        Args: { p_location_id: string }
+        Returns: number
+      }
       accept_client_invitation: {
         Args: { accepted_user_id: string; invitation_token_hash: string }
         Returns: {

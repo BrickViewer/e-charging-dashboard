@@ -104,10 +104,10 @@ export function useCreateQuoteFromLead() {
 export function useSendQuote() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ quoteId, email, pdfBase64, offPdfBase64, internalSelfSign }: { quoteId: string; email?: string; pdfBase64?: string; offPdfBase64?: string; internalSelfSign?: boolean }) => {
+    mutationFn: async ({ quoteId, email, pdfBase64, internalSelfSign }: { quoteId: string; email?: string; pdfBase64?: string; internalSelfSign?: boolean }) => {
       const { data, error } = await supabase.functions.invoke<{ status: string; message?: string; acceptUrl?: string }>(
         "quote-send",
-        { body: { quote_id: quoteId, email, pdf_base64: pdfBase64, off_pdf_base64: offPdfBase64, internal_self_sign: internalSelfSign } },
+        { body: { quote_id: quoteId, email, pdf_base64: pdfBase64, internal_self_sign: internalSelfSign } },
       );
       if (error) throw error;
       if (data?.status && data.status !== "sent") throw new Error(data.message || "Versturen mislukt");
@@ -125,10 +125,10 @@ export function useSendQuote() {
 export function useRequestSignoff() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ quoteId, offPdfBase64 }: { quoteId: string; offPdfBase64?: string }) => {
+    mutationFn: async ({ quoteId }: { quoteId: string }) => {
       const { data, error } = await supabase.functions.invoke<{ status: string; message?: string; to?: string }>(
         "quote-request-signoff",
-        { body: { quote_id: quoteId, off_pdf_base64: offPdfBase64 } },
+        { body: { quote_id: quoteId } },
       );
       if (error) throw error;
       if (data?.status && data.status !== "requested") throw new Error(data.message || "Versturen ter ondertekening mislukt");
