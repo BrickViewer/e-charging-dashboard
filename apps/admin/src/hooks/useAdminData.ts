@@ -3,13 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type {
   AdminChargePoint,
-  AdminSettlement,
   ClientInvitationSummary,
   ClientWithRelations,
   CronJobStatus,
   RecentInvitation,
 } from "@/types/db";
-import { getCurrentMonth, shiftMonth, monthShortLabel } from "@/lib/period";
+import { getCurrentMonth, monthShortLabel } from "@/lib/period";
 
 export function useAllClients() {
   return useQuery({
@@ -305,15 +304,45 @@ export function useRecentActivity(limit = 10) {
   });
 }
 
+interface AdminSettlementKpis {
+  available_years: number[];
+  monthly: { month: number; revenue: number; kwh: number; clients: number }[];
+  cur: { month_revenue: number; total_kwh: number; total_revenue: number };
+  prev: { month_revenue: number; kwh: number };
+}
+
 export function useAdminKPIs(chartYear?: number) {
   const { data: clients } = useAllClients();
-  const { data: settlements } = useAllSettlements();
   const { data: chargePoints } = useAllChargePoints();
 
-  // getCurrentMonth buiten de memo (goedkoop) zodat de maandgrens nooit verstart; de
-  // zware afgeleide aggregatie memoizen op de query-data + jaar + maand-primitieven,
-  // zodat onverwante re-renders niet alles herberekenen.
+  // getCurrentMonth buiten de memo (goedkoop) zodat de maandgrens nooit verstart.
   const { year: curYear, month: curMonth } = getCurrentMonth();
+  // Jaar-navigatie voor de omzetgrafiek: standaard het huidige jaar.
+  const selectedYear = chartYear ?? curYear;
+
+  // Settlement-aggregatie server-side via admin_settlement_kpis i.p.v. álle settlements
+  // client-side ophalen + reducen (het dashboard trok voorheen de hele settlements-tabel).
+  // De huidige maand wordt in NL-tijd (getCurrentMonth) bepaald en meegegeven, zodat de
+  // server exact dezelfde maandgrens spiegelt. Jaar-stappen doet nu een kleine, gecachete
+  // RPC-call i.p.v. een client-filter (geen gedrags-/correctheidswijziging).
+  const { data: kpi } = useQuery({
+    queryKey: ["admin-settlement-kpis", selectedYear, curYear, curMonth],
+    queryFn: async () => {
+      const rpcClient = supabase as unknown as {
+        rpc(
+          name: "admin_settlement_kpis",
+          args: { p_year: number; p_cur_year: number; p_cur_month: number },
+        ): Promise<{ data: AdminSettlementKpis | null; error: Error | null }>;
+      };
+      const { data, error } = await rpcClient.rpc("admin_settlement_kpis", {
+        p_year: selectedYear,
+        p_cur_year: curYear,
+        p_cur_month: curMonth,
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
 
   return useMemo(() => {
   const cur = { year: curYear, month: curMonth };
@@ -324,43 +353,32 @@ export function useAdminKPIs(chartYear?: number) {
   const activeClients = visibleClients.filter(c => (c.locations?.length ?? 0) > 0);
   const totalChargePoints = chargePoints?.length || 0;
   const typedChargePoints = (chargePoints ?? []) as AdminChargePoint[];
-  const typedSettlements = (settlements ?? []) as AdminSettlement[];
   // Alleen laadpunten op een aan-een-klant-gekoppelde locatie tellen mee als "in gebruik".
   const linkedCPs = typedChargePoints.filter(cp => cp.locations?.client_id != null);
   const onlineCPs = linkedCPs.filter(cp => cp.status === "online" || cp.status === "in_use");
   const offlineCPs = linkedCPs.filter(cp => cp.status === "offline" || cp.status === "error");
 
-  const prev = shiftMonth(cur, -1);
-  // Jaar-navigatie voor de omzetgrafiek: standaard het huidige jaar, maar de admin
-  // kan terug/vooruit door alle jaren waarvoor data bestaat (∪ huidig jaar).
-  const selectedYear = chartYear ?? cur.year;
-  const settlementYears = new Set<number>(typedSettlements.map(s => s.year).filter(Boolean));
-  settlementYears.add(cur.year);
-  const availableYears = Array.from(settlementYears).sort((a, b) => a - b);
+  // Settlement-afgeleiden uit de RPC; labels (monthShortLabel) + %-deltas blijven client-side
+  // identiek. Tijdens laden: 12 nul-maanden + alleen het huidige jaar (zoals voorheen).
+  const monthlyRows = kpi?.monthly?.length
+    ? kpi.monthly
+    : Array.from({ length: 12 }, (_, i) => ({ month: i + 1, revenue: 0, kwh: 0, clients: 0 }));
+  const monthlyData = monthlyRows.map(r => ({
+    period: monthShortLabel(selectedYear, r.month),
+    revenue: Number(r.revenue || 0),
+    kwh: Number(r.kwh || 0),
+    clients: Number(r.clients || 0),
+  }));
+  const availableYears = kpi?.available_years ?? [cur.year];
 
-  const currentSettlements = typedSettlements.filter(s => s.year === cur.year && s.month === cur.month);
-  const prevSettlements = typedSettlements.filter(s => s.year === prev.year && s.month === prev.month);
-
-  const monthRevenue = currentSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0);
-  const prevMonthRevenue = prevSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0);
-  const totalKwh = currentSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0);
-  const prevKwh = prevSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0);
-  const totalRevenue = currentSettlements.reduce((sum, s) => sum + Number(s.gross_revenue || 0), 0);
+  const monthRevenue = Number(kpi?.cur?.month_revenue || 0);
+  const prevMonthRevenue = Number(kpi?.prev?.month_revenue || 0);
+  const totalKwh = Number(kpi?.cur?.total_kwh || 0);
+  const prevKwh = Number(kpi?.prev?.kwh || 0);
+  const totalRevenue = Number(kpi?.cur?.total_revenue || 0);
 
   const revenueChange = prevMonthRevenue > 0 ? ((monthRevenue - prevMonthRevenue) / prevMonthRevenue) * 100 : 0;
   const kwhChange = prevKwh > 0 ? ((totalKwh - prevKwh) / prevKwh) * 100 : 0;
-
-  // Kalenderjaar (jan -> dec) van het GEKOZEN jaar voor de omzetgrafiek.
-  const monthlyData: { period: string; revenue: number; kwh: number; clients: number }[] = [];
-  for (let m = 1; m <= 12; m++) {
-    const periodSettlements = typedSettlements.filter(s => s.year === selectedYear && s.month === m);
-    monthlyData.push({
-      period: monthShortLabel(selectedYear, m),
-      revenue: periodSettlements.reduce((sum, s) => sum + Number(s.echarging_revenue || 0), 0),
-      kwh: periodSettlements.reduce((sum, s) => sum + Number(s.total_kwh || 0), 0),
-      clients: periodSettlements.length,
-    });
-  }
 
   return {
     activeClients: activeClients.length,
@@ -379,5 +397,5 @@ export function useAdminKPIs(chartYear?: number) {
     selectedChartYear: selectedYear,
     availableYears,
   };
-  }, [clients, settlements, chargePoints, chartYear, curYear, curMonth]);
+  }, [clients, chargePoints, kpi, curYear, curMonth, selectedYear]);
 }
