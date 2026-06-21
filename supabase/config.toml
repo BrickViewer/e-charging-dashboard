@@ -1,1 +1,102 @@
 project_id = "uuldldhmuanmjlyvnagt"
+
+# Per-functie verify_jwt — vastgelegd in version control zodat een CLI-deploy
+# (`supabase functions deploy --use-api`) de huidige live-instelling per functie
+# exact behoudt (de CLI-default is verify_jwt=true). Waarden = de live-stand vóór
+# de Fase 2-deploysweep. Publieke/secret-geauthenticeerde functies = false.
+
+[functions.accept-client-invitation]
+verify_jwt = false
+
+[functions.aggregate-settlements]
+verify_jwt = false
+
+[functions.assign-user-role]
+verify_jwt = true
+
+[functions.blog-public]
+verify_jwt = false
+
+[functions.configurator-draft-save]
+verify_jwt = false
+
+[functions.configurator-finalize-client]
+verify_jwt = false
+
+[functions.configurator-save-to-lead]
+verify_jwt = false
+
+[functions.configurator-session-start]
+verify_jwt = false
+
+[functions.configurator-settings]
+verify_jwt = false
+
+[functions.contact-intake]
+verify_jwt = false
+
+[functions.delete-team-member]
+verify_jwt = true
+
+[functions.eflux-sync]
+verify_jwt = false
+
+[functions.eflux-test-connection]
+verify_jwt = false
+
+[functions.erase-client]
+verify_jwt = true
+
+[functions.installation-completion-webhook]
+verify_jwt = false
+
+[functions.invite-team-member]
+verify_jwt = true
+
+[functions.lead-convert-to-client]
+verify_jwt = false
+
+[functions.lead-intake]
+verify_jwt = false
+
+[functions.object-delete]
+verify_jwt = true
+
+[functions.order-handoff]
+verify_jwt = true
+
+[functions.password-reset]
+verify_jwt = false
+
+[functions.quote-accept]
+verify_jwt = false
+
+[functions.quote-create-from-lead]
+verify_jwt = true
+
+[functions.quote-internal-sign]
+verify_jwt = true
+
+[functions.quote-opd-sync]
+verify_jwt = false
+
+[functions.quote-request-signoff]
+verify_jwt = true
+
+[functions.quote-send]
+verify_jwt = false
+
+[functions.quote-sharepoint-off]
+verify_jwt = false
+
+[functions.send-client-invitation]
+verify_jwt = false
+
+[functions.send-fault-notification]
+verify_jwt = false
+
+[functions.sharepoint-setup]
+verify_jwt = false
+
+[functions.update-portal-bank-details]
+verify_jwt = false
