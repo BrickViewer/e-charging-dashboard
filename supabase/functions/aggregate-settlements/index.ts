@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
+import { DEFAULT_ECHARGING_FEE_PER_KWH, computeSettlement } from "../_shared/settlement-math.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -31,8 +32,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-const DEFAULT_ECHARGING_FEE_PER_KWH = 0.10; // tien cent per kWh — NIET 0.001
 
 interface Range { fromYear: number; fromMonth: number; toYear: number; toMonth: number; }
 type AggregateBody = Record<string, unknown>;
@@ -201,9 +200,19 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
   // rijen met een gereserveerd factuurnummer blijven óók staan — doorlopende reeks).
   const { data: existingSettlements } = await supabase
     .from("settlements")
-    .select("id, client_id, status, invoice_number")
+    .select("id, client_id, status, invoice_number, fee_waived")
     .eq("year", year)
     .eq("month", month);
+
+  // Eén keer indexeren op client_id; hergebruikt in de aggregatie-loop i.p.v. een
+  // SELECT per klant (N+1). Klanten met sessies worden nooit opgeruimd (disjunct van
+  // de orphan-set), dus deze map blijft accuraat voor elke verwerkte klant.
+  const existingByClient = new Map<string, { id: string; status: string; fee_waived: boolean }>();
+  for (const s of existingSettlements ?? []) {
+    existingByClient.set(s.client_id as string, {
+      id: s.id as string, status: s.status as string, fee_waived: s.fee_waived === true,
+    });
+  }
 
   const clientsWithSessionsInMonth = new Set<string>();
   {
@@ -219,14 +228,15 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
     }
   }
 
-  for (const setl of existingSettlements ?? []) {
-    if (
+  // Opruimen in één DELETE i.p.v. per rij (exact dezelfde rijen).
+  const orphanIds = (existingSettlements ?? [])
+    .filter((setl) =>
       (setl.status === "live" || setl.status === "calculated")
       && !setl.invoice_number
-      && !clientsWithSessionsInMonth.has(setl.client_id as string)
-    ) {
-      await supabase.from("settlements").delete().eq("id", setl.id);
-    }
+      && !clientsWithSessionsInMonth.has(setl.client_id as string))
+    .map((setl) => setl.id as string);
+  if (orphanIds.length > 0) {
+    await supabase.from("settlements").delete().in("id", orphanIds);
   }
 
   // Aggregaten per klant in deze maand (excl. excluded sessies).
@@ -304,26 +314,24 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
 
     // Bestaande rij met definitieve status niet overschrijven; fee_waived
     // (handmatige kwijtschelding via set_settlement_fee_waived) preserveren.
-    const { data: existing } = await supabase
-      .from("settlements")
-      .select("id, status, fee_waived")
-      .eq("client_id", a.client_id)
-      .eq("year", year)
-      .eq("month", month)
-      .maybeSingle();
+    // Uit de vooraf opgebouwde map (geen SELECT per klant).
+    const existing = existingByClient.get(a.client_id);
 
-    if (existing && ["approved", "paid", "invoice_sent", "invoice_paid", "charged_back"].includes(existing.status as string)) {
+    if (existing && ["approved", "paid", "invoice_sent", "invoice_paid", "charged_back"].includes(existing.status)) {
       skipped++;
       continue;
     }
 
-    // Kwijtgescholden maand → fee 0; snapshot blijft genuld over her-runs heen
+    // Kwijtgescholden maand → fee 0; snapshot blijft genuld over her-runs heen.
+    // Formule via de gedeelde settlement-math module (zelfde getallen, één bron).
     const feeWaived = existing?.fee_waived === true;
-    const feePerKwh = feeWaived ? 0 : (clientFee.get(a.client_id) ?? orgFeePerKwh);
-
     const grossRevenue = a.reimbursement_total;
-    const echargingRevenue = feePerKwh * a.total_kwh; // GEEN minimum
-    const clientPayout = grossRevenue - echargingRevenue;
+    const { feePerKwh, echargingRevenue, clientPayout } = computeSettlement({
+      totalKwh: a.total_kwh,
+      grossRevenue,
+      feePerKwh: clientFee.get(a.client_id) ?? orgFeePerKwh,
+      feeWaived,
+    });
 
     const newStatus = isMonthStillRunning ? "live" : "calculated";
 

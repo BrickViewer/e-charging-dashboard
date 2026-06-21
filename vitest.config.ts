@@ -12,6 +12,8 @@ export default defineConfig({
       "apps/**/*.{test,spec}.{ts,tsx}",
       "packages/**/*.{test,spec}.{ts,tsx}",
     ],
+    // Playwright e2e-specs draaien onder `npm run test:e2e`, niet onder vitest.
+    exclude: ["**/node_modules/**", "**/dist/**", "**/e2e/**"],
   },
   resolve: {
     alias: {
