@@ -1,16 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveOrCreateCompany, resolveOrCreatePerson, linkPersonToCompany } from "../_shared/contacts.ts";
+import { CORS_INTAKE } from "../_shared/cors.ts";
 
 // lead-intake — publieke endpoint waar de website nieuwe leads naartoe POST't.
 // Beveiliging: gedeelde sleutel in de header `x-intake-secret` (timing-safe) +
 // honeypot-veld tegen bots. verify_jwt = false.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type, x-intake-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_INTAKE;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });

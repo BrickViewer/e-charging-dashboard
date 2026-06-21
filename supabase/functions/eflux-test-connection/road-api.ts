@@ -1,3 +1,5 @@
+import { CORS_ROAD } from "../_shared/cors.ts";
+
 export interface RoadConfig { apiKey: string; providerId: string; baseUrl?: string; }
 export interface RoadErrorPayload { type?: string; message: string; status?: number; }
 export class RoadApiError extends Error {
@@ -39,8 +41,4 @@ export function clientFromEnvAndOrg(org: { eflux_provider_id?: string | null }):
   if (!apiKey || !org.eflux_provider_id) return null;
   return new RoadClient({ apiKey, providerId: org.eflux_provider_id });
 }
-export const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-};
+export const corsHeaders = CORS_ROAD;

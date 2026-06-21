@@ -5,6 +5,7 @@ import { normalizeSettings } from "../_shared/configurator.ts";
 import { GraphClient, sanitizeName } from "../_shared/sharepoint.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { sha256Hex } from "../_shared/hash.ts";
+import { CORS_GET_POST_ALT } from "../_shared/cors.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
 // offerte-samenvatting (genoeg om de PDF te renderen). POST accordeert: slaat de
@@ -12,11 +13,7 @@ import { sha256Hex } from "../_shared/hash.ts";
 // klantaccount (1:1) + installatie-order, zet de lead op Gewonnen, mailt de klant
 // een bevestiging (met PDF) en e-charging een melding.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+const corsHeaders = CORS_GET_POST_ALT;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

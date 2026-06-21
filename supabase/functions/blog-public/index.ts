@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { buildCors } from "../_shared/cors.ts";
 
 // Publiek, read-only leespad voor de website (verify_jwt = false).
 //   GET            → lijst gepubliceerde blogs (zonder volledige inhoud)
@@ -13,13 +14,13 @@ const PUBLISHER = { "@type": "Organization", name: "E-Charging", url: SITE, logo
 const ALLOWED_ORIGINS = ["https://www.e-charging.nl", "https://e-charging.nl"];
 function corsHeaders(origin: string) {
   const ok = ALLOWED_ORIGINS.includes(origin) || origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1");
-  return {
-    "Access-Control-Allow-Origin": ok ? origin : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Headers": "content-type",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Vary": "Origin",
-    "Cache-Control": "public, max-age=60",
-  };
+  return buildCors({
+    origin: ok ? origin : ALLOWED_ORIGINS[0],
+    headers: "content-type",
+    methods: "GET, OPTIONS",
+    vary: true,
+    cacheControl: "public, max-age=60",
+  });
 }
 function json(body: unknown, status: number, origin: string) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders(origin), "Content-Type": "application/json" } });

@@ -3,15 +3,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { renderOfferEmail } from "../_shared/offer-email.ts";
 import { sha256Hex, generateToken } from "../_shared/hash.ts";
+import { CORS_INTERNAL } from "../_shared/cors.ts";
 
 // Verstuurt een offerte via Resend met een beveiligde akkoord-link (token).
 // Body: { quote_id, email?, pdf_base64? } — de offerte-PDF gaat altijd als bijlage mee.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_INTERNAL;
 const RESEND_API = "https://api.resend.com/emails";
 
 function json(body: unknown, status = 200) {

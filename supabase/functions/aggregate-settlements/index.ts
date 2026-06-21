@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { DEFAULT_ECHARGING_FEE_PER_KWH, computeSettlement } from "../_shared/settlement-math.ts";
+import { CORS_INTERNAL } from "../_shared/cors.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -27,11 +28,7 @@ type SupabaseClient = ReturnType<typeof createClient>;
 //   { "fromYear": 2026, "fromMonth": 1, "toYear": 2026, "toMonth": 6 }
 //   {}                                                             → huidige + vorige maand
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_INTERNAL;
 
 interface Range { fromYear: number; fromMonth: number; toYear: number; toMonth: number; }
 type AggregateBody = Record<string, unknown>;

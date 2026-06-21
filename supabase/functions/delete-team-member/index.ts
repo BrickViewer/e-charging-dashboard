@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { CORS_STD } from "../_shared/cors.ts";
 
 // delete-team-member — verwijdert een intern teamlid volledig (auth-account + rollen + profiel).
 // Hiërarchie wordt server-side afgedwongen:
@@ -9,11 +10,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //   - Alleen interne teamleden (met een rol) — nooit een klant-/portal-account.
 // Body: { user_id: string }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_STD;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

@@ -2,17 +2,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { renderFaultEmail, type FaultEmailItem } from "./email-template.ts";
+import { CORS_INTERNAL } from "../_shared/cors.ts";
 
 // Verstuurt een branded storingsmail (gebundeld per locatie) naar het
 // ingestelde notificatie-adres. Aangeroepen door eflux-sync (x-internal-secret)
 // of handmatig door een admin (JWT). Body: { location_id?, fault_ids: string[] }.
 
 const RESEND_API = "https://api.resend.com/emails";
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_INTERNAL;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

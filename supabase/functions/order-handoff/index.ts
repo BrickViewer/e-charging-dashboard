@@ -4,6 +4,7 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { buildHandoffPayload, validateSiteForHandoff } from "../_shared/installationHandoff.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { EgroupApiError, EgroupClient } from "./egroup-api.ts";
+import { CORS_STD } from "../_shared/cors.ts";
 
 // Overdracht van een installatie-order naar de E-Group portal. Bouwt een
 // volledig payload (klant, site-adres, contact + site_contact, offerte-regels),
@@ -11,11 +12,7 @@ import { EgroupApiError, EgroupClient } from "./egroup-api.ts";
 // Idempotent: een al verstuurde order wordt niet opnieuw aangemaakt.
 // Body: { order_id }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_STD;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

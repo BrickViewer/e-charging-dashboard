@@ -1,7 +1,8 @@
 // Road.io / e-Flux platform API client (Deno-compatible).
 // Reference: documentation.road.io + memory/reference_eflux_road_api.md
-// Per Supabase deploy: deze file staat naast elke function die hem gebruikt
-// (geen relative ../_shared/ imports — bundle-incompatibel).
+// Per Supabase deploy: deze file staat (vooralsnog) naast elke function die hem
+// gebruikt. De CORS-preset komt wél uit ../_shared/cors.ts (dat bundelt prima mee).
+import { CORS_ROAD } from "../_shared/cors.ts";
 
 export interface RoadConfig {
   apiKey: string;
@@ -358,8 +359,4 @@ export function clientFromEnvAndOrg(org: { eflux_provider_id?: string | null }):
   return new RoadClient({ apiKey, providerId: org.eflux_provider_id });
 }
 
-export const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-};
+export const corsHeaders = CORS_ROAD;

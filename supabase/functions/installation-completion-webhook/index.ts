@@ -3,16 +3,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/auth.ts";
 import { mapEgroupStatus } from "../_shared/installationHandoff.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
+import { CORS_ECHARGING_SECRET } from "../_shared/cors.ts";
 
 // Inbound webhook: E-Group meldt statuswijzigingen van een doorgezette
 // installatie-order terug (volledige spiegeling). verify_jwt=false; auth via
 // gedeelde secret-header. Body = Contract 2.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-echarging-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_ECHARGING_SECRET;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

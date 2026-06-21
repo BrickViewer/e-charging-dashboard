@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveOrCreateCompany, resolveOrCreatePerson, linkPersonToCompany } from "../_shared/contacts.ts";
 import { sha256Hex } from "../_shared/hash.ts";
+import { buildCors } from "../_shared/cors.ts";
 
 // Publiek contactformulier-endpoint vanaf de website. verify_jwt = false.
 // Een inzending komt binnen als LEAD in de Leads-module, met bedrijf + persoon
@@ -18,12 +19,12 @@ function isAllowedOrigin(origin: string): boolean {
   return origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1");
 }
 function corsHeaders(origin: string) {
-  return {
-    "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Headers": "content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
+  return buildCors({
+    origin: isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0],
+    headers: "content-type",
+    methods: "POST, OPTIONS",
+    vary: true,
+  });
 }
 function json(body: unknown, status: number, origin: string) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders(origin), "Content-Type": "application/json" } });

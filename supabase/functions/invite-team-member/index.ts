@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { CORS_STD } from "../_shared/cors.ts";
 
 // invite-team-member — nodigt een intern teamlid (admin/manager/viewer) uit voor het
 // beheer-portaal. Alleen de superadmin mag uitnodigen + rollen toekennen.
@@ -9,11 +10,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //   3. branded uitnodiging mailen via Resend (link → /wachtwoord-herstellen)
 // Body: { email: string, name?: string, role: "admin"|"manager"|"viewer" }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_STD;
 
 const RESEND_API = "https://api.resend.com/emails";
 const ALLOWED_ROLES = ["admin", "manager", "sales", "marketing", "viewer"];

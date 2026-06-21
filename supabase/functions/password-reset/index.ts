@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { sha256Hex } from "../_shared/hash.ts";
+import { CORS_STD } from "../_shared/cors.ts";
 
 // Publieke "wachtwoord vergeten"-flow met branded Resend-mail (verify_jwt = false).
 // Body: { email: string, redirectTo?: string }
@@ -10,11 +11,7 @@ import { sha256Hex } from "../_shared/hash.ts";
 // - rate-limit per IP (8/uur) en per e-mail (3/15min) via password_reset_log
 
 const RESEND_API = "https://api.resend.com/emails";
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_STD;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

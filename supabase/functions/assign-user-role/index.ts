@@ -1,15 +1,12 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { CORS_STD } from "../_shared/cors.ts";
 
 // assign-user-role — keurt een toegangsverzoek goed (rol toekennen) of weigert het.
 // Rol-gating: admin/manager mag ALLEEN de superadmin toekennen; sales/marketing/viewer
 // mag elke admin (en superadmin). De superadmin-rol is nooit via deze weg toekenbaar.
 // Body: { request_id?: string, user_id?: string, role?: app_role, action?: "approve"|"deny" }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_STD;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

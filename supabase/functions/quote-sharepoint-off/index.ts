@@ -3,17 +3,14 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { resolveProjectLocation } from "../_shared/projectLocation.ts";
 import { GraphClient, sanitizeName, base64ToBytes } from "../_shared/sharepoint.ts";
+import { CORS_INTERNAL } from "../_shared/cors.ts";
 
 // quote-sharepoint-off — maakt server-side (app-only) het dossier + de ongetekende OFF aan.
 // Vervangt de browser/delegated-variant, zodat admins geen Microsoft-Graph-token nodig hebben.
 // Body: { quote_id, off_pdf_base64 }. Idempotent (skip als off_item_id al gezet).
 
 const DOSSIER_SUBFOLDERS = ["Foto's", "Tekeningen", "Diverse", "Leveranciers", "Facturen", "Opdracht"];
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_INTERNAL;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

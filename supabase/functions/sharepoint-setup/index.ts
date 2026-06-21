@@ -1,17 +1,14 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
+import { CORS_INTERNAL } from "../_shared/cors.ts";
 
 // sharepoint-setup — zet de org-brede SharePoint-doelmap vast op basis van NAMEN
 // (site → bibliotheek → map) via app-only Graph. Bypasst de client-side mapkiezer.
 // Body: { site_query?: "E-Charging", drive_name?: "Documenten", folder_name?: "02 Locaties" }
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_INTERNAL;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

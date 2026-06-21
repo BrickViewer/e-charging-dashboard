@@ -3,17 +3,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getEmailHeroV1Bytes, getEmailHeroV2Bytes, getEmailLogoBytes } from "./email-logo.ts";
 import { renderInviteEmail } from "./email-template.ts";
 import { sha256Hex, generateToken } from "../_shared/hash.ts";
+import { CORS_STD } from "../_shared/cors.ts";
 
 // Send-client-invitation — verstuurt e-charging-branded uitnodiging via Resend.
 // Body: { client_id: string, resend?: boolean }
 //   - client_id: voor welke klant de uitnodiging is
 //   - resend: true → oude pending invite intrekken en verse single-use token mailen
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_STD;
 
 const RESEND_API = "https://api.resend.com/emails";
 

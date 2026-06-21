@@ -3,17 +3,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { renderInternalSignoffRequest } from "../_shared/offer-email.ts";
 import { sha256Hex, generateToken } from "../_shared/hash.ts";
+import { CORS_STD } from "../_shared/cors.ts";
 
 // Stuurt een offerte ter ondertekening naar de gekozen interne ondertekenaar
 // (een ander dan de afzender). Maakt een token-link aan, zet de status op
 // 'intern_ter_ondertekening' en mailt de ondertekenaar.
 // Body: { quote_id }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_STD;
 const RESEND_API = "https://api.resend.com/emails";
 
 function json(body: unknown, status = 200) {

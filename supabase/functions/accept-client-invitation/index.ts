@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { sha256Hex } from "../_shared/hash.ts";
+import { CORS_GET_POST } from "../_shared/cors.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -14,11 +15,7 @@ type SupabaseClient = ReturnType<typeof createClient>;
 // Public function (verify_jwt: false) — wordt aangeroepen vanaf de invite-pagina
 // vóór de klant überhaupt is ingelogd.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+const corsHeaders = CORS_GET_POST;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

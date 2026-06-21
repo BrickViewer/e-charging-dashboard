@@ -3,15 +3,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { GraphClient, sanitizeName } from "../_shared/sharepoint.ts";
+import { CORS_INTERNAL } from "../_shared/cors.ts";
 
 // Cron-functie: uploadt getekende offertes (OPD) die nog niet in SharePoint staan,
 // vanuit de Supabase-storage naar de Opdracht-submap. Alleen via x-internal-secret.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = CORS_INTERNAL;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
