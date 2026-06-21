@@ -557,7 +557,23 @@ async function syncSessions(
     if (skip > 100_000) break; // safety circuit
   }
 
-  await logSync(supabase, "cpo_sessions", "success", summary.upserted);
+  // KRITIEK: alleen 'success' loggen (= watermark verschuiven) als ELKE batch slaagde.
+  // Faalde een upsert-batch, dan NIET als success markeren — de cursor blijft staan en
+  // de volgende run herhaalt vanaf de vorige watermark (onConflict-upsert is idempotent,
+  // dus reeds opgeslagen sessies worden onschadelijk her-upsert). Voorheen werd hier
+  // altijd 'success' geschreven, waardoor gefaalde sessies permanent werden overgeslagen
+  // (stil dataverlies op het geld-pad).
+  if (summary.errors > 0) {
+    await logSync(
+      supabase,
+      "cpo_sessions",
+      "failed",
+      summary.upserted,
+      `${summary.errors} sessie(s) niet opgeslagen; watermark niet verschoven om dataverlies te voorkomen`,
+    );
+  } else {
+    await logSync(supabase, "cpo_sessions", "success", summary.upserted);
+  }
   return summary;
 }
 
