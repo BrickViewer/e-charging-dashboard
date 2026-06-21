@@ -16,8 +16,12 @@ export function useAllClients() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
+        // Versmald: consumenten (AdminClients/useAdminKPIs/AdminLocationDetail) lezen van
+        // locaties enkel het bestaan + per laadpunt alleen id/status. Wil je elders een
+        // ander locatie-/laadpunt-veld, breid dán deze select bewust uit (type claimt nog
+        // de volledige rij). AdminFinancial heeft z'n eigen full-row useAllSettlements.
         .select(
-          "*, locations(*, charge_points(*)), client_invitations(id, status, invited_at, expires_at)",
+          "*, locations(id, charge_points(id, status)), client_invitations(id, status, invited_at, expires_at)",
         );
       if (error) throw error;
       // Pak de meest recente invitation per klant (Supabase select geeft array)
