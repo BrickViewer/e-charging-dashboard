@@ -24,6 +24,14 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/services/activityLog";
 import { deleteClientProfile } from "@/services/clients";
+import {
+  approveSettlement as approveSettlementRpc,
+  unapproveSettlement as unapproveSettlementRpc,
+  markSettlementEfluxReimbursed as markSettlementEfluxReimbursedRpc,
+  markSettlementPaid as markSettlementPaidRpc,
+  markSettlementInvoiceSent as markSettlementInvoiceSentRpc,
+  markSettlementInvoicePaid as markSettlementInvoicePaidRpc,
+} from "@/services/settlements";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientOrders, useUpdateOrder, useHandoffOrder, ORDER_STATUSES } from "@/hooks/useInstallations";
@@ -105,15 +113,7 @@ export default function AdminClientDetail() {
   const approveSettlement = async (settlementId: string) => {
     setApprovingId(settlementId);
     try {
-      const rpcClient = supabase as unknown as {
-        rpc(name: "approve_settlements", args: { settlement_ids: string[] }): Promise<{
-          data: Array<{ approved_count?: number }> | null;
-          error: Error | null;
-        }>;
-      };
-      const { error } = await rpcClient.rpc("approve_settlements", {
-        settlement_ids: [settlementId],
-      });
+      const { error } = await approveSettlementRpc(settlementId);
       if (error) throw error;
       toast.success("Afrekening goedgekeurd - zichtbaar voor klant in portaal");
       queryClient.invalidateQueries({ queryKey: ["admin-client-settlements", id] });
@@ -131,15 +131,7 @@ export default function AdminClientDetail() {
   const unapproveSettlementAction = async (settlementId: string) => {
     setApprovingId(settlementId);
     try {
-      const rpcClient = supabase as unknown as {
-        rpc(name: "unapprove_settlements", args: { settlement_ids: string[] }): Promise<{
-          data: Array<{ unapproved_count?: number }> | null;
-          error: Error | null;
-        }>;
-      };
-      const { error } = await rpcClient.rpc("unapprove_settlements", {
-        settlement_ids: [settlementId],
-      });
+      const { error } = await unapproveSettlementRpc(settlementId);
       if (error) throw error;
       toast.success("Goedkeuring teruggedraaid — afrekening staat weer op 'berekend'");
       queryClient.invalidateQueries({ queryKey: ["admin-client-settlements", id] });
@@ -163,13 +155,13 @@ export default function AdminClientDetail() {
           : totalCashflow < 0
           ? "mark_settlements_invoice_sent"
           : "mark_settlements_paid";
-      const rpcClient = supabase as unknown as {
-        rpc(
-          name: "mark_settlements_paid" | "mark_settlements_invoice_sent" | "mark_settlements_invoice_paid",
-          args: { settlement_ids: string[] },
-        ): Promise<{ data: unknown; error: Error | null }>;
-      };
-      const { error } = await rpcClient.rpc(rpcName, { settlement_ids: [settlementId] });
+      const rpcFn =
+        rpcName === "mark_settlements_invoice_paid"
+          ? markSettlementInvoicePaidRpc
+          : rpcName === "mark_settlements_invoice_sent"
+          ? markSettlementInvoiceSentRpc
+          : markSettlementPaidRpc;
+      const { error } = await rpcFn(settlementId);
       if (error) throw error;
       if (rpcName === "mark_settlements_invoice_sent") {
         toast.success("Factuur gemarkeerd als verzonden");
@@ -192,10 +184,7 @@ export default function AdminClientDetail() {
   const markEfluxReimbursed = async (settlementId: string) => {
     setApprovingId(settlementId);
     try {
-      const rpcClient = supabase as unknown as {
-        rpc(name: "mark_settlements_eflux_reimbursed", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-      };
-      const { error } = await rpcClient.rpc("mark_settlements_eflux_reimbursed", { settlement_ids: [settlementId] });
+      const { error } = await markSettlementEfluxReimbursedRpc(settlementId);
       if (error) throw error;
       toast.success("Vastgelegd: e-Flux heeft uitbetaald");
       queryClient.invalidateQueries({ queryKey: ["admin-client-settlements", id] });

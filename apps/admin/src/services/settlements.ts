@@ -10,49 +10,33 @@ export async function getSettlements(clientId?: string) {
   return query;
 }
 
-export async function approveSettlement(id: string) {
+// Eén plek voor de settlement state-machine RPC's. De generated Supabase-types kennen
+// deze RPC's (nog) niet, dus de cast leeft hier centraal i.p.v. gedupliceerd per
+// call-site in de pagina's. Accepteert één id of een batch (zelfde RPC, één round-trip).
+type SettlementRpc =
+  | "approve_settlements"
+  | "unapprove_settlements"
+  | "mark_settlements_eflux_reimbursed"
+  | "mark_settlements_paid"
+  | "mark_settlements_invoice_sent"
+  | "mark_settlements_invoice_paid";
+
+function callSettlementRpc(name: SettlementRpc, ids: string | string[]) {
+  const settlement_ids = Array.isArray(ids) ? ids : [ids];
   const rpcClient = supabase as unknown as {
-    rpc(name: "approve_settlements", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
+    rpc(name: SettlementRpc, args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
   };
-  return rpcClient.rpc("approve_settlements", { settlement_ids: [id] });
+  return rpcClient.rpc(name, { settlement_ids });
 }
 
-export async function markSettlementEfluxReimbursed(id: string) {
-  const rpcClient = supabase as unknown as {
-    rpc(name: "mark_settlements_eflux_reimbursed", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-  };
-  return rpcClient.rpc("mark_settlements_eflux_reimbursed", { settlement_ids: [id] });
-}
-
-export async function markSettlementPaid(id: string) {
-  const rpcClient = supabase as unknown as {
-    rpc(name: "mark_settlements_paid", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-  };
-  return rpcClient.rpc("mark_settlements_paid", { settlement_ids: [id] });
-}
-
-export async function markSettlementInvoiceSent(id: string) {
-  const rpcClient = supabase as unknown as {
-    rpc(name: "mark_settlements_invoice_sent", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-  };
-  return rpcClient.rpc("mark_settlements_invoice_sent", { settlement_ids: [id] });
-}
-
-export async function markSettlementInvoicePaid(id: string) {
-  const rpcClient = supabase as unknown as {
-    rpc(name: "mark_settlements_invoice_paid", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-  };
-  return rpcClient.rpc("mark_settlements_invoice_paid", { settlement_ids: [id] });
-}
-
-// Goedkeuring terugdraaien (approved → calculated). Alleen mogelijk zolang er
-// geen geldstroom is gestart; daarna is de afrekening definitief.
-export async function unapproveSettlement(id: string) {
-  const rpcClient = supabase as unknown as {
-    rpc(name: "unapprove_settlements", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-  };
-  return rpcClient.rpc("unapprove_settlements", { settlement_ids: [id] });
-}
+export const approveSettlement = (ids: string | string[]) => callSettlementRpc("approve_settlements", ids);
+// Goedkeuring terugdraaien (approved → calculated). Alleen mogelijk zolang er geen
+// geldstroom is gestart; daarna is de afrekening definitief (server-side afgedwongen).
+export const unapproveSettlement = (ids: string | string[]) => callSettlementRpc("unapprove_settlements", ids);
+export const markSettlementEfluxReimbursed = (ids: string | string[]) => callSettlementRpc("mark_settlements_eflux_reimbursed", ids);
+export const markSettlementPaid = (ids: string | string[]) => callSettlementRpc("mark_settlements_paid", ids);
+export const markSettlementInvoiceSent = (ids: string | string[]) => callSettlementRpc("mark_settlements_invoice_sent", ids);
+export const markSettlementInvoicePaid = (ids: string | string[]) => callSettlementRpc("mark_settlements_invoice_paid", ids);
 
 // Service-fee voor één maand kwijtschelden of herstellen. Alleen mogelijk bij
 // status 'live'/'calculated' (server-side afgedwongen). Kwijtschelden nult de

@@ -21,6 +21,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { settlementVat } from "@/services/calculations";
+import { approveSettlement, unapproveSettlement, markSettlementEfluxReimbursed, markSettlementPaid, markSettlementInvoiceSent, markSettlementInvoicePaid } from "@/services/settlements";
 import type { AdminSettlement } from "@/types/db";
 import { getCurrentMonth, monthFullLabel, monthShortLabel } from "@/lib/period";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
@@ -289,10 +290,7 @@ export default function AdminFinancial() {
 
   const approveMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const rpcClient = supabase as unknown as {
-        rpc(name: "approve_settlements", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-      };
-      const { error } = await rpcClient.rpc("approve_settlements", { settlement_ids: ids });
+      const { error } = await approveSettlement(ids);
       if (error) throw error;
     },
     onSuccess: (_, ids) => {
@@ -309,10 +307,7 @@ export default function AdminFinancial() {
   // geldstroom is gestart — de RPC dwingt dat server-side af.
   const unapproveMutation = useMutation({
     mutationFn: async (id: string) => {
-      const rpcClient = supabase as unknown as {
-        rpc(name: "unapprove_settlements", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-      };
-      const { error } = await rpcClient.rpc("unapprove_settlements", { settlement_ids: [id] });
+      const { error } = await unapproveSettlement(id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -330,17 +325,11 @@ export default function AdminFinancial() {
       // (attestatie in de bevestiging), zodat dit niet per klant hoeft. mark_settlements_paid
       // vereist eflux_reimbursed_at, dus zet die eerst voor wie 'm nog mist.
       const needEflux = items.filter((s) => !s.eflux_reimbursed_at).map((s) => s.id);
-      const rpcClient = supabase as unknown as {
-        rpc(
-          name: "mark_settlements_eflux_reimbursed" | "mark_settlements_paid",
-          args: { settlement_ids: string[] },
-        ): Promise<{ data: unknown; error: Error | null }>;
-      };
       if (needEflux.length > 0) {
-        const { error: efErr } = await rpcClient.rpc("mark_settlements_eflux_reimbursed", { settlement_ids: needEflux });
+        const { error: efErr } = await markSettlementEfluxReimbursed(needEflux);
         if (efErr) throw efErr;
       }
-      const { error } = await rpcClient.rpc("mark_settlements_paid", { settlement_ids: ids });
+      const { error } = await markSettlementPaid(ids);
       if (error) throw error;
     },
     onSuccess: (_, items) => {
@@ -354,10 +343,7 @@ export default function AdminFinancial() {
   const markInvoiceSentMutation = useMutation({
     mutationFn: async (items: AdminSettlement[]) => {
       const ids = items.map((s) => s.id);
-      const rpcClient = supabase as unknown as {
-        rpc(name: "mark_settlements_invoice_sent", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-      };
-      const { error } = await rpcClient.rpc("mark_settlements_invoice_sent", { settlement_ids: ids });
+      const { error } = await markSettlementInvoiceSent(ids);
       if (error) throw error;
     },
     onSuccess: (_, items) => {
@@ -371,10 +357,7 @@ export default function AdminFinancial() {
   const markInvoicePaidMutation = useMutation({
     mutationFn: async (items: AdminSettlement[]) => {
       const ids = items.map((s) => s.id);
-      const rpcClient = supabase as unknown as {
-        rpc(name: "mark_settlements_invoice_paid", args: { settlement_ids: string[] }): Promise<{ data: unknown; error: Error | null }>;
-      };
-      const { error } = await rpcClient.rpc("mark_settlements_invoice_paid", { settlement_ids: ids });
+      const { error } = await markSettlementInvoicePaid(ids);
       if (error) throw error;
     },
     onSuccess: (_, items) => {
