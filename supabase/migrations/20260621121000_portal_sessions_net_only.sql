@@ -1,0 +1,14 @@
+-- ============================================================================
+-- Fase 1 (architectuur-audit) — PORTAAL-LEK DICHTEN.
+-- Portaal-users konden public.charging_sessions RAUW lezen (incl. de bruto
+-- `reimbursement_amount`) via deze permissieve SELECT-policy — buiten de bewust
+-- net-only get_portal_sessions RPC om, die juist bruto/fee server-side houdt.
+--
+-- De app leest portaal-sessies UITSLUITEND via get_portal_sessions (SECURITY DEFINER,
+-- bypasst RLS) — geverifieerd: alle portaalpagina's (ClientSessions/ClientFinancial/
+-- ClientLocationDetail) + useClientData gebruiken die RPC; de enige directe lezer
+-- (getSettlementSessions in invoicePdf) zit op het ADMIN-pad (is_internal-policy) en
+-- de portaal-factuur levert net-sessielijnen vooraf aan. Dit verwijdert dus alleen de
+-- directe-leesweg voor portaal-JWT's; admin behoudt toegang via "Internal users...".
+-- ============================================================================
+drop policy if exists "Portal user can view own sessions" on public.charging_sessions;
