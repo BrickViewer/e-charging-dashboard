@@ -1,12 +1,12 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
+import { GraphClient } from "../_shared/sharepoint.ts";
 
 // object-delete — verwijdert een object (project_location) en optioneel de SharePoint-map.
 // quotes.project_location_id wordt automatisch NULL (FK on delete set null).
 // Body: { object_id, delete_sharepoint }
 
-const GRAPH = "https://graph.microsoft.com/v1.0";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -14,23 +14,6 @@ const corsHeaders = {
 };
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-}
-
-async function getToken(tenant: string, clientId: string, secret: string): Promise<string> {
-  const res = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: clientId, client_secret: secret, grant_type: "client_credentials", scope: "https://graph.microsoft.com/.default" }).toString(),
-  });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Token-fout (${res.status}): ${j.error_description || res.statusText}`);
-  return j.access_token;
-}
-async function graphDelete(token: string, path: string): Promise<void> {
-  const res = await fetch(`${GRAPH}${path}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-  if (res.status === 204 || res.status === 404) return; // verwijderd of al weg
-  const j = await res.json().catch(() => ({}));
-  throw new Error(`Graph ${res.status} op DELETE ${path}: ${j.error?.message || res.statusText}`);
 }
 
 Deno.serve(async (req) => {
@@ -64,8 +47,7 @@ Deno.serve(async (req) => {
       const { data: org } = await sb.from("organizations").select("sharepoint_drive_id").eq("id", loc.organization_id).maybeSingle();
       const driveId = org?.sharepoint_drive_id as string | null;
       if (!driveId) return json({ status: "error", message: "SharePoint-drive niet ingesteld" }, 400);
-      const token = await getToken(tenant, clientId, secret);
-      await graphDelete(token, `/drives/${driveId}/items/${loc.folder_item_id}`);
+      await new GraphClient(tenant, clientId, secret).deleteItem(driveId, loc.folder_item_id as string);
     }
 
     const { error: delErr } = await sb.from("project_locations").delete().eq("id", objectId);

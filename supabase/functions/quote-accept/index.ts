@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { renderSignedConfirmation, renderInternalSignedNotice } from "../_shared/offer-email.ts";
 import { normalizeSettings } from "../_shared/configurator.ts";
-import { GraphClient, sanitizeName } from "./sharepoint.ts";
+import { GraphClient, sanitizeName } from "../_shared/sharepoint.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de

@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
-import { GraphClient, sanitizeName } from "./sharepoint.ts";
+import { GraphClient, sanitizeName } from "../_shared/sharepoint.ts";
 
 // Cron-functie: uploadt getekende offertes (OPD) die nog niet in SharePoint staan,
 // vanuit de Supabase-storage naar de Opdracht-submap. Alleen via x-internal-secret.

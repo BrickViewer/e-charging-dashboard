@@ -2,7 +2,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { resolveProjectLocation } from "../_shared/projectLocation.ts";
-import { GraphClient, sanitizeName, base64ToBytes } from "./sharepoint.ts";
+import { GraphClient, sanitizeName, base64ToBytes } from "../_shared/sharepoint.ts";
 
 // quote-sharepoint-off — maakt server-side (app-only) het dossier + de ongetekende OFF aan.
 // Vervangt de browser/delegated-variant, zodat admins geen Microsoft-Graph-token nodig hebben.

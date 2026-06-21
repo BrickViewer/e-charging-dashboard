@@ -1,6 +1,8 @@
-// Microsoft Graph (SharePoint) client. Per Supabase-deploy staat deze file NAAST
-// elke functie die hem gebruikt (geen ../_shared-import — bundle-incompatibel,
-// net als road-api.ts). Houd de kopieën in de functie-mappen identiek.
+// Microsoft Graph (SharePoint) client — gedeelde module. Eén canonieke GraphClient
+// voor alle edge functions (quote-sharepoint-off / quote-accept / quote-opd-sync /
+// object-delete). Wordt via de folder-prefixed deploy meegebundeld als
+// _shared/sharepoint.ts (zelfde patroon als _shared/auth.ts), dus géén losse kopie
+// meer naast elke functie.
 
 export const GRAPH = "https://graph.microsoft.com/v1.0";
 
@@ -121,6 +123,19 @@ export class GraphClient {
   async listChildren(driveId: string, itemId: string): Promise<DriveItem[]> {
     const data = await this.request<{ value: unknown[] }>("GET", `/drives/${driveId}/items/${itemId}/children?$select=id,name,webUrl,size,file,folder,lastModifiedDateTime&$top=400`);
     return (data.value || []).map(mapItem);
+  }
+
+  // Verwijder een drive-item. 204/404 = success (verwijderd of al weg). Spiegelt de
+  // voormalige inline object-delete-impl 1:1: directe DELETE, géén retry, zelfde
+  // foutmelding. (Token komt uit de gedeelde, gecachte getToken.)
+  async deleteItem(driveId: string, itemId: string): Promise<void> {
+    const token = await this.getToken();
+    const path = `/drives/${driveId}/items/${itemId}`;
+    const res = await fetch(`${GRAPH}${path}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 204 || res.status === 404) return; // verwijderd of al weg
+    // deno-lint-ignore no-explicit-any
+    const j: any = await res.json().catch(() => ({}));
+    throw new Error(`Graph ${res.status} op DELETE ${path}: ${j.error?.message || res.statusText}`);
   }
 }
 
