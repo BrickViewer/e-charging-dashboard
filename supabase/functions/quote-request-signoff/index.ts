@@ -4,6 +4,7 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { renderInternalSignoffRequest } from "../_shared/offer-email.ts";
 import { sha256Hex, generateToken } from "../_shared/hash.ts";
 import { CORS_STD } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 // Stuurt een offerte ter ondertekening naar de gekozen interne ondertekenaar
 // (een ander dan de afzender). Maakt een token-link aan, zet de status op
@@ -11,7 +12,6 @@ import { CORS_STD } from "../_shared/cors.ts";
 // Body: { quote_id }
 
 const corsHeaders = CORS_STD;
-const RESEND_API = "https://api.resend.com/emails";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -27,8 +27,6 @@ Deno.serve(async (req) => {
   const sb = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-  const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
-  const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
   const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://dashboard.e-charging.nl").replace(/\/+$/, "");
 
   try {
@@ -98,17 +96,11 @@ Deno.serve(async (req) => {
         supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
         signerName: prof.full_name ?? "collega", total, reviewUrl,
       });
-      const res = await fetch(RESEND_API, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: `${FROM_NAME} <${FROM_EMAIL}>`,
-          to: [signerEmail],
-          subject: `Ter ondertekening · Offerte ${quote.quote_number}`,
-          html, text,
-          reply_to: "info@e-charging.nl",
-          tags: [{ name: "type", value: "quote_signoff_request" }],
-        }),
+      const res = await sendEmail({
+        to: [signerEmail],
+        subject: `Ter ondertekening · Offerte ${quote.quote_number}`,
+        html, text,
+        tags: [{ name: "type", value: "quote_signoff_request" }],
       });
       if (!res.ok) {
         const errText = await res.text();

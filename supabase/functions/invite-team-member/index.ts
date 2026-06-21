@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { CORS_STD } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 // invite-team-member — nodigt een intern teamlid (admin/manager/viewer) uit voor het
 // beheer-portaal. Alleen de superadmin mag uitnodigen + rollen toekennen.
@@ -12,7 +13,6 @@ import { CORS_STD } from "../_shared/cors.ts";
 
 const corsHeaders = CORS_STD;
 
-const RESEND_API = "https://api.resend.com/emails";
 const ALLOWED_ROLES = ["admin", "manager", "sales", "marketing", "viewer"];
 
 function json(body: unknown, status = 200) {
@@ -103,23 +103,15 @@ Deno.serve(async (req: Request) => {
     // Branded uitnodiging via Resend (indien geconfigureerd).
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (RESEND_API_KEY) {
-      const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
-      const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
       const logoUrl = `${supabaseUrl}/functions/v1/send-client-invitation/logo-v3.png`;
       const html = renderTeamInviteHtml({ name, role, actionLink, logoUrl });
       const text = `Je bent uitgenodigd voor het E-Charging beheer-portaal (rol: ${role}). Activeer je account: ${actionLink}`;
-      const res = await fetch(RESEND_API, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: `${FROM_NAME} <${FROM_EMAIL}>`,
-          to: [email],
-          subject: reinvite ? "Je toegang tot het E-Charging beheer-portaal" : "Uitnodiging — E-Charging beheer-portaal",
-          html,
-          text,
-          reply_to: "info@e-charging.nl",
-          tags: [{ name: "type", value: "team_invitation" }],
-        }),
+      const res = await sendEmail({
+        to: [email],
+        subject: reinvite ? "Je toegang tot het E-Charging beheer-portaal" : "Uitnodiging — E-Charging beheer-portaal",
+        html,
+        text,
+        tags: [{ name: "type", value: "team_invitation" }],
       });
       if (!res.ok) {
         const errText = await res.text();

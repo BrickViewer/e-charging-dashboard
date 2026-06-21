@@ -4,6 +4,7 @@ import { getEmailHeroV1Bytes, getEmailHeroV2Bytes, getEmailLogoBytes } from "./e
 import { renderInviteEmail } from "./email-template.ts";
 import { sha256Hex, generateToken } from "../_shared/hash.ts";
 import { CORS_STD } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 // Send-client-invitation — verstuurt e-charging-branded uitnodiging via Resend.
 // Body: { client_id: string, resend?: boolean }
@@ -11,8 +12,6 @@ import { CORS_STD } from "../_shared/cors.ts";
 //   - resend: true → oude pending invite intrekken en verse single-use token mailen
 
 const corsHeaders = CORS_STD;
-
-const RESEND_API = "https://api.resend.com/emails";
 
 function imageHeaders(filename: string) {
   return {
@@ -66,7 +65,6 @@ Deno.serve(async (req: Request) => {
       return json({ status: "not_configured", message: "RESEND_API_KEY ontbreekt in environment" }, 500);
     }
 
-    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
     const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
     const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://e-charging.nl").replace(/\/+$/, "");
 
@@ -174,24 +172,15 @@ Deno.serve(async (req: Request) => {
     });
 
     // Send via Resend API
-    const resendRes = await fetch(RESEND_API, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: `${FROM_NAME} <${FROM_EMAIL}>`,
-        to: [recipientEmail],
-        subject,
-        html,
-        text,
-        reply_to: "info@e-charging.nl",
-        tags: [
-          { name: "type", value: "client_invitation" },
-          { name: "client_id", value: client_id },
-        ],
-      }),
+    const resendRes = await sendEmail({
+      to: [recipientEmail],
+      subject,
+      html,
+      text,
+      tags: [
+        { name: "type", value: "client_invitation" },
+        { name: "client_id", value: client_id },
+      ],
     });
 
     if (!resendRes.ok) {

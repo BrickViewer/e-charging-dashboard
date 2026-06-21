@@ -5,6 +5,7 @@ import { normalizeSettings } from "../_shared/configurator.ts";
 import { GraphClient, sanitizeName } from "../_shared/sharepoint.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { sha256Hex } from "../_shared/hash.ts";
+import { sendEmail as sendViaResend } from "../_shared/email.ts";
 import { CORS_GET_POST_ALT } from "../_shared/cors.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
@@ -25,22 +26,11 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-const RESEND_API = "https://api.resend.com/emails";
 async function sendEmail(opts: { to: string; subject: string; html: string; text: string; attachments?: { filename: string; content: string }[] }) {
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return;
-  const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
-  const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
   try {
-    await fetch(RESEND_API, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: `${FROM_NAME} <${FROM_EMAIL}>`, to: [opts.to], subject: opts.subject,
-        html: opts.html, text: opts.text, reply_to: "info@e-charging.nl",
-        ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
-      }),
-    });
+    await sendViaResend({ to: opts.to, subject: opts.subject, html: opts.html, text: opts.text, attachments: opts.attachments });
   } catch (_e) { /* mail mag de acceptatie niet blokkeren */ }
 }
 

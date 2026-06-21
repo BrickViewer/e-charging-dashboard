@@ -4,12 +4,12 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { renderOfferEmail } from "../_shared/offer-email.ts";
 import { sha256Hex, generateToken } from "../_shared/hash.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 // Verstuurt een offerte via Resend met een beveiligde akkoord-link (token).
 // Body: { quote_id, email?, pdf_base64? } — de offerte-PDF gaat altijd als bijlage mee.
 
 const corsHeaders = CORS_INTERNAL;
-const RESEND_API = "https://api.resend.com/emails";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -25,8 +25,6 @@ Deno.serve(async (req) => {
   const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-  const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
-  const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
   const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://dashboard.e-charging.nl").replace(/\/+$/, "");
 
   try {
@@ -90,18 +88,12 @@ Deno.serve(async (req) => {
         contact: quote.prospect_contact, total, acceptUrl, validUntil: quote.valid_until,
         hasAttachment: !!pdfBase64,
       });
-      const res = await fetch(RESEND_API, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: `${FROM_NAME} <${FROM_EMAIL}>`,
-          to: [recipient],
-          subject: `E-Charging · Uw offerte ${quote.quote_number}`,
-          html, text,
-          reply_to: "info@e-charging.nl",
-          tags: [{ name: "type", value: "quote_offer" }],
-          ...(pdfBase64 ? { attachments: [{ filename: `offerte-${quote.quote_number}.pdf`, content: pdfBase64 }] } : {}),
-        }),
+      const res = await sendEmail({
+        to: [recipient],
+        subject: `E-Charging · Uw offerte ${quote.quote_number}`,
+        html, text,
+        tags: [{ name: "type", value: "quote_offer" }],
+        ...(pdfBase64 ? { attachments: [{ filename: `offerte-${quote.quote_number}.pdf`, content: pdfBase64 }] } : {}),
       });
       if (!res.ok) {
         const errText = await res.text();

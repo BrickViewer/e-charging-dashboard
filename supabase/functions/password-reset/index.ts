@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { sha256Hex } from "../_shared/hash.ts";
 import { CORS_STD } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 // Publieke "wachtwoord vergeten"-flow met branded Resend-mail (verify_jwt = false).
 // Body: { email: string, redirectTo?: string }
@@ -10,7 +11,6 @@ import { CORS_STD } from "../_shared/cors.ts";
 // - anti-enumeratie: geeft ALTIJD 200 { status:"ok" } bij een geldig verzoek
 // - rate-limit per IP (8/uur) en per e-mail (3/15min) via password_reset_log
 
-const RESEND_API = "https://api.resend.com/emails";
 const corsHeaders = CORS_STD;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -88,23 +88,15 @@ Deno.serve(async (req: Request) => {
       console.error("password-reset: RESEND_API_KEY ontbreekt");
       return json({ status: "ok" }); // niet onthullen
     }
-    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
-    const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
     const logoUrl = `${supabaseUrl}/functions/v1/send-client-invitation/logo-v3.png`;
     const html = renderResetHtml({ actionLink, logoUrl });
 
-    const res = await fetch(RESEND_API, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: `${FROM_NAME} <${FROM_EMAIL}>`,
-        to: [email],
-        subject: "Wachtwoord opnieuw instellen — E-Charging",
-        html,
-        text: `Stel je wachtwoord opnieuw in via deze link: ${actionLink}\n\nHeb je dit niet aangevraagd? Negeer deze e-mail.`,
-        reply_to: "info@e-charging.nl",
-        tags: [{ name: "type", value: "password_reset" }],
-      }),
+    const res = await sendEmail({
+      to: [email],
+      subject: "Wachtwoord opnieuw instellen — E-Charging",
+      html,
+      text: `Stel je wachtwoord opnieuw in via deze link: ${actionLink}\n\nHeb je dit niet aangevraagd? Negeer deze e-mail.`,
+      tags: [{ name: "type", value: "password_reset" }],
     });
     if (!res.ok) {
       console.error("password-reset Resend faalde:", res.status, await res.text());

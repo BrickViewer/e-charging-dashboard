@@ -3,12 +3,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { renderFaultEmail, type FaultEmailItem } from "./email-template.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 // Verstuurt een branded storingsmail (gebundeld per locatie) naar het
 // ingestelde notificatie-adres. Aangeroepen door eflux-sync (x-internal-secret)
 // of handmatig door een admin (JWT). Body: { location_id?, fault_ids: string[] }.
 
-const RESEND_API = "https://api.resend.com/emails";
 const corsHeaders = CORS_INTERNAL;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -54,8 +54,6 @@ Deno.serve(async (req) => {
     const recipient = (org as { fault_notification_email?: string | null } | null)?.fault_notification_email || "info@e-charging.nl";
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
-    const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
     const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://e-charging.nl").replace(/\/+$/, "");
     const logoUrl = `${supabaseUrl}/functions/v1/send-client-invitation/logo-v3.png`;
 
@@ -97,16 +95,10 @@ Deno.serve(async (req) => {
       return json({ status: "not_configured", message: "RESEND_API_KEY ontbreekt", would_send_to: recipient, count: items.length });
     }
 
-    const resendRes = await fetch(RESEND_API, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: `${FROM_NAME} <${FROM_EMAIL}>`,
-        to: [recipient],
-        subject, html, text,
-        reply_to: "info@e-charging.nl",
-        tags: [{ name: "type", value: "fault_notification" }],
-      }),
+    const resendRes = await sendEmail({
+      to: [recipient],
+      subject, html, text,
+      tags: [{ name: "type", value: "fault_notification" }],
     });
     if (!resendRes.ok) {
       const errText = await resendRes.text();
