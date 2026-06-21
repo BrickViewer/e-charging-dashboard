@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type {
@@ -309,6 +310,13 @@ export function useAdminKPIs(chartYear?: number) {
   const { data: settlements } = useAllSettlements();
   const { data: chargePoints } = useAllChargePoints();
 
+  // getCurrentMonth buiten de memo (goedkoop) zodat de maandgrens nooit verstart; de
+  // zware afgeleide aggregatie memoizen op de query-data + jaar + maand-primitieven,
+  // zodat onverwante re-renders niet alles herberekenen.
+  const { year: curYear, month: curMonth } = getCurrentMonth();
+
+  return useMemo(() => {
+  const cur = { year: curYear, month: curMonth };
   // Verwijderde (geanonimiseerde) profielen tellen niet als klant — net als in de klantenlijst.
   const visibleClients = (clients ?? []).filter(c => c.status !== "verwijderd");
   // Actieve klant = klant met minstens één gekoppelde locatie. Totaal = alle (niet-verwijderde)
@@ -322,7 +330,6 @@ export function useAdminKPIs(chartYear?: number) {
   const onlineCPs = linkedCPs.filter(cp => cp.status === "online" || cp.status === "in_use");
   const offlineCPs = linkedCPs.filter(cp => cp.status === "offline" || cp.status === "error");
 
-  const cur = getCurrentMonth();
   const prev = shiftMonth(cur, -1);
   // Jaar-navigatie voor de omzetgrafiek: standaard het huidige jaar, maar de admin
   // kan terug/vooruit door alle jaren waarvoor data bestaat (∪ huidig jaar).
@@ -372,4 +379,5 @@ export function useAdminKPIs(chartYear?: number) {
     selectedChartYear: selectedYear,
     availableYears,
   };
+  }, [clients, settlements, chargePoints, chartYear, curYear, curMonth]);
 }

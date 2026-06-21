@@ -17,7 +17,7 @@ import OfferAccept from "./pages/OfferAccept";
 import OfferInternalSign from "./pages/OfferInternalSign";
 import ResetPassword from "./pages/ResetPassword";
 import NoAccess from "./pages/NoAccess";
-import { workspacesForRole } from "@/lib/workspaces";
+import { workspacesForRole, rolesForWorkspace } from "@/lib/workspaces";
 
 // Client portal pages
 const ClientDashboard = lazy(() => import("./pages/portal/ClientDashboard"));
@@ -162,7 +162,7 @@ const App = () => (
 
               {/* Beheer-werkblad */}
               <Route path="/admin" element={
-                <RequireAuth allowedRoles={["admin", "manager", "viewer"]} loginPath="/login/admin">
+                <RequireAuth allowedRoles={rolesForWorkspace("beheer")} loginPath="/login/admin">
                   <WorkspaceLayout />
                 </RequireAuth>
               }>
@@ -184,7 +184,7 @@ const App = () => (
 
               {/* Sales-werkblad */}
               <Route path="/sales" element={
-                <RequireAuth allowedRoles={["admin", "manager", "sales"]} loginPath="/login/admin">
+                <RequireAuth allowedRoles={rolesForWorkspace("sales")} loginPath="/login/admin">
                   <WorkspaceLayout />
                 </RequireAuth>
               }>
@@ -200,7 +200,7 @@ const App = () => (
 
               {/* Marketing-werkblad */}
               <Route path="/marketing" element={
-                <RequireAuth allowedRoles={["admin", "manager", "marketing"]} loginPath="/login/admin">
+                <RequireAuth allowedRoles={rolesForWorkspace("marketing")} loginPath="/login/admin">
                   <WorkspaceLayout />
                 </RequireAuth>
               }>

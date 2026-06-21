@@ -73,6 +73,12 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
 
 export const WORKSPACE_ORDER: WorkspaceKey[] = ["beheer", "sales", "marketing"];
 
+// De rollen die een werkblad mogen openen — één bron voor zowel de navigatie als de
+// route-gating (RequireAuth in App.tsx), zodat de toegangsmatrix niet kan divergeren.
+export function rolesForWorkspace(key: WorkspaceKey): string[] {
+  return WORKSPACES[key].roles;
+}
+
 // Welke werkbladen mag deze rol zien?
 export function workspacesForRole(role: UserRole): WorkspaceKey[] {
   if (!role) return [];
