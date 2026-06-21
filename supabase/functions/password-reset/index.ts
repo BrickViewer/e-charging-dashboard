@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { sha256Hex } from "../_shared/hash.ts";
 
 // Publieke "wachtwoord vergeten"-flow met branded Resend-mail (verify_jwt = false).
 // Body: { email: string, redirectTo?: string }
@@ -30,11 +31,6 @@ function safeRedirect(input: string | undefined, fallback: string): string {
   return `${fallback.replace(/\/+$/, "")}/wachtwoord-herstellen`;
 }
 
-async function sha256(s: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 function renderResetHtml(opts: { actionLink: string; logoUrl: string }) {
   return `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
   <div style="max-width:520px;margin:0 auto;padding:32px 24px;">
@@ -63,8 +59,8 @@ Deno.serve(async (req: Request) => {
     const redirectTo = safeRedirect(body.redirectTo, PUBLIC_URL);
 
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
-    const ipHash = await sha256(ip);
-    const emailHash = await sha256(email);
+    const ipHash = await sha256Hex(ip);
+    const emailHash = await sha256Hex(email);
 
     // Rate-limit: 8 per IP/uur, 3 per e-mail/15min.
     const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();

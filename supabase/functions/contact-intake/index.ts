@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveOrCreateCompany, resolveOrCreatePerson, linkPersonToCompany } from "../_shared/contacts.ts";
+import { sha256Hex } from "../_shared/hash.ts";
 
 // Publiek contactformulier-endpoint vanaf de website. verify_jwt = false.
 // Een inzending komt binnen als LEAD in de Leads-module, met bedrijf + persoon
@@ -28,8 +29,6 @@ function json(body: unknown, status: number, origin: string) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders(origin), "Content-Type": "application/json" } });
 }
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-function bytesToHex(b: Uint8Array) { return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(""); }
-async function sha256Hex(v: string) { return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))); }
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin") ?? "";

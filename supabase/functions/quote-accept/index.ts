@@ -4,6 +4,7 @@ import { renderSignedConfirmation, renderInternalSignedNotice } from "../_shared
 import { normalizeSettings } from "../_shared/configurator.ts";
 import { GraphClient, sanitizeName } from "../_shared/sharepoint.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
+import { sha256Hex } from "../_shared/hash.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
 // offerte-samenvatting (genoeg om de PDF te renderen). POST accordeert: slaat de
@@ -19,8 +20,6 @@ const corsHeaders = {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
-function bytesToHex(b: Uint8Array) { return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(""); }
-async function sha256Hex(v: string) { return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))); }
 function num(v: unknown): number | null { const n = Number(v); return Number.isFinite(n) ? n : null; }
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/^data:[^,]+,/, ""));

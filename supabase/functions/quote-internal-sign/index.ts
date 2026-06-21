@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { normalizeSettings } from "../_shared/configurator.ts";
+import { sha256Hex } from "../_shared/hash.ts";
 
 // Interne tekenpagina-backend. JWT vereist (inloggen) + de ingelogde gebruiker moet
 // de toegewezen ondertekenaar zijn. Acties (POST body.action):
@@ -17,8 +18,6 @@ const corsHeaders = {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
-function bytesToHex(b: Uint8Array) { return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(""); }
-async function sha256Hex(v: string) { return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))); }
 function num(v: unknown): number | null { const n = Number(v); return Number.isFinite(n) ? n : null; }
 
 // Stuurt de (al intern getekende) offerte door naar de klant via quote-send.
