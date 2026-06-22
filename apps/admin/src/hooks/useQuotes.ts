@@ -121,6 +121,66 @@ export function useCreateQuoteStandalone() {
   });
 }
 
+export type AwaitingClientQuote = {
+  id: string;
+  quote_number: string | null;
+  prospect_company: string | null;
+  prospect_contact: string | null;
+  prospect_email: string | null;
+  company_id: string | null;
+  person_id: string | null;
+  lead_id: string | null;
+  project_location_id: string | null;
+  total_hardware_cost: number | null;
+  total_installation_cost: number | null;
+  charge_rate_per_kwh: number | null;
+  energy_cost_per_kwh: number | null;
+  with_management: boolean | null;
+  calculation_snapshot: unknown;
+  offer_details: unknown;
+  created_at: string;
+};
+
+// Getekende offertes die nog géén klantaccount hebben → de "Klant aanmaken"-stap in onboarding.
+export function useSignedQuotesAwaitingClient() {
+  return useQuery({
+    queryKey: ["quotes", "awaiting-client"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("quotes")
+        .select("id, quote_number, prospect_company, prospect_contact, prospect_email, company_id, person_id, lead_id, project_location_id, total_hardware_cost, total_installation_cost, charge_rate_per_kwh, energy_cost_per_kwh, with_management, calculation_snapshot, offer_details, created_at")
+        .eq("status", "getekend")
+        .is("client_id", null)
+        .order("signed_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as AwaitingClientQuote[];
+    },
+  });
+}
+
+// Maakt het klantaccount aan vanuit een getekende offerte met gereviewde gegevens.
+export function useCreateClientFromQuote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ quoteId, client }: { quoteId: string; client: Record<string, unknown> }) => {
+      const { data, error } = await supabase.functions.invoke<{ clientId: string; clientNumber: number | null }>(
+        "quote-create-client",
+        { body: { quote_id: quoteId, client } },
+      );
+      if (error) throw error;
+      if (!data?.clientId) throw new Error("Klantaccount aanmaken mislukt");
+      return data;
+    },
+    onSuccess: (_d, { quoteId }) => {
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["quote", quoteId] });
+      qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+}
+
 export function useSendQuote() {
   const qc = useQueryClient();
   return useMutation({

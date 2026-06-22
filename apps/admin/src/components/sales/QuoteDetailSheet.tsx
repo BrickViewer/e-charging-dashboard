@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Eye, Loader2, Plus, Send, Trash2, PenLine } from "lucide-react";
+import { Eye, Loader2, Plus, Send, Trash2, PenLine, UserPlus } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useAuth } from "@/hooks/useAuth";
 import { useSignableAdmins } from "@/hooks/useSignableAdmins";
 import { SignerStatusPanel } from "@/components/sales/SignerStatusPanel";
+import { CreateClientFromQuoteDialog } from "@/components/sales/CreateClientFromQuoteDialog";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
 import type { OfferDetails, OfferTemplateValues } from "@/services/offerTypes";
@@ -47,6 +48,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   // Eén voortgangs-/busy-vlag over de héle verzendketen (save → PDF → versturen →
   // dossier). Zolang dit gezet is, zijn alle actieknoppen disabled → geen dubbele verzending.
   const [busy, setBusy] = useState<string | null>(null);
+  const [createClientOpen, setCreateClientOpen] = useState(false);
 
   useEffect(() => {
     if (quote) {
@@ -430,6 +432,11 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                   {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} {busy ?? "Opnieuw versturen"}
                 </Button>
               )}
+              {quote.status === "getekend" && !quote.client_id && (
+                <Button onClick={() => setCreateClientOpen(true)}>
+                  <UserPlus className="mr-1.5 h-4 w-4" /> Klant account aanmaken
+                </Button>
+              )}
             </div>
             {!isConcept && <p className="-mt-3 text-right text-xs text-muted-foreground">Geldig tot {quote.valid_until ?? "—"}</p>}
 
@@ -438,6 +445,8 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                 <Trash2 className="mr-1.5 h-4 w-4" /> Offerte verwijderen
               </Button>
             </div>
+
+            <CreateClientFromQuoteDialog quote={quote} open={createClientOpen} onClose={() => setCreateClientOpen(false)} onCreated={() => onOpenChange(false)} />
           </div>
         )}
       </SheetContent>

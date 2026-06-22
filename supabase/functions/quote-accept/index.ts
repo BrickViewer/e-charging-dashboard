@@ -118,7 +118,6 @@ Deno.serve(async (req) => {
     const signedPdfB64 = typeof body.signed_pdf_base64 === "string" ? body.signed_pdf_base64 : "";
 
     const org = quote.organization_id as string;
-    const companyId = (lead?.company_id ?? quote.company_id) as string | null;
     const personId = (lead?.person_id ?? quote.person_id) as string | null;
 
     // Bron-van-waarheid completeren: zet e-mail/telefoon op de persoon als die leeg is.
@@ -134,67 +133,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Klantaccount aanmaken of koppelen (1 bedrijf = 1 account).
-    let clientId = quote.client_id as string | null;
-    if (!clientId && companyId) {
-      const { data: existing } = await sb
-        .from("clients").select("id, status").eq("organization_id", org).eq("company_id", companyId)
-        .neq("status", "verwijderd").order("created_at", { ascending: true }).limit(1).maybeSingle();
-      if (existing) {
-        clientId = existing.id;
-        if (existing.status === "inactief") await sb.from("clients").update({ status: "actief" }).eq("id", existing.id);
-      }
-    }
-    if (!clientId) {
-      const { data: created, error: cErr } = await sb.from("clients").insert({
-        organization_id: org,
-        company_id: companyId,
-        person_id: personId,
-        company_name: lead?.company_name ?? quote.prospect_company ?? "Onbekend bedrijf",
-        contact_name: lead?.contact_name ?? quote.prospect_contact ?? null,
-        contact_email: lead?.contact_email ?? quote.prospect_email ?? null,
-        contact_phone: lead?.contact_phone ?? null,
-        billing_address_street: lead?.address_street ?? null,
-        billing_address_postal: lead?.postal_code ?? null,
-        billing_address_city: lead?.city ?? null,
-        charge_rate_per_kwh: num(quote.charge_rate_per_kwh) ?? undefined,
-        energy_cost_per_kwh: num(quote.energy_cost_per_kwh) ?? undefined,
-        // 'Zonder beheer' → klant zonder dashboard/opbrengstdeling (later upgradebaar).
-        managed: quote.with_management === false ? false : true,
-        status: "actief",
-        notes: `Aangemaakt via offerte ${quote.quote_number}`,
-      }).select("id").single();
-      if (cErr) throw cErr;
-      clientId = created.id;
-    }
-
-    // Idempotentie: configuratie + installatie-order alleen bij de eerste afronding.
-    const isFirstFinalize = !quote.client_id;
-    // Koppel het account vroeg, zodat een retry na een SharePoint-blip niets dubbel doet.
-    await sb.from("quotes").update({ client_id: clientId }).eq("id", quote.id);
-
-    if (isFirstFinalize) {
-      // Configuratie-snapshot op het account (nieuwe versie).
-      const cfg = (quote.calculation_snapshot ?? null) as Record<string, any> | null;
-      if (cfg?.pricing_input && cfg?.pricing_result) {
-        const { data: maxV } = await sb.from("customer_configurations").select("version").eq("client_id", clientId)
-          .order("version", { ascending: false }).limit(1).maybeSingle();
-        await sb.from("customer_configurations").insert({
-          client_id: clientId, organization_id: org, version: (maxV?.version ?? 0) + 1,
-          settings_version: num(cfg.settings_version) ?? 1, pricing_input: cfg.pricing_input,
-          pricing_result: cfg.pricing_result, status: "agreed",
-        });
-      }
-      // Installatie-order (exact één per offerte).
-      const { data: existingOrder } = await sb.from("installation_orders").select("id").eq("quote_id", quote.id).maybeSingle();
-      if (!existingOrder) {
-        await sb.from("installation_orders").insert({
-          organization_id: org, client_id: clientId, quote_id: quote.id, lead_id: quote.lead_id ?? null,
-          company_id: companyId, status: "nieuw",
-          notes: `Vanuit getekende offerte ${quote.quote_number}`,
-        });
-      }
-    }
+    // Géén klantaccount meer automatisch bij tekenen — dat is nu een bewuste onboarding-stap:
+    // de getekende offerte verschijnt in "Klant aanmaken" → review → edge-fn quote-create-client
+    // maakt dan pas het klantaccount + installatie-order + configuratie-snapshot aan. Hier alleen
+    // de offerte zelf afronden (status, getekende PDF, dossier-OPD, lead → Gewonnen, mails).
 
     // Getekende PDF ALTIJD in Supabase opslaan (zo hebben we 'm zeker + kunnen we mailen);
     // van daaruit gaat 'ie naar SharePoint. Een storage-fout mag de klant niet blokkeren.
@@ -233,35 +175,27 @@ Deno.serve(async (req) => {
       console.error("[quote-accept] OPD naar SharePoint mislukt (cron probeert later opnieuw):", e instanceof Error ? e.message : e);
     }
 
-    // Dossier aan het klantaccount koppelen (alleen bij beheer).
-    if (quote.project_location_id && quote.with_management !== false) {
-      await sb.from("project_locations").update({ client_id: clientId }).eq("id", quote.project_location_id);
-    }
-
     // Offerte + acceptatie afronden — ALTIJD (ook als SharePoint nog faalde; OPD volgt via de cron).
+    // (Dossier wordt aan het klantaccount gekoppeld zodra dat in onboarding wordt aangemaakt.)
     await sb.from("quotes").update({
-      status: "getekend", signed_at: new Date().toISOString(), client_id: clientId, signer_name: signerName, signed_pdf_path: signedPath,
+      status: "getekend", signed_at: new Date().toISOString(), signer_name: signerName, signed_pdf_path: signedPath,
     }).eq("id", quote.id);
     await sb.from("quote_acceptances").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", acc.id);
 
-    // Lead naar Gewonnen + koppelen.
+    // Lead naar Gewonnen (deal is binnen). Het klantaccount + de koppeling (converted_client_id)
+    // volgen pas bij het aanmaken in onboarding.
     if (lead) {
       const { data: wonStage } = await sb.from("lead_stages").select("id")
         .eq("organization_id", org).eq("is_won", true).order("position", { ascending: true }).limit(1).maybeSingle();
-      // Respecteer een eerdere (handmatige) conversie: overschrijf de koppeling niet.
-      const patch: Record<string, unknown> = { converted_client_id: lead.converted_client_id ?? clientId, quote_id: quote.id };
+      const patch: Record<string, unknown> = { quote_id: quote.id };
       if (wonStage?.id) patch.stage_id = wonStage.id;
       await sb.from("leads").update(patch).eq("id", lead.id);
       await sb.from("lead_activities").insert({
         lead_id: lead.id, organization_id: org, type: "quote_accepted",
-        description: `Offerte ${quote.quote_number} getekend door ${signerName} → klantaccount + installatie-order`,
-        metadata: { quote_id: quote.id, client_id: clientId, signer_name: signerName },
+        description: `Offerte ${quote.quote_number} getekend door ${signerName} — klantaccount aanmaken in onboarding`,
+        metadata: { quote_id: quote.id, signer_name: signerName },
       });
     }
-    await sb.from("activity_log").insert({
-      organization_id: org, client_id: clientId, action: "quote_signed",
-      details: { quote_id: quote.id, quote_number: quote.quote_number, signer_name: signerName, opd_web_url: opdWebUrl },
-    });
 
     // Mails: klant-bevestiging (met getekende PDF) + interne melding.
     const attach = signedPdfB64 ? [{ filename: `offerte-${quote.quote_number}.pdf`, content: signedPdfB64.replace(/^data:[^,]+,/, "") }] : undefined;

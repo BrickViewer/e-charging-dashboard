@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Send, Plug, MailPlus, ExternalLink, Clock, ArrowRight, Receipt } from "lucide-react";
+import { Send, Plug, MailPlus, ExternalLink, Clock, ArrowRight, Receipt, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -14,6 +14,10 @@ import {
   type OnboardingClient, type OnboardingStage,
 } from "@/hooks/useOnboarding";
 import { OnboardingHandoffDialog } from "@/components/sales/OnboardingHandoffDialog";
+import { CreateClientFromQuoteDialog } from "@/components/sales/CreateClientFromQuoteDialog";
+import { useSignedQuotesAwaitingClient, type AwaitingClientQuote } from "@/hooks/useQuotes";
+
+const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
 function NextAction({
   client, stage, onLink, onInvite, onHandoff, onMarkInvoiced, inviting, invoicing, navigate,
@@ -113,10 +117,12 @@ function LinkLocationDialog({ client, onClose }: { client: OnboardingClient | nu
 export default function SalesOnboarding() {
   const navigate = useNavigate();
   const { data: clients, isLoading } = useOnboardingClients();
+  const { data: awaiting } = useSignedQuotesAwaitingClient();
   const sendInvite = useSendOnboardingInvite();
   const markInvoiced = useMarkInvoiced();
   const [linkFor, setLinkFor] = useState<OnboardingClient | null>(null);
   const [handoffFor, setHandoffFor] = useState<OnboardingClient | null>(null);
+  const [createFor, setCreateFor] = useState<AwaitingClientQuote | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [invoicingId, setInvoicingId] = useState<string | null>(null);
   const [showArchive, setShowArchive] = useState(false);
@@ -181,6 +187,33 @@ export default function SalesOnboarding() {
       ) : (
         <div className="relative">
           <div className="flex gap-3 overflow-x-auto pb-2">
+          {/* Tussenstap: getekende offertes zonder klantaccount → review & aanmaken. */}
+          <div className="flex min-w-[210px] max-w-[300px] flex-1 flex-col rounded-xl border bg-muted/20">
+            <div className="border-b px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: "#6366f1" }} />
+                  <span className="truncate text-sm font-semibold">Klant aanmaken</span>
+                </div>
+                <span className="shrink-0 rounded-full bg-card px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{(awaiting ?? []).length}</span>
+              </div>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Getekend — review &amp; klantaccount</p>
+            </div>
+            <div className="flex flex-1 flex-col gap-2 p-2.5">
+              {(awaiting ?? []).length === 0 && <p className="py-8 text-center text-xs text-muted-foreground/60">Niets te doen</p>}
+              {(awaiting ?? []).map((q) => (
+                <div key={q.id} className="space-y-2 rounded-lg border bg-card p-2.5 shadow-sm">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{q.prospect_company || "—"}</p>
+                    <p className="text-[11px] tabular-nums text-muted-foreground">{q.quote_number} · {euro((Number(q.total_hardware_cost) || 0) + (Number(q.total_installation_cost) || 0))}</p>
+                  </div>
+                  <Button size="sm" className="h-auto min-h-8 w-full whitespace-normal px-2 py-1 text-xs leading-tight" onClick={() => setCreateFor(q)}>
+                    <UserPlus className="mr-1.5 h-3.5 w-3.5 shrink-0" /> Klant account aanmaken
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
           {stages.map((s) => {
             const items = byStage[s.key];
             return (
@@ -226,6 +259,7 @@ export default function SalesOnboarding() {
 
       <LinkLocationDialog client={linkFor} onClose={() => setLinkFor(null)} />
       <OnboardingHandoffDialog client={handoffFor} onClose={() => setHandoffFor(null)} />
+      <CreateClientFromQuoteDialog quote={createFor} open={!!createFor} onClose={() => setCreateFor(null)} onCreated={(id) => navigate(`/admin/klanten/${id}`)} />
     </div>
   );
 }
