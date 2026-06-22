@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   MapPin,
   Plug,
   Zap,
@@ -73,9 +74,12 @@ export default function AdminLocationDetail() {
   const { data: clients } = useAllClients();
 
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkMode, setLinkMode] = useState<"couple" | "transfer">("couple");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [clientSearch, setClientSearch] = useState("");
   const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
+  const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
+  const [transferTargetId, setTransferTargetId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   if (isLoading) {
@@ -107,8 +111,13 @@ export default function AdminLocationDetail() {
   const assignableClientList = clientList.filter(
     (client) => client.status !== "verwijderd" && !client.erased_at,
   );
+  // Bij overdragen: de huidige eigenaar uit de keuzelijst halen.
+  const pickerClientList = assignableClientList.filter(
+    (client) => linkMode !== "transfer" || client.id !== locationDetail.client_id,
+  );
+  const transferTargetClient = clientList.find((client) => client.id === transferTargetId);
   const normalizedClientSearch = clientSearch.trim().toLowerCase();
-  const filteredClientList = assignableClientList.filter((client) => {
+  const filteredClientList = pickerClientList.filter((client) => {
     if (!normalizedClientSearch) return true;
 
     return [
@@ -121,17 +130,19 @@ export default function AdminLocationDetail() {
     ].some((value) => value?.toLowerCase().includes(normalizedClientSearch));
   });
 
-  const handleLink = async () => {
-    if (!selectedClientId || !id) return;
+  // Koppelen én overdragen lopen via dezelfde RPC (set_location_client): niet-afgerekende
+  // sessies volgen de nieuwe eigenaar, afgerekende blijven bij de vorige.
+  const applyLink = async (targetId: string, onDone?: () => void) => {
+    if (!targetId || !id) return;
     setSubmitting(true);
     try {
-      const result = await linkLocationToClient(id, selectedClientId);
+      const result = await linkLocationToClient(id, targetId);
       const assigned = result?.reassigned_sessions ?? 0;
       const retained = result?.retained_final_sessions ?? 0;
+      const wasTransfer = !!result?.previous_client_id;
       toast.success(
-        retained > 0
-          ? `Locatie gekoppeld: ${assigned} sessies toegewezen, ${retained} afgerekende sessies behouden`
-          : `Locatie gekoppeld: ${assigned} sessies toegewezen aan klant`,
+        `${wasTransfer ? "Locatie overgedragen" : "Locatie gekoppeld"}: ${assigned} sessie(s) ${wasTransfer ? "meegegaan" : "toegewezen"}` +
+          (retained > 0 ? `, ${retained} afgerekende sessie(s) behouden bij vorige eigenaar` : ""),
       );
       queryClient.invalidateQueries({ queryKey: ["admin-location", id] });
       queryClient.invalidateQueries({ queryKey: ["admin-location-sessions", id] });
@@ -139,18 +150,43 @@ export default function AdminLocationDetail() {
       queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
       queryClient.invalidateQueries({ queryKey: ["admin-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-client", selectedClientId] });
+      queryClient.invalidateQueries({ queryKey: ["admin-client", targetId] });
+      if (result?.previous_client_id) {
+        queryClient.invalidateQueries({ queryKey: ["admin-client", result.previous_client_id] });
+      }
       queryClient.invalidateQueries({ queryKey: ["admin-client-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["admin-client-settlements"] });
-      setLinkDialogOpen(false);
-      setSelectedClientId("");
-      setClientSearch("");
+      onDone?.();
     } catch (err) {
-      toast.error(err.message || "Koppelen mislukt");
+      toast.error(err.message || "Mislukt");
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleLink = () => {
+    if (!selectedClientId) return;
+    // Overdragen krijgt een extra bevestiging (typ de doel-klantnaam) vanwege de geld-impact.
+    if (linkMode === "transfer") {
+      setTransferTargetId(selectedClientId);
+      setLinkDialogOpen(false);
+      setTransferConfirmOpen(true);
+      return;
+    }
+    void applyLink(selectedClientId, () => {
+      setLinkDialogOpen(false);
+      setSelectedClientId("");
+      setClientSearch("");
+    });
+  };
+
+  const handleConfirmTransfer = () =>
+    applyLink(transferTargetId, () => {
+      setTransferConfirmOpen(false);
+      setTransferTargetId("");
+      setSelectedClientId("");
+      setClientSearch("");
+    });
 
   const handleUnlink = async () => {
     if (!id) return;
@@ -245,14 +281,29 @@ export default function AdminLocationDetail() {
                   )}
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setUnlinkDialogOpen(true)}
-              >
-                <Unlink className="w-4 h-4 mr-2" />
-                Ontkoppelen
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLinkMode("transfer");
+                    setSelectedClientId("");
+                    setClientSearch("");
+                    setLinkDialogOpen(true);
+                  }}
+                >
+                  <ArrowLeftRight className="w-4 h-4 mr-2" />
+                  Overdragen naar ander account
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUnlinkDialogOpen(true)}
+                >
+                  <Unlink className="w-4 h-4 mr-2" />
+                  Ontkoppelen
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -268,7 +319,12 @@ export default function AdminLocationDetail() {
                   </p>
                 </div>
               </div>
-              <Button onClick={() => setLinkDialogOpen(true)}>
+              <Button
+                onClick={() => {
+                  setLinkMode("couple");
+                  setLinkDialogOpen(true);
+                }}
+              >
                 <LinkIcon className="w-4 h-4 mr-2" />
                 Koppel aan klant
               </Button>
@@ -528,11 +584,13 @@ export default function AdminLocationDetail() {
       >
         <DialogContent className="bg-card text-card-foreground shadow-2xl sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Koppel locatie aan klant</DialogTitle>
+            <DialogTitle>
+              {linkMode === "transfer" ? "Overdragen naar ander account" : "Koppel locatie aan klant"}
+            </DialogTitle>
             <DialogDescription className="text-foreground/75">
-              Selecteer bij welke klant deze locatie hoort. Alle niet-afgerekende
-              sessies van deze locatie worden aan de gekozen klant gekoppeld.
-              Sessies die al definitief zijn afgerekend blijven historisch staan.
+              {linkMode === "transfer"
+                ? "Selecteer het account waarnaar je deze locatie overdraagt. Alle niet-afgerekende sessies gaan mee naar het nieuwe account; al afgerekende sessies blijven bij de huidige eigenaar."
+                : "Selecteer bij welke klant deze locatie hoort. Alle niet-afgerekende sessies van deze locatie worden aan de gekozen klant gekoppeld. Sessies die al definitief zijn afgerekend blijven historisch staan."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -611,7 +669,7 @@ export default function AdminLocationDetail() {
               onClick={handleLink}
               disabled={!selectedClientId || submitting}
             >
-              {submitting ? "Bezig…" : "Koppel"}
+              {submitting ? "Bezig…" : linkMode === "transfer" ? "Overdragen…" : "Koppel"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -645,6 +703,33 @@ export default function AdminLocationDetail() {
         confirmLabel="Ontkoppelen"
         isSubmitting={submitting}
         onConfirm={() => handleUnlink()}
+      />
+
+      {/* Overdracht-bevestiging — typ de doel-klantnaam ter bevestiging (geld-impact) */}
+      <DeleteConfirmDialog
+        open={transferConfirmOpen}
+        onOpenChange={(open) => {
+          setTransferConfirmOpen(open);
+          if (!open) setTransferTargetId("");
+        }}
+        title="Locatie overdragen?"
+        description={
+          <>
+            Deze locatie wordt overgedragen aan{" "}
+            <strong>{transferTargetClient?.company_name || "het gekozen account"}</strong>. Alle
+            niet-afgerekende sessies van deze locatie gaan mee naar dit account; al afgerekende
+            sessies blijven bij de huidige eigenaar.
+          </>
+        }
+        confirmationValue={transferTargetClient?.company_name ?? ""}
+        confirmationLabel={
+          <>
+            Typ <span className="font-medium text-foreground">{transferTargetClient?.company_name}</span> om over te dragen *
+          </>
+        }
+        confirmLabel="Overdragen"
+        isSubmitting={submitting}
+        onConfirm={() => handleConfirmTransfer()}
       />
     </div>
   );
