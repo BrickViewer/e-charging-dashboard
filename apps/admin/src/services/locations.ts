@@ -57,6 +57,16 @@ export async function unlinkLocation(locationId: string, _previousClientId?: str
   return data;
 }
 
+// Zet de per-locatie service-fee (€/kWh) handmatig. NULL = terug naar fallback (klant → org).
+export async function setLocationServiceFee(locationId: string, fee: number | null) {
+  const rpcClient = supabase as unknown as {
+    rpc(name: "set_location_service_fee", args: { p_location_id: string; p_fee: number | null }):
+      Promise<{ data: unknown; error: Error | null }>;
+  };
+  const { error } = await rpcClient.rpc("set_location_service_fee", { p_location_id: locationId, p_fee: fee });
+  if (error) throw error;
+}
+
 // Trigger een handmatige sync van Road → Supabase via de eflux-sync edge function.
 // Returns het sync-resultaat zodat de UI feedback kan tonen.
 export async function triggerEfluxSync() {

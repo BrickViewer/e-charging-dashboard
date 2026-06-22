@@ -178,6 +178,25 @@ export function useEfluxInvoices() {
   });
 }
 
+// Huidige per-locatie tarief (laatste valid_from) uit tariff_profiles.
+export function useLocationTariff(locationId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-location-tariff", locationId],
+    enabled: !!locationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tariff_profiles")
+        .select("id, echarging_fee_per_kwh, charge_rate_per_kwh, energy_cost_per_kwh, start_tariff, idle_tariff_per_min, valid_from")
+        .eq("location_id", locationId!)
+        .order("valid_from", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useAllSessions(limit = 1000) {
   return useQuery({
     queryKey: ["admin-sessions", limit],

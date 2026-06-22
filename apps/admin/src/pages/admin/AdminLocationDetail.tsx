@@ -3,6 +3,7 @@ import {
   useLocationById,
   useLocationSessions,
   useAllClients,
+  useLocationTariff,
 } from "@/hooks/useAdminData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,13 +34,13 @@ import {
   CheckCircle,
   Search,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { ConnectivityIndicator } from "@/components/admin/ConnectivityIndicator";
-import { linkLocationToClient, unlinkLocation } from "@/services/locations";
+import { linkLocationToClient, unlinkLocation, setLocationServiceFee } from "@/services/locations";
 import type { AdminLocationDetail, AdminSession, ClientWithRelations } from "@/types/db";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,12 @@ export default function AdminLocationDetail() {
   const { data: location, isLoading } = useLocationById(id);
   const { data: sessions } = useLocationSessions(id);
   const { data: clients } = useAllClients();
+  const { data: tariff } = useLocationTariff(id);
+  const [feeInput, setFeeInput] = useState("");
+  const [savingFee, setSavingFee] = useState(false);
+  useEffect(() => {
+    setFeeInput(tariff?.echarging_fee_per_kwh != null ? String(tariff.echarging_fee_per_kwh) : "");
+  }, [tariff?.echarging_fee_per_kwh]);
 
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkMode, setLinkMode] = useState<"couple" | "transfer">("couple");
@@ -187,6 +194,25 @@ export default function AdminLocationDetail() {
       setSelectedClientId("");
       setClientSearch("");
     });
+
+  const saveFee = async () => {
+    if (!id) return;
+    const raw = feeInput.trim().replace(",", ".");
+    const fee = raw === "" ? null : Number(raw);
+    if (fee !== null && (!Number.isFinite(fee) || fee < 0)) { toast.error("Ongeldige service-fee"); return; }
+    setSavingFee(true);
+    try {
+      await setLocationServiceFee(id, fee);
+      toast.success("Service-fee opgeslagen");
+      queryClient.invalidateQueries({ queryKey: ["admin-location-tariff", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-financial-overview"] });
+    } catch (err) {
+      toast.error(err.message || "Opslaan mislukt");
+    } finally {
+      setSavingFee(false);
+    }
+  };
 
   const handleUnlink = async () => {
     if (!id) return;
@@ -332,6 +358,49 @@ export default function AdminLocationDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Tarieven (per locatie) */}
+      {isLinked && (
+        <Card className="portal-card">
+          <CardContent className="space-y-4 p-5">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Tarieven · per locatie</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Onze service-fee bepaalt de marge in de maandafrekening van déze locatie (leeg = klant-/standaardtarief).
+                Bestuurders-tarieven komen uit de offerte en worden in e-Flux op de palen ingesteld.
+              </p>
+            </div>
+            <div className="flex items-end gap-2">
+              <div className="w-48">
+                <span className="text-xs text-muted-foreground">E-Charging service-fee (€/kWh)</span>
+                <Input inputMode="decimal" placeholder="leeg = standaard" value={feeInput}
+                  onChange={(e) => setFeeInput(e.target.value)} />
+              </div>
+              <Button size="sm" onClick={saveFee} disabled={savingFee}>
+                {savingFee ? "Opslaan…" : "Opslaan"}
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+              <div>
+                <span className="text-xs text-muted-foreground">Laadtarief</span>
+                <p className="font-medium tabular-nums">{tariff?.charge_rate_per_kwh != null ? `€${Number(tariff.charge_rate_per_kwh).toFixed(2)}/kWh` : "—"}</p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">Stroomkosten</span>
+                <p className="font-medium tabular-nums">{tariff?.energy_cost_per_kwh != null ? `€${Number(tariff.energy_cost_per_kwh).toFixed(2)}/kWh` : "—"}</p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">Starttarief</span>
+                <p className="font-medium tabular-nums">{tariff?.start_tariff != null ? `€${Number(tariff.start_tariff).toFixed(2)}` : "—"}</p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">Blokkeertarief</span>
+                <p className="font-medium tabular-nums">{tariff?.idle_tariff_per_min != null ? `€${Number(tariff.idle_tariff_per_min).toFixed(2)}/min` : "—"}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

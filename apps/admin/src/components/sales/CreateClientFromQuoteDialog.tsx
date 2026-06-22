@@ -46,10 +46,8 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
 
   useEffect(() => {
     if (!open || !quote) return;
-    const snap = (quote.calculation_snapshot ?? {}) as { pricing_input?: { contract?: Record<string, unknown> }; pricing_result?: { serviceFeePct?: number } };
+    const snap = (quote.calculation_snapshot ?? {}) as { pricing_input?: { contract?: Record<string, unknown> } };
     const contract = snap.pricing_input?.contract ?? {};
-    const serviceFeePct = Number(snap.pricing_result?.serviceFeePct);
-    const revenue = Number.isFinite(serviceFeePct) ? Math.round(Math.max(0, Math.min(100, (1 - serviceFeePct) * 100))) : null;
     const od = (quote.offer_details ?? {}) as { addressStreet?: string; addressPostalCode?: string; addressCity?: string };
     setF({
       company_name: quote.prospect_company ?? company.data?.name ?? "",
@@ -61,11 +59,8 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
       billing_address_street: company.data?.address_street ?? od.addressStreet ?? "",
       billing_address_postal: company.data?.postal_code ?? od.addressPostalCode ?? "",
       billing_address_city: company.data?.city ?? od.addressCity ?? "",
-      charge_rate_per_kwh: quote.charge_rate_per_kwh != null ? String(quote.charge_rate_per_kwh) : "",
-      energy_cost_per_kwh: quote.energy_cost_per_kwh != null ? String(quote.energy_cost_per_kwh) : "",
       contract_duration_months: contract.durationMonths != null ? String(contract.durationMonths) : "",
       notice_period_months: contract.noticePeriodMonths != null ? String(contract.noticePeriodMonths) : "",
-      revenue_share_percentage: revenue != null ? String(revenue) : "",
     });
     setManaged(quote.with_management !== false);
   }, [open, quote?.id, company.data, person.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -89,11 +84,8 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
           billing_address_street: t("billing_address_street").trim() || null,
           billing_address_postal: t("billing_address_postal").trim() || null,
           billing_address_city: t("billing_address_city").trim() || null,
-          charge_rate_per_kwh: numOr(t("charge_rate_per_kwh")),
-          energy_cost_per_kwh: numOr(t("energy_cost_per_kwh")),
           contract_duration_months: numOr(t("contract_duration_months")),
           notice_period_months: numOr(t("notice_period_months")),
-          revenue_share_percentage: numOr(t("revenue_share_percentage")),
           managed,
         },
       });
@@ -143,20 +135,18 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
           </div>
 
           <div>
-            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Tarieven &amp; contract</p>
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Contract</p>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Laadtarief / kWh (€)"><Input inputMode="decimal" value={t("charge_rate_per_kwh")} onChange={(e) => set("charge_rate_per_kwh")(e.target.value)} /></Field>
-              <Field label="Stroomkosten / kWh (€)"><Input inputMode="decimal" value={t("energy_cost_per_kwh")} onChange={(e) => set("energy_cost_per_kwh")(e.target.value)} /></Field>
               <Field label="Looptijd (mnd)"><Input inputMode="numeric" value={t("contract_duration_months")} onChange={(e) => set("contract_duration_months")(e.target.value)} /></Field>
               <Field label="Opzegtermijn (mnd)"><Input inputMode="numeric" value={t("notice_period_months")} onChange={(e) => set("notice_period_months")(e.target.value)} /></Field>
-              <Field label="Opbrengstdeling klant (%)"><Input inputMode="numeric" value={t("revenue_share_percentage")} onChange={(e) => set("revenue_share_percentage")(e.target.value)} /></Field>
             </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Tarieven (laad-/start-/blokkeertarief en onze service-fee) stel je per locatie in, niet op het klantaccount.</p>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div>
               <p className="text-sm font-medium text-foreground">Met beheer</p>
-              <p className="text-[11px] text-muted-foreground">Dashboard + opbrengstdeling. Uit = alleen levering &amp; installatie.</p>
+              <p className="text-[11px] text-muted-foreground">Dashboard + maandelijkse afrekening. Uit = alleen levering &amp; installatie.</p>
             </div>
             <Switch checked={managed} onCheckedChange={setManaged} />
           </div>
