@@ -71,6 +71,9 @@ verify_jwt = false
 [functions.quote-accept]
 verify_jwt = false
 
+[functions.quote-create]
+verify_jwt = true
+
 [functions.quote-create-from-lead]
 verify_jwt = true
 

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FileText, Search } from "lucide-react";
+import { FileText, Plus, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useQuotes } from "@/hooks/useQuotes";
 import { QuoteDetailSheet } from "@/components/sales/QuoteDetailSheet";
+import { NewQuoteDialog } from "@/components/sales/NewQuoteDialog";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -21,6 +23,7 @@ export default function SalesOffertes() {
   const [search, setSearch] = useState("");
   const q = useDebouncedValue(search, 200).trim().toLowerCase();
   const [selected, setSelected] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
@@ -39,9 +42,12 @@ export default function SalesOffertes() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-semibold">Offertes</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Offertes voortbouwend op de configurator — versturen en akkoord volgen.</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Offertes</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Offertes voortbouwend op de configurator — aanmaken, versturen en akkoord volgen.</p>
+        </div>
+        <Button onClick={() => setNewOpen(true)}><Plus className="mr-2 h-4 w-4" /> Nieuwe offerte</Button>
       </div>
 
       <div className="relative max-w-md">
@@ -54,7 +60,8 @@ export default function SalesOffertes() {
       ) : all.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card p-10 text-center">
           <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="mt-3 text-sm text-muted-foreground">Nog geen offertes. Maak er een vanuit een lead met een opgeslagen configuratie.</p>
+          <p className="mt-3 text-sm text-muted-foreground">Nog geen offertes. Klik op <strong>Nieuwe offerte</strong> (vanuit een lead of standalone), of maak er een vanuit een lead.</p>
+          <Button className="mt-4" onClick={() => setNewOpen(true)}><Plus className="mr-2 h-4 w-4" /> Nieuwe offerte</Button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
@@ -89,6 +96,7 @@ export default function SalesOffertes() {
       )}
 
       <QuoteDetailSheet quoteId={selected} open={!!selected} onOpenChange={(v) => !v && setSelected(null)} />
+      <NewQuoteDialog open={newOpen} onClose={() => setNewOpen(false)} onCreated={(quoteId) => setSelected(quoteId)} />
     </div>
   );
 }

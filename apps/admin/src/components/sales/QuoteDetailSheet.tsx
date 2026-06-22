@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Eye, Plus, Send, Trash2, PenLine } from "lucide-react";
+import { Eye, Loader2, Plus, Send, Trash2, PenLine } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useAuth } from "@/hooks/useAuth";
@@ -44,6 +44,9 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   const [idleGrace, setIdleGrace] = useState("");
   const [od, setOd] = useState<OfferDetails>({});
   const [signerUserId, setSignerUserId] = useState<string | null>(null);
+  // Eén voortgangs-/busy-vlag over de héle verzendketen (save → PDF → versturen →
+  // dossier). Zolang dit gezet is, zijn alle actieknoppen disabled → geen dubbele verzending.
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (quote) {
@@ -149,75 +152,89 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
     echargingSignerFunction: quote?.internal_signer_function ?? null,
   });
 
+  // SharePoint-dossier bijwerken met de (getekende) OFF — best-effort: mag het versturen NOOIT
+  // blokkeren en draait NA de verzending zodat de klant-mail niet op de Graph-upload wacht.
+  const updateSharepointOff = async (pdfBase64: string, sentLabel: string) => {
+    try {
+      const { data: spRes, error: spErr } = await supabase.functions.invoke("quote-sharepoint-off", { body: { quote_id: quote!.id, off_pdf_base64: pdfBase64 } });
+      if (spErr) throw spErr;
+      if ((spRes as { status?: string })?.status === "error") throw new Error((spRes as { message?: string }).message || "SharePoint-dossier mislukt");
+    } catch (e) {
+      console.error("[SharePoint] OFF-dossier mislukt:", e);
+      toast.warning(`${sentLabel}, maar het SharePoint-dossier kon niet worden bijgewerkt.`);
+    }
+  };
+
   // Zelf tekenen: stempel eigen handtekening op de PDF en verstuur direct naar de klant.
   const signAndSend = async () => {
-    if (!quote || !selfAdmin) return;
+    if (busy || !quote || !selfAdmin) return;
     if (!selfAdmin.signatureDataUrl) { toast.error("Stel eerst je handtekening in bij Instellingen › Mijn handtekening"); return; }
-    if (grandTotal <= 0 && !window.confirm("Het offertetotaal is €0. Toch versturen?")) return;
-    await save();
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
+    if (grandTotal <= 0 && !window.confirm("Het offertetotaal is €0. Toch versturen?")) return;
+    if (!window.confirm(`Offerte ${quote.quote_number} ondertekenen en versturen naar ${email.trim()}?\nTotaal: ${euro(grandTotal)}`)) return;
     try {
-      const data = pdfData();
-      // 1) SharePoint-dossier + ongetekende OFF (best-effort: mag het versturen NOOIT blokkeren).
-      try {
-        const offPdfBase64 = await offerPdfBase64(data);
-        const { data: spRes, error: spErr } = await supabase.functions.invoke("quote-sharepoint-off", { body: { quote_id: quote.id, off_pdf_base64: offPdfBase64 } });
-        if (spErr) throw spErr;
-        if ((spRes as { status?: string })?.status === "error") throw new Error((spRes as { message?: string }).message || "SharePoint-dossier mislukt");
-      } catch (e) {
-        console.error("[SharePoint] OFF-dossier mislukt:", e);
-        toast.warning("Let op: het SharePoint-dossier kon niet worden aangemaakt. De offerte wordt wél verstuurd.");
-      }
-      // 2) Getekende PDF voor de klantmail + versturen.
-      const pdfBase64 = await offerPdfBase64(data, {
+      setBusy("Opslaan…");
+      await save();
+      setBusy("Document voorbereiden…");
+      // Eén getekende PDF — hergebruikt voor zowel de klantmail als het SharePoint-dossier.
+      const pdfBase64 = await offerPdfBase64(pdfData(), {
         echargingSignatureDataUrl: selfAdmin.signatureDataUrl,
         echargingSignerName: selfAdmin.fullName,
         echargingSignerFunction: selfAdmin.signerTitle,
       });
+      setBusy("Versturen…");
       await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64, internalSelfSign: true });
       toast.success(`Ondertekend en verstuurd naar ${email.trim()}`);
+      setBusy("Dossier bijwerken…");
+      await updateSharepointOff(pdfBase64, "De offerte is verstuurd");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
+    finally { setBusy(null); }
   };
 
   // Ander tekent: stuur ter ondertekening (mail met link).
   const sendForSignoff = async () => {
-    if (!quote || !selectedAdmin) return;
+    if (busy || !quote || !selectedAdmin) return;
     if (!selectedAdmin.hasSignature) { toast.error(`${selectedAdmin.fullName} heeft nog geen handtekening ingesteld`); return; }
-    await save();
+    if (!window.confirm(`Offerte ${quote.quote_number} ter ondertekening sturen naar ${selectedAdmin.fullName}?`)) return;
     try {
-      // SharePoint-dossier + ongetekende OFF (best-effort: mag het versturen NOOIT blokkeren).
-      try {
-        const offPdfBase64 = await offerPdfBase64(pdfData());
-        const { data: spRes, error: spErr } = await supabase.functions.invoke("quote-sharepoint-off", { body: { quote_id: quote.id, off_pdf_base64: offPdfBase64 } });
-        if (spErr) throw spErr;
-        if ((spRes as { status?: string })?.status === "error") throw new Error((spRes as { message?: string }).message || "SharePoint-dossier mislukt");
-      } catch (e) {
-        console.error("[SharePoint] OFF-dossier mislukt:", e);
-        toast.warning("Let op: het SharePoint-dossier kon niet worden aangemaakt. De offerte wordt wél ter ondertekening gestuurd.");
-      }
+      setBusy("Opslaan…");
+      await save();
+      setBusy("Document voorbereiden…");
+      const offPdfBase64 = await offerPdfBase64(pdfData());
+      setBusy("Versturen…");
       await requestSignoff.mutateAsync({ quoteId: quote.id });
       toast.success(`Ter ondertekening gestuurd naar ${selectedAdmin.fullName}`);
+      setBusy("Dossier bijwerken…");
+      await updateSharepointOff(offPdfBase64, "Ter ondertekening gestuurd");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
+    finally { setBusy(null); }
   };
 
   // Opnieuw naar de klant versturen (offerte is al intern getekend).
   const resendToCustomer = async () => {
-    if (!quote) return;
+    if (busy || !quote) return;
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
+    if (!window.confirm(`Offerte ${quote.quote_number} opnieuw versturen naar ${email.trim()}?`)) return;
     try {
+      setBusy("Document voorbereiden…");
       const pdfBase64 = await offerPdfBase64(pdfData(), { ...echargingFromQuote() });
+      setBusy("Versturen…");
       await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64 });
       toast.success(`Offerte opnieuw verstuurd naar ${email.trim()}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
+    finally { setBusy(null); }
   };
 
   // Opnieuw ter ondertekening sturen (zelfde of nieuwe ondertekenaar).
   const resendSignoff = async () => {
-    if (!quote) return;
+    if (busy || !quote) return;
+    if (!window.confirm(`Offerte ${quote.quote_number} opnieuw ter ondertekening sturen?`)) return;
     try {
+      setBusy("Versturen…");
       await requestSignoff.mutateAsync({ quoteId: quote.id });
       toast.success("Opnieuw ter ondertekening gestuurd");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Versturen mislukt"); }
+    finally { setBusy(null); }
   };
 
   const doDelete = async () => {
@@ -391,33 +408,33 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
 
             <div className="flex items-center justify-between gap-2 border-t pt-4">
               <div className="flex items-center gap-2">
-                {isConcept && <Button variant="outline" onClick={save} disabled={update.isPending}>Opslaan</Button>}
-                <Button variant="outline" onClick={doPreview}><Eye className="mr-1.5 h-4 w-4" /> Bekijken</Button>
+                {isConcept && <Button variant="outline" onClick={save} disabled={!!busy || update.isPending}>Opslaan</Button>}
+                <Button variant="outline" onClick={doPreview} disabled={!!busy}><Eye className="mr-1.5 h-4 w-4" /> Bekijken</Button>
               </div>
               {quote.status === "concept" && (
                 <Button
                   onClick={selfSelected ? signAndSend : sendForSignoff}
-                  disabled={!signerUserId || !selectedAdmin?.hasSignature || send.isPending || requestSignoff.isPending || update.isPending}
+                  disabled={!!busy || !signerUserId || !selectedAdmin?.hasSignature}
                 >
-                  {selfSelected ? <PenLine className="mr-1.5 h-4 w-4" /> : <Send className="mr-1.5 h-4 w-4" />}
-                  {selfSelected ? "Onderteken & verstuur" : "Stuur ter ondertekening"}
+                  {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : selfSelected ? <PenLine className="mr-1.5 h-4 w-4" /> : <Send className="mr-1.5 h-4 w-4" />}
+                  {busy ?? (selfSelected ? "Onderteken & verstuur" : "Stuur ter ondertekening")}
                 </Button>
               )}
               {quote.status === "intern_ter_ondertekening" && (
-                <Button variant="outline" onClick={resendSignoff} disabled={requestSignoff.isPending}>
-                  <Send className="mr-1.5 h-4 w-4" /> Opnieuw sturen
+                <Button variant="outline" onClick={resendSignoff} disabled={!!busy}>
+                  {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} {busy ?? "Opnieuw sturen"}
                 </Button>
               )}
               {quote.status === "verstuurd" && (
-                <Button onClick={resendToCustomer} disabled={send.isPending}>
-                  <Send className="mr-1.5 h-4 w-4" /> Opnieuw versturen
+                <Button onClick={resendToCustomer} disabled={!!busy}>
+                  {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} {busy ?? "Opnieuw versturen"}
                 </Button>
               )}
             </div>
             {!isConcept && <p className="-mt-3 text-right text-xs text-muted-foreground">Geldig tot {quote.valid_until ?? "—"}</p>}
 
             <div className="flex justify-end border-t pt-4">
-              <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={doDelete} disabled={del.isPending}>
+              <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={doDelete} disabled={!!busy || del.isPending}>
                 <Trash2 className="mr-1.5 h-4 w-4" /> Offerte verwijderen
               </Button>
             </div>

@@ -101,6 +101,26 @@ export function useCreateQuoteFromLead() {
   });
 }
 
+// Maakt een losse (standalone) offerte voor een object, los van een lead.
+export function useCreateQuoteStandalone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectLocationId, companyId, personId }: { projectLocationId: string; companyId?: string | null; personId?: string | null }) => {
+      const { data, error } = await supabase.functions.invoke<{ quoteId: string; quoteNumber: string }>(
+        "quote-create",
+        { body: { project_location_id: projectLocationId, company_id: companyId ?? undefined, person_id: personId ?? undefined } },
+      );
+      if (error) throw error;
+      if (!data?.quoteId) throw new Error("Offerte aanmaken mislukt");
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["project-locations"] });
+    },
+  });
+}
+
 export function useSendQuote() {
   const qc = useQueryClient();
   return useMutation({
