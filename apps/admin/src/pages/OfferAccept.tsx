@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ type QuoteSummary = {
   quoteNumber: string;
   company?: string | null;
   contact?: string | null;
+  signerEmail?: string | null;
   addressLine?: string | null;
   numChargePoints?: number | null;
   total: number;
@@ -87,7 +89,10 @@ export default function OfferAccept() {
   const [accepted, setAccepted] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [signerName, setSignerName] = useState("");
+  const [signerFunction, setSignerFunction] = useState("");
   const [signature, setSignature] = useState<string | null>(null);
+  const [authorityChecked, setAuthorityChecked] = useState(false);
+  const [termsChecked, setTermsChecked] = useState(false);
 
   useEffect(() => {
     if (!token) { setResp({ status: "not_found", message: "Geen token" }); setLoading(false); return; }
@@ -121,6 +126,7 @@ export default function OfferAccept() {
     if (!token || !quote) return;
     if (!signerName.trim()) { toast.error("Vul uw naam in"); return; }
     if (!signature) { toast.error("Zet uw handtekening"); return; }
+    if (!authorityChecked || !termsChecked) { toast.error("Bevestig de twee verklaringen om te ondertekenen"); return; }
     setSubmitting(true);
     try {
       const signedPdf = await offerPdfBase64(toPdfData(quote), {
@@ -132,7 +138,14 @@ export default function OfferAccept() {
       const res = await fetch(FN_URL, {
         method: "POST",
         headers: { Authorization: AUTH, "Content-Type": "application/json" },
-        body: JSON.stringify({ token, signer_name: signerName.trim(), signed_pdf_base64: signedPdf }),
+        body: JSON.stringify({
+          token,
+          signer_name: signerName.trim(),
+          signer_function: signerFunction.trim() || undefined,
+          authority_confirmed: true,
+          terms_accepted: true,
+          signed_pdf_base64: signedPdf,
+        }),
       });
       const out = (await res.json()) as Resp;
       if (out.status === "accepted" || out.status === "already_accepted") setAccepted(true);
@@ -158,6 +171,7 @@ export default function OfferAccept() {
               <CheckCircle className="mx-auto h-12 w-12 text-green-600" />
               <h1 className="text-xl font-bold">Bedankt — uw offerte is getekend</h1>
               <p className="text-sm text-muted-foreground">Offerte {quote?.quoteNumber} is digitaal ondertekend. U ontvangt per e-mail een bevestiging met de getekende offerte. Wij nemen contact op voor de planning van de installatie.</p>
+              <p className="text-xs text-muted-foreground">Uw akkoord is met tijdstip en IP-adres vastgelegd als bewijs van ondertekening.</p>
             </CardContent></Card>
           ) : (
             <Card><CardContent className="space-y-3 p-8 text-center">
@@ -229,17 +243,38 @@ export default function OfferAccept() {
             <div className="space-y-4">
               <div>
                 <h2 className="text-base font-bold">Akkoord geven</h2>
-                <p className="text-sm text-muted-foreground">Door te ondertekenen gaat u akkoord met deze offerte, de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a> E-Charging.</p>
+                <p className="text-sm text-muted-foreground">Onderteken hieronder digitaal: vul uw naam in, bevestig de verklaringen en plaats uw handtekening.</p>
+                {quote.signerEmail ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Op naam van <span className="font-medium text-foreground">{quote.signerEmail}</span></p>
+                ) : null}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="signer">Naam ondertekenaar</Label>
                 <Input id="signer" value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="Voor- en achternaam" />
               </div>
               <div className="space-y-1.5">
+                <Label htmlFor="signer-fn">Functie <span className="font-normal text-muted-foreground">(optioneel)</span></Label>
+                <Input id="signer-fn" value={signerFunction} onChange={(e) => setSignerFunction(e.target.value)} placeholder="Bijv. directeur, eigenaar" />
+              </div>
+
+              {/* Verplichte, niet-vooraangevinkte verklaringen — juridisch bindende ondertekening. */}
+              <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Verklaringen</p>
+                <label className="flex items-start gap-2.5 text-sm leading-snug">
+                  <Checkbox className="mt-0.5 shrink-0" checked={authorityChecked} onCheckedChange={(v) => setAuthorityChecked(v === true)} />
+                  <span>Ik ben bevoegd om namens {quote.company || "mijn organisatie"} deze offerte te aanvaarden en een bindende overeenkomst aan te gaan.</span>
+                </label>
+                <div className="flex items-start gap-2.5 text-sm leading-snug">
+                  <Checkbox className="mt-0.5 shrink-0" checked={termsChecked} onCheckedChange={(v) => setTermsChecked(v === true)} />
+                  <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a>, en met elektronisch ondertekenen. Voor bewijs leggen wij uw naam, e-mailadres, tijdstip en IP-adres vast.</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
                 <Label>Handtekening</Label>
                 <SignaturePad onChange={setSignature} />
               </div>
-              <Button className="w-full" size="lg" onClick={sign} disabled={submitting || !signerName.trim() || !signature}>
+              <Button className="w-full" size="lg" onClick={sign} disabled={submitting || !signerName.trim() || !signature || !authorityChecked || !termsChecked}>
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Akkoord &amp; tekenen
               </Button>

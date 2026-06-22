@@ -80,6 +80,9 @@ Deno.serve(async (req) => {
       quoteNumber: quote.quote_number,
       company: quote.prospect_company,
       contact: quote.prospect_contact,
+      // E-mailadres waaraan de offerte-link is verzonden — tonen we op het tekenscherm
+      // (identificatie van de ondertekenaar) en leggen we vast in de audit-trail.
+      signerEmail: (quote.prospect_email ?? lead?.contact_email) ?? null,
       addressLine: addr || null,
       numChargePoints: quote.num_charge_points ?? null,
       total,
@@ -116,6 +119,19 @@ Deno.serve(async (req) => {
     const signerName = typeof body.signer_name === "string" ? body.signer_name.trim() : "";
     if (!signerName) return json({ status: "invalid", message: "Naam ontbreekt." }, 400);
     const signedPdfB64 = typeof body.signed_pdf_base64 === "string" ? body.signed_pdf_base64 : "";
+
+    // Juridisch bindende ondertekening (eIDAS SES/AdES + BW 3:15a/6:227a): vereis expliciete,
+    // niet-vooraangevinkte instemming. Zonder bevoegdheids- én akkoordverklaring geen ondertekening.
+    const signerFunction = typeof body.signer_function === "string" ? body.signer_function.trim() : "";
+    const authorityConfirmed = body.authority_confirmed === true;
+    const termsAccepted = body.terms_accepted === true;
+    if (!authorityConfirmed || !termsAccepted) {
+      return json({ status: "invalid", message: "Bevestig dat u bevoegd bent en akkoord gaat met de offerte, de voorwaarden en elektronisch ondertekenen." }, 400);
+    }
+    // Audit-trail: vanwaar (IP/apparaat) + integriteit (hash van de getekende PDF).
+    const signerIp = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
+    const signerUserAgent = req.headers.get("user-agent");
+    const documentSha256 = signedPdfB64 ? await sha256Hex(signedPdfB64) : null;
 
     const org = quote.organization_id as string;
     const personId = (lead?.person_id ?? quote.person_id) as string | null;
@@ -181,6 +197,27 @@ Deno.serve(async (req) => {
       status: "getekend", signed_at: new Date().toISOString(), signer_name: signerName, signed_pdf_path: signedPath,
     }).eq("id", quote.id);
     await sb.from("quote_acceptances").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", acc.id);
+
+    // Onveranderlijke bewijsregel van de ondertekening (zie migratie quote_signature_evidence).
+    // Een fout hierin mag de acceptatie niet terugdraaien, maar wordt wel gelogd.
+    {
+      const { error: evErr } = await sb.from("quote_signature_evidence").insert({
+        organization_id: org,
+        quote_id: quote.id,
+        acceptance_id: acc.id,
+        signer_name: signerName,
+        signer_email: (quote.prospect_email ?? lead?.contact_email) ?? null,
+        signer_function: signerFunction || null,
+        authority_confirmed: authorityConfirmed,
+        terms_accepted: termsAccepted,
+        terms_version: "AV/VWO www.e-charging.nl",
+        document_sha256: documentSha256,
+        signed_at: new Date().toISOString(),
+        ip: signerIp,
+        user_agent: signerUserAgent,
+      });
+      if (evErr) console.error("[quote-accept] bewijsregel opslaan mislukt:", evErr.message);
+    }
 
     // Lead naar Gewonnen (deal is binnen). Het klantaccount + de koppeling (converted_client_id)
     // volgen pas bij het aanmaken in onboarding.
