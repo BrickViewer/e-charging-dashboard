@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
+import { Outlet, NavLink, Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import logoBright from "@/assets/logo-bright.svg";
@@ -214,21 +214,25 @@ export default function WorkspaceLayout() {
         ))}
       </nav>
 
-      {/* Onderaan: Instellingen (alleen Beheer-toegang) + ingelogde gebruiker */}
+      {/* Onderaan: ingelogde gebruiker (met subtiel tandwiel → Instellingen, alleen Beheer-toegang) */}
       <div className="px-3 py-4 border-t border-foreground/[0.06]">
-        {canAccessBeheer(role) && (
-          <SidebarNavLink
-            to="/admin/instellingen"
-            icon={Settings}
-            label="Instellingen"
-            onNavigate={() => setMobileOpen(false)}
-          />
-        )}
-        <div className="my-2 border-t border-foreground/[0.06]" />
         <div className="px-3 mb-3">
-          <p className="text-sm font-medium text-foreground truncate">
-            {profileName || user?.email || "Gebruiker"}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="min-w-0 truncate text-sm font-medium text-foreground">
+              {profileName || user?.email || "Gebruiker"}
+            </p>
+            {canAccessBeheer(role) && (
+              <Link
+                to="/admin/instellingen"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Instellingen"
+                title="Instellingen"
+                className="shrink-0 text-muted-foreground/50 transition-colors hover:text-foreground"
+              >
+                <Settings className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </Link>
+            )}
+          </div>
           <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 mt-1">
             {role || "—"}
           </p>
