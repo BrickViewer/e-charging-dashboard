@@ -229,7 +229,7 @@ export default function OfferAccept() {
             <div className="space-y-4">
               <div>
                 <h2 className="text-base font-bold">Akkoord geven</h2>
-                <p className="text-sm text-muted-foreground">Door te ondertekenen gaat u akkoord met deze offerte, de Algemene Voorwaarden en de Verwerkersovereenkomst E-Charging.</p>
+                <p className="text-sm text-muted-foreground">Door te ondertekenen gaat u akkoord met deze offerte, de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a> E-Charging.</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="signer">Naam ondertekenaar</Label>
