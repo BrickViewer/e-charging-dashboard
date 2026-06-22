@@ -192,12 +192,12 @@ export default function SalesOnboarding() {
             <div className="border-b px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: "#6366f1" }} />
-                  <span className="truncate text-sm font-semibold">Klant aanmaken</span>
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: "#3b82f6" }} />
+                  <span className="truncate text-sm font-semibold">Getekend</span>
                 </div>
                 <span className="shrink-0 rounded-full bg-card px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{(awaiting ?? []).length}</span>
               </div>
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Getekend — review &amp; klantaccount</p>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Maak het klantaccount aan</p>
             </div>
             <div className="flex flex-1 flex-col gap-2 p-2.5">
               {(awaiting ?? []).length === 0 && <p className="py-8 text-center text-xs text-muted-foreground/60">Niets te doen</p>}

@@ -15,7 +15,7 @@ export type OnboardingStage =
   | "archief";
 
 export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: string; hint: string }[] = [
-  { key: "getekend", label: "Getekend", color: "#3b82f6", hint: "Doorsturen naar installateur" },
+  { key: "getekend", label: "Klant aangemaakt", color: "#6366f1", hint: "Doorsturen naar installateur" },
   { key: "bij_installateur", label: "Bij installateur", color: "#f59e0b", hint: "Wacht op oplevering" },
   { key: "opgeleverd", label: "Opgeleverd", color: "#06b6d4", hint: "Factureren" },
   { key: "locaties_koppelen", label: "Locaties koppelen", color: "#8b5cf6", hint: "Laadlocatie koppelen" },
