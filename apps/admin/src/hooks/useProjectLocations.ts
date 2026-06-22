@@ -40,14 +40,18 @@ export function useProjectLocation(id: string | undefined) {
     queryKey: ["project-locations", "one", id],
     enabled: !!id,
     queryFn: async () => {
-      const { data, error } = await supabase.from("project_locations").select("*, companies(name)").eq("id", id!).maybeSingle();
+      const { data, error } = await supabase.from("project_locations").select("*, companies(name), persons(full_name), leads(company_name)").eq("id", id!).maybeSingle();
       if (error) throw error;
-      return data as unknown as (ProjectLocation & { companies: { name: string } | null }) | null;
+      return data as unknown as (ProjectLocation & {
+        companies: { name: string } | null;
+        persons: { full_name: string | null } | null;
+        leads: { company_name: string | null } | null;
+      }) | null;
     },
   });
 }
 
-/** De offertehistorie van een object (alle offertes op deze locatie). */
+/** De offertehistorie van een object (alle offertes op dit object). */
 export function useQuotesForLocation(id: string | undefined) {
   return useQuery({
     queryKey: ["project-locations", "quotes", id],
@@ -82,6 +86,18 @@ export function useProjectLocationsByCompany(companyId: string | undefined) {
     enabled: !!companyId,
     queryFn: async () => {
       const { data, error } = await supabase.from("project_locations").select("*, quotes(count)").eq("company_id", companyId!).order("location_number", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as ProjectLocationWithCounts[];
+    },
+  });
+}
+
+export function useProjectLocationsByPerson(personId: string | undefined) {
+  return useQuery({
+    queryKey: ["project-locations", "person", personId],
+    enabled: !!personId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("project_locations").select("*, quotes(count)").eq("person_id", personId!).order("location_number", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as ProjectLocationWithCounts[];
     },
@@ -123,6 +139,8 @@ export type NewProjectLocation = {
   city: string | null;
   house_number?: string | null;
   company_id?: string | null;
+  person_id?: string | null;
+  lead_id?: string | null;
 };
 
 export function useCreateProjectLocation() {
@@ -141,11 +159,12 @@ export function useCreateProjectLocation() {
         orgId = org?.id ?? null;
       }
       if (!orgId) throw new Error("Geen organisatie gevonden");
-      const display_name = input.display_name || [input.address_street, input.city].filter(Boolean).join(" ") || "Onbekende locatie";
+      const display_name = input.display_name || [input.address_street, input.city].filter(Boolean).join(" ") || "Onbekend object";
       const { data, error } = await supabase.from("project_locations").insert({
         organization_id: orgId, display_name,
         address_street: input.address_street, postal_code: input.postal_code, city: input.city,
         house_number: input.house_number ?? null, company_id: input.company_id ?? null,
+        person_id: input.person_id ?? null, lead_id: input.lead_id ?? null,
       }).select("*").single();
       if (error) throw error;
       return data as ProjectLocation;
@@ -156,7 +175,7 @@ export function useCreateProjectLocation() {
 
 export type ProjectLocationPatch = Partial<Pick<
   Database["public"]["Tables"]["project_locations"]["Update"],
-  "display_name" | "descriptive_label" | "address_street" | "postal_code" | "city" | "house_number" | "status" | "notes" | "company_id"
+  "display_name" | "descriptive_label" | "address_street" | "postal_code" | "city" | "house_number" | "status" | "notes" | "company_id" | "person_id" | "lead_id"
 >>;
 
 export function useUpdateProjectLocation() {

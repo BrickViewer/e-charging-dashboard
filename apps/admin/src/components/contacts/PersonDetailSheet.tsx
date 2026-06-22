@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -6,8 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Trash2, X } from "lucide-react";
+import { MapPin, Plus, Trash2, X } from "lucide-react";
 import { CompanyPicker } from "./CompanyPicker";
+import { ObjectCreateDialog } from "./ObjectCreateDialog";
+import { useProjectLocationsByPerson } from "@/hooks/useProjectLocations";
 import {
   useUpdatePerson,
   useDeletePerson,
@@ -33,6 +36,9 @@ export function PersonDetailSheet({
   const leads = useLeadsForContact("person_id", open ? person?.id : undefined);
   const link = useLinkPersonToCompany();
   const unlink = useUnlinkPersonFromCompany();
+  const objecten = useProjectLocationsByPerson(open ? person?.id : undefined);
+  const navigate = useNavigate();
+  const [objCreateOpen, setObjCreateOpen] = useState(false);
 
   const [form, setForm] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -86,9 +92,10 @@ export function PersonDetailSheet({
         </SheetHeader>
 
         <Tabs defaultValue="gegevens" className="mt-5">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="gegevens">Gegevens</TabsTrigger>
             <TabsTrigger value="bedrijven">Bedrijven{companies.data ? ` (${companies.data.length})` : ""}</TabsTrigger>
+            <TabsTrigger value="objecten">Objecten{objecten.data ? ` (${objecten.data.length})` : ""}</TabsTrigger>
             <TabsTrigger value="leads">Leads{leads.data ? ` (${leads.data.length})` : ""}</TabsTrigger>
           </TabsList>
 
@@ -142,7 +149,30 @@ export function PersonDetailSheet({
               {leads.data?.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Geen leads.</p>}
             </div>
           </TabsContent>
+
+          <TabsContent value="objecten" className="mt-4 space-y-3">
+            <Button variant="outline" size="sm" onClick={() => setObjCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Object koppelen/aanmaken
+            </Button>
+            <div className="space-y-1.5">
+              {(objecten.data ?? []).map((o) => (
+                <button key={o.id} onClick={() => navigate(`/sales/contacten?object=${o.id}`)} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 truncate">{o.location_number} · {[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</span>
+                  <span className="text-[11px] text-muted-foreground">{o.quotes?.[0]?.count ?? 0} offertes</span>
+                </button>
+              ))}
+              {objecten.data?.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Nog geen objecten gekoppeld.</p>}
+            </div>
+          </TabsContent>
         </Tabs>
+
+        <ObjectCreateDialog
+          open={objCreateOpen}
+          onClose={() => setObjCreateOpen(false)}
+          onCreated={() => objecten.refetch()}
+          defaultPerson={{ id: person.id, label: person.full_name || "Persoon" }}
+        />
       </SheetContent>
     </Sheet>
   );

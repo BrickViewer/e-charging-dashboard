@@ -20,6 +20,7 @@ import {
 import { CompanyDetailSheet } from "@/components/contacts/CompanyDetailSheet";
 import { PersonDetailSheet } from "@/components/contacts/PersonDetailSheet";
 import { ObjectDetailSheet } from "@/components/contacts/ObjectDetailSheet";
+import { ObjectCreateDialog } from "@/components/contacts/ObjectCreateDialog";
 import { useProjectLocations } from "@/hooks/useProjectLocations";
 
 type Tab = "bedrijven" | "personen" | "objecten";
@@ -52,6 +53,7 @@ export default function SalesContacts() {
   const [selObject, setSelObject] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
+  const [objectCreateOpen, setObjectCreateOpen] = useState(false);
 
   const allCompanies = useMemo(() => companies.data ?? [], [companies.data]);
   const allPersons = useMemo(() => persons.data ?? [], [persons.data]);
@@ -123,7 +125,11 @@ export default function SalesContacts() {
           <h1 className="text-2xl font-semibold">Contacten</h1>
           <p className="mt-1 text-sm text-muted-foreground">Eén centrale database van bedrijven en personen.</p>
         </div>
-        {tab !== "objecten" && (
+        {tab === "objecten" ? (
+          <Button onClick={() => setObjectCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Object toevoegen
+          </Button>
+        ) : (
           <Button onClick={() => { setAddName(""); setAddOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> {tab === "bedrijven" ? "Nieuw bedrijf" : "Nieuw persoon"}
           </Button>
@@ -219,7 +225,7 @@ export default function SalesContacts() {
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-4 py-2.5 font-medium">Locatie</th>
+                <th className="px-4 py-2.5 font-medium">Object</th>
                 <th className="px-4 py-2.5 font-medium">Adres</th>
                 <th className="px-4 py-2.5 font-medium">Bedrijf</th>
                 <th className="px-4 py-2.5 text-right font-medium">Offertes</th>
@@ -241,7 +247,7 @@ export default function SalesContacts() {
                 </tr>
               ))}
               {filteredObjects.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Geen objecten. Ze ontstaan zodra je een offerte voor een adres maakt.</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Geen objecten. Voeg er handmatig één toe, of ze ontstaan automatisch zodra je een offerte voor een adres maakt.</td></tr>
               )}
             </tbody>
           </table>
@@ -273,6 +279,11 @@ export default function SalesContacts() {
       <CompanyDetailSheet company={selCompany} open={!!selCompany} onOpenChange={(v) => !v && setSelCompany(null)} />
       <PersonDetailSheet person={selPerson} open={!!selPerson} onOpenChange={(v) => !v && setSelPerson(null)} />
       <ObjectDetailSheet objectId={selObject} open={!!selObject} onOpenChange={(v) => !v && setSelObject(null)} />
+      <ObjectCreateDialog
+        open={objectCreateOpen}
+        onClose={() => setObjectCreateOpen(false)}
+        onCreated={(id) => { setSelObject(id); objects.refetch(); }}
+      />
     </div>
   );
 }

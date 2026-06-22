@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ExternalLink, MapPin, Star, Trash2, X } from "lucide-react";
+import { ExternalLink, MapPin, Plus, Star, Target, Trash2, X } from "lucide-react";
 import { PersonPicker } from "./PersonPicker";
+import { ObjectCreateDialog } from "./ObjectCreateDialog";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
+import { useLeadsForClient } from "@/hooks/useLeads";
 import { useProjectLocationsByCompany } from "@/hooks/useProjectLocations";
 import {
   useUpdateCompany,
@@ -39,9 +41,11 @@ export function CompanyDetailSheet({
   const account = useClientForCompany(open ? company?.id : undefined);
   const locations = useClientLocations(open ? account.data?.id : undefined);
   const objecten = useProjectLocationsByCompany(open ? company?.id : undefined);
+  const herkomst = useLeadsForClient(open ? account.data?.id : undefined);
   const link = useLinkPersonToCompany();
   const unlink = useUnlinkPersonFromCompany();
   const navigate = useNavigate();
+  const [objCreateOpen, setObjCreateOpen] = useState(false);
 
   const [form, setForm] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -101,11 +105,12 @@ export function CompanyDetailSheet({
         </SheetHeader>
 
         <Tabs defaultValue="gegevens" className="mt-5">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="gegevens">Gegevens</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="personen">Personen{persons.data ? ` (${persons.data.length})` : ""}</TabsTrigger>
             <TabsTrigger value="leads">Leads{leads.data ? ` (${leads.data.length})` : ""}</TabsTrigger>
+            <TabsTrigger value="objecten">Objecten{objecten.data ? ` (${objecten.data.length})` : ""}</TabsTrigger>
             <TabsTrigger value="mappen">Mappen</TabsTrigger>
           </TabsList>
 
@@ -141,6 +146,20 @@ export function CompanyDetailSheet({
                     <ExternalLink className="mr-1.5 h-4 w-4" /> Open klant
                   </Button>
                 </div>
+                {(herkomst.data ?? []).length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Herkomst</p>
+                    <div className="space-y-1.5">
+                      {(herkomst.data ?? []).map((l) => (
+                        <div key={l.id} className="flex items-center gap-2 rounded-lg border p-2 text-sm">
+                          <Target className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="flex-1 truncate">{l.contact_name || l.company_name}</span>
+                          <span className="text-[11px] text-muted-foreground">lead</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Locaties</p>
                   <div className="space-y-1.5">
@@ -210,24 +229,33 @@ export function CompanyDetailSheet({
             </div>
           </TabsContent>
 
+          <TabsContent value="objecten" className="mt-4 space-y-3">
+            <Button variant="outline" size="sm" onClick={() => setObjCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Object koppelen/aanmaken
+            </Button>
+            <div className="space-y-1.5">
+              {(objecten.data ?? []).map((o) => (
+                <button key={o.id} onClick={() => navigate(`/sales/contacten?object=${o.id}`)} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 truncate">{o.location_number} · {[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</span>
+                  <span className="text-[11px] text-muted-foreground">{o.quotes?.[0]?.count ?? 0} offertes</span>
+                </button>
+              ))}
+              {objecten.data?.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Nog geen objecten gekoppeld.</p>}
+            </div>
+          </TabsContent>
+
           <TabsContent value="mappen" className="mt-4 space-y-4">
-            {(objecten.data ?? []).length > 0 && (
-              <div>
-                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Objecten</p>
-                <div className="space-y-1.5">
-                  {(objecten.data ?? []).map((o) => (
-                    <button key={o.id} onClick={() => navigate(`/sales/contacten?object=${o.id}`)} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
-                      <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="flex-1 truncate">{o.location_number} · {[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</span>
-                      <span className="text-[11px] text-muted-foreground">{o.quotes?.[0]?.count ?? 0} offertes</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             <DossierDocuments companyId={company.id} />
           </TabsContent>
         </Tabs>
+
+        <ObjectCreateDialog
+          open={objCreateOpen}
+          onClose={() => setObjCreateOpen(false)}
+          onCreated={() => objecten.refetch()}
+          defaultCompany={{ id: company.id, label: company.name }}
+        />
       </SheetContent>
     </Sheet>
   );

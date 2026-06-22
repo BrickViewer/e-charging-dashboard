@@ -265,14 +265,28 @@ export function useCreatePerson() {
     mutationFn: async (input: Omit<PersonInsert, "organization_id"> & { organization_id?: string }) => {
       const org = input.organization_id ?? (await defaultOrgId());
       if (!org) throw new Error("Geen organisatie gevonden");
+      const email = (input.email ?? "").trim();
+      // Eén e-mail = één persoon: bestaat er al een contactpersoon met dit e-mailadres
+      // binnen de organisatie, hergebruik die i.p.v. een dubbele aan te maken.
+      if (email) {
+        const { data: existing } = await supabase
+          .from("persons").select("*").eq("organization_id", org).ilike("email", email).limit(1).maybeSingle();
+        if (existing) return existing as Person;
+      }
       const uid = await currentUserId();
       const { data, error } = await supabase
         .from("persons")
         .insert({ ...input, organization_id: org, created_by: uid })
         .select("*")
         .single();
-      if (error) throw error;
-      return data as Person;
+      if (!error && data) return data as Person;
+      // Race op de unieke (org, e-mail)-index → pak de bestaande persoon op.
+      if ((error as { code?: string } | null)?.code === "23505" && email) {
+        const { data: dup } = await supabase
+          .from("persons").select("*").eq("organization_id", org).ilike("email", email).limit(1).maybeSingle();
+        if (dup) return dup as Person;
+      }
+      throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["persons"] });
@@ -286,6 +300,9 @@ export function useUpdatePerson() {
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: PersonUpdate }) => {
       const { error } = await supabase.from("persons").update(patch).eq("id", id);
+      if ((error as { code?: string } | null)?.code === "23505") {
+        throw new Error("Er bestaat al een contactpersoon met dit e-mailadres.");
+      }
       if (error) throw error;
     },
     onSuccess: (_d, { id }) => {

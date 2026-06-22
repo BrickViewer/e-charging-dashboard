@@ -60,8 +60,16 @@ export async function resolveOrCreatePerson(
     .from("persons")
     .insert({ organization_id: org, first_name, last_name, email: email || null, phone: p.phone || null, role: p.role || null })
     .select("id").single();
-  if (error) throw error;
-  return created.id as string;
+  if (!error && created?.id) return created.id as string;
+  // Race-conditie: de unieke index (organization_id, e-mail) sloeg toe omdat een ander
+  // pad de persoon net aanmaakte → pak die bestaande persoon op i.p.v. te falen.
+  // Zo levert één e-mailadres nooit dubbele personen op.
+  if ((error as { code?: string } | null)?.code === "23505" && email) {
+    const { data: dup } = await sb
+      .from("persons").select("id").eq("organization_id", org).ilike("email", email).limit(1).maybeSingle();
+    if (dup?.id) return dup.id as string;
+  }
+  throw error;
 }
 
 export async function linkPersonToCompany(sb: ServiceClient, companyId: string, personId: string, isPrimary = false) {

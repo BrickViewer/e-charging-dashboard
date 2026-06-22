@@ -2215,6 +2215,7 @@ export type Database = {
           notes: string | null
           opdracht_item_id: string | null
           organization_id: string
+          person_id: string | null
           postal_code: string | null
           status: string
           updated_at: string
@@ -2237,6 +2238,7 @@ export type Database = {
           notes?: string | null
           opdracht_item_id?: string | null
           organization_id: string
+          person_id?: string | null
           postal_code?: string | null
           status?: string
           updated_at?: string
@@ -2259,6 +2261,7 @@ export type Database = {
           notes?: string | null
           opdracht_item_id?: string | null
           organization_id?: string
+          person_id?: string | null
           postal_code?: string | null
           status?: string
           updated_at?: string

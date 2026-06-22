@@ -59,6 +59,38 @@ export function useLead(id: string | undefined) {
   });
 }
 
+// Lead-zoekopdracht voor de picker (objecten koppelen aan een lead).
+export function useLeadSearch(search: string) {
+  const q = search.trim();
+  return useQuery({
+    queryKey: ["lead-search", q],
+    queryFn: async () => {
+      let query = supabase.from("leads").select("id, company_name, contact_name, city").order("created_at", { ascending: false }).limit(25);
+      if (q) query = query.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as { id: string; company_name: string; contact_name: string | null; city: string | null }[];
+    },
+  });
+}
+
+// Herkomst-lead(s) van een klant (reverse-lookup via converted_client_id).
+export function useLeadsForClient(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ["client-leads", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("id, company_name, contact_name, status, created_at")
+        .eq("converted_client_id", clientId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as { id: string; company_name: string; contact_name: string | null; status: string; created_at: string }[];
+    },
+  });
+}
+
 export function useLeadTasks(leadId: string | undefined) {
   return useQuery({
     queryKey: ["lead-tasks", leadId],

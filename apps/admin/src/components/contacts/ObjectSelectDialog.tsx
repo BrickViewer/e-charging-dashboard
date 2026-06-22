@@ -49,7 +49,7 @@ export function ObjectSelectDialog({ open, onClose, lead, onConfirm, pending }: 
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Object kiezen</DialogTitle>
-          <DialogDescription>De offerte wordt gekoppeld aan een object (locatie).{lead.company_name ? ` ${lead.company_name}` : ""}</DialogDescription>
+          <DialogDescription>De offerte wordt gekoppeld aan een object.{lead.company_name ? ` ${lead.company_name}` : ""}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">

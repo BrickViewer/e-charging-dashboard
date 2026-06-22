@@ -11,6 +11,11 @@ import { toast } from "sonner";
 import { FileText, Trash2 } from "lucide-react";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
 import { useProjectLocation, useQuotesForLocation, useUpdateProjectLocation, useDeleteProjectLocation } from "@/hooks/useProjectLocations";
+import { CompanyPicker } from "@/components/contacts/CompanyPicker";
+import { PersonPicker } from "@/components/contacts/PersonPicker";
+import { LeadPicker } from "@/components/contacts/LeadPicker";
+
+type LinkRef = { id: string; label: string } | null;
 
 // Detail van een Object (project_location): adres, offertehistorie en SharePoint-dossier.
 export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: string | null; open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -33,11 +38,19 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
   };
 
   const [form, setForm] = useState<Record<string, string>>({});
+  const [company, setCompany] = useState<LinkRef>(null);
+  const [person, setPerson] = useState<LinkRef>(null);
+  const [lead, setLead] = useState<LinkRef>(null);
   useEffect(() => {
-    if (loc) setForm({
-      display_name: loc.display_name ?? "", address_street: loc.address_street ?? "", house_number: loc.house_number ?? "",
-      postal_code: loc.postal_code ?? "", city: loc.city ?? "", status: loc.status ?? "actief", notes: loc.notes ?? "",
-    });
+    if (loc) {
+      setForm({
+        display_name: loc.display_name ?? "", address_street: loc.address_street ?? "", house_number: loc.house_number ?? "",
+        postal_code: loc.postal_code ?? "", city: loc.city ?? "", status: loc.status ?? "actief", notes: loc.notes ?? "",
+      });
+      setCompany(loc.company_id ? { id: loc.company_id, label: loc.companies?.name ?? "Bedrijf" } : null);
+      setPerson(loc.person_id ? { id: loc.person_id, label: loc.persons?.full_name ?? "Persoon" } : null);
+      setLead(loc.lead_id ? { id: loc.lead_id, label: loc.leads?.company_name ?? "Lead" } : null);
+    }
   }, [loc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!objectId) return null;
@@ -52,6 +65,7 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
         address_street: t("address_street").trim() || null, house_number: t("house_number").trim() || null,
         postal_code: t("postal_code").trim() || null, city: t("city").trim() || null,
         status: t("status").trim() || "actief", notes: t("notes").trim() || null,
+        company_id: company?.id ?? null, person_id: person?.id ?? null, lead_id: lead?.id ?? null,
       } });
       toast.success("Object opgeslagen");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
@@ -63,7 +77,7 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
         <SheetHeader>
           <SheetTitle className="text-xl">{loc?.display_name ?? "Object"}</SheetTitle>
           <SheetDescription>
-            Locatie {loc?.location_number ?? "…"}{loc?.companies?.name ? ` · ${loc.companies.name}` : ""}
+            Object {loc?.location_number ?? "…"}{loc?.companies?.name ? ` · ${loc.companies.name}` : ""}
             {loc?.folder_web_url ? <> · <a href={loc.folder_web_url} target="_blank" rel="noopener" className="text-primary hover:underline">Open in SharePoint</a></> : null}
           </SheetDescription>
         </SheetHeader>
@@ -88,6 +102,12 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
               <Field label="Huisnummer"><Input value={t("house_number")} onChange={(e) => set("house_number")(e.target.value)} /></Field>
               <Field label="Postcode"><Input value={t("postal_code")} onChange={(e) => set("postal_code")(e.target.value)} /></Field>
               <Field label="Plaats"><Input value={t("city")} onChange={(e) => set("city")(e.target.value)} /></Field>
+            </div>
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Koppelingen</p>
+              <Field label="Bedrijf"><CompanyPicker value={company?.id ?? null} valueLabel={company?.label ?? null} onChange={(id, c) => setCompany(id ? { id, label: c?.name ?? "" } : null)} /></Field>
+              <Field label="Persoon"><PersonPicker value={person?.id ?? null} valueLabel={person?.label ?? null} onChange={(id, p) => setPerson(id ? { id, label: p?.full_name ?? "" } : null)} /></Field>
+              <Field label="Lead"><LeadPicker value={lead?.id ?? null} valueLabel={lead?.label ?? null} onChange={(id, label) => setLead(id ? { id, label: label ?? "" } : null)} /></Field>
             </div>
             <Field label="Notities"><Textarea rows={3} value={t("notes")} onChange={(e) => set("notes")(e.target.value)} /></Field>
             <div className="flex items-center justify-between border-t pt-4">
@@ -114,7 +134,7 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
                   </div>
                 );
               })}
-              {quotesQ.data?.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Nog geen offertes op deze locatie.</p>}
+              {quotesQ.data?.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Nog geen offertes op dit object.</p>}
             </div>
           </TabsContent>
 
