@@ -116,6 +116,7 @@ export type SitePatch = Pick<
   | "site_contact_email"
   | "site_contact_phone"
   | "service_summary"
+  | "notes"
 >;
 
 export function useUpdateOrderSite() {

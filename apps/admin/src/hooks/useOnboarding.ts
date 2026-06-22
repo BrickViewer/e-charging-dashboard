@@ -40,6 +40,7 @@ export type OnbOrder = {
   site_contact_email: string | null;
   site_contact_phone: string | null;
   service_summary: string | null;
+  notes: string | null;
 };
 type OnbLocation = { id: string };
 type OnbInvite = { id: string; status: string | null };
@@ -52,6 +53,7 @@ export type OnboardingClient = {
   portal_user_id: string | null;
   contact_email: string | null;
   contact_name: string | null;
+  contact_phone: string | null;
   created_at: string;
   payment_onboarding_status: string | null;
   vat_status: string | null;
@@ -66,10 +68,10 @@ export type OnboardingClient = {
 };
 
 const CLIENT_SELECT =
-  "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, created_at, " +
+  "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, contact_phone, created_at, " +
   "payment_onboarding_status, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
   "installation_orders(id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
-  "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary), " +
+  "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes), " +
   "locations(id), client_invitations(id, status)";
 
 export function useOnboardingClients() {

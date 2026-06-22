@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useHandoffOrder, useUpdateOrderSite } from "@/hooks/useInstallations";
@@ -14,6 +15,7 @@ const emptyToNull = (s: string) => { const t = s.trim(); return t === "" ? null 
 type SiteForm = {
   site_street: string; site_house_number: string; site_postal: string; site_city: string;
   site_contact_name: string; site_contact_email: string; site_contact_phone: string; service_summary: string;
+  notes: string;
 };
 
 // Stuur de getekende opdracht naar de installateur (E-Group / e-portal): vul het site-adres
@@ -26,22 +28,24 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
   const handoff = useHandoffOrder();
   const [form, setForm] = useState<SiteForm>({
     site_street: "", site_house_number: "", site_postal: "", site_city: "",
-    site_contact_name: "", site_contact_email: "", site_contact_phone: "", service_summary: "",
+    site_contact_name: "", site_contact_email: "", site_contact_phone: "", service_summary: "", notes: "",
   });
 
   useEffect(() => {
     if (!order) return;
+    // Voorgevuld uit het order (door create_client_from_quote uit de offerte gevuld); fallback op de klant.
     setForm({
-      site_street: order.site_street ?? "",
+      site_street: order.site_street ?? client?.billing_address_street ?? "",
       site_house_number: order.site_house_number ?? "",
-      site_postal: order.site_postal ?? "",
-      site_city: order.site_city ?? "",
+      site_postal: order.site_postal ?? client?.billing_address_postal ?? "",
+      site_city: order.site_city ?? client?.billing_address_city ?? "",
       site_contact_name: order.site_contact_name ?? client?.contact_name ?? "",
       site_contact_email: order.site_contact_email ?? client?.contact_email ?? "",
-      site_contact_phone: order.site_contact_phone ?? "",
+      site_contact_phone: order.site_contact_phone ?? client?.contact_phone ?? "",
       service_summary: order.service_summary ?? "",
+      notes: order.notes ?? "",
     });
-  }, [order?.id, client?.contact_name, client?.contact_email]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [order?.id, client?.contact_name, client?.contact_email, client?.contact_phone, client?.billing_address_street, client?.billing_address_postal, client?.billing_address_city]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canSend = !!(form.site_street.trim() && form.site_house_number.trim() && form.site_postal.trim() && form.site_city.trim());
   const busy = updateSite.isPending || handoff.isPending;
@@ -54,6 +58,7 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
         site_postal: emptyToNull(form.site_postal), site_city: emptyToNull(form.site_city),
         site_contact_name: emptyToNull(form.site_contact_name), site_contact_email: emptyToNull(form.site_contact_email),
         site_contact_phone: emptyToNull(form.site_contact_phone), service_summary: emptyToNull(form.service_summary),
+        notes: emptyToNull(form.notes),
       } });
       const res = await handoff.mutateAsync(order.id);
       if (res.status === "validation_error") { toast.error("Vul het site-adres compleet aan: straat, huisnummer, postcode, plaats"); return; }
@@ -112,6 +117,11 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
             <div className="col-span-2 space-y-1.5">
               <Label htmlFor="oh_summary">Service-samenvatting</Label>
               <Input id="oh_summary" value={form.service_summary} onChange={(e) => setForm({ ...form, service_summary: e.target.value })} disabled={sent} placeholder="bijv. 10 laadpunten" />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label htmlFor="oh_notes">Opdrachtomschrijving</Label>
+              <Textarea id="oh_notes" rows={5} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} disabled={sent} placeholder="Wat moet er gebeuren — overgenomen uit de offerte" />
+              <p className="text-[11px] text-muted-foreground">Voorgevuld uit de offerte; wordt meegestuurd naar de installateur.</p>
             </div>
           </div>
         </div>
