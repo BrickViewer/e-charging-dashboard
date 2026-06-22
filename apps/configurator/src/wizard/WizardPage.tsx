@@ -11,7 +11,7 @@ import { FinalizePanel } from "./FinalizePanel";
 import { encodeDemoCfg } from "./demoLink";
 import { IsometricSite } from "../scene/IsometricSite";
 import { useCountUp } from "../scene/useCountUp";
-import { euro, jaren, roundToHalf } from "./format";
+import { euro, jaren, number, roundToHalf } from "./format";
 
 function EarningsStrip({
   perMonth,
@@ -178,6 +178,9 @@ export default function WizardPage() {
     { label: "Laadtarief", value: `${euro(input.tariffs.chargeTariffPerKwh, 2)} / kWh` },
     { label: "Looptijd", value: `${input.contract.durationMonths} maanden` },
     { label: "Investering", value: `${euro(investmentMinTotal)} – ${euro(investmentMaxTotal)}` },
+    ...(input.tariffs.idleFeeEnabled
+      ? [{ label: "Blokkeertarief", value: `${euro(Math.round(pricing.idleFeeRevenuePerChargePointMonth * sockets))}/mnd` }]
+      : []),
     ...(ereEnabled ? [{ label: "ERE-subsidie", value: `+ ${euro(settings.ereSubsidyPerKwh, 2)} / kWh` }] : []),
   ];
 
@@ -186,6 +189,9 @@ export default function WizardPage() {
     { label: "Laadtarief", value: `${euro(input.tariffs.chargeTariffPerKwh, 2)} / kWh` },
     { label: "Verwacht verbruik", value: `${input.usage.kwhPerChargePointMonth.toLocaleString("nl-NL")} kWh p.p./mnd` },
     { label: "Totale investering", value: `${euro(investmentMinTotal)} – ${euro(investmentMaxTotal)}` },
+    ...(input.tariffs.idleFeeEnabled
+      ? [{ label: "Blokkeertarief", value: `${euro(Math.round(pricing.idleFeeRevenuePerChargePointMonth * sockets))}/mnd · ${number(pricing.effectiveBillableIdleMinutesPerSession, 1)} belaste min/sessie` }]
+      : []),
     { label: "ERE-subsidie", value: ereEnabled ? `Aan (+ ${euro(settings.ereSubsidyPerKwh, 2)}/kWh)` : "Uit" },
   ];
 

@@ -37,6 +37,8 @@ const FALLBACK_USAGE: UsageDefaults = {
   kwhPerChargePointMonth: 200,
   averageSessionDurationHours: 6,
   effectiveChargingPowerKw: 8,
+  idleMinutesPerSession: 180,
+  idleBillableSharePct: 10,
 };
 
 function toNumber(value: string | number, fallback = 0) {
@@ -356,11 +358,13 @@ export default function AdminConfiguratorSettings() {
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="grid gap-5 md:grid-cols-4">
+                  <CardContent className="grid gap-5 md:grid-cols-3">
                     <CurrencyInput label="Sessies/paal/mnd" value={usage.sessionsPerChargePointMonth} onChange={(value) => setUsage({ sessionsPerChargePointMonth: value })} />
                     <CurrencyInput label="kWh/paal/mnd" value={usage.kwhPerChargePointMonth} onChange={(value) => setUsage({ kwhPerChargePointMonth: value })} />
                     <CurrencyInput label="Sessieduur uren" value={usage.averageSessionDurationHours} onChange={(value) => setUsage({ averageSessionDurationHours: value })} />
                     <CurrencyInput label="Laadvermogen kW" value={usage.effectiveChargingPowerKw} onChange={(value) => setUsage({ effectiveChargingPowerKw: Math.max(0.1, value) })} />
+                    <CurrencyInput label="Gem. stilstaande min/sessie" value={usage.idleMinutesPerSession} onChange={(value) => setUsage({ idleMinutesPerSession: Math.max(0, value) })} />
+                    <CurrencyInput label="% sessies dat blokkeert. betaalt" value={usage.idleBillableSharePct} onChange={(value) => setUsage({ idleBillableSharePct: Math.min(100, Math.max(0, value)) })} />
                   </CardContent>
                 </Card>
               );
@@ -411,17 +415,17 @@ export default function AdminConfiguratorSettings() {
               <CardTitle>Blokkeertarief — berekening &amp; opbrengst</CardTitle>
               <CardDescription>
                 Zo rekent de configurator de opbrengst van het blokkeertarief uit. De waarden hierboven
-                (blokkeertarief per minuut en gratis minuten) plus de sessieduur en het laadvermogen per
-                locatietype (tab Locatietypes) bepalen het resultaat.
+                (blokkeertarief per minuut en gratis minuten) plus per locatietype de gem. stilstaande
+                minuten en het % sessies dat betaalt (tab Locatietypes) bepalen het resultaat.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-1.5 rounded-lg border bg-muted/40 p-4 text-sm">
                 <p className="font-medium">Berekening per laadpunt</p>
-                <p className="text-muted-foreground">1. Laadtijd per sessie = kWh per sessie / laadvermogen (kW)</p>
-                <p className="text-muted-foreground">2. Idle-minuten per sessie = sessieduur min laadtijd</p>
-                <p className="text-muted-foreground">3. Belastbare minuten = idle-minuten min gratis minuten (grace), minimaal 0</p>
-                <p className="text-muted-foreground">4. Opbrengst per laadpunt/maand = belastbare minuten x sessies/maand x blokkeertarief per minuut</p>
+                <p className="text-muted-foreground">1. Gem. stilstaande minuten per sessie = instelbaar per locatietype (onderzoek-gebaseerd), NIET afgeleid van de sessieduur (nacht-/langparkeren vertekent dat).</p>
+                <p className="text-muted-foreground">2. Na grace = stilstaande minuten min gratis minuten, minimaal 0</p>
+                <p className="text-muted-foreground">3. Belaste minuten = na grace × % sessies dat blokkeertarief betaalt (dag/nacht-venster + incidentie)</p>
+                <p className="text-muted-foreground">4. Opbrengst per laadpunt/maand = belaste minuten × sessies/maand × blokkeertarief per minuut</p>
                 <p className="pt-1 text-xs">
                   Huidige waarden: <span className="font-medium">{eur(settings.defaultIdleFeePerMinute)} per minuut</span>, gratis{" "}
                   <span className="font-medium">{minutesLabel(settings.defaultIdleGraceMinutes)}</span>.
@@ -433,8 +437,10 @@ export default function AdminConfiguratorSettings() {
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="py-2 pr-3 font-medium">Locatietype</th>
-                      <th className="px-3 py-2 text-right font-medium">Idle-min/sessie</th>
-                      <th className="px-3 py-2 text-right font-medium">Belastbaar/sessie</th>
+                      <th className="px-3 py-2 text-right font-medium">Stilstaand/sessie</th>
+                      <th className="px-3 py-2 text-right font-medium">Na grace</th>
+                      <th className="px-3 py-2 text-right font-medium">% betaalt</th>
+                      <th className="px-3 py-2 text-right font-medium">Belast/sessie</th>
                       <th className="px-3 py-2 text-right font-medium">Sessies/mnd</th>
                       <th className="py-2 pl-3 text-right font-medium">Opbrengst/laadpunt/mnd</th>
                     </tr>
@@ -448,6 +454,8 @@ export default function AdminConfiguratorSettings() {
                           <td className="py-2 pr-3">{entry.label}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{preview ? minutesLabel(preview.idleMinutesPerSession) : "-"}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{preview ? minutesLabel(preview.billableIdleMinutesPerSession) : "-"}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{Math.round(usage.idleBillableSharePct)}%</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{preview ? `${preview.effectiveBillableIdleMinutesPerSession.toLocaleString("nl-NL", { maximumFractionDigits: 1 })} min` : "-"}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{Math.round(usage.sessionsPerChargePointMonth)}</td>
                           <td className="py-2 pl-3 text-right font-medium tabular-nums">{preview ? eur(preview.idleFeeRevenuePerChargePointMonth) : "-"}</td>
                         </tr>

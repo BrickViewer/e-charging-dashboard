@@ -41,6 +41,8 @@ export type ConfiguratorSettings = {
     kwhPerChargePointMonth: number;
     averageSessionDurationHours: number;
     effectiveChargingPowerKw: number;
+    idleMinutesPerSession: number;
+    idleBillableSharePct: number;
   }>;
   offerTemplate: OfferTemplate;
 };
@@ -109,6 +111,8 @@ export type PricingInput = {
     kwhPerChargePointMonth: number;
     averageSessionDurationHours: number;
     effectiveChargingPowerKw: number;
+    idleMinutesPerSession: number;
+    idleBillableSharePct: number;
   };
   contract: {
     durationMonths: number;
@@ -160,17 +164,38 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = {
     { key: "other", label: "Anders" },
   ],
   locationTypeDefaults: {
-    workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8 },
-    destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10 },
-    fleet: { sessionsPerChargePointMonth: 24, kwhPerChargePointMonth: 650, averageSessionDurationHours: 8, effectiveChargingPowerKw: 11 },
-    public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11 },
-    other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8 },
+    workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 180, idleBillableSharePct: 10 },
+    destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10, idleMinutesPerSession: 90, idleBillableSharePct: 25 },
+    fleet: { sessionsPerChargePointMonth: 24, kwhPerChargePointMonth: 650, averageSessionDurationHours: 8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 90, idleBillableSharePct: 5 },
+    public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 120, idleBillableSharePct: 20 },
+    other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 90, idleBillableSharePct: 15 },
   },
   offerTemplate: defaultOfferTemplate,
 };
 
 function numberOr(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+// Merge per locatietype: default + opgeslagen waarden veld-voor-veld, zodat oude rows
+// (zonder de idle-velden) tóch geldige idle-defaults krijgen i.p.v. undefined → NaN.
+function mergeLocationTypeDefaults(raw: unknown): ConfiguratorSettings["locationTypeDefaults"] {
+  const base = defaultConfiguratorSettings.locationTypeDefaults;
+  const rawMap = (raw && typeof raw === "object" ? raw : {}) as Record<string, Partial<ConfiguratorSettings["locationTypeDefaults"][string]>>;
+  const out: ConfiguratorSettings["locationTypeDefaults"] = {};
+  for (const key of new Set([...Object.keys(base), ...Object.keys(rawMap)])) {
+    const d = base[key] ?? base.workplace;
+    const r = rawMap[key] ?? {};
+    out[key] = {
+      sessionsPerChargePointMonth: Math.max(0, numberOr(r.sessionsPerChargePointMonth, d.sessionsPerChargePointMonth)),
+      kwhPerChargePointMonth: Math.max(0, numberOr(r.kwhPerChargePointMonth, d.kwhPerChargePointMonth)),
+      averageSessionDurationHours: Math.max(0, numberOr(r.averageSessionDurationHours, d.averageSessionDurationHours)),
+      effectiveChargingPowerKw: Math.max(0.1, numberOr(r.effectiveChargingPowerKw, d.effectiveChargingPowerKw)),
+      idleMinutesPerSession: Math.max(0, numberOr(r.idleMinutesPerSession, d.idleMinutesPerSession)),
+      idleBillableSharePct: Math.min(100, Math.max(0, numberOr(r.idleBillableSharePct, d.idleBillableSharePct))),
+    };
+  }
+  return out;
 }
 
 export function normalizeSettings(value: unknown): ConfiguratorSettings {
@@ -184,10 +209,7 @@ export function normalizeSettings(value: unknown): ConfiguratorSettings {
       ? raw.locationTypes
       : defaultConfiguratorSettings.locationTypes,
     inputRanges: { ...defaultConfiguratorSettings.inputRanges, ...(raw.inputRanges ?? {}) },
-    locationTypeDefaults: {
-      ...defaultConfiguratorSettings.locationTypeDefaults,
-      ...(raw.locationTypeDefaults ?? {}),
-    },
+    locationTypeDefaults: mergeLocationTypeDefaults(raw.locationTypeDefaults),
     // Oude rijen missen offerTemplate → val veld-voor-veld terug op de standaarden.
     offerTemplate: { ...defaultOfferTemplate, ...(raw.offerTemplate ?? {}) },
   };
@@ -223,6 +245,8 @@ export function normalizePricingInput(value: unknown, settings: ConfiguratorSett
       kwhPerChargePointMonth: Math.max(0, numberOr(usage.kwhPerChargePointMonth, defaults.kwhPerChargePointMonth)),
       averageSessionDurationHours: Math.max(0, numberOr(usage.averageSessionDurationHours, defaults.averageSessionDurationHours)),
       effectiveChargingPowerKw: Math.max(0.1, numberOr(usage.effectiveChargingPowerKw, defaults.effectiveChargingPowerKw)),
+      idleMinutesPerSession: Math.max(0, numberOr(usage.idleMinutesPerSession, defaults.idleMinutesPerSession ?? 0)),
+      idleBillableSharePct: Math.min(100, Math.max(0, numberOr(usage.idleBillableSharePct, defaults.idleBillableSharePct ?? 0))),
     },
     contract: {
       durationMonths: Math.max(1, Math.round(numberOr(contract.durationMonths, settings.defaultContractDurationMonths))),
@@ -248,11 +272,16 @@ export function calculatePricing(input: PricingInput, settings: ConfiguratorSett
     ? (kwhPerSession / input.usage.effectiveChargingPowerKw) * 60
     : 0;
   const sessionDurationMinutes = input.usage.averageSessionDurationHours * 60;
-  const idleMinutesPerSession = Math.max(0, sessionDurationMinutes - chargingMinutesPerSession);
+  // Referentie (oude afleiding sessieduur − laadtijd); telt NIET mee in de opbrengst.
+  const derivedIdleMinutesPerSession = Math.max(0, sessionDurationMinutes - chargingMinutesPerSession);
+  // Billing-basis: instelbare gem. stilstaande min/sessie + % sessies dat betaalt.
+  const idleMinutesPerSession = Math.max(0, input.usage.idleMinutesPerSession);
+  const idleBillableSharePct = Math.min(100, Math.max(0, input.usage.idleBillableSharePct));
   const billableIdleMinutesPerSession = input.tariffs.idleFeeEnabled
     ? Math.max(0, idleMinutesPerSession - input.tariffs.idleGraceMinutes)
     : 0;
-  const billableIdleMinutesPerChargePointMonth = billableIdleMinutesPerSession * sessions;
+  const effectiveBillableIdleMinutesPerSession = billableIdleMinutesPerSession * (idleBillableSharePct / 100);
+  const billableIdleMinutesPerChargePointMonth = effectiveBillableIdleMinutesPerSession * sessions;
   const grossChargingRevenuePerChargePointMonth = kwh * input.tariffs.chargeTariffPerKwh;
   const energyCostPerChargePointMonth = -(kwh * input.tariffs.energyCostPerKwh);
   const startFeeRevenuePerChargePointMonth = input.tariffs.startFeeEnabled ? sessions * input.tariffs.startFeePerSession : 0;
@@ -288,8 +317,11 @@ export function calculatePricing(input: PricingInput, settings: ConfiguratorSett
     kwhPerSession,
     chargingMinutesPerSession,
     sessionDurationMinutes,
+    derivedIdleMinutesPerSession,
     idleMinutesPerSession,
+    idleBillableSharePct,
     billableIdleMinutesPerSession,
+    effectiveBillableIdleMinutesPerSession,
     billableIdleMinutesPerChargePointMonth,
     grossChargingRevenuePerChargePointMonth,
     energyCostPerChargePointMonth,

@@ -15,6 +15,12 @@ export const locationTypeDefaultsSchema = z.object({
   kwhPerChargePointMonth: z.number().min(0),
   averageSessionDurationHours: z.number().min(0),
   effectiveChargingPowerKw: z.number().positive(),
+  // Blokkeertarief-aannames per locatietype (gedrag, niet afgeleid van de sessieduur):
+  // gemiddelde stilstaande minuten per sessie + het % van de sessies dat daadwerkelijk
+  // blokkeertarief oplevert (dag/nacht-venster + incidentie). `.default()` houdt oude
+  // opgeslagen settings/inputs geldig (val terug op 0 = géén idle-opbrengst).
+  idleMinutesPerSession: z.number().min(0).default(0),
+  idleBillableSharePct: z.number().min(0).max(100).default(0),
 });
 
 // Invoer-/slidergrenzen die de configurator-UI gebruikt (geen invloed op de math).
@@ -145,8 +151,13 @@ export type PricingResult = {
   kwhPerSession: number;
   chargingMinutesPerSession: number;
   sessionDurationMinutes: number;
+  // Referentie: oude afleiding (sessieduur − laadtijd). Telt NIET mee in de opbrengst.
+  derivedIdleMinutesPerSession: number;
+  // Billing-basis: instelbare gem. stilstaande min/sessie (per locatietype).
   idleMinutesPerSession: number;
+  idleBillableSharePct: number;
   billableIdleMinutesPerSession: number;
+  effectiveBillableIdleMinutesPerSession: number;
   billableIdleMinutesPerChargePointMonth: number;
   grossChargingRevenuePerChargePointMonth: number;
   energyCostPerChargePointMonth: number;
@@ -210,12 +221,15 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = configuratorSet
     { key: "public", label: "Publiek" },
     { key: "other", label: "Anders" },
   ],
+  // idleMinutesPerSession + idleBillableSharePct: conservatieve, onderzoek-gebaseerde
+  // defaults (ElaadNL/JRC/Allego) — bewust niet-misleidend, vrij aanpasbaar in de admin.
+  // Werkplek/vloot worden in de praktijk vrijwel nooit belast → lage share.
   locationTypeDefaults: {
-    workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8 },
-    destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10 },
-    fleet: { sessionsPerChargePointMonth: 24, kwhPerChargePointMonth: 650, averageSessionDurationHours: 8, effectiveChargingPowerKw: 11 },
-    public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11 },
-    other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8 },
+    workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 180, idleBillableSharePct: 10 },
+    destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10, idleMinutesPerSession: 90, idleBillableSharePct: 25 },
+    fleet: { sessionsPerChargePointMonth: 24, kwhPerChargePointMonth: 650, averageSessionDurationHours: 8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 90, idleBillableSharePct: 5 },
+    public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 120, idleBillableSharePct: 20 },
+    other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 90, idleBillableSharePct: 15 },
   },
 });
 
@@ -233,6 +247,8 @@ export const excelDefaultPricingInput: PricingInput = pricingInputSchema.parse({
     sessionsPerChargePointMonth: 12,
     averageSessionDurationHours: 6,
     effectiveChargingPowerKw: 8,
+    idleMinutesPerSession: 180,
+    idleBillableSharePct: 10,
   },
   contract: {
     durationMonths: 12,
@@ -258,11 +274,18 @@ function calculateWith(input: PricingInput, settings: ConfiguratorSettings, over
     ? (kwhPerSession / input.usage.effectiveChargingPowerKw) * 60
     : 0;
   const sessionDurationMinutes = input.usage.averageSessionDurationHours * 60;
-  const idleMinutesPerSession = Math.max(0, sessionDurationMinutes - chargingMinutesPerSession);
+  // Referentie ("theoretisch max"): de oude afleiding sessieduur − laadtijd. Telt NIET
+  // mee in de opbrengst (nacht-/langparkeren vertekent dit) — alleen ter context.
+  const derivedIdleMinutesPerSession = Math.max(0, sessionDurationMinutes - chargingMinutesPerSession);
+  // Billing-basis: instelbare gem. stilstaande min/sessie (per locatietype, te overschrijven).
+  const idleMinutesPerSession = Math.max(0, input.usage.idleMinutesPerSession);
+  const idleBillableSharePct = Math.min(100, Math.max(0, input.usage.idleBillableSharePct));
   const billableIdleMinutesPerSession = tariffs.idleFeeEnabled
     ? Math.max(0, idleMinutesPerSession - tariffs.idleGraceMinutes)
     : 0;
-  const billableIdleMinutesPerChargePointMonth = billableIdleMinutesPerSession * sessions;
+  // × % van de sessies dat écht blokkeertarief oplevert (dag/nacht-venster + incidentie).
+  const effectiveBillableIdleMinutesPerSession = billableIdleMinutesPerSession * (idleBillableSharePct / 100);
+  const billableIdleMinutesPerChargePointMonth = effectiveBillableIdleMinutesPerSession * sessions;
   const grossChargingRevenuePerChargePointMonth = kwh * tariffs.chargeTariffPerKwh;
   const energyCostPerChargePointMonth = -(kwh * tariffs.energyCostPerKwh);
   const startFeeRevenuePerChargePointMonth = tariffs.startFeeEnabled ? sessions * tariffs.startFeePerSession : 0;
@@ -291,8 +314,11 @@ function calculateWith(input: PricingInput, settings: ConfiguratorSettings, over
     kwhPerSession,
     chargingMinutesPerSession,
     sessionDurationMinutes,
+    derivedIdleMinutesPerSession,
     idleMinutesPerSession,
+    idleBillableSharePct,
     billableIdleMinutesPerSession,
+    effectiveBillableIdleMinutesPerSession,
     billableIdleMinutesPerChargePointMonth,
     grossChargingRevenuePerChargePointMonth,
     energyCostPerChargePointMonth,

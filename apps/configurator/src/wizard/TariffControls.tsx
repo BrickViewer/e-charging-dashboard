@@ -179,10 +179,37 @@ export function TariffControls({
                   onAmount={(n) => updateInput((d) => { d.tariffs.idleFeePerMinute = n; })}
                 />
                 {input.tariffs.idleFeeEnabled && (
-                  <div className="flex items-center justify-between gap-3 pl-1">
-                    <p className="text-[13px] text-muted-foreground">Gratis minuten vóór blokkeertarief</p>
-                    <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.tariffs.idleGraceMinutes}
-                      aria-label="Gratis minuten" onChange={(e) => updateInput((d) => { d.tariffs.idleGraceMinutes = parseNumber(e.target.value, d.tariffs.idleGraceMinutes); })} />
+                  <div className="space-y-2.5 rounded-xl border border-border-soft/60 bg-muted/20 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[13px] text-muted-foreground">Gem. stilstaande min / sessie</p>
+                      <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.usage.idleMinutesPerSession}
+                        aria-label="Gemiddelde stilstaande minuten per sessie"
+                        onChange={(e) => updateInput((d) => { d.usage.idleMinutesPerSession = parseNumber(e.target.value, d.usage.idleMinutesPerSession); })} />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[13px] text-muted-foreground">Gratis minuten vóór blokkeertarief</p>
+                      <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.tariffs.idleGraceMinutes}
+                        aria-label="Gratis minuten"
+                        onChange={(e) => updateInput((d) => { d.tariffs.idleGraceMinutes = parseNumber(e.target.value, d.tariffs.idleGraceMinutes); })} />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[13px] text-muted-foreground">% sessies dat blokkeertarief betaalt</p>
+                      <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.usage.idleBillableSharePct}
+                        aria-label="Percentage sessies dat blokkeertarief betaalt"
+                        onChange={(e) => updateInput((d) => { d.usage.idleBillableSharePct = parseNumber(e.target.value, d.usage.idleBillableSharePct); })} />
+                    </div>
+                    {/* Transparante berekening — zo komen we aan de blokkeer-opbrengst. */}
+                    <div className="space-y-0.5 border-t border-border-soft/60 pt-2 text-[11px] leading-relaxed text-muted-foreground">
+                      <p>
+                        max(0, {number(input.usage.idleMinutesPerSession)} − {number(input.tariffs.idleGraceMinutes)}) × {number(input.usage.idleBillableSharePct)}%
+                        = <span className="font-semibold text-foreground">{number(pricing.effectiveBillableIdleMinutesPerSession, 1)}</span> belaste min/sessie
+                      </p>
+                      <p>
+                        × {number(input.usage.sessionsPerChargePointMonth)} sessies × {euro(input.tariffs.idleFeePerMinute, 2)}
+                        = <span className="font-semibold text-foreground">{euro(pricing.idleFeeRevenuePerChargePointMonth)}</span> / laadpunt / maand
+                      </p>
+                      <p className="opacity-70">Theoretisch max (sessieduur − laadtijd): {number(pricing.derivedIdleMinutesPerSession)} min/sessie — niet meegerekend.</p>
+                    </div>
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-3 border-t border-border-soft/60 pt-3">
