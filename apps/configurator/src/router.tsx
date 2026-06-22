@@ -25,7 +25,8 @@ const stepRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([sessionRoute, stepRoute]);
 
-export const router = createRouter({ routeTree });
+// basepath = subpad waar de app draait (dashboard.e-charging.nl/configurator).
+export const router = createRouter({ routeTree, basepath: "/configurator" });
 
 declare module "@tanstack/react-router" {
   interface Register {

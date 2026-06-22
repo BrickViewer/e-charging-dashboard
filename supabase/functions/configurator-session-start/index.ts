@@ -115,8 +115,9 @@ Deno.serve(async (req) => {
 
     if (sessionError) throw sessionError;
 
-    // Productie-URL als veilige fallback; lokaal zet je CONFIGURATOR_APP_URL=http://localhost:8081.
-    const appUrl = (Deno.env.get("CONFIGURATOR_APP_URL") ?? "https://echarging-configurator.pages.dev").replace(/\/+$/, "");
+    // Productie-fallback: configurator draait onder /configurator op het dashboard-domein.
+    // Lokaal zet je CONFIGURATOR_APP_URL=http://localhost:8081/configurator.
+    const appUrl = (Deno.env.get("CONFIGURATOR_APP_URL") ?? "https://dashboard.e-charging.nl/configurator").replace(/\/+$/, "");
     const url = `${appUrl}/s/${session.id}/stap/1`;
     const cookieDomain = Deno.env.get("CONFIGURATOR_COOKIE_DOMAIN");
     const cookieHeaders: Record<string, string> = {};

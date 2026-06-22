@@ -14,6 +14,7 @@
     "build": "npm run build --workspaces --if-present",
     "build:admin": "npm run build -w @echarging/admin",
     "build:configurator": "npm run build -w @echarging/configurator",
+    "build:dashboard": "npm run build:admin && npm run build:configurator && rm -rf apps/admin/dist/configurator && cp -r apps/configurator/dist apps/admin/dist/configurator",
     "build:packages": "npm run build -w @echarging/pricing-engine && npm run build -w @echarging/api-client && npm run build -w @echarging/ui-kit",
     "lint": "eslint .",
     "preview": "npm run preview -w @echarging/admin",

@@ -4,6 +4,9 @@ import path from "path";
 
 export default defineConfig({
   envDir: path.resolve(__dirname, "../.."),
+  // Wordt onder dashboard.e-charging.nl/configurator/ geserveerd (gecombineerde deploy in
+  // het admin Pages-project), dus assets laden vanaf /configurator/.
+  base: "/configurator/",
   server: {
     host: "::",
     port: 8081,
