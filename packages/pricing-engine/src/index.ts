@@ -135,7 +135,9 @@ export const pricingInputSchema = z.object({
   customer: z.object({
     companyName: z.string().trim().default(""),
     contactName: z.string().trim().optional().default(""),
-    contactEmail: z.string().trim().email().optional().or(z.literal("")).default(""),
+    // E-mailadres is GEEN prijsinput; format-validatie hoort bij het opslaan, niet bij elke
+    // toetsaanslag (anders crasht de live-berekening op een half-getypt adres). Hier dus tolerant.
+    contactEmail: z.string().trim().optional().default(""),
     contactPhone: z.string().trim().optional().default(""),
     locationAddress: z.string().trim().optional().default(""),
     postalCode: z.string().trim().optional().default(""),

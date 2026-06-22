@@ -37,7 +37,9 @@ export function FinalizePanel({
   demoCfg?: string | null;
   onClose: () => void;
 }) {
-  const canSubmit = !finalizing && input.customer.companyName.trim().length > 0;
+  const emailRaw = input.customer.contactEmail.trim();
+  const emailValid = emailRaw === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw);
+  const canSubmit = !finalizing && input.customer.companyName.trim().length > 0 && emailValid;
 
   const openDemo = () => {
     if (!demoCfg) return;
@@ -122,6 +124,9 @@ export function FinalizePanel({
                 <input className="text-input" type="email" value={input.customer.contactEmail}
                   onChange={(e) => updateInput((d) => { d.customer.contactEmail = e.target.value; })} />
               </Field>
+              {emailRaw !== "" && !emailValid && (
+                <p className="-mt-2 text-xs font-medium text-gauge-red">Vul een geldig e-mailadres in.</p>
+              )}
               <Field label="Straat en huisnummer">
                 <input className="text-input" value={input.customer.locationAddress}
                   onChange={(e) => updateInput((d) => { d.customer.locationAddress = e.target.value; })} />
