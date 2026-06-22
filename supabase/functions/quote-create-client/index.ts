@@ -56,6 +56,9 @@ Deno.serve(async (req) => {
     const personId = (quote.person_id ?? lead?.person_id) as string | null;
 
     // Tarieven + service-fee staan per LOCATIE (tariff_profiles), niet op het klantaccount.
+    // Snapshot blijft nodig voor de configuratie-versie op het account (zie verderop).
+    const snap = (quote.calculation_snapshot ?? null) as
+      { settings_version?: unknown; pricing_input?: unknown; pricing_result?: Record<string, unknown> } | null;
     // Gereviewde klantgegevens (val terug op offerte/lead waar leeg gelaten).
     const fields = {
       company_name: str(reviewed.company_name) ?? quote.prospect_company ?? lead?.company_name ?? "Onbekend bedrijf",
