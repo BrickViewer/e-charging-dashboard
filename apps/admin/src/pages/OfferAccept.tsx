@@ -244,9 +244,6 @@ export default function OfferAccept() {
               <div>
                 <h2 className="text-base font-bold">Akkoord geven</h2>
                 <p className="text-sm text-muted-foreground">Onderteken hieronder digitaal: vul uw naam in, bevestig de verklaringen en plaats uw handtekening.</p>
-                {quote.signerEmail ? (
-                  <p className="mt-1 text-xs text-muted-foreground">Op naam van <span className="font-medium text-foreground">{quote.signerEmail}</span></p>
-                ) : null}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="signer">Naam ondertekenaar</Label>
