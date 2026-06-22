@@ -115,7 +115,8 @@ Deno.serve(async (req) => {
 
     if (sessionError) throw sessionError;
 
-    const appUrl = (Deno.env.get("CONFIGURATOR_APP_URL") ?? "http://localhost:8081").replace(/\/+$/, "");
+    // Productie-URL als veilige fallback; lokaal zet je CONFIGURATOR_APP_URL=http://localhost:8081.
+    const appUrl = (Deno.env.get("CONFIGURATOR_APP_URL") ?? "https://echarging-configurator.pages.dev").replace(/\/+$/, "");
     const url = `${appUrl}/s/${session.id}/stap/1`;
     const cookieDomain = Deno.env.get("CONFIGURATOR_COOKIE_DOMAIN");
     const cookieHeaders: Record<string, string> = {};
