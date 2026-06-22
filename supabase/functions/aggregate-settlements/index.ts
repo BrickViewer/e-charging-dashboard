@@ -37,6 +37,7 @@ type Aggregation = {
   total_kwh: number;
   total_sessions: number;
   reimbursement_total: number;
+  byLocation: Map<string, number>; // location_id ("" = geen) → kWh, voor per-locatie fee
 };
 
 function currentMonth(): { year: number; month: number } {
@@ -242,7 +243,7 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
   {
     const { data: sessions, error: sErr } = await supabase
       .from("charging_sessions")
-      .select("client_id, kwh_delivered, reimbursement_amount")
+      .select("client_id, location_id, kwh_delivered, reimbursement_amount")
       .gte("started_at", start)
       .lt("started_at", end)
       .eq("excluded", false)
@@ -254,12 +255,15 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
     for (const s of sessions ?? []) {
       const k = s.client_id as string;
       if (!map.has(k)) {
-        map.set(k, { client_id: k, total_kwh: 0, total_sessions: 0, reimbursement_total: 0 });
+        map.set(k, { client_id: k, total_kwh: 0, total_sessions: 0, reimbursement_total: 0, byLocation: new Map() });
       }
       const a = map.get(k)!;
-      a.total_kwh += Number(s.kwh_delivered ?? 0);
+      const kwh = Number(s.kwh_delivered ?? 0);
+      a.total_kwh += kwh;
       a.total_sessions += 1;
       a.reimbursement_total += Number(s.reimbursement_amount ?? 0);
+      const locId = (s.location_id as string | null) ?? "";
+      a.byLocation.set(locId, (a.byLocation.get(locId) ?? 0) + kwh);
     }
     aggregations = Array.from(map.values());
   }
@@ -293,6 +297,28 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
     }
   }
 
+  // Per-LOCATIE service-fee: laatste tariff_profiles-rij met een non-null fee en valid_from <= period_end.
+  // NULL/ontbrekend → val terug op de klant-fee → org default (identiek aan vroeger gedrag).
+  const locFee = new Map<string, number>();
+  {
+    const locIds = Array.from(
+      new Set(aggregations.flatMap((a) => Array.from(a.byLocation.keys())).filter((x) => x)),
+    );
+    if (locIds.length > 0) {
+      const { data: tps } = await supabase
+        .from("tariff_profiles")
+        .select("location_id, echarging_fee_per_kwh, valid_from")
+        .in("location_id", locIds)
+        .not("echarging_fee_per_kwh", "is", null)
+        .lte("valid_from", period_end)
+        .order("valid_from", { ascending: false });
+      for (const tp of tps ?? []) {
+        const lid = tp.location_id as string;
+        if (!locFee.has(lid)) locFee.set(lid, Number(tp.echarging_fee_per_kwh)); // eerste = nieuwste (order desc)
+      }
+    }
+  }
+
   // Lopende maand? Dan status 'live'. Anders 'calculated' (admin kan goedkeuren).
   const isMonthStillRunning = new Date() < new Date(end);
 
@@ -323,12 +349,16 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
     // Formule via de gedeelde settlement-math module (zelfde getallen, één bron).
     const feeWaived = existing?.fee_waived === true;
     const grossRevenue = a.reimbursement_total;
-    const { feePerKwh, echargingRevenue, clientPayout } = computeSettlement({
-      totalKwh: a.total_kwh,
-      grossRevenue,
-      feePerKwh: clientFee.get(a.client_id) ?? orgFeePerKwh,
-      feeWaived,
-    });
+    // Fee PER LOCATIE: som van (locatie-fee × locatie-kWh). Locatie zonder eigen fee → klant-fee → org.
+    const clientDefaultFee = clientFee.get(a.client_id) ?? orgFeePerKwh;
+    let echargingRevenue = 0;
+    for (const [locId, locKwh] of a.byLocation) {
+      const fee = locId && locFee.get(locId) != null ? (locFee.get(locId) as number) : clientDefaultFee;
+      echargingRevenue += computeSettlement({ totalKwh: locKwh, grossRevenue: 0, feePerKwh: fee, feeWaived }).echargingRevenue;
+    }
+    const clientPayout = grossRevenue - echargingRevenue;
+    // Blended snapshot voor portal/weergave (exact = client_payout + echarging_revenue = gross).
+    const blendedFee = a.total_kwh > 0 ? echargingRevenue / a.total_kwh : 0;
 
     const newStatus = isMonthStillRunning ? "live" : "calculated";
 
@@ -341,7 +371,7 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
       total_kwh: a.total_kwh,
       total_sessions: a.total_sessions,
       gross_revenue: grossRevenue,
-      echarging_fee_per_kwh: feePerKwh, // snapshot (0 bij kwijtschelding)
+      echarging_fee_per_kwh: feeWaived ? 0 : blendedFee, // blended snapshot (0 bij kwijtschelding)
       echarging_revenue: echargingRevenue,
       client_payout: clientPayout,
       vat_rate: vatRate, // BTW-snapshot (0.21 BTW-plichtig, 0 anders)
