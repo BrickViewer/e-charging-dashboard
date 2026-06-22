@@ -72,6 +72,29 @@ export const offerTemplateSchema = z.object({
   defaultAanhef: z.string().default("heer/mevrouw"),
 }).default({});
 
+// Demo-presets (keuzescherm van de no-login demo). Per preset een aantal locaties met
+// elk een aantal palen + vermogen; de demo synthetiseert hieruit een portaal-dataset.
+export const demoPresetLocationSchema = z.object({
+  name: z.string().default("Locatie"),
+  chargePoints: z.number().int().min(1).default(4),
+  powerKw: z.number().min(1).default(11),
+});
+export const demoPresetSchema = z.object({
+  key: z.string().trim().min(1),
+  label: z.string().default("Demo"),
+  customerName: z.string().default("Demo Laadplein B.V."),
+  kwhPerCpMonth: z.number().min(0).default(420),
+  sessionsPerCpMonth: z.number().min(0).default(35),
+  locations: z.array(demoPresetLocationSchema).min(1).default([{ name: "Hoofdlocatie", chargePoints: 5, powerKw: 11 }]),
+});
+
+// Kleinste demo = 1 locatie / 5 palen, oplopend naar 2 en 3 locaties. Vrij aanpasbaar.
+export const defaultDemoPresets = [
+  { key: "1-locatie", label: "1 locatie", customerName: "Van der Velde Retail B.V.", kwhPerCpMonth: 420, sessionsPerCpMonth: 35, locations: [{ name: "Hoofdlocatie", chargePoints: 5, powerKw: 11 }] },
+  { key: "2-locaties", label: "2 locaties", customerName: "Hofstede Vastgoed B.V.", kwhPerCpMonth: 480, sessionsPerCpMonth: 40, locations: [{ name: "Hoofdkantoor", chargePoints: 4, powerKw: 22 }, { name: "Bezoekersparkeren", chargePoints: 4, powerKw: 11 }] },
+  { key: "3-locaties", label: "3 locaties", customerName: "Rijnpoort Logistiek B.V.", kwhPerCpMonth: 520, sessionsPerCpMonth: 42, locations: [{ name: "Distributiecentrum", chargePoints: 6, powerKw: 22 }, { name: "Wagenpark", chargePoints: 4, powerKw: 11 }, { name: "Kantoor", chargePoints: 2, powerKw: 22 }] },
+];
+
 export const configuratorSettingsSchema = z.object({
   // e-charging-marge: vast bedrag per kWh dat e-charging op het verbruik verdient.
   echargingMarginPerKwh: z.number().min(0).default(0.05),
@@ -103,6 +126,8 @@ export const configuratorSettingsSchema = z.object({
     { key: "other", label: "Anders" },
   ]),
   locationTypeDefaults: z.record(z.string(), locationTypeDefaultsSchema),
+  // Demo-presets voor het keuzescherm (instelbaar in de admin "Demo"-tab).
+  demoPresets: z.array(demoPresetSchema).min(1).default(defaultDemoPresets),
   offerTemplate: offerTemplateSchema,
 });
 
@@ -231,6 +256,7 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = configuratorSet
     public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 120, idleBillableSharePct: 20 },
     other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 90, idleBillableSharePct: 15 },
   },
+  demoPresets: defaultDemoPresets,
 });
 
 export const excelDefaultPricingInput: PricingInput = pricingInputSchema.parse({

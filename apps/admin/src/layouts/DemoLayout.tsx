@@ -4,10 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { buildDemoDataset, type DemoParams } from "@/lib/demoData";
 import {
-  DEMO_SCENARIOS,
-  isScenarioKey,
+  FALLBACK_DEMO_PRESETS,
+  demoParamsFromPreset,
   demoParamsFromConfiguration,
   decodeDemoConfig,
+  type DemoPreset,
   type LeadConfiguration,
 } from "@/lib/demoScenarios";
 import { DemoDatasetProvider } from "@/contexts/DemoDatasetContext";
@@ -56,7 +57,7 @@ export default function DemoLayout() {
 
   const { cfg, scenario, leadId } = useMemo(() => {
     let c: string | null = cfgParam || null;
-    let s: number | null = scenarioParam ? Number(scenarioParam) : null;
+    let s: string | null = scenarioParam || null;
     let l: string | null = leadParam || null;
     // Portal-navlinks dragen de query niet mee → val terug op sessionStorage.
     if (!c && !s && !l && typeof sessionStorage !== "undefined") {
@@ -65,7 +66,7 @@ export default function DemoLayout() {
       const ssScenario = sessionStorage.getItem(SS_SCENARIO);
       if (ssCfg) c = ssCfg;
       else if (ssLead) l = ssLead;
-      else if (ssScenario) s = Number(ssScenario);
+      else if (ssScenario) s = ssScenario;
     }
     // Bewaar de actieve keuze en wis de andere, zodat er geen oude keuze blijft hangen.
     if (typeof sessionStorage !== "undefined") {
@@ -92,6 +93,22 @@ export default function DemoLayout() {
     },
   });
 
+  // Demo-presets uit de admin-settings (publiek, no-login). Terugval op de baked
+  // defaults bij fout/laden.
+  const presetsQuery = useQuery({
+    queryKey: ["demo-presets"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke<{ demoPresets?: DemoPreset[] }>(
+        "configurator-settings",
+        { body: { action: "demo-presets" } },
+      );
+      if (error) throw error;
+      return Array.isArray(data?.demoPresets) && data!.demoPresets.length > 0 ? data!.demoPresets : FALLBACK_DEMO_PRESETS;
+    },
+    staleTime: 60_000,
+  });
+  const presets = presetsQuery.data ?? FALLBACK_DEMO_PRESETS;
+
   const { dataset, source } = useMemo<{ dataset: ReturnType<typeof buildDemoDataset> | null; source: ConfiguratorSource | null }>(() => {
     if (cfg) {
       // No-login: config staat in de link, geen Supabase-call.
@@ -114,20 +131,29 @@ export default function DemoLayout() {
       );
       return { dataset: buildDemoDataset(params), source: { leadId, seed: null } };
     }
-    if (scenario && isScenarioKey(scenario)) {
-      const params = DEMO_SCENARIOS[scenario];
-      return { dataset: buildDemoDataset(params), source: { leadId: null, seed: seedFromParams(params) } };
+    if (scenario) {
+      const preset = presets.find((p) => p.key === scenario);
+      if (preset) {
+        const params = demoParamsFromPreset(preset);
+        return { dataset: buildDemoDataset(params), source: { leadId: null, seed: seedFromParams(params) } };
+      }
     }
     return { dataset: null, source: null };
-  }, [cfg, leadId, leadQuery.data, scenario]);
+  }, [cfg, leadId, leadQuery.data, scenario, presets]);
 
-  if (!cfg && !leadId && !(scenario && isScenarioKey(scenario))) return <DemoScenarioChooser />;
+  if (!cfg && !leadId && !scenario) return <DemoScenarioChooser presets={presets} />;
   if (cfg && !dataset) {
     return <DemoMessage title="Configuratie niet leesbaar" sub="Open de demo opnieuw vanuit de configurator." />;
   }
   if (leadId && !cfg && leadQuery.isLoading) return <DemoMessage title="Demo wordt voorbereid…" />;
   if (leadId && !cfg && (leadQuery.isError || !leadQuery.data)) {
     return <DemoMessage title="Configuratie niet gevonden" sub="Open de demo opnieuw vanuit de configurator." />;
+  }
+  // Scenario gekozen maar (nog) geen match: bij laden wachten, anders terug naar de keuze.
+  if (scenario && !cfg && !leadId && !dataset) {
+    return presetsQuery.isLoading
+      ? <DemoMessage title="Demo wordt voorbereid…" />
+      : <DemoScenarioChooser presets={presets} />;
   }
   if (!dataset) return <DemoMessage title="Demo wordt voorbereid…" />;
 

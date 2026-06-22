@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculatePricing,
+  configuratorSettingsSchema,
   defaultConfiguratorSettings,
   excelDefaultPricingInput,
   pricingInputSchema,
@@ -101,6 +102,21 @@ describe("pricing engine", () => {
     const result = calculatePricing(excelDefaultPricingInput, defaultConfiguratorSettings);
     // Start fee = 12 sessies × €0,50 = €6 per laadpunt → €60 over 10 laadpunten.
     closeTo(result.deltas.startFeeCustomerPerMonth, 60);
+  });
+
+  it("levert default demo-presets: 1/2/3 locaties, kleinste 5 palen", () => {
+    const presets = defaultConfiguratorSettings.demoPresets;
+    expect(presets.length).toBe(3);
+    expect(presets[0].locations.length).toBe(1);
+    expect(presets[0].locations.reduce((a, l) => a + l.chargePoints, 0)).toBe(5);
+    expect(presets[2].locations.length).toBe(3);
+  });
+
+  it("schema vult demoPresets aan als ze ontbreken (oude settings-rows)", () => {
+    const parsed = configuratorSettingsSchema.parse({
+      locationTypeDefaults: defaultConfiguratorSettings.locationTypeDefaults,
+    });
+    expect(parsed.demoPresets.length).toBe(3);
   });
 
   it("blocks finalization when net return is zero or negative", () => {

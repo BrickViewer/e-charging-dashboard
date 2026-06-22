@@ -3,15 +3,18 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, Outlet } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// Elke Supabase-tabelaanroep wordt geteld; de scenario-demo moet 100% lokaal zijn.
+// Elke Supabase-tabelaanroep wordt geteld; de scenario-/cfg-demo doet geen DB-query
+// (de preset-fetch loopt via functions.invoke en valt terug op de baked defaults).
 // vi.hoisted: de mock-factory wordt boven de imports gehesen, dus de spy ook.
-const { fromSpy } = vi.hoisted(() => ({
+const { fromSpy, invokeSpy } = vi.hoisted(() => ({
   fromSpy: vi.fn(() => ({
     select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
   })),
+  // Geeft geen presets terug → DemoLayout valt terug op FALLBACK_DEMO_PRESETS.
+  invokeSpy: vi.fn(async () => ({ data: { demoPresets: null }, error: null })),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: fromSpy },
+  supabase: { from: fromSpy, functions: { invoke: invokeSpy } },
 }));
 
 // ClientLayout is bestaande chrome; stub naar een kale Outlet zodat de test puur
@@ -53,15 +56,15 @@ beforeEach(() => {
 });
 
 describe("DemoLayout", () => {
-  it("scenario=10 levert de 10-palen dataset via context, zonder enige Supabase-aanroep", () => {
-    renderAt("/demo?scenario=10");
-    expect(screen.getByTestId("probe").textContent).toBe("scenario-10|cps=10|ere=true");
+  it("scenario=2-locaties levert de 8-palen dataset via context, zonder DB-query", () => {
+    renderAt("/demo?scenario=2-locaties");
+    expect(screen.getByTestId("probe").textContent).toBe("preset-2-locaties|cps=8|ere=true");
     expect(fromSpy).not.toHaveBeenCalled();
   });
 
-  it("scenario=5 levert de 5-palen dataset", () => {
-    renderAt("/demo?scenario=5");
-    expect(screen.getByTestId("probe").textContent).toBe("scenario-5|cps=5|ere=true");
+  it("scenario=1-locatie levert de 5-palen dataset", () => {
+    renderAt("/demo?scenario=1-locatie");
+    expect(screen.getByTestId("probe").textContent).toBe("preset-1-locatie|cps=5|ere=true");
     expect(fromSpy).not.toHaveBeenCalled();
   });
 
@@ -74,13 +77,13 @@ describe("DemoLayout", () => {
     expect(fromSpy).not.toHaveBeenCalled();
   });
 
-  it("een scenario kiezen navigeert en rendert dat portaal (klik -> dataset)", () => {
+  it("een preset kiezen navigeert en rendert dat portaal (klik -> dataset)", () => {
     renderAt("/demo");
-    // De 5-palen-kaart bevat de naam van klant 5; klik op de omhullende knop.
+    // De 1-locatie-kaart draagt de naam van die demo-klant; klik op de omhullende knop.
     const card = screen.getByText("Van der Velde Retail B.V.").closest("button")!;
     fireEvent.click(card);
-    expect(sessionStorage.getItem("demo.scenario")).toBe("5");
-    expect(screen.getByTestId("probe").textContent).toBe("scenario-5|cps=5|ere=true");
+    expect(sessionStorage.getItem("demo.scenario")).toBe("1-locatie");
+    expect(screen.getByTestId("probe").textContent).toBe("preset-1-locatie|cps=5|ere=true");
   });
 
   it("cfg-link (no-login): bouwt de dataset uit de gecodeerde config, zonder Supabase", () => {

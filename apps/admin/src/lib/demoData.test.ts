@@ -1,30 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { buildDemoDataset, type DemoDataset } from "./demoData";
-import { DEMO_SCENARIOS, SCENARIO_KEYS, demoParamsFromConfiguration } from "./demoScenarios";
+import { buildDemoDataset } from "./demoData";
+import { FALLBACK_DEMO_PRESETS, demoParamsFromPreset, presetChargePoints, demoParamsFromConfiguration } from "./demoScenarios";
 import { INVOICE_NUMBER_RE, validateSelfBillingInvoiceData } from "@/services/invoiceValidation";
 import { buildSelfBillingInvoicePdf } from "@/services/invoicePdf";
 import { getCurrentMonth, shiftMonth } from "@/lib/period";
 
 const CO2_KG_PER_KWH = 0.306; // moet gelijk zijn aan de echte dashboard-RPC
 
-const datasets: Array<{ key: number; ds: DemoDataset }> = SCENARIO_KEYS.map((key) => ({
-  key,
-  ds: buildDemoDataset(DEMO_SCENARIOS[key]),
-}));
+const datasets = FALLBACK_DEMO_PRESETS.map((preset) => {
+  const params = demoParamsFromPreset(preset);
+  return { key: preset.key, cp: presetChargePoints(preset), params, ds: buildDemoDataset(params) };
+});
 
-describe.each(datasets)("demoData scenario $key", ({ key, ds }) => {
-  const params = DEMO_SCENARIOS[key];
-
+describe.each(datasets)("demoData preset $key", ({ cp, params, ds }) => {
   it("schaalt naar het juiste aantal laadpalen, 0 storingen", () => {
     const cps = ds.locations.flatMap((l) => l.charge_points ?? []);
-    expect(cps.length).toBe(key);
+    expect(cps.length).toBe(cp);
     expect(cps.every((cp) => cp.status === "online" || cp.status === "in_use")).toBe(true);
   });
 
   it("verbruik ligt conform de inschatting met een lichte stijging (geen rechte lijn)", () => {
     // settlements zijn newest-first → chronologisch = omgekeerd (oudste eerst).
     const chrono = [...ds.settlements].reverse().map((s) => Number(s.total_kwh));
-    const estimate = key * params.kwhPerCpMonth; // de inschatting (laadpalen × kWh/paal)
+    const estimate = cp * params.kwhPerCpMonth; // de inschatting (laadpalen × kWh/paal)
     const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
     // (a) conform inschatting: elke maand binnen een realistische band rond de inschatting
@@ -57,7 +55,7 @@ describe.each(datasets)("demoData scenario $key", ({ key, ds }) => {
 
   it("sessie-generator is deterministisch", () => {
     expect(ds.getSessions({ limit: 5000 })).toEqual(ds.getSessions({ limit: 5000 }));
-    expect(buildDemoDataset(DEMO_SCENARIOS[key]).getSessions({ limit: 5000 })).toEqual(ds.getSessions({ limit: 5000 }));
+    expect(buildDemoDataset(params).getSessions({ limit: 5000 })).toEqual(ds.getSessions({ limit: 5000 }));
   });
 
   it("sessie-sommen per maand kloppen met de settlements (±1 kWh, exact aantal)", () => {
@@ -120,8 +118,8 @@ describe.each(datasets)("demoData scenario $key", ({ key, ds }) => {
 });
 
 describe("demoData — factuur-PDF", () => {
-  it("rendert een echte PDF (≥2 pagina's) voor de 10-palen demo", async () => {
-    const ds = buildDemoDataset(DEMO_SCENARIOS[10]);
+  it("rendert een echte PDF (≥2 pagina's) voor de grootste demo", async () => {
+    const ds = buildDemoDataset(demoParamsFromPreset(FALLBACK_DEMO_PRESETS[2]));
     const newest = ds.settlements[0];
     const { start, end } = ds.getMonthBounds(newest.year, newest.month);
     const lines = ds.getSessions({ from: start, to: end, limit: 5000 });

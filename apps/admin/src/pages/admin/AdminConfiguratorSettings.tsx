@@ -300,9 +300,10 @@ export default function AdminConfiguratorSettings() {
       </div>
 
       <Tabs defaultValue="defaults">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
           <TabsTrigger value="defaults">Defaults</TabsTrigger>
           <TabsTrigger value="locations">Locatietypes</TabsTrigger>
+          <TabsTrigger value="demo">Demo</TabsTrigger>
           <TabsTrigger value="tariffs">Tarieven</TabsTrigger>
           <TabsTrigger value="investment">ERE &amp; investering</TabsTrigger>
           <TabsTrigger value="ranges">Invoergrenzen</TabsTrigger>
@@ -468,6 +469,100 @@ export default function AdminConfiguratorSettings() {
                 Opbrengst is per laadpunt per maand en stijgt mee met het aantal laadpunten in de configuratie.
                 Pas het tarief of de gratis minuten hierboven aan en de voorbeeld-opbrengst verandert direct mee.
               </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* DEMO-PRESETS */}
+        <TabsContent value="demo" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Demo-presets</CardTitle>
+              <CardDescription>
+                De keuzekaarten van de no-login demo (dashboard.e-charging.nl/demo). Per preset het
+                aantal locaties met palen + vermogen; de demo bouwt hieruit een portaal. Kleinste =
+                1 locatie / 5 palen. Vrij aan te passen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {settings.demoPresets.map((preset, pi) => {
+                const setPreset = (patch: Partial<(typeof settings.demoPresets)[number]>) =>
+                  updateSettings((c) => {
+                    const next = [...c.demoPresets];
+                    next[pi] = { ...next[pi], ...patch };
+                    return { ...c, demoPresets: next };
+                  });
+                const setLoc = (li: number, patch: Partial<(typeof preset.locations)[number]>) =>
+                  updateSettings((c) => {
+                    const next = [...c.demoPresets];
+                    const locs = [...next[pi].locations];
+                    locs[li] = { ...locs[li], ...patch };
+                    next[pi] = { ...next[pi], locations: locs };
+                    return { ...c, demoPresets: next };
+                  });
+                const totalCp = preset.locations.reduce((s, l) => s + Math.max(1, Math.round(l.chargePoints)), 0);
+                return (
+                  <div key={preset.key} className="space-y-4 rounded-lg border p-4">
+                    <div className="flex items-end justify-between gap-3">
+                      <div className="grid flex-1 gap-3 md:grid-cols-2">
+                        <TextField label="Label (kaart-titel)" value={preset.label} onChange={(label) => setPreset({ label })} />
+                        <TextField label="Demo-klantnaam" value={preset.customerName} onChange={(customerName) => setPreset({ customerName })} />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={settings.demoPresets.length <= 1}
+                        onClick={() => updateSettings((c) => ({ ...c, demoPresets: c.demoPresets.filter((_, i) => i !== pi) }))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <CurrencyInput label="kWh/paal/mnd" value={preset.kwhPerCpMonth} onChange={(v) => setPreset({ kwhPerCpMonth: Math.max(0, v) })} />
+                      <CurrencyInput label="Sessies/paal/mnd" value={preset.sessionsPerCpMonth} onChange={(v) => setPreset({ sessionsPerCpMonth: Math.max(0, v) })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Locaties</Label>
+                      {preset.locations.map((loc, li) => (
+                        <div key={li} className="grid items-end gap-3 sm:grid-cols-[1fr_6rem_6rem_auto]">
+                          <TextField label="Naam" value={loc.name} onChange={(name) => setLoc(li, { name })} />
+                          <CurrencyInput label="Palen" value={loc.chargePoints} onChange={(v) => setLoc(li, { chargePoints: Math.max(1, Math.round(v)) })} />
+                          <CurrencyInput label="kW" value={loc.powerKw} onChange={(v) => setLoc(li, { powerKw: Math.max(1, v) })} />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            disabled={preset.locations.length <= 1}
+                            onClick={() => setPreset({ locations: preset.locations.filter((_, i) => i !== li) })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button variant="outline" size="sm" onClick={() => setPreset({ locations: [...preset.locations, { name: "Nieuwe locatie", chargePoints: 4, powerKw: 11 }] })}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Locatie toevoegen
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Totaal: {totalCp} palen · {preset.locations.length} locatie(s) · key: {preset.key}</p>
+                  </div>
+                );
+              })}
+              <Button
+                variant="outline"
+                onClick={() => updateSettings((c) => {
+                  const key = uniqueKey(slugify("preset"), c.demoPresets.map((p) => p.key));
+                  return {
+                    ...c,
+                    demoPresets: [
+                      ...c.demoPresets,
+                      { key, label: "Nieuwe preset", customerName: "Demo B.V.", kwhPerCpMonth: 420, sessionsPerCpMonth: 35, locations: [{ name: "Locatie", chargePoints: 4, powerKw: 11 }] },
+                    ],
+                  };
+                })}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Preset toevoegen
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

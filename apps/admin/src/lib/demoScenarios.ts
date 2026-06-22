@@ -1,93 +1,76 @@
-// Scenario-presets (5/10/20 laadpalen) en de mapping van een echte
-// configurator-configuratie naar demo-parameters. Puur, geen React.
+// Demo-presets (keuzescherm) + de mapping van een echte configurator-configuratie naar
+// demo-parameters. Puur, geen React. Presets komen uit de admin-settings; FALLBACK_*
+// dient als baked default én als terugval als de publieke fetch faalt.
 import type { DemoCustomer, DemoParams, DemoSiteSpec } from "@/lib/demoData";
 
-export type ScenarioKey = 5 | 10 | 20;
-export const SCENARIO_KEYS: ScenarioKey[] = [5, 10, 20];
-
-// Per-paal aannames volgen de configurator-locatietype-profielen
-// (destination 420 / public 520 kWh per paal/maand) + €0,581/kWh klantvergoeding.
+// €/kWh klantvergoeding-default (config-demo's leiden 'm liever af uit het rekenresultaat).
 const NET = 0.581;
 
-const CUSTOMER_5: DemoCustomer = {
-  companyName: "Van der Velde Retail B.V.",
-  contactName: "Sanne van der Velde",
-  contactEmail: "s.vandervelde@vdvretail.nl",
-  contactPhone: "+31302345678",
-  address: "Croeselaan 18",
-  postalCode: "3521 CB",
-  city: "Utrecht",
-  kvk: "30123456",
-  btwNumber: "NL803012345B01",
-  clientNumber: 184,
-};
-
-const CUSTOMER_10: DemoCustomer = {
-  companyName: "Hofstede Vastgoed B.V.",
-  contactName: "Mark Hofstede",
-  contactEmail: "m.hofstede@hofstedevastgoed.nl",
-  contactPhone: "+31334567890",
-  address: "Stationsplein 12",
-  postalCode: "3818 LE",
-  city: "Amersfoort",
-  kvk: "63094821",
-  btwNumber: "NL863094821B01",
-  clientNumber: 217,
-};
-
-const CUSTOMER_20: DemoCustomer = {
-  companyName: "Rijnpoort Logistiek B.V.",
-  contactName: "Erik Bakker",
-  contactEmail: "e.bakker@rijnpoortlogistiek.nl",
-  contactPhone: "+31104567890",
-  address: "Waalhaven Oostzijde 75",
-  postalCode: "3087 BM",
-  city: "Rotterdam",
-  kvk: "24501234",
-  btwNumber: "NL824501234B01",
-  clientNumber: 263,
-};
-
-const SITES_5: DemoSiteSpec[] = [
-  { name: "Hoofdkantoor Croeselaan", address: "Croeselaan 18", city: "Utrecht", postal_code: "3521 CB", property_type: "kantoor", parking_spots: 24, has_solar: true, solar_capacity_kwp: 30, brand: "Alfen", model: "Eve Double Pro", max_power: 22, num_connectors: 2, count: 3, idPrefix: "demo-cp-1", cpPrefix: "HK" },
-  { name: "Bezoekersparkeren Jaarbeurs", address: "Jaarbeursplein 6", city: "Utrecht", postal_code: "3521 AL", property_type: "retail", parking_spots: 18, has_solar: false, solar_capacity_kwp: null, brand: "Zaptec", model: "Pro", max_power: 11, num_connectors: 1, count: 2, idPrefix: "demo-cp-2", cpPrefix: "BZ" },
-];
-
-const SITES_10: DemoSiteSpec[] = [
-  { name: "Hofstede Huis", address: "Stationsplein 12", city: "Amersfoort", postal_code: "3818 LE", property_type: "kantoor", parking_spots: 40, has_solar: true, solar_capacity_kwp: 36, brand: "Alfen", model: "Eve Double Pro", max_power: 22, num_connectors: 2, count: 4, idPrefix: "demo-cp-1", cpPrefix: "HH" },
-  { name: "Wooncomplex De Eempoort", address: "Eemplein 84", city: "Amersfoort", postal_code: "3812 EA", property_type: "wooncomplex", parking_spots: 64, has_solar: false, solar_capacity_kwp: null, brand: "Zaptec", model: "Pro", max_power: 11, num_connectors: 1, count: 4, idPrefix: "demo-cp-2", cpPrefix: "EP" },
-  { name: "Bedrijvenpark Calveen", address: "Nijverheidsweg-Noord 60", city: "Amersfoort", postal_code: "3812 PM", property_type: "bedrijventerrein", parking_spots: 28, has_solar: true, solar_capacity_kwp: 52.8, brand: "Alfen", model: "Eve Double Pro", max_power: 22, num_connectors: 2, count: 2, idPrefix: "demo-cp-3", cpPrefix: "BC" },
-];
-
-const SITES_20: DemoSiteSpec[] = [
-  { name: "Distributiecentrum Waalhaven", address: "Waalhaven Oostzijde 75", city: "Rotterdam", postal_code: "3087 BM", property_type: "bedrijventerrein", parking_spots: 80, has_solar: true, solar_capacity_kwp: 120, brand: "Alfen", model: "Eve Double Pro", max_power: 22, num_connectors: 2, count: 6, idPrefix: "demo-cp-1", cpPrefix: "DC" },
-  { name: "Wagenpark Vlaardingen", address: "Industrieweg 40", city: "Vlaardingen", postal_code: "3133 EE", property_type: "bedrijventerrein", parking_spots: 60, has_solar: true, solar_capacity_kwp: 88, brand: "Zaptec", model: "Pro", max_power: 11, num_connectors: 1, count: 6, idPrefix: "demo-cp-2", cpPrefix: "WP" },
-  { name: "Kantoor Rijnhaven", address: "Rijnhaven 12", city: "Rotterdam", postal_code: "3072 AP", property_type: "kantoor", parking_spots: 36, has_solar: false, solar_capacity_kwp: null, brand: "Alfen", model: "Eve Single Pro", max_power: 22, num_connectors: 1, count: 4, idPrefix: "demo-cp-3", cpPrefix: "KR" },
-  { name: "Retailpark Zuidplein", address: "Zuidplein 120", city: "Rotterdam", postal_code: "3083 CW", property_type: "retail", parking_spots: 48, has_solar: false, solar_capacity_kwp: null, brand: "Zaptec", model: "Pro", max_power: 11, num_connectors: 1, count: 4, idPrefix: "demo-cp-4", cpPrefix: "RZ" },
-];
-
-export const DEMO_SCENARIOS: Record<ScenarioKey, DemoParams> = {
-  5: { id: "scenario-5", chargePoints: 5, kwhPerCpMonth: 420, sessionsPerCpMonth: 35, netRatePerKwh: NET, customer: CUSTOMER_5, sites: SITES_5, monthsWindow: 14, seed: 5 },
-  10: { id: "scenario-10", chargePoints: 10, kwhPerCpMonth: 520, sessionsPerCpMonth: 45, netRatePerKwh: NET, customer: CUSTOMER_10, sites: SITES_10, monthsWindow: 14, seed: 10 },
-  20: { id: "scenario-20", chargePoints: 20, kwhPerCpMonth: 480, sessionsPerCpMonth: 38, netRatePerKwh: NET, customer: CUSTOMER_20, sites: SITES_20, monthsWindow: 14, seed: 20 },
-};
-
-export function isScenarioKey(v: unknown): v is ScenarioKey {
-  return v === 5 || v === 10 || v === 20;
+// ── Demo-presets ──────────────────────────────────────────────────────────────
+export interface DemoPresetLocation { name: string; chargePoints: number; powerKw: number }
+export interface DemoPreset {
+  key: string;
+  label: string;
+  customerName: string;
+  kwhPerCpMonth: number;
+  sessionsPerCpMonth: number;
+  locations: DemoPresetLocation[];
 }
 
-// Korte beschrijving voor de keuzekaarten.
-export function scenarioDescriptor(key: ScenarioKey): {
-  klant: string;
-  locaties: number;
-  maandopbrengst: string;
-} {
-  const p = DEMO_SCENARIOS[key];
-  const perMonth = p.chargePoints * p.kwhPerCpMonth * (p.netRatePerKwh ?? NET);
+// Mirror van pricing-engine `defaultDemoPresets` (1/2/3 locaties, kleinste 5 palen/1 loc).
+export const FALLBACK_DEMO_PRESETS: DemoPreset[] = [
+  { key: "1-locatie", label: "1 locatie", customerName: "Van der Velde Retail B.V.", kwhPerCpMonth: 420, sessionsPerCpMonth: 35, locations: [{ name: "Hoofdlocatie", chargePoints: 5, powerKw: 11 }] },
+  { key: "2-locaties", label: "2 locaties", customerName: "Hofstede Vastgoed B.V.", kwhPerCpMonth: 480, sessionsPerCpMonth: 40, locations: [{ name: "Hoofdkantoor", chargePoints: 4, powerKw: 22 }, { name: "Bezoekersparkeren", chargePoints: 4, powerKw: 11 }] },
+  { key: "3-locaties", label: "3 locaties", customerName: "Rijnpoort Logistiek B.V.", kwhPerCpMonth: 520, sessionsPerCpMonth: 42, locations: [{ name: "Distributiecentrum", chargePoints: 6, powerKw: 22 }, { name: "Wagenpark", chargePoints: 4, powerKw: 11 }, { name: "Kantoor", chargePoints: 2, powerKw: 22 }] },
+];
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+export function presetChargePoints(preset: DemoPreset): number {
+  return preset.locations.reduce((sum, l) => sum + Math.max(1, Math.round(l.chargePoints)), 0);
+}
+
+// Indicatieve maandopbrengst voor een preset-kaart (zelfde NET-aanname als de scenario's).
+export function presetMonthlyEstimate(preset: DemoPreset): number {
+  return Math.round(presetChargePoints(preset) * preset.kwhPerCpMonth * NET);
+}
+
+// Bouwt demo-parameters uit een preset: per locatie een gesynthetiseerde site (adres/
+// merk/zonnedak afgeleid van palen/vermogen). Klant = preset.customerName + demo-defaults.
+export function demoParamsFromPreset(preset: DemoPreset): DemoParams {
+  const sites: DemoSiteSpec[] = preset.locations.map((loc, i) => {
+    const power = loc.powerKw >= 22 ? 22 : 11;
+    const count = Math.max(1, Math.round(loc.chargePoints));
+    return {
+      name: loc.name || `Locatie ${i + 1}`,
+      address: "Locatieadres",
+      city: "Nederland",
+      postal_code: "",
+      property_type: "bedrijfslocatie",
+      parking_spots: Math.max(count * 2, count + 4),
+      has_solar: i === 0,
+      solar_capacity_kwp: i === 0 ? round2(count * 5) : null,
+      brand: power >= 22 ? "Alfen" : "Zaptec",
+      model: power >= 22 ? "Eve Double Pro" : "Pro",
+      max_power: power,
+      num_connectors: power >= 22 ? 2 : 1,
+      count,
+      idPrefix: `demo-cp-${i + 1}`,
+      cpPrefix: `LP${i + 1}`,
+    };
+  });
   return {
-    klant: p.customer.companyName,
-    locaties: p.sites?.length ?? 1,
-    maandopbrengst: `€ ${Math.round(perMonth).toLocaleString("nl-NL")}`,
+    id: `preset-${preset.key}`,
+    chargePoints: sites.reduce((sum, s) => sum + s.count, 0),
+    kwhPerCpMonth: preset.kwhPerCpMonth,
+    sessionsPerCpMonth: preset.sessionsPerCpMonth,
+    netRatePerKwh: NET,
+    customer: { ...DEMO_CONFIG_CUSTOMER, companyName: preset.customerName || DEMO_CONFIG_CUSTOMER.companyName },
+    sites,
+    chargerPowerKw: Math.max(...sites.map((s) => s.max_power)), // dominant vermogen → configurator-seed
+    monthsWindow: 14,
+    ereEnabled: true, // demo toont ERE standaard aan (sales-highlight)
+    seed: hashSeed(preset.key),
   };
 }
 

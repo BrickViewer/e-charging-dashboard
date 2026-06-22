@@ -117,6 +117,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Publieke, niet-gevoelige read voor de no-login demo: alleen de demo-presets
+    // (schaal + fictieve locatienamen). Geen auth nodig.
+    if (action === "demo-presets") {
+      const active = await getActiveSettings(serviceClient);
+      const settings = normalizeSettings(active?.settings ?? {});
+      return json({ demoPresets: settings.demoPresets });
+    }
+
     const auth = await requireAdminOrInternal(req, serviceClient, corsHeaders, { allowInternal: false });
     if (!auth.ok) return auth.response;
 

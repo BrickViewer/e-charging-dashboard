@@ -44,6 +44,14 @@ export type ConfiguratorSettings = {
     idleMinutesPerSession: number;
     idleBillableSharePct: number;
   }>;
+  demoPresets: Array<{
+    key: string;
+    label: string;
+    customerName: string;
+    kwhPerCpMonth: number;
+    sessionsPerCpMonth: number;
+    locations: Array<{ name: string; chargePoints: number; powerKw: number }>;
+  }>;
   offerTemplate: OfferTemplate;
 };
 
@@ -129,6 +137,13 @@ export type PricingInput = {
   };
 };
 
+// Mirror van pricing-engine `defaultDemoPresets` (1/2/3 locaties, kleinste 5 palen/1 loc).
+export const defaultDemoPresets = [
+  { key: "1-locatie", label: "1 locatie", customerName: "Van der Velde Retail B.V.", kwhPerCpMonth: 420, sessionsPerCpMonth: 35, locations: [{ name: "Hoofdlocatie", chargePoints: 5, powerKw: 11 }] },
+  { key: "2-locaties", label: "2 locaties", customerName: "Hofstede Vastgoed B.V.", kwhPerCpMonth: 480, sessionsPerCpMonth: 40, locations: [{ name: "Hoofdkantoor", chargePoints: 4, powerKw: 22 }, { name: "Bezoekersparkeren", chargePoints: 4, powerKw: 11 }] },
+  { key: "3-locaties", label: "3 locaties", customerName: "Rijnpoort Logistiek B.V.", kwhPerCpMonth: 520, sessionsPerCpMonth: 42, locations: [{ name: "Distributiecentrum", chargePoints: 6, powerKw: 22 }, { name: "Wagenpark", chargePoints: 4, powerKw: 11 }, { name: "Kantoor", chargePoints: 2, powerKw: 22 }] },
+];
+
 export const defaultConfiguratorSettings: ConfiguratorSettings = {
   echargingMarginPerKwh: 0.05,
   defaultContractDurationMonths: 12,
@@ -170,6 +185,7 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = {
     public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 120, idleBillableSharePct: 20 },
     other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 90, idleBillableSharePct: 15 },
   },
+  demoPresets: defaultDemoPresets,
   offerTemplate: defaultOfferTemplate,
 };
 
@@ -210,6 +226,10 @@ export function normalizeSettings(value: unknown): ConfiguratorSettings {
       : defaultConfiguratorSettings.locationTypes,
     inputRanges: { ...defaultConfiguratorSettings.inputRanges, ...(raw.inputRanges ?? {}) },
     locationTypeDefaults: mergeLocationTypeDefaults(raw.locationTypeDefaults),
+    // Oude rijen missen demoPresets → val terug op de standaard-presets.
+    demoPresets: Array.isArray(raw.demoPresets) && raw.demoPresets.length > 0
+      ? raw.demoPresets
+      : defaultConfiguratorSettings.demoPresets,
     // Oude rijen missen offerTemplate → val veld-voor-veld terug op de standaarden.
     offerTemplate: { ...defaultOfferTemplate, ...(raw.offerTemplate ?? {}) },
   };
