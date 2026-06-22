@@ -7,6 +7,10 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useCompany, usePerson } from "@/hooks/useContacts";
 import { useCreateClientFromQuote } from "@/hooks/useQuotes";
+import { useAllClients } from "@/hooks/useAdminData";
+import { cn } from "@/lib/utils";
+import { Search, CheckCircle } from "lucide-react";
+import type { ClientWithRelations } from "@/types/db";
 
 // Wat de dialog nodig heeft van de offerte; zowel AwaitingClientQuote als de volledige Quote voldoen.
 export type QuoteForClient = {
@@ -43,6 +47,24 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
 
   const [f, setF] = useState<Record<string, string>>({});
   const [managed, setManaged] = useState(true);
+  const [mode, setMode] = useState<"new" | "existing">("new");
+  const [targetClientId, setTargetClientId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState("");
+  const { data: allClients } = useAllClients();
+
+  // Reset de keuze zodra de dialog voor een (andere) offerte opent.
+  useEffect(() => {
+    if (open) { setMode("new"); setTargetClientId(""); setClientSearch(""); }
+  }, [open, quote?.id]);
+
+  const term = clientSearch.trim().toLowerCase();
+  const clientOptions = ((allClients ?? []) as ClientWithRelations[])
+    .filter((c) => c.status !== "verwijderd" && !c.erased_at)
+    .filter((c) =>
+      !term ||
+      [c.company_name, c.contact_email, c.kvk, c.client_number ? `#${c.client_number}` : "", String(c.client_number ?? "")]
+        .some((v) => v?.toLowerCase().includes(term)),
+    );
 
   useEffect(() => {
     if (!open || !quote) return;
@@ -70,8 +92,16 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
 
   const submit = async () => {
     if (!quote) return;
-    if (!t("company_name").trim()) { toast.error("Bedrijfsnaam is verplicht"); return; }
     try {
+      if (mode === "existing") {
+        if (!targetClientId) { toast.error("Kies een bestaand klantaccount"); return; }
+        const { clientId } = await create.mutateAsync({ quoteId: quote.id, client: {}, targetClientId });
+        toast.success("Offerte gekoppeld aan bestaand klantaccount");
+        onCreated?.(clientId);
+        onClose();
+        return;
+      }
+      if (!t("company_name").trim()) { toast.error("Bedrijfsnaam is verplicht"); return; }
       const { clientId } = await create.mutateAsync({
         quoteId: quote.id,
         client: {
@@ -107,6 +137,56 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Keuze: nieuw account of koppelen aan een bestaand account */}
+          <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
+            <button type="button" onClick={() => setMode("new")}
+              className={cn("rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                mode === "new" ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-foreground/[0.05]")}>
+              Nieuw account
+            </button>
+            <button type="button" onClick={() => setMode("existing")}
+              className={cn("rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                mode === "existing" ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-foreground/[0.05]")}>
+              Bestaand account
+            </button>
+          </div>
+
+          {mode === "existing" ? (
+            <div className="space-y-2">
+              <p className="text-[11px] text-muted-foreground">
+                Koppel deze getekende offerte (incl. locatie) aan een bestaand klantaccount. De
+                accountgegevens van dat account blijven ongewijzigd.
+              </p>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input autoFocus value={clientSearch} onChange={(e) => setClientSearch(e.target.value)}
+                  placeholder="Zoek op naam, klantnummer of KvK…" className="pl-9" />
+              </div>
+              <div className="max-h-72 overflow-y-auto rounded-lg border bg-background/50 p-1">
+                {clientOptions.map((c) => {
+                  const sel = targetClientId === c.id;
+                  return (
+                    <button key={c.id} type="button" onClick={() => setTargetClientId(c.id)}
+                      className={cn("flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors",
+                        sel ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "hover:bg-foreground/[0.06]")}>
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-x-2">
+                          {c.client_number && <span className="text-xs font-semibold tabular-nums text-primary">#{c.client_number}</span>}
+                          <span className="truncate font-medium">{c.company_name}</span>
+                        </span>
+                        {c.contact_email && <span className="block truncate text-xs text-muted-foreground">{c.contact_email}</span>}
+                      </span>
+                      {sel && <CheckCircle className="h-4 w-4 flex-shrink-0 text-primary" />}
+                    </button>
+                  );
+                })}
+                {clientOptions.length === 0 && (
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">Geen klantaccounts gevonden.</div>
+                )}
+              </div>
+            </div>
+          ) : (
+          <>
           <div>
             <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Bedrijf</p>
             <div className="grid grid-cols-2 gap-2">
@@ -150,11 +230,15 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
             </div>
             <Switch checked={managed} onCheckedChange={setManaged} />
           </div>
+          </>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={create.isPending}>Annuleren</Button>
-          <Button onClick={submit} disabled={create.isPending || !t("company_name").trim()}>{create.isPending ? "Aanmaken…" : "Klant account aanmaken"}</Button>
+          <Button onClick={submit} disabled={create.isPending || (mode === "new" ? !t("company_name").trim() : !targetClientId)}>
+            {create.isPending ? "Bezig…" : mode === "existing" ? "Koppel aan account" : "Klant account aanmaken"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

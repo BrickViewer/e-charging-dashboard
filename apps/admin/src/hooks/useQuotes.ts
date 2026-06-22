@@ -162,10 +162,10 @@ export function useSignedQuotesAwaitingClient() {
 export function useCreateClientFromQuote() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ quoteId, client }: { quoteId: string; client: Record<string, unknown> }) => {
+    mutationFn: async ({ quoteId, client, targetClientId }: { quoteId: string; client: Record<string, unknown>; targetClientId?: string | null }) => {
       const { data, error } = await supabase.functions.invoke<{ clientId: string; clientNumber: number | null }>(
         "quote-create-client",
-        { body: { quote_id: quoteId, client } },
+        { body: { quote_id: quoteId, client, target_client_id: targetClientId ?? null } },
       );
       if (error) throw error;
       if (!data?.clientId) throw new Error("Klantaccount aanmaken mislukt");

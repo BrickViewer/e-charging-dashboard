@@ -34,6 +34,8 @@ Deno.serve(async (req) => {
     const quoteId = typeof body.quote_id === "string" ? body.quote_id : "";
     if (!quoteId) return json({ status: "error", message: "quote_id ontbreekt" }, 400);
     const reviewed = (body.client && typeof body.client === "object" ? body.client : {}) as Record<string, unknown>;
+    // Optioneel: koppel de offerte aan een BESTAAND klantaccount i.p.v. een nieuw account.
+    const targetClientId = typeof body.target_client_id === "string" && body.target_client_id ? body.target_client_id : null;
 
     const { data: quote, error: qErr } = await sb.from("quotes").select("*").eq("id", quoteId).maybeSingle();
     if (qErr) throw qErr;
@@ -89,9 +91,15 @@ Deno.serve(async (req) => {
       if (Object.keys(cPatch).length) await sb.from("companies").update(cPatch).eq("id", companyId);
     }
 
-    // 1 bedrijf = 1 actief klantaccount: bestaand account hergebruiken (reactiveren) + bijwerken.
     let clientId: string | null = null;
-    if (companyId) {
+    if (targetClientId) {
+      // Expliciet koppelen aan een bestaand account: alleen de offerte/locatie eraan hangen, de
+      // accountgegevens van het bestaande account NIET overschrijven.
+      const { data: tc } = await sb.from("clients").select("id, status").eq("organization_id", org).eq("id", targetClientId).maybeSingle();
+      if (!tc || tc.status === "verwijderd") return json({ status: "error", message: "Gekozen klantaccount niet gevonden" }, 422);
+      clientId = tc.id;
+    } else if (companyId) {
+      // 1 bedrijf = 1 actief klantaccount: bestaand account hergebruiken (reactiveren) + bijwerken.
       const { data: existing } = await sb.from("clients").select("id, status").eq("organization_id", org).eq("company_id", companyId)
         .neq("status", "verwijderd").order("created_at", { ascending: true }).limit(1).maybeSingle();
       if (existing) {
