@@ -230,7 +230,7 @@ export default function AdminConfiguratorSettings() {
       return;
     }
     // Fallback-basis: lokaal de dev-server, in productie het gekoppelde domein.
-    const base = import.meta.env.DEV ? "http://localhost:8081" : "https://configurator.e-charging.nl";
+    const base = import.meta.env.DEV ? "http://localhost:8081" : "https://echarging-configurator.pages.dev";
     try {
       const { data, error } = await supabase.functions.invoke<SessionStartResponse>("configurator-session-start");
       if (error) throw error;

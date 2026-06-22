@@ -424,6 +424,42 @@
     user-select: none;
   }
 
+  /* Demo-actiebalk rechtsboven (links van de thema-toggle): "Start configurator"-CTA
+     + de Demo-chip. De chip wordt binnen de balk statisch i.p.v. fixed. */
+  .portal-theme .portal-demo-actions {
+    position: fixed;
+    top: max(0.9rem, env(safe-area-inset-top));
+    right: calc(max(1.1rem, env(safe-area-inset-right)) + 2.35rem + 0.6rem);
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .portal-theme .portal-demo-actions .portal-demo-chip {
+    position: static;
+    top: auto;
+    right: auto;
+  }
+  .portal-theme .portal-demo-start {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 2.35rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: hsl(0 0% 100%);
+    background: hsl(var(--gauge-green));
+    border: 1px solid hsl(var(--gauge-green));
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 14px hsl(var(--gauge-green) / 0.25);
+    transition: filter 0.15s ease, opacity 0.15s ease;
+  }
+  .portal-theme .portal-demo-start:hover { filter: brightness(1.06); }
+  .portal-theme .portal-demo-start:disabled { opacity: 0.6; cursor: default; box-shadow: none; }
+
   /* Dagmodus — licht satijnglas-chip op de zachte kap; hover-groen volgt het
      verenigde --gauge-green van het thema */
   .portal-theme.light .portal-theme-toggle {

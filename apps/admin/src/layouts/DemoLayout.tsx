@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { buildDemoDataset } from "@/lib/demoData";
+import { buildDemoDataset, type DemoParams } from "@/lib/demoData";
 import {
   DEMO_SCENARIOS,
   isScenarioKey,
@@ -11,6 +11,7 @@ import {
   type LeadConfiguration,
 } from "@/lib/demoScenarios";
 import { DemoDatasetProvider } from "@/contexts/DemoDatasetContext";
+import type { ConfiguratorSeed, ConfiguratorSource } from "@/contexts/demoConfiguratorSourceValue";
 import { DemoShell } from "@/components/portal/DemoShell";
 import { DemoScenarioChooser } from "@/components/portal/DemoScenarioChooser";
 import ClientLayout from "@/layouts/ClientLayout";
@@ -35,6 +36,18 @@ function DemoMessage({ title, sub }: { title: string; sub?: string }) {
 // keuze behouden), bouwt de bijbehorende dataset en levert die via context.
 // `cfg` (config-in-de-link) is no-login: geen Supabase-call. `leadId` is een
 // ingelogde fallback. Prioriteit: cfg > leadId > scenario.
+// Demo-schaal → configurator-seed (palen/verbruik). Voor presets/scenario's zonder
+// lead; de configurator start hiermee voorgevuld. Met een lead is geen seed nodig.
+function seedFromParams(p: DemoParams): ConfiguratorSeed {
+  return {
+    chargePoints: p.chargePoints,
+    kwhPerChargePointMonth: p.kwhPerCpMonth,
+    sessionsPerChargePointMonth: p.sessionsPerCpMonth,
+    effectiveChargingPowerKw: p.chargerPowerKw ?? 11,
+    ere: p.ereEnabled === true,
+  };
+}
+
 export default function DemoLayout() {
   const [sp] = useSearchParams();
   const cfgParam = sp.get("cfg");
@@ -79,27 +92,33 @@ export default function DemoLayout() {
     },
   });
 
-  const dataset = useMemo(() => {
+  const { dataset, source } = useMemo<{ dataset: ReturnType<typeof buildDemoDataset> | null; source: ConfiguratorSource | null }>(() => {
     if (cfg) {
       // No-login: config staat in de link, geen Supabase-call.
       try {
         const payload = decodeDemoConfig(cfg);
         const params = demoParamsFromConfiguration(payload.leadId || "demo", payload.config);
-        return buildDemoDataset(params);
+        const src: ConfiguratorSource = payload.leadId
+          ? { leadId: payload.leadId, seed: null }
+          : { leadId: null, seed: seedFromParams(params) };
+        return { dataset: buildDemoDataset(params), source: src };
       } catch {
-        return null;
+        return { dataset: null, source: null };
       }
     }
     if (leadId) {
-      if (!leadQuery.data) return null;
+      if (!leadQuery.data) return { dataset: null, source: null };
       const params = demoParamsFromConfiguration(
         leadId,
         leadQuery.data.configuration as LeadConfiguration | null,
       );
-      return buildDemoDataset(params);
+      return { dataset: buildDemoDataset(params), source: { leadId, seed: null } };
     }
-    if (scenario && isScenarioKey(scenario)) return buildDemoDataset(DEMO_SCENARIOS[scenario]);
-    return null;
+    if (scenario && isScenarioKey(scenario)) {
+      const params = DEMO_SCENARIOS[scenario];
+      return { dataset: buildDemoDataset(params), source: { leadId: null, seed: seedFromParams(params) } };
+    }
+    return { dataset: null, source: null };
   }, [cfg, leadId, leadQuery.data, scenario]);
 
   if (!cfg && !leadId && !(scenario && isScenarioKey(scenario))) return <DemoScenarioChooser />;
@@ -113,7 +132,7 @@ export default function DemoLayout() {
   if (!dataset) return <DemoMessage title="Demo wordt voorbereid…" />;
 
   return (
-    <DemoDatasetProvider dataset={dataset}>
+    <DemoDatasetProvider dataset={dataset} source={source}>
       <ClientLayout />
     </DemoDatasetProvider>
   );

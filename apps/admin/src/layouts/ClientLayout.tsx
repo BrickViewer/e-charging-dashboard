@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { NavIconBar } from "@/components/portal/NavIconBar";
 import { CockpitArc } from "@/components/portal/CockpitArc";
 import { ThemeToggle } from "@/components/portal/ThemeToggle";
+import { StartConfiguratorButton } from "@/components/portal/StartConfiguratorButton";
 import { usePortalTheme } from "@/hooks/usePortalTheme";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 
@@ -46,7 +47,12 @@ export default function ClientLayout() {
     return (
       <div className={shellClass}>
         <ThemeToggle variant="floating" />
-        {isDemo && <span className="portal-demo-chip" aria-label="Demo-omgeving">Demo</span>}
+        {isDemo && (
+          <div className="portal-demo-actions">
+            <StartConfiguratorButton />
+            <span className="portal-demo-chip" aria-label="Demo-omgeving">Demo</span>
+          </div>
+        )}
         <div className="flex-shrink-0 w-full pt-0">
           <CockpitArc className="h-[clamp(80px,14vh,240px)]" />
         </div>
@@ -63,7 +69,12 @@ export default function ClientLayout() {
   return (
     <div className={shellClass}>
       <ThemeToggle variant="floating" />
-        {isDemo && <span className="portal-demo-chip" aria-label="Demo-omgeving">Demo</span>}
+        {isDemo && (
+          <div className="portal-demo-actions">
+            <StartConfiguratorButton />
+            <span className="portal-demo-chip" aria-label="Demo-omgeving">Demo</span>
+          </div>
+        )}
       {/* Eén scroll-container — content schuift onder de cockpit-arc door, volgt zo de curve */}
       <div className="flex-1 min-h-0 w-full overflow-y-auto">
         {/* Sticky cockpit-arc met overlay-titel. h-0 op de sticky-wrapper zodat de inhoud

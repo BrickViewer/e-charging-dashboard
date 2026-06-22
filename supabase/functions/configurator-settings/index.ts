@@ -28,7 +28,7 @@ async function getActiveSettings(serviceClient: ReturnType<typeof createClient>)
 async function getSessionSettings(serviceClient: ReturnType<typeof createClient>, sessionId: string) {
   const { data: session, error: sessionError } = await serviceClient
     .from("configurator_sessions")
-    .select("id, status, expires_at, settings_id, lead_id")
+    .select("id, status, expires_at, settings_id, lead_id, seed_config")
     .eq("id", sessionId)
     .maybeSingle();
 
@@ -45,7 +45,11 @@ async function getSessionSettings(serviceClient: ReturnType<typeof createClient>
 
   if (error) throw error;
   if (!data) return null;
-  return { settings: data, leadId: (session.lead_id as string | null) ?? null };
+  return {
+    settings: data,
+    leadId: (session.lead_id as string | null) ?? null,
+    seedConfig: (session.seed_config as { pricing_input?: unknown; ere?: boolean } | null) ?? null,
+  };
 }
 
 // Lead-context voor de wizard: basis-prefill (klant-/behoeftevelden) + de eerder
@@ -100,13 +104,16 @@ Deno.serve(async (req) => {
       const result = await getSessionSettings(serviceClient, sessionId);
       if (!result) return json({ status: "forbidden", message: "Configuratiesessie verlopen" }, 403);
       const ctx = result.leadId ? await getLeadContext(serviceClient, result.leadId) : undefined;
+      // Geen lead maar wél een demo-seed → gebruik die als savedInput (start vanuit
+      // de demo-schaal; opslaan in de wizard maakt daarna de lead aan).
+      const seed = !result.leadId && result.seedConfig ? result.seedConfig : null;
       return json({
         version: result.settings.version,
         settings: normalizeSettings(result.settings.settings),
         leadId: result.leadId,
         prefill: ctx?.prefill,
-        savedInput: ctx?.savedInput,
-        savedExtras: ctx?.savedExtras,
+        savedInput: ctx?.savedInput ?? seed?.pricing_input,
+        savedExtras: ctx?.savedExtras ?? (seed ? { ere: seed.ere === true, investmentMin: null, investmentMax: null } : undefined),
       });
     }
 

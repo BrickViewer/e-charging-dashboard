@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
-import { defaultConfiguratorSettings } from "../_shared/configurator.ts";
+import { defaultConfiguratorSettings, normalizePricingInput, normalizeSettings } from "../_shared/configurator.ts";
 import { CORS_STD } from "../_shared/cors.ts";
 
 const corsHeaders = CORS_STD;
@@ -50,15 +50,17 @@ Deno.serve(async (req) => {
 
     const settingsResult = await serviceClient
       .from("configurator_settings")
-      .select("id, version")
+      .select("id, version, settings")
       .eq("organization_id", org.id)
       .eq("is_active", true)
       .maybeSingle();
 
     if (settingsResult.error) throw settingsResult.error;
-    let settings = settingsResult.data;
+    let settingsId = settingsResult.data?.id as string | undefined;
+    let settingsVersion = (settingsResult.data?.version as number | undefined) ?? 1;
+    let settingsJson: unknown = settingsResult.data?.settings ?? defaultConfiguratorSettings;
 
-    if (!settings) {
+    if (!settingsId) {
       const { data: created, error: createSettingsError } = await serviceClient
         .from("configurator_settings")
         .insert({
@@ -72,7 +74,28 @@ Deno.serve(async (req) => {
         .single();
 
       if (createSettingsError) throw createSettingsError;
-      settings = created;
+      settingsId = created.id as string;
+      settingsVersion = created.version as number;
+      settingsJson = defaultConfiguratorSettings;
+    }
+
+    // Optionele seed: een demo zonder lead geeft de schaal mee (palen/verbruik). We
+    // normaliseren 'm hier naar een volledige PricingInput zodat de wizard 'm direct
+    // als savedInput kan hydrateren. Met een lead (lead_id) is geen seed nodig.
+    let seedConfig: { pricing_input: unknown; ere: boolean } | null = null;
+    const seed = body.seed && typeof body.seed === "object" ? body.seed as Record<string, unknown> : null;
+    if (seed && !leadId) {
+      const normSettings = normalizeSettings(settingsJson);
+      const input = normalizePricingInput({
+        customer: { locationType: typeof seed.locationType === "string" ? seed.locationType : undefined },
+        hardware: { chargePoints: Number(seed.chargePoints) },
+        usage: {
+          kwhPerChargePointMonth: Number(seed.kwhPerChargePointMonth),
+          sessionsPerChargePointMonth: Number(seed.sessionsPerChargePointMonth),
+          effectiveChargingPowerKw: Number(seed.effectiveChargingPowerKw),
+        },
+      }, normSettings);
+      seedConfig = { pricing_input: input, ere: seed.ere === true };
     }
 
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -81,10 +104,11 @@ Deno.serve(async (req) => {
       .insert({
         organization_id: org.id,
         actor_user_id: auth.userId,
-        settings_id: settings.id,
-        settings_version: settings.version,
+        settings_id: settingsId,
+        settings_version: settingsVersion,
         expires_at: expiresAt,
         lead_id: leadId,
+        seed_config: seedConfig,
       })
       .select("id, expires_at")
       .single();
