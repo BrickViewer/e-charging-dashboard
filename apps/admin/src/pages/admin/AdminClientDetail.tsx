@@ -1365,13 +1365,14 @@ function OnboardingChecklistPanel({
         client.managed === false ? (
           <span className="text-[11px] font-medium text-amber-600">Activeer eerst beheer</span>
         ) : !client.contact_email ? (
-          <Button size="sm" variant="outline" onClick={onEdit}>
+          <Button size="sm" variant="outline" className="h-8 w-full text-xs" onClick={onEdit}>
             <Mail className="mr-1.5 h-3.5 w-3.5" /> E-mailadres toevoegen
           </Button>
         ) : (
           <Button
             size="sm"
             variant={hasPendingInvite ? "outline" : "default"}
+            className="h-8 w-full text-xs"
             onClick={() => onSendInvitation(Boolean(hasPendingInvite))}
             disabled={sendingInvite}
           >
@@ -1404,7 +1405,7 @@ function OnboardingChecklistPanel({
         ? `${client.locations?.length ?? 0} locatie${client.locations?.length === 1 ? "" : "s"} gekoppeld`
         : "Koppel een gesyncde e-Flux locatie",
       action: !hasLocation ? (
-        <Button size="sm" variant="outline" onClick={onLinkLocation}>
+        <Button size="sm" variant="outline" className="h-8 w-full text-xs" onClick={onLinkLocation}>
           <MapPin className="mr-1.5 h-3.5 w-3.5" />
           Locatie koppelen
         </Button>
@@ -1422,7 +1423,7 @@ function OnboardingChecklistPanel({
           {steps.map((step) => (
             <div
               key={step.label}
-              className="rounded-lg border border-border/70 bg-background/20 p-3"
+              className="flex flex-col rounded-lg border border-border/70 bg-background/20 p-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -1435,7 +1436,7 @@ function OnboardingChecklistPanel({
                   <Circle className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
                 )}
               </div>
-              {step.action && <div className="mt-3">{step.action}</div>}
+              {step.action && <div className="mt-auto pt-3">{step.action}</div>}
             </div>
           ))}
         </div>
