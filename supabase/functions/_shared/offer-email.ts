@@ -85,7 +85,7 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
     p(`Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur. ${bijlageZin}`) +
     p("In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.") +
     btn(o.acceptUrl, "Offerte bekijken en ondertekenen") +
-    fine(`${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."} De Algemene Voorwaarden en Verwerkersovereenkomst E-Charging horen bij deze offerte.`) +
+    fine(`${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."}`) +
     greet;
   const text = `${o.contact ? `Beste ${o.contact},` : "Geachte heer/mevrouw,"}
 
@@ -95,8 +95,6 @@ In de offerte leest u de volledige uitwerking: de hardware, de installatie, het 
 
 Bekijk en onderteken de offerte online: ${o.acceptUrl}
 ${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."}
-
-De Algemene Voorwaarden en Verwerkersovereenkomst E-Charging horen bij deze offerte.
 
 Met vriendelijke groet,
 Team E-Charging
