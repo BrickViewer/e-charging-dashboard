@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useAllSettlements } from "@/hooks/useAdminData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,6 +25,12 @@ import { approveSettlement, unapproveSettlement, markSettlementEfluxReimbursed, 
 import type { AdminSettlement } from "@/types/db";
 import { getCurrentMonth, monthFullLabel, monthShortLabel } from "@/lib/period";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSearchParams } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { CashKpi } from "@/components/admin/financial/CashKpi";
+import { ReconciliationOverview } from "@/components/admin/financial/ReconciliationOverview";
+import { EfluxInvoicesTab } from "@/components/admin/financial/EfluxInvoicesTab";
 
 type RecomputeBody = { year?: number; month?: number };
 type RecomputeResult = { computed?: number; skipped?: number; errors?: number };
@@ -49,11 +55,11 @@ const vatInfo = (s: AdminSettlement) =>
 const inclAmount = (s: AdminSettlement) => vatInfo(s).inclVat;          // incl. BTW (getekend)
 const inclAbs = (s: AdminSettlement) => Math.abs(inclAmount(s));
 
-export default function AdminFinancial() {
+function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
   const { data: settlements, isLoading } = useAllSettlements();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [periodFilter, setPeriodFilter] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<string>(initialPeriod);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -64,6 +70,9 @@ export default function AdminFinancial() {
   const [trendYear, setTrendYear] = useState<number | undefined>(undefined);
   const selectedTrendYear = trendYear ?? getCurrentMonth().year;
   const perPage = 20;
+
+  // Maandfilter vanuit het Maandoverzicht (deeplink ?maand=YYYY-MM).
+  useEffect(() => { setPeriodFilter(initialPeriod); setPage(0); }, [initialPeriod]);
 
   const handleRecompute = async () => {
     setRecomputing(true);
@@ -778,57 +787,55 @@ export default function AdminFinancial() {
   );
 }
 
-/* ──────────────────────────────────────────── helpers ─── */
+// Financieel-module: tabbladen. Maandoverzicht (reconciliatie) + eFlux-facturen zijn admin-only;
+// niet-admins (manager/viewer) zien alleen de Afrekeningen die ze al konden zien.
+export default function AdminFinancial() {
+  const { role } = useAuth();
+  const isAdmin = role === "admin" || role === "superadmin";
+  const [params, setParams] = useSearchParams();
+  const maand = params.get("maand") ?? "all";
+  const tab = params.get("tab") ?? (isAdmin ? "overzicht" : "afrekeningen");
 
-function CashKpi({
-  label,
-  value,
-  subtitle,
-  icon,
-  accent,
-  changePositive,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  accent?: "primary" | "amber" | "muted";
-  changePositive?: boolean;
-}) {
-  const accentBg = {
-    primary: "bg-primary/10 border-primary/20 text-primary",
-    amber: "bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] text-[hsl(var(--status-amber))]",
-    muted: "bg-muted/30 border-border text-muted-foreground",
-  }[accent ?? "muted"];
+  const setTab = (v: string) => {
+    const next = new URLSearchParams(params);
+    next.set("tab", v);
+    if (v !== "afrekeningen") next.delete("maand");
+    setParams(next, { replace: true });
+  };
+  const openMonth = (ym: string) => setParams({ tab: "afrekeningen", maand: ym });
 
-  const subtitleColor =
-    changePositive === undefined
-      ? "text-muted-foreground"
-      : changePositive
-      ? "text-primary"
-      : "text-[hsl(var(--status-red))]";
+  if (!isAdmin) {
+    return (
+      <div className="space-y-5 animate-fade-in">
+        <SettlementsTab initialPeriod="all" />
+      </div>
+    );
+  }
 
   return (
-    <Card className="portal-card">
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3">
-          <div
-            className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${accentBg}`}
-          >
-            {icon}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="cockpit-section-label">{label}</p>
-            <p className="text-2xl font-semibold tabular-nums mt-1.5 leading-none">{value}</p>
-            {subtitle && (
-              <p className={`text-xs mt-1.5 ${subtitleColor}`}>{subtitle}</p>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-5 animate-fade-in">
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="overzicht">Maandoverzicht</TabsTrigger>
+          <TabsTrigger value="afrekeningen">Afrekeningen</TabsTrigger>
+          <TabsTrigger value="facturen">eFlux-facturen</TabsTrigger>
+        </TabsList>
+        <TabsContent value="overzicht" className="mt-5">
+          <ReconciliationOverview onOpenMonth={openMonth} />
+        </TabsContent>
+        <TabsContent value="afrekeningen" className="mt-5">
+          <SettlementsTab initialPeriod={maand} />
+        </TabsContent>
+        <TabsContent value="facturen" className="mt-5">
+          <EfluxInvoicesTab />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
+
+/* ──────────────────────────────────────────── helpers ─── */
+// CashKpi staat nu in components/admin/financial/CashKpi.tsx (gedeeld met het maandoverzicht).
 
 function PaymentPipeline({ pipeline }: { pipeline: PaymentPipelineSummary }) {
   const totalCount =

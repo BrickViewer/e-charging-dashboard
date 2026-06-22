@@ -134,6 +134,50 @@ export function useAllSettlements() {
   });
 }
 
+// CFO-reconciliatie per maand (eFlux-vergoeding ↔ klant-uitkeringen + onze fee). Admin-only RPC.
+export interface MonthlyFinancialRow {
+  year: number; month: number;
+  eflux_credit_incl: number; eflux_credit_excl: number; eflux_usage_incl: number; eflux_net_incl: number;
+  sessions_reimb_excl: number; sessions_reimb_incl: number; sessions_kwh: number; sessions_count: number;
+  recon_diff_incl: number; tie_out_ok: boolean;
+  gross_total: number; payout_total: number; fee_total: number; assigned_reimb: number; unassigned_reimb: number;
+  cnt_live: number; cnt_calculated: number; cnt_approved: number; cnt_paid: number;
+  cnt_invoice_sent: number; cnt_invoice_paid: number; cnt_charged_back: number;
+  settlements_total: number; settlements_final: number;
+  recon_status: "sluit" | "verschil" | "geen_factuur" | "lopend";
+}
+export function useMonthlyFinancialOverview(year?: number) {
+  return useQuery({
+    queryKey: ["admin-financial-overview", year ?? null],
+    queryFn: async () => {
+      const rpcClient = supabase as unknown as {
+        rpc(name: "monthly_financial_overview", args: { p_year: number | null }):
+          Promise<{ data: MonthlyFinancialRow[] | null; error: Error | null }>;
+      };
+      const { data, error } = await rpcClient.rpc("monthly_financial_overview", { p_year: year ?? null });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// Ruwe eFlux-facturen (cpo-credit = vergoeding, cpo-usage = kosten). RLS: admin-only tabel.
+export function useEfluxInvoices() {
+  return useQuery({
+    queryKey: ["admin-eflux-invoices"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("eflux_invoices")
+        .select("id, year, month, type, total_credit_amount_with_vat, total_amount_with_vat, is_paid, is_ready, has_error, identifier, account_name, currency, synced_at")
+        .order("year", { ascending: false })
+        .order("month", { ascending: false })
+        .order("type", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 export function useAllSessions(limit = 1000) {
   return useQuery({
     queryKey: ["admin-sessions", limit],
