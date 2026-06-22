@@ -1,6 +1,5 @@
 import type { PricingInput } from "@echarging/pricing-engine";
 import { Check, X, MonitorPlay } from "lucide-react";
-import { euro } from "./format";
 
 // Admin-app origin voor de demo-deeplink. In dev draait admin op 8080.
 const ADMIN_URL = (import.meta.env.VITE_ADMIN_APP_URL as string | undefined)
@@ -18,8 +17,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function FinalizePanel({
   input,
   updateInput,
-  monthly,
-  perYear,
   summary,
   onFinalize,
   finalizing,
@@ -31,8 +28,6 @@ export function FinalizePanel({
 }: {
   input: PricingInput;
   updateInput: (recipe: (draft: PricingInput) => void) => void;
-  monthly: number;
-  perYear: number;
   summary: { label: string; value: string }[];
   onFinalize: () => void;
   finalizing: boolean;
@@ -96,15 +91,7 @@ export function FinalizePanel({
                 : "Sla de configuratie op. Er wordt een lead aangemaakt met deze gegevens; de klant ontstaat pas zodra de offerte wordt geaccepteerd."}
             </p>
 
-            <div className="mt-5 rounded-2xl border border-gauge-green/25 bg-gauge-green/[0.07] p-4">
-              <p className="field-label mb-1">Geschatte opbrengst</p>
-              <p className="text-3xl font-black tracking-[-0.02em] text-foreground">
-                {euro(Math.round(monthly))}<span className="text-base font-semibold text-muted-foreground"> / maand</span>
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">{euro(Math.round(perYear))} per jaar</p>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-border-soft/70 p-4">
+            <div className="mt-5 rounded-2xl border border-border-soft/70 p-4">
               <p className="field-label mb-3">Vastgelegde configuratie</p>
               <div className="space-y-1.5">
                 {summary.map((s) => (

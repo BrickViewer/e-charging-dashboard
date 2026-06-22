@@ -449,16 +449,20 @@
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    color: hsl(0 0% 100%);
-    background: hsl(var(--gauge-green));
-    border: 1px solid hsl(var(--gauge-green));
+    color: hsl(var(--gauge-green));
+    background: hsl(var(--card) / 0.42);
+    border: 1px solid hsl(var(--gauge-green) / 0.35);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     cursor: pointer;
     white-space: nowrap;
-    box-shadow: 0 4px 14px hsl(var(--gauge-green) / 0.25);
-    transition: filter 0.15s ease, opacity 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
   }
-  .portal-theme .portal-demo-start:hover { filter: brightness(1.06); }
-  .portal-theme .portal-demo-start:disabled { opacity: 0.6; cursor: default; box-shadow: none; }
+  .portal-theme .portal-demo-start:hover {
+    background: hsl(var(--card) / 0.6);
+    border-color: hsl(var(--gauge-green) / 0.55);
+  }
+  .portal-theme .portal-demo-start:disabled { opacity: 0.6; cursor: default; }
 
   /* Dagmodus — licht satijnglas-chip op de zachte kap; hover-groen volgt het
      verenigde --gauge-green van het thema */

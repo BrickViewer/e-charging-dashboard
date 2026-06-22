@@ -340,8 +340,6 @@ export default function WizardPage() {
         <FinalizePanel
           input={input}
           updateInput={updateInput}
-          monthly={profitable ? effectiveMonth : 0}
-          perYear={profitable ? effectiveYear : 0}
           summary={saveSummary}
           onFinalize={() => finalizeMutation.mutate()}
           finalizing={finalizeMutation.isPending}

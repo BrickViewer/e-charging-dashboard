@@ -75,11 +75,21 @@ Deno.serve(async (req) => {
 
     const savedAt = new Date().toISOString();
 
+    const orgId = session.organization_id as string;
+    // Configurator-leads horen in de "Geconfigureerd"-fase (niet "Nieuw"). Haal de fases
+    // één keer op; val terug op de eerste fase als die fase niet bestaat (oud gedrag).
+    const { data: stages } = await serviceClient
+      .from("lead_stages").select("id, name, position")
+      .eq("organization_id", orgId).order("position", { ascending: true });
+    const configuredStage = (stages ?? []).find(
+      (s) => (s.name ?? "").trim().toLowerCase() === "geconfigureerd",
+    );
+    const initialStageId = (configuredStage ?? stages?.[0])?.id ?? null;
+
     // Sessie zonder lead (losse configuratie) → maak een lead aan (géén klant).
     let leadId = session.lead_id as string | null;
     const createdNewLead = !leadId;
     if (!leadId) {
-      const orgId = session.organization_id as string;
       const companyId = await resolveOrCreateCompany(serviceClient, orgId, {
         name: input.customer.companyName,
         street: input.customer.locationAddress || null,
@@ -92,11 +102,8 @@ Deno.serve(async (req) => {
         phone: input.customer.contactPhone || null,
       });
       if (companyId && personId) await linkPersonToCompany(serviceClient, companyId, personId, true);
-      const { data: stage } = await serviceClient
-        .from("lead_stages").select("id").eq("organization_id", orgId)
-        .order("position", { ascending: true }).limit(1).maybeSingle();
       const { data: newLead, error: leadErr } = await serviceClient.from("leads").insert({
-        organization_id: orgId, stage_id: stage?.id ?? null,
+        organization_id: orgId, stage_id: initialStageId,
         company_id: companyId, person_id: personId,
         company_name: input.customer.companyName,
         contact_name: input.customer.contactName || null,
@@ -107,6 +114,19 @@ Deno.serve(async (req) => {
       if (leadErr) throw leadErr;
       leadId = newLead.id as string;
       await serviceClient.from("configurator_sessions").update({ lead_id: leadId }).eq("id", session.id);
+    }
+
+    // Bestaande lead: vooruit verplaatsen naar "Geconfigureerd" (forward-only) — van een
+    // eerdere/geen fase naar Geconfigureerd; nooit terug, en gewonnen/verloren/latere fases
+    // blijven staan. Nieuwe leads zijn hierboven al in de juiste fase aangemaakt.
+    const stagePatch: { stage_id?: string } = {};
+    if (!createdNewLead && configuredStage) {
+      const { data: curLead } = await serviceClient
+        .from("leads").select("stage_id").eq("id", leadId).maybeSingle();
+      const cur = (stages ?? []).find((s) => s.id === curLead?.stage_id);
+      if (!cur || cur.position < configuredStage.position) {
+        stagePatch.stage_id = configuredStage.id as string;
+      }
     }
 
     const { error: updateError } = await serviceClient
@@ -126,6 +146,7 @@ Deno.serve(async (req) => {
         // pas bepaald bij het maken van een offerte (verkoopprijs van de palen).
         configuration,
         configuration_updated_at: savedAt,
+        ...stagePatch,
       })
       .eq("id", leadId);
     if (updateError) throw updateError;
