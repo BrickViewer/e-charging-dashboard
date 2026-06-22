@@ -83,14 +83,8 @@ Deno.serve(async (req) => {
         status: "actief",
         notes: cfg ? "Geconverteerd vanuit lead (met configuratie)" : "Geconverteerd vanuit lead",
       };
-      // Exacte tarieven/contract uit de opgeslagen configuratie.
+      // Tarieven staan per LOCATIE (tariff_profiles), niet op het klantaccount; alleen contract-admin.
       if (pi) {
-        const chargeTariff = num(pi.tariffs?.chargeTariffPerKwh);
-        const energyCost = num(pi.tariffs?.energyCostPerKwh);
-        const serviceFeePct = num(pr?.serviceFeePct);
-        if (chargeTariff !== null) clientInsert.charge_rate_per_kwh = chargeTariff;
-        if (energyCost !== null) clientInsert.energy_cost_per_kwh = energyCost;
-        if (serviceFeePct !== null) clientInsert.revenue_share_percentage = Math.max(0, Math.min(100, (1 - serviceFeePct) * 100));
         const duration = num(pi.contract?.durationMonths);
         const notice = num(pi.contract?.noticePeriodMonths);
         if (duration !== null) clientInsert.contract_duration_months = duration;

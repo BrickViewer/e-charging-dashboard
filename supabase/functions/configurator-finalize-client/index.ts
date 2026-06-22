@@ -129,9 +129,6 @@ Deno.serve(async (req) => {
     if (existing) {
       client = { id: existing.id, client_number: existing.client_number };
       await serviceClient.from("clients").update({
-        charge_rate_per_kwh: input.tariffs.chargeTariffPerKwh,
-        energy_cost_per_kwh: input.tariffs.energyCostPerKwh,
-        revenue_share_percentage: Math.max(0, Math.min(100, (1 - pricing.serviceFeePct) * 100)),
         contract_duration_months: input.contract.durationMonths,
         notice_period_months: input.contract.noticePeriodMonths,
         status: "actief",
@@ -151,9 +148,6 @@ Deno.serve(async (req) => {
           billing_address_street: input.customer.locationAddress || null,
           billing_address_postal: input.customer.postalCode || null,
           billing_address_city: input.customer.city || null,
-          charge_rate_per_kwh: input.tariffs.chargeTariffPerKwh,
-          energy_cost_per_kwh: input.tariffs.energyCostPerKwh,
-          revenue_share_percentage: Math.max(0, Math.min(100, (1 - pricing.serviceFeePct) * 100)),
           contract_duration_months: input.contract.durationMonths,
           notice_period_months: input.contract.noticePeriodMonths,
           status: "actief",

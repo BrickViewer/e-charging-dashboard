@@ -53,12 +53,7 @@ Deno.serve(async (req) => {
     const companyId = (quote.company_id ?? lead?.company_id) as string | null;
     const personId = (quote.person_id ?? lead?.person_id) as string | null;
 
-    // Afgeleide opbrengstdeling uit de offerte-snapshot (klant houdt 1 − service-fee).
-    const snap = (quote.calculation_snapshot ?? null) as
-      { settings_version?: unknown; pricing_input?: unknown; pricing_result?: Record<string, unknown> } | null;
-    const serviceFeePct = num(snap?.pricing_result?.serviceFeePct);
-    const derivedRevenue = serviceFeePct != null ? Math.max(0, Math.min(100, (1 - serviceFeePct) * 100)) : null;
-
+    // Tarieven + service-fee staan per LOCATIE (tariff_profiles), niet op het klantaccount.
     // Gereviewde klantgegevens (val terug op offerte/lead waar leeg gelaten).
     const fields = {
       company_name: str(reviewed.company_name) ?? quote.prospect_company ?? lead?.company_name ?? "Onbekend bedrijf",
@@ -70,11 +65,8 @@ Deno.serve(async (req) => {
       billing_address_street: str(reviewed.billing_address_street) ?? lead?.address_street ?? null,
       billing_address_postal: str(reviewed.billing_address_postal) ?? lead?.postal_code ?? null,
       billing_address_city: str(reviewed.billing_address_city) ?? lead?.city ?? null,
-      charge_rate_per_kwh: num(reviewed.charge_rate_per_kwh) ?? num(quote.charge_rate_per_kwh),
-      energy_cost_per_kwh: num(reviewed.energy_cost_per_kwh) ?? num(quote.energy_cost_per_kwh),
       contract_duration_months: num(reviewed.contract_duration_months),
       notice_period_months: num(reviewed.notice_period_months),
-      revenue_share_percentage: num(reviewed.revenue_share_percentage) ?? derivedRevenue,
       managed: typeof reviewed.managed === "boolean" ? reviewed.managed : (quote.with_management === false ? false : true),
     };
 
