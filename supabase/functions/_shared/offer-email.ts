@@ -107,16 +107,16 @@ export function renderSignedConfirmation(o: { supabaseUrl: string; quoteNumber: 
   const bijlage = o.hasAttachment ? " De getekende offerte vindt u als PDF-bijlage bij deze e-mail." : "";
   const inner =
     eyebrow(`Offerte ${o.quoteNumber}`) +
-    h1("Bedankt — uw offerte is ondertekend") +
+    h1("Bedankt, uw offerte is ondertekend") +
     aanhef(o.signerName) +
-    p(`Hartelijk dank voor uw akkoord op offerte <strong>${o.quoteNumber}</strong> (eenmalige investering ${eur0(o.total)} excl. BTW).${bijlage}`) +
-    p("Een van onze adviseurs neemt binnen 2 werkdagen contact met u op om de installatie in te plannen. Heeft u vragen? Mail ons gerust via info@e-charging.nl.") +
+    p(`Hartelijk dank voor uw akkoord op offerte <strong>${o.quoteNumber}</strong>.${bijlage}`) +
+    p("Wij nemen binnenkort contact met u op om de installatie in te plannen. Heeft u vragen? Mail ons gerust via info@e-charging.nl.") +
     greet;
   const text = `Beste ${o.signerName},
 
-Hartelijk dank voor uw akkoord op offerte ${o.quoteNumber} (eenmalige investering ${eur0(o.total)} excl. BTW).${o.hasAttachment ? " De getekende offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
+Hartelijk dank voor uw akkoord op offerte ${o.quoteNumber}.${o.hasAttachment ? " De getekende offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
 
-Een van onze adviseurs neemt binnen 2 werkdagen contact met u op om de installatie in te plannen. Heeft u vragen? Mail ons via info@e-charging.nl.
+Wij nemen binnenkort contact met u op om de installatie in te plannen. Heeft u vragen? Mail ons via info@e-charging.nl.
 
 Met vriendelijke groet,
 Team E-Charging`;
