@@ -37,6 +37,7 @@ const AdminFinancial = lazy(() => import("./pages/admin/AdminFinancial"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
 const SalesOnboarding = lazy(() => import("./pages/sales/SalesOnboarding"));
 const AdminLocationDetail = lazy(() => import("./pages/admin/AdminLocationDetail"));
+const AdminMspLocaties = lazy(() => import("./pages/admin/AdminMspLocaties"));
 const AdminStoringen = lazy(() => import("./pages/admin/AdminStoringen"));
 const AdminStoringDetail = lazy(() => import("./pages/admin/AdminStoringDetail"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
@@ -172,6 +173,7 @@ const App = () => (
                 <Route path="klanten/:id" element={<AdminClientDetail />} />
                 <Route path="locaties" element={<AdminLocations />} />
                 <Route path="locaties/:id" element={<AdminLocationDetail />} />
+                <Route path="msp-locaties" element={<AdminMspLocaties />} />
                 <Route path="storingen" element={<AdminStoringen />} />
                 <Route path="storingen/:id" element={<AdminStoringDetail />} />
                 {/* Installaties zijn naar het Sales-werkblad verhuisd; redirect voor oude bookmarks */}
