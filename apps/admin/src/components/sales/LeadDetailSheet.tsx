@@ -31,6 +31,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { canAccessBeheer } from "@/lib/workspaces";
 import { CompanyPicker } from "@/components/contacts/CompanyPicker";
 import { PersonPicker } from "@/components/contacts/PersonPicker";
+import { CompanyFields } from "@/components/contacts/CompanyFields";
+import { PersonFields } from "@/components/contacts/PersonFields";
 import {
   useLeadTasks, useLeadActivities, useUpdateLead, useDeleteLead, useAddTask, useToggleTask,
   useDeleteTask, useConvertLeadToClient, type LeadStage, type LeadWithTasks,
@@ -112,8 +114,8 @@ export function LeadDetailSheet({
     const cfg = (l.configuration as unknown as LeadConfig | null) ?? null;
     const ci = cfg?.pricing_input ?? {};
     return {
-      kvk: l.kvk ?? "", website: l.website ?? "", sector: l.sector ?? "",
-      address_street: l.address_street ?? "", postal_code: l.postal_code ?? "", city: l.city ?? "",
+      // kvk/website/sector/adres zijn bedrijfs-eigendom → bewerkt via de bedrijfstap (CompanyFields),
+      // niet meer als lead-veld. De inline-cache op de lead volgt automatisch via de propagate-trigger.
       location_type: l.location_type ?? "",
       estimated_charge_points: l.estimated_charge_points?.toString() ?? "",
       estimated_kwh_per_month: l.estimated_kwh_per_month?.toString() ?? "",
@@ -194,9 +196,7 @@ export function LeadDetailSheet({
       await updateLead.mutateAsync({
         id: lead.id,
         patch: {
-          kvk: text("kvk").trim() || null, website: text("website").trim() || null, sector: text("sector").trim() || null,
-          address_street: text("address_street").trim() || null, postal_code: text("postal_code").trim() || null,
-          city: text("city").trim() || null, location_type: text("location_type") || null,
+          location_type: text("location_type") || null,
           estimated_charge_points: text("estimated_charge_points") ? Math.round(num(text("estimated_charge_points")) ?? 0) : null,
           estimated_kwh_per_month: num(text("estimated_kwh_per_month")),
           charger_type: text("charger_type").trim() || null,
@@ -788,12 +788,22 @@ function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
   const locOptions = Object.entries(LOCATION_TYPES) as [string, string][];
   return (
     <>
-      <InfoCard title="Bedrijf & contact" icon={Building2}>
+      <InfoCard title="Bedrijf" icon={Building2}>
         <ERow label="Bedrijf"><CompanyPicker value={lead.company_id} valueLabel={lead.company_name} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { company_id: id } })} /></ERow>
-        <ERow label="Contactpersoon"><PersonPicker value={lead.person_id} valueLabel={lead.contact_name} companyId={lead.company_id} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { person_id: id } })} /></ERow>
-        <ERow label="KvK"><EInput value={text("kvk")} onChange={set("kvk")} /></ERow>
-        <ERow label="Website"><EInput value={text("website")} onChange={set("website")} /></ERow>
-        <ERow label="Sector"><EInput value={text("sector")} onChange={set("sector")} /></ERow>
+        {lead.company_id ? (
+          <div className="pt-3"><CompanyFields companyId={lead.company_id} /></div>
+        ) : (
+          <p className="pt-2 text-xs text-muted-foreground">Kies of maak eerst een bedrijf om bedrijfsgegevens (KvK, BTW, website, adres) in te vullen. Deze worden 1:1 bij het bedrijf in de Contacten-tab bewaard.</p>
+        )}
+      </InfoCard>
+
+      <InfoCard title="Contactpersoon" icon={UserPlus}>
+        <ERow label="Persoon"><PersonPicker value={lead.person_id} valueLabel={lead.contact_name} companyId={lead.company_id} placeholder={lead.company_id ? "Kies of zoek persoon…" : "Kies eerst een bedrijf"} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { person_id: id } })} /></ERow>
+        {lead.person_id ? (
+          <div className="pt-3"><PersonFields personId={lead.person_id} /></div>
+        ) : (
+          <p className="pt-2 text-xs text-muted-foreground">Koppel een contactpersoon om naam, e-mail, telefoon en functie vast te leggen — 1:1 met de Contacten-tab.</p>
+        )}
       </InfoCard>
 
       <InfoCard title="Bericht" icon={MessageSquare}>
@@ -805,9 +815,6 @@ function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
       </InfoCard>
 
       <InfoCard title="Locatie & behoefte" icon={MapPin}>
-        <ERow label="Straat"><EInput value={text("address_street")} onChange={set("address_street")} /></ERow>
-        <ERow label="Postcode"><EInput value={text("postal_code")} onChange={set("postal_code")} /></ERow>
-        <ERow label="Plaats"><EInput value={text("city")} onChange={set("city")} /></ERow>
         <ERow label="Type locatie"><ESelect value={text("location_type")} onChange={set("location_type")} options={locOptions} placeholder="Kies…" /></ERow>
         <ERow label="Laadpunten"><EInput value={text("estimated_charge_points")} onChange={set("estimated_charge_points")} mode="numeric" /></ERow>
         <ERow label="kWh / maand"><EInput value={text("estimated_kwh_per_month")} onChange={set("estimated_kwh_per_month")} mode="decimal" /></ERow>
