@@ -20,7 +20,6 @@ function EarningsStrip({
   paybackLoYears,
   paybackHiYears,
   assumptions,
-  breakdown,
 }: {
   perMonth: number;
   perYear: number;
@@ -28,7 +27,6 @@ function EarningsStrip({
   paybackLoYears: number | null;
   paybackHiYears: number | null;
   assumptions: { label: string; value: string }[];
-  breakdown: { label: string; value: string }[];
 }) {
   const m = useCountUp(perMonth);
   const y = useCountUp(perYear);
@@ -91,16 +89,6 @@ function EarningsStrip({
       ) : (
         <p className="mt-5 border-t border-border-soft/60 pt-4 text-sm text-muted-foreground">
           Pas het tarief of het verwachte verbruik aan om het rendement te zien.
-        </p>
-      )}
-      {profitable && payback && (
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Afhankelijk van de installatiekosten. Daarna volledig rendement.
-        </p>
-      )}
-      {profitable && breakdown.length > 0 && (
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Waarvan {breakdown.map((b) => `${b.label} ${b.value}`).join(" · ")}
         </p>
       )}
     </div>
@@ -192,16 +180,6 @@ export default function WizardPage() {
       ? [{ label: "Uurtarief", value: `${euro(Math.round(pricing.perHourFeeRevenuePerChargePointMonth * sockets))}/mnd` }]
       : []),
     ...(ereEnabled ? [{ label: "ERE-subsidie", value: `+ ${euro(settings.ereSubsidyPerKwh, 2)} / kWh` }] : []),
-  ];
-
-  // Subtiel inzicht in het resultaat: wat dragen blokkeer- en uurtarief per maand bij.
-  const breakdown = [
-    ...(input.tariffs.idleFeeEnabled
-      ? [{ label: "blokkeertarief", value: `${euro(Math.round(pricing.idleFeeRevenuePerChargePointMonth * sockets))}/mnd` }]
-      : []),
-    ...(input.tariffs.perHourFeeEnabled
-      ? [{ label: "uurtarief", value: `${euro(Math.round(pricing.perHourFeeRevenuePerChargePointMonth * sockets))}/mnd` }]
-      : []),
   ];
 
   const saveSummary = [
@@ -337,7 +315,6 @@ export default function WizardPage() {
             paybackLoYears={paybackLoYears}
             paybackHiYears={paybackHiYears}
             assumptions={assumptions}
-            breakdown={breakdown}
           />
         </section>
 

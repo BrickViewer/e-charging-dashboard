@@ -246,6 +246,10 @@ export function TariffControls({
                     {/* Transparante berekening — ná de gratis minuten betaalt iedereen. */}
                     <div className="space-y-0.5 border-t border-border-soft/60 pt-2 text-[11px] leading-relaxed text-muted-foreground">
                       <p>
+                        {euro(input.tariffs.idleFeePerMinute, 2)} per minuut
+                        = <span className="font-semibold text-foreground">{euro(input.tariffs.idleFeePerMinute * 60, 2)} per uur</span>
+                      </p>
+                      <p>
                         max(0, {number(input.usage.idleMinutesPerSession)} − {number(input.tariffs.idleGraceMinutes)})
                         = <span className="font-semibold text-foreground">{number(pricing.billableIdleMinutesPerSession, 0)}</span> belaste min/sessie
                       </p>
