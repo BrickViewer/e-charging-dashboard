@@ -114,6 +114,16 @@ Deno.serve(async (req) => {
     }
     if (companyId && personId) await linkPersonToCompany(serviceClient, companyId, personId, true);
 
+    // KvK/BTW komen uit het bedrijf (bron van waarheid); de configurator vraagt ze niet uit.
+    let companyKvk: string | null = null;
+    let companyBtw: string | null = null;
+    if (companyId) {
+      const { data: co } = await serviceClient
+        .from("companies").select("kvk, btw_number").eq("id", companyId).maybeSingle();
+      companyKvk = (co?.kvk as string | null) ?? null;
+      companyBtw = (co?.btw_number as string | null) ?? null;
+    }
+
     // 1 bedrijf = 1 klantaccount: bestaat er al een account voor dit bedrijf, voeg
     // dan een nieuwe configuratie-versie aan dat account toe i.p.v. een tweede klant.
     let existing: { id: string; client_number: number | null; status: string | null } | null = null;
@@ -141,6 +151,8 @@ Deno.serve(async (req) => {
           company_id: companyId,
           person_id: personId,
           company_name: input.customer.companyName,
+          kvk: companyKvk,
+          btw_number: companyBtw,
           contact_name: input.customer.contactName || null,
           contact_email: input.customer.contactEmail || null,
           contact_phone: input.customer.contactPhone || null,

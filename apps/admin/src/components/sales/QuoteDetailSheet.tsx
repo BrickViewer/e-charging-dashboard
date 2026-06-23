@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Eye, Loader2, Plus, Send, Trash2, PenLine, UserPlus } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
+import { useCompany } from "@/hooks/useContacts";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useAuth } from "@/hooks/useAuth";
 import { useSignableAdmins } from "@/hooks/useSignableAdmins";
@@ -35,6 +36,10 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   const quote = quoteQ.data;
   const tpl = settingsQ.data?.offerTemplate;
   const admins = adminsQ.data ?? [];
+  // Bedrijfsgegevens (KvK/BTW/website) lezen via de company_id-koppeling — bron van waarheid is
+  // het company-record, niet een quote-cache. Zo tonen offertes altijd de actuele bedrijfsgegevens.
+  const companyQ = useCompany(quote?.company_id ?? undefined);
+  const company = companyQ.data;
 
   const [items, setItems] = useState<QuoteLineItem[]>([]);
   const [email, setEmail] = useState("");
@@ -266,12 +271,19 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
           <p className="mt-6 text-sm text-muted-foreground">Laden…</p>
         ) : (
           <div className="mt-5 space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">{quote.prospect_company || "—"}</p>
                 <p className="text-[11px] text-muted-foreground">{quote.prospect_contact || ""}</p>
+                {company && (company.kvk || company.btw_number || company.website) ? (
+                  <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
+                    {company.kvk ? <p>KvK: {company.kvk}</p> : null}
+                    {company.btw_number ? <p>BTW: {company.btw_number}</p> : null}
+                    {company.website ? <p className="truncate">{company.website}</p> : null}
+                  </div>
+                ) : null}
               </div>
-              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium">{STATUS_LABEL[quote.status] ?? quote.status}</span>
+              <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium">{STATUS_LABEL[quote.status] ?? quote.status}</span>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border p-3">
