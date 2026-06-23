@@ -67,6 +67,7 @@ export interface OfferTemplateData {
   chargeTariffPerKwh?: number | null; // laadkosten
   idleFeePerMinute?: number | null; // blokkeertarief
   startFeePerSession?: number | null; // starttarief
+  perHourFeePerHour?: number | null; // uurtarief (per uur aan de paal); null = niet tonen
   idleGraceMinutes?: number | null;
   validUntil?: string | null;
   offerDetails?: OfferDetails | null;
@@ -123,7 +124,7 @@ interface ResolvedModel {
   onzeReferentie: string; object: string; betreft: string; aanhef: string;
   numChargePoints: number; numPoles: number; chargerModel: string; loadBalancer: string;
   eindgroepen: number; eindgroepAmperage: number; leveringText: string; totalInvestment: number; stelpost: number;
-  serviceFeePerKwh: number; laadkosten: number | null; blokkeertarief: number | null; starttarief: number | null;
+  serviceFeePerKwh: number; laadkosten: number | null; blokkeertarief: number | null; starttarief: number | null; uurtarief: number | null;
   overlegNaam: string; overlegDatum: string;
   servicemonteurPerHour: number; voorrijkostenPerKm: number; toeslagWerkuur: number; activatiekostenPerSocket: number;
   ingangsdatum: string;
@@ -179,6 +180,7 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     laadkosten: firstNum(data.chargeTariffPerKwh),
     blokkeertarief: firstNum(data.idleFeePerMinute),
     starttarief: firstNum(od.startFeePerSession, data.startFeePerSession),
+    uurtarief: firstNum(od.perHourFeePerHour, data.perHourFeePerHour),
     overlegNaam: firstStr(od.overlegNaam),
     overlegDatum: od.overlegDatum ? fmtDateLong(od.overlegDatum) : "",
     servicemonteurPerHour: firstNum(od.servicemonteurPerHour, tpl.servicemonteurPerHour) ?? 0,
@@ -388,6 +390,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push(bRaw(tariff("Laadkosten:", `${mEur(m.laadkosten)} per kWh`), 4));
   blocks.push(bRaw(tariff("Blokkeertarief:", `${mEur(m.blokkeertarief)} per minuut`), 4));
   blocks.push(bRaw(tariff("Starttarief:", `${mEur(m.starttarief)} per keer`), 4));
+  if (m.uurtarief != null && m.uurtarief > 0) blocks.push(bRaw(tariff("Tarief per uur:", `${mEur(m.uurtarief)} per uur`), 4));
 
   // --- Uitgangspunten / voorwaarden ---
   const row2 = (l: string, r: string) => `<div style="display:flex"><div style="width:330px">${l}</div><div>${r}</div></div>`;

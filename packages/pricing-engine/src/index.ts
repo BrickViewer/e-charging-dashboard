@@ -15,12 +15,11 @@ export const locationTypeDefaultsSchema = z.object({
   kwhPerChargePointMonth: z.number().min(0),
   averageSessionDurationHours: z.number().min(0),
   effectiveChargingPowerKw: z.number().positive(),
-  // Blokkeertarief-aannames per locatietype (gedrag, niet afgeleid van de sessieduur):
-  // gemiddelde stilstaande minuten per sessie + het % van de sessies dat daadwerkelijk
-  // blokkeertarief oplevert (dag/nacht-venster + incidentie). `.default()` houdt oude
-  // opgeslagen settings/inputs geldig (val terug op 0 = géén idle-opbrengst).
+  // Blokkeertarief-basis per locatietype: de GEMIDDELDE stilstaande minuten per sessie over ÁLLE
+  // sessies (movers = 0 min, niet-movers = veel → het gemiddelde vangt de spreiding al). Na de
+  // gratis grace-minuten betaalt iedereen het blokkeertarief; er is bewust géén apart "% dat
+  // betaalt" meer. `.default(0)` houdt oude opgeslagen settings/inputs geldig.
   idleMinutesPerSession: z.number().min(0).default(0),
-  idleBillableSharePct: z.number().min(0).max(100).default(0),
 });
 
 // Invoer-/slidergrenzen die de configurator-UI gebruikt (geen invloed op de math).
@@ -108,6 +107,9 @@ export const configuratorSettingsSchema = z.object({
   defaultIdleFeeEnabled: z.boolean().default(false),
   defaultIdleFeePerMinute: z.number().min(0).default(0.05),
   defaultIdleGraceMinutes: z.number().min(0).default(60),
+  // Uurtarief: bedrag per uur aan de paal (hele sessieduur). Staat standaard UIT.
+  defaultPerHourFeeEnabled: z.boolean().default(false),
+  defaultPerHourFeePerHour: z.number().min(0).default(1),
   // ERE-subsidie: extra opbrengst per kWh per laadpaal (UI-laag in de configurator).
   ereSubsidyPerKwh: z.number().min(0).default(0.10),
   ereEnabledByDefault: z.boolean().default(false),
@@ -162,6 +164,9 @@ export const pricingInputSchema = z.object({
     idleFeeEnabled: z.boolean(),
     idleFeePerMinute: z.number().min(0),
     idleGraceMinutes: z.number().min(0),
+    // Uurtarief: per uur aan de paal (hele sessieduur). `.default()` houdt oude inputs geldig.
+    perHourFeeEnabled: z.boolean().default(false),
+    perHourFeePerHour: z.number().min(0).default(0),
   }),
 });
 
@@ -182,14 +187,13 @@ export type PricingResult = {
   derivedIdleMinutesPerSession: number;
   // Billing-basis: instelbare gem. stilstaande min/sessie (per locatietype).
   idleMinutesPerSession: number;
-  idleBillableSharePct: number;
   billableIdleMinutesPerSession: number;
-  effectiveBillableIdleMinutesPerSession: number;
   billableIdleMinutesPerChargePointMonth: number;
   grossChargingRevenuePerChargePointMonth: number;
   energyCostPerChargePointMonth: number;
   startFeeRevenuePerChargePointMonth: number;
   idleFeeRevenuePerChargePointMonth: number;
+  perHourFeeRevenuePerChargePointMonth: number;
   netReturnPerChargePointMonth: number;
   // e-charging verdient een vaste marge per kWh; serviceFeePct is daarvan afgeleid
   // (= marge / netto rendement) en blijft beschikbaar voor de klant-revenue-share.
@@ -211,6 +215,7 @@ export type PricingResult = {
   deltas: {
     startFeeCustomerPerMonth: number;
     idleFeeCustomerPerMonth: number;
+    perHourFeeCustomerPerMonth: number;
     lowerTariffLossPerYear: number;
   };
 };
@@ -226,6 +231,8 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = configuratorSet
   defaultIdleFeeEnabled: false,
   defaultIdleFeePerMinute: 0.05,
   defaultIdleGraceMinutes: 60,
+  defaultPerHourFeeEnabled: false,
+  defaultPerHourFeePerHour: 1,
   ereSubsidyPerKwh: 0.10,
   ereEnabledByDefault: false,
   investmentPerSocketLow: 1500,
@@ -248,15 +255,15 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = configuratorSet
     { key: "public", label: "Publiek" },
     { key: "other", label: "Anders" },
   ],
-  // idleMinutesPerSession + idleBillableSharePct: conservatieve, onderzoek-gebaseerde
-  // defaults (ElaadNL/JRC/Allego) — bewust niet-misleidend, vrij aanpasbaar in de admin.
-  // Werkplek/vloot worden in de praktijk vrijwel nooit belast → lage share.
+  // idleMinutesPerSession = conservatieve GEMIDDELDE stilstaande minuten per sessie over álle sessies
+  // (movers + niet-movers). Na de gratis grace betaalt iedereen; daarom bewust conservatief gekozen
+  // (net boven de standaard-grace van 60), vrij aanpasbaar per locatietype in de admin.
   locationTypeDefaults: {
-    workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 180, idleBillableSharePct: 10 },
-    destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10, idleMinutesPerSession: 90, idleBillableSharePct: 25 },
-    fleet: { sessionsPerChargePointMonth: 24, kwhPerChargePointMonth: 650, averageSessionDurationHours: 8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 90, idleBillableSharePct: 5 },
-    public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 120, idleBillableSharePct: 20 },
-    other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 90, idleBillableSharePct: 15 },
+    workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 75 },
+    destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10, idleMinutesPerSession: 70 },
+    fleet: { sessionsPerChargePointMonth: 24, kwhPerChargePointMonth: 650, averageSessionDurationHours: 8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 65 },
+    public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 70 },
+    other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 70 },
   },
   demoPresets: defaultDemoPresets,
 });
@@ -276,7 +283,6 @@ export const excelDefaultPricingInput: PricingInput = pricingInputSchema.parse({
     averageSessionDurationHours: 6,
     effectiveChargingPowerKw: 8,
     idleMinutesPerSession: 180,
-    idleBillableSharePct: 10,
   },
   contract: {
     durationMonths: 12,
@@ -305,26 +311,30 @@ function calculateWith(input: PricingInput, settings: ConfiguratorSettings, over
   // Referentie ("theoretisch max"): de oude afleiding sessieduur − laadtijd. Telt NIET
   // mee in de opbrengst (nacht-/langparkeren vertekent dit) — alleen ter context.
   const derivedIdleMinutesPerSession = Math.max(0, sessionDurationMinutes - chargingMinutesPerSession);
-  // Billing-basis: instelbare gem. stilstaande min/sessie (per locatietype, te overschrijven).
+  // Blokkeer-basis: de GEMIDDELDE stilstaande minuten per sessie (over álle sessies; movers = 0,
+  // niet-movers = veel → het gemiddelde vangt de spreiding al). Na de gratis grace-minuten betaalt
+  // IEDEREEN het blokkeertarief — geen apart "% dat betaalt" meer.
   const idleMinutesPerSession = Math.max(0, input.usage.idleMinutesPerSession);
-  const idleBillableSharePct = Math.min(100, Math.max(0, input.usage.idleBillableSharePct));
   const billableIdleMinutesPerSession = tariffs.idleFeeEnabled
     ? Math.max(0, idleMinutesPerSession - tariffs.idleGraceMinutes)
     : 0;
-  // × % van de sessies dat écht blokkeertarief oplevert (dag/nacht-venster + incidentie).
-  const effectiveBillableIdleMinutesPerSession = billableIdleMinutesPerSession * (idleBillableSharePct / 100);
-  const billableIdleMinutesPerChargePointMonth = effectiveBillableIdleMinutesPerSession * sessions;
+  const billableIdleMinutesPerChargePointMonth = billableIdleMinutesPerSession * sessions;
   const grossChargingRevenuePerChargePointMonth = kwh * tariffs.chargeTariffPerKwh;
   const energyCostPerChargePointMonth = -(kwh * tariffs.energyCostPerKwh);
   const startFeeRevenuePerChargePointMonth = tariffs.startFeeEnabled ? sessions * tariffs.startFeePerSession : 0;
   const idleFeeRevenuePerChargePointMonth = tariffs.idleFeeEnabled
     ? billableIdleMinutesPerChargePointMonth * tariffs.idleFeePerMinute
     : 0;
+  // Uurtarief: per uur aan de paal = sessies × gemiddelde sessieduur (uren) × tarief/uur.
+  const perHourFeeRevenuePerChargePointMonth = tariffs.perHourFeeEnabled
+    ? sessions * input.usage.averageSessionDurationHours * tariffs.perHourFeePerHour
+    : 0;
   const netReturnPerChargePointMonth =
     grossChargingRevenuePerChargePointMonth +
     energyCostPerChargePointMonth +
     startFeeRevenuePerChargePointMonth +
-    idleFeeRevenuePerChargePointMonth;
+    idleFeeRevenuePerChargePointMonth +
+    perHourFeeRevenuePerChargePointMonth;
 
   // e-charging verdient een vaste marge per kWh; de rest is voor de klant.
   const echargingMarginPerKwh = settings.echargingMarginPerKwh;
@@ -344,14 +354,13 @@ function calculateWith(input: PricingInput, settings: ConfiguratorSettings, over
     sessionDurationMinutes,
     derivedIdleMinutesPerSession,
     idleMinutesPerSession,
-    idleBillableSharePct,
     billableIdleMinutesPerSession,
-    effectiveBillableIdleMinutesPerSession,
     billableIdleMinutesPerChargePointMonth,
     grossChargingRevenuePerChargePointMonth,
     energyCostPerChargePointMonth,
     startFeeRevenuePerChargePointMonth,
     idleFeeRevenuePerChargePointMonth,
+    perHourFeeRevenuePerChargePointMonth,
     netReturnPerChargePointMonth,
     echargingMarginPerKwh,
     echargingMarginPerChargePointMonth,
@@ -377,6 +386,7 @@ export function calculatePricing(rawInput: PricingInput, rawSettings: Configurat
   const base = calculateWith(input, settings);
   const withoutStart = calculateWith(input, settings, { startFeeEnabled: false });
   const withoutIdle = calculateWith(input, settings, { idleFeeEnabled: false });
+  const withoutPerHour = calculateWith(input, settings, { perHourFeeEnabled: false });
   const friendlyTariff = calculateWith(input, settings, { chargeTariffPerKwh: Math.min(0.49, input.tariffs.chargeTariffPerKwh) });
 
   const blockingReasons: string[] = [];
@@ -391,6 +401,7 @@ export function calculatePricing(rawInput: PricingInput, rawSettings: Configurat
     deltas: {
       startFeeCustomerPerMonth: base.totals.customerPerMonth - withoutStart.totals.customerPerMonth,
       idleFeeCustomerPerMonth: base.totals.customerPerMonth - withoutIdle.totals.customerPerMonth,
+      perHourFeeCustomerPerMonth: base.totals.customerPerMonth - withoutPerHour.totals.customerPerMonth,
       lowerTariffLossPerYear: Math.max(0, base.totals.customerPerYear - friendlyTariff.totals.customerPerYear),
     },
   };

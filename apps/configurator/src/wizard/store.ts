@@ -59,6 +59,8 @@ export function createDefaultInput(settings: ConfiguratorSettings = defaultConfi
       idleFeeEnabled: settings.defaultIdleFeeEnabled,
       idleFeePerMinute: settings.defaultIdleFeePerMinute,
       idleGraceMinutes: settings.defaultIdleGraceMinutes,
+      perHourFeeEnabled: settings.defaultPerHourFeeEnabled,
+      perHourFeePerHour: settings.defaultPerHourFeePerHour,
     },
   });
 }
@@ -126,6 +128,8 @@ export const useWizardStore = create<WizardStore>()(
         state.input.tariffs.idleFeeEnabled = settings.defaultIdleFeeEnabled;
         state.input.tariffs.idleFeePerMinute = settings.defaultIdleFeePerMinute;
         state.input.tariffs.idleGraceMinutes = settings.defaultIdleGraceMinutes;
+        state.input.tariffs.perHourFeeEnabled = settings.defaultPerHourFeeEnabled;
+        state.input.tariffs.perHourFeePerHour = settings.defaultPerHourFeePerHour;
       }),
     updateInput: (updater) => set((state) => updater(state.input)),
     setSockets: (count) =>

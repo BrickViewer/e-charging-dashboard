@@ -20,47 +20,44 @@ describe("pricing engine", () => {
     closeTo(result.chargingMinutesPerSession, 125);
 
     // Stilstaande minuten: de afgeleide waarde (sessieduur − laadtijd = 235) blijft als
-    // referentie, maar billing gebruikt de instelbare gem. (180) × keten.
+    // referentie, maar billing gebruikt de instelbare gem. (180). Iedereen betaalt na de grace.
     closeTo(result.derivedIdleMinutesPerSession, 235);
     closeTo(result.idleMinutesPerSession, 180);
-    closeTo(result.idleBillableSharePct, 10);
     closeTo(result.billableIdleMinutesPerSession, 120); // 180 − 60 grace
-    closeTo(result.effectiveBillableIdleMinutesPerSession, 12); // × 10%
-    closeTo(result.billableIdleMinutesPerChargePointMonth, 144); // × 12 sessies
-    closeTo(result.idleFeeRevenuePerChargePointMonth, 7.2); // × €0,05
+    closeTo(result.billableIdleMinutesPerChargePointMonth, 1440); // × 12 sessies
+    closeTo(result.idleFeeRevenuePerChargePointMonth, 72); // × €0,05
+    closeTo(result.perHourFeeRevenuePerChargePointMonth, 0); // uurtarief standaard uit
 
-    // netto rendement = 116 (laden) − 50 (stroom) + 6 (start) + 7,2 (blokkeer).
-    closeTo(result.netReturnPerChargePointMonth, 79.2);
+    // netto rendement = 116 (laden) − 50 (stroom) + 6 (start) + 72 (blokkeer).
+    closeTo(result.netReturnPerChargePointMonth, 144);
 
-    // marge = 0,05 €/kWh × 200 kWh = 10; klant houdt 79,2 − 10 = 69,2 over.
+    // marge = 0,05 €/kWh × 200 kWh = 10; klant houdt 144 − 10 = 134 over.
     closeTo(result.echargingMarginPerKwh, 0.05);
     closeTo(result.echargingMarginPerChargePointMonth, 10);
-    closeTo(result.customerNetPerChargePointMonth, 69.2);
+    closeTo(result.customerNetPerChargePointMonth, 134);
     closeTo(result.echargingNetPerChargePointMonth, 10);
 
-    closeTo(result.serviceFeePct, 10 / 79.2);
+    closeTo(result.serviceFeePct, 10 / 144);
 
     // totalen schalen met 10 laadpunten.
-    closeTo(result.totals.customerPerMonth, 692);
+    closeTo(result.totals.customerPerMonth, 1340);
     closeTo(result.totals.echargingNetPerMonth, 100);
-    closeTo(result.totals.netReturnPerMonth, 792);
+    closeTo(result.totals.netReturnPerMonth, 1440);
     expect(result.status).toBe("ok");
   });
 
-  it("keeps idle revenue far below the old naive (sessieduur − laadtijd) derivation", () => {
+  it("baseert blokkeertarief op de gemiddelde stilstaande minuten, niet op de naïeve sessieduur − laadtijd", () => {
     const result = calculatePricing(excelDefaultPricingInput, defaultConfiguratorSettings);
-    // Oude model belastte ALLE sessies op de afgeleide idle: (235 − 60) × 12 × €0,05 = €105/paal.
-    const naiveOldRevenue = Math.max(0, result.derivedIdleMinutesPerSession - 60) * 12 * 0.05;
-    closeTo(naiveOldRevenue, 105);
-    // Nieuw, realistisch: €7,2/paal — een orde lager, niet-misleidend.
-    expect(result.idleFeeRevenuePerChargePointMonth).toBeLessThan(naiveOldRevenue);
-    closeTo(result.idleFeeRevenuePerChargePointMonth, 7.2);
-    // De share-factor verlaagt de belaste minuten t.o.v. enkel grace.
-    expect(result.effectiveBillableIdleMinutesPerSession)
-      .toBeLessThan(result.billableIdleMinutesPerSession);
+    // Naïef (alle stilstand uit sessieduur − laadtijd): (235 − 60) × 12 × €0,05 = €105/paal.
+    const naiveRevenue = Math.max(0, result.derivedIdleMinutesPerSession - 60) * 12 * 0.05;
+    closeTo(naiveRevenue, 105);
+    // Wij rekenen op de instelbare gem. stilstand (180): (180 − 60) × 12 × €0,05 = €72/paal —
+    // lager dan naïef én zonder verwarrend "% dat betaalt".
+    expect(result.idleFeeRevenuePerChargePointMonth).toBeLessThan(naiveRevenue);
+    closeTo(result.idleFeeRevenuePerChargePointMonth, 72);
   });
 
-  it("idle grace and billable-share are the levers that lower the projection", () => {
+  it("grace en aan/uit zijn de hefbomen voor het blokkeertarief (geen '% dat betaalt' meer)", () => {
     const base = calculatePricing(excelDefaultPricingInput, defaultConfiguratorSettings);
 
     // Hogere grace → minder belaste minuten → lagere opbrengst.
@@ -71,12 +68,12 @@ describe("pricing engine", () => {
     expect(higherGrace.idleFeeRevenuePerChargePointMonth)
       .toBeLessThan(base.idleFeeRevenuePerChargePointMonth);
 
-    // Lagere share → lagere opbrengst (lineair).
-    const lowerShare = calculatePricing(
-      { ...excelDefaultPricingInput, usage: { ...excelDefaultPricingInput.usage, idleBillableSharePct: 5 } },
+    // Lagere gem. stilstand (90) → (90 − 60) × 12 × €0,05 = €18.
+    const lowerIdle = calculatePricing(
+      { ...excelDefaultPricingInput, usage: { ...excelDefaultPricingInput.usage, idleMinutesPerSession: 90 } },
       defaultConfiguratorSettings,
     );
-    closeTo(lowerShare.idleFeeRevenuePerChargePointMonth, base.idleFeeRevenuePerChargePointMonth / 2);
+    closeTo(lowerIdle.idleFeeRevenuePerChargePointMonth, 18);
 
     // Uitgeschakeld → géén idle-opbrengst.
     const off = calculatePricing(
@@ -86,6 +83,22 @@ describe("pricing engine", () => {
     closeTo(off.idleFeeRevenuePerChargePointMonth, 0);
   });
 
+  it("rekent het uurtarief per uur aan de paal (sessies × sessieduur × tarief), additief", () => {
+    const base = calculatePricing(excelDefaultPricingInput, defaultConfiguratorSettings);
+    closeTo(base.perHourFeeRevenuePerChargePointMonth, 0); // standaard uit
+
+    const withHourly = calculatePricing(
+      { ...excelDefaultPricingInput, tariffs: { ...excelDefaultPricingInput.tariffs, perHourFeeEnabled: true, perHourFeePerHour: 2 } },
+      defaultConfiguratorSettings,
+    );
+    // 12 sessies × 6 uur × €2 = €144/paal/maand.
+    closeTo(withHourly.perHourFeeRevenuePerChargePointMonth, 144);
+    // Additief op het netto rendement.
+    closeTo(withHourly.netReturnPerChargePointMonth, base.netReturnPerChargePointMonth + 144);
+    // Volledig naar de klant (e-charging-marge blijft vast per kWh): delta = 144 × 10 laadpunten.
+    closeTo(withHourly.deltas.perHourFeeCustomerPerMonth, 1440);
+  });
+
   it("scales the e-charging margin with the configured rate", () => {
     const result = calculatePricing(excelDefaultPricingInput, {
       ...defaultConfiguratorSettings,
@@ -93,8 +106,8 @@ describe("pricing engine", () => {
     });
 
     closeTo(result.echargingMarginPerChargePointMonth, 16); // 0,08 × 200
-    closeTo(result.customerNetPerChargePointMonth, 63.2); // 79,2 − 16
-    closeTo(result.serviceFeePct, 16 / 79.2);
+    closeTo(result.customerNetPerChargePointMonth, 128); // 144 − 16
+    closeTo(result.serviceFeePct, 16 / 144);
     expect(result.status).toBe("ok");
   });
 

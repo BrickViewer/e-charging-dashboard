@@ -10,6 +10,8 @@ export type ConfiguratorSettings = {
   defaultIdleFeeEnabled: boolean;
   defaultIdleFeePerMinute: number;
   defaultIdleGraceMinutes: number;
+  defaultPerHourFeeEnabled: boolean;
+  defaultPerHourFeePerHour: number;
   ereSubsidyPerKwh: number;
   ereEnabledByDefault: boolean;
   investmentPerSocketLow: number;
@@ -42,7 +44,6 @@ export type ConfiguratorSettings = {
     averageSessionDurationHours: number;
     effectiveChargingPowerKw: number;
     idleMinutesPerSession: number;
-    idleBillableSharePct: number;
   }>;
   demoPresets: Array<{
     key: string;
@@ -120,7 +121,6 @@ export type PricingInput = {
     averageSessionDurationHours: number;
     effectiveChargingPowerKw: number;
     idleMinutesPerSession: number;
-    idleBillableSharePct: number;
   };
   contract: {
     durationMonths: number;
@@ -134,6 +134,8 @@ export type PricingInput = {
     idleFeeEnabled: boolean;
     idleFeePerMinute: number;
     idleGraceMinutes: number;
+    perHourFeeEnabled: boolean;
+    perHourFeePerHour: number;
   };
 };
 
@@ -156,6 +158,8 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = {
   defaultIdleFeeEnabled: false,
   defaultIdleFeePerMinute: 0.05,
   defaultIdleGraceMinutes: 60,
+  defaultPerHourFeeEnabled: false,
+  defaultPerHourFeePerHour: 1,
   ereSubsidyPerKwh: 0.10,
   ereEnabledByDefault: false,
   investmentPerSocketLow: 1500,
@@ -179,11 +183,11 @@ export const defaultConfiguratorSettings: ConfiguratorSettings = {
     { key: "other", label: "Anders" },
   ],
   locationTypeDefaults: {
-    workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 180, idleBillableSharePct: 10 },
-    destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10, idleMinutesPerSession: 90, idleBillableSharePct: 25 },
-    fleet: { sessionsPerChargePointMonth: 24, kwhPerChargePointMonth: 650, averageSessionDurationHours: 8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 90, idleBillableSharePct: 5 },
-    public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 120, idleBillableSharePct: 20 },
-    other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 90, idleBillableSharePct: 15 },
+    workplace: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 75 },
+    destination: { sessionsPerChargePointMonth: 35, kwhPerChargePointMonth: 420, averageSessionDurationHours: 2.5, effectiveChargingPowerKw: 10, idleMinutesPerSession: 70 },
+    fleet: { sessionsPerChargePointMonth: 24, kwhPerChargePointMonth: 650, averageSessionDurationHours: 8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 65 },
+    public: { sessionsPerChargePointMonth: 50, kwhPerChargePointMonth: 520, averageSessionDurationHours: 1.8, effectiveChargingPowerKw: 11, idleMinutesPerSession: 70 },
+    other: { sessionsPerChargePointMonth: 12, kwhPerChargePointMonth: 200, averageSessionDurationHours: 6, effectiveChargingPowerKw: 8, idleMinutesPerSession: 70 },
   },
   demoPresets: defaultDemoPresets,
   offerTemplate: defaultOfferTemplate,
@@ -208,7 +212,6 @@ function mergeLocationTypeDefaults(raw: unknown): ConfiguratorSettings["location
       averageSessionDurationHours: Math.max(0, numberOr(r.averageSessionDurationHours, d.averageSessionDurationHours)),
       effectiveChargingPowerKw: Math.max(0.1, numberOr(r.effectiveChargingPowerKw, d.effectiveChargingPowerKw)),
       idleMinutesPerSession: Math.max(0, numberOr(r.idleMinutesPerSession, d.idleMinutesPerSession)),
-      idleBillableSharePct: Math.min(100, Math.max(0, numberOr(r.idleBillableSharePct, d.idleBillableSharePct))),
     };
   }
   return out;
@@ -266,7 +269,6 @@ export function normalizePricingInput(value: unknown, settings: ConfiguratorSett
       averageSessionDurationHours: Math.max(0, numberOr(usage.averageSessionDurationHours, defaults.averageSessionDurationHours)),
       effectiveChargingPowerKw: Math.max(0.1, numberOr(usage.effectiveChargingPowerKw, defaults.effectiveChargingPowerKw)),
       idleMinutesPerSession: Math.max(0, numberOr(usage.idleMinutesPerSession, defaults.idleMinutesPerSession ?? 0)),
-      idleBillableSharePct: Math.min(100, Math.max(0, numberOr(usage.idleBillableSharePct, defaults.idleBillableSharePct ?? 0))),
     },
     contract: {
       durationMonths: Math.max(1, Math.round(numberOr(contract.durationMonths, settings.defaultContractDurationMonths))),
@@ -280,6 +282,8 @@ export function normalizePricingInput(value: unknown, settings: ConfiguratorSett
       idleFeeEnabled: typeof tariffs.idleFeeEnabled === "boolean" ? tariffs.idleFeeEnabled : settings.defaultIdleFeeEnabled,
       idleFeePerMinute: Math.max(0, numberOr(tariffs.idleFeePerMinute, settings.defaultIdleFeePerMinute)),
       idleGraceMinutes: Math.max(0, numberOr(tariffs.idleGraceMinutes, settings.defaultIdleGraceMinutes)),
+      perHourFeeEnabled: typeof tariffs.perHourFeeEnabled === "boolean" ? tariffs.perHourFeeEnabled : settings.defaultPerHourFeeEnabled,
+      perHourFeePerHour: Math.max(0, numberOr(tariffs.perHourFeePerHour, settings.defaultPerHourFeePerHour)),
     },
   };
 }
@@ -294,25 +298,29 @@ export function calculatePricing(input: PricingInput, settings: ConfiguratorSett
   const sessionDurationMinutes = input.usage.averageSessionDurationHours * 60;
   // Referentie (oude afleiding sessieduur − laadtijd); telt NIET mee in de opbrengst.
   const derivedIdleMinutesPerSession = Math.max(0, sessionDurationMinutes - chargingMinutesPerSession);
-  // Billing-basis: instelbare gem. stilstaande min/sessie + % sessies dat betaalt.
+  // Blokkeer-basis: de GEMIDDELDE stilstaande minuten per sessie (over álle sessies; movers = 0,
+  // niet-movers = veel → het gemiddelde vangt de spreiding al). Na de gratis grace betaalt iedereen.
   const idleMinutesPerSession = Math.max(0, input.usage.idleMinutesPerSession);
-  const idleBillableSharePct = Math.min(100, Math.max(0, input.usage.idleBillableSharePct));
   const billableIdleMinutesPerSession = input.tariffs.idleFeeEnabled
     ? Math.max(0, idleMinutesPerSession - input.tariffs.idleGraceMinutes)
     : 0;
-  const effectiveBillableIdleMinutesPerSession = billableIdleMinutesPerSession * (idleBillableSharePct / 100);
-  const billableIdleMinutesPerChargePointMonth = effectiveBillableIdleMinutesPerSession * sessions;
+  const billableIdleMinutesPerChargePointMonth = billableIdleMinutesPerSession * sessions;
   const grossChargingRevenuePerChargePointMonth = kwh * input.tariffs.chargeTariffPerKwh;
   const energyCostPerChargePointMonth = -(kwh * input.tariffs.energyCostPerKwh);
   const startFeeRevenuePerChargePointMonth = input.tariffs.startFeeEnabled ? sessions * input.tariffs.startFeePerSession : 0;
   const idleFeeRevenuePerChargePointMonth = input.tariffs.idleFeeEnabled
     ? billableIdleMinutesPerChargePointMonth * input.tariffs.idleFeePerMinute
     : 0;
+  // Uurtarief: per uur aan de paal = sessies × gemiddelde sessieduur (uren) × tarief/uur.
+  const perHourFeeRevenuePerChargePointMonth = input.tariffs.perHourFeeEnabled
+    ? sessions * input.usage.averageSessionDurationHours * input.tariffs.perHourFeePerHour
+    : 0;
   const netReturnPerChargePointMonth =
     grossChargingRevenuePerChargePointMonth +
     energyCostPerChargePointMonth +
     startFeeRevenuePerChargePointMonth +
-    idleFeeRevenuePerChargePointMonth;
+    idleFeeRevenuePerChargePointMonth +
+    perHourFeeRevenuePerChargePointMonth;
 
   // e-charging verdient een vaste marge per kWh; de rest is voor de klant.
   const echargingMarginPerKwh = settings.echargingMarginPerKwh;
@@ -339,14 +347,13 @@ export function calculatePricing(input: PricingInput, settings: ConfiguratorSett
     sessionDurationMinutes,
     derivedIdleMinutesPerSession,
     idleMinutesPerSession,
-    idleBillableSharePct,
     billableIdleMinutesPerSession,
-    effectiveBillableIdleMinutesPerSession,
     billableIdleMinutesPerChargePointMonth,
     grossChargingRevenuePerChargePointMonth,
     energyCostPerChargePointMonth,
     startFeeRevenuePerChargePointMonth,
     idleFeeRevenuePerChargePointMonth,
+    perHourFeeRevenuePerChargePointMonth,
     netReturnPerChargePointMonth,
     echargingMarginPerKwh,
     echargingMarginPerChargePointMonth,

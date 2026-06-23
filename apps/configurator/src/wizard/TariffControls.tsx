@@ -153,7 +153,7 @@ export function TariffControls({
         <button type="button" className="ghost-row" onClick={() => setAdvancedOpen((v) => !v)} aria-expanded={advancedOpen}>
           <span className="flex flex-col text-left">
             <span className="text-sm font-semibold text-foreground">Geavanceerde instellingen</span>
-            <span className="text-[11px] text-muted-foreground">Start- &amp; blokkeertarief, gratis minuten, ERE</span>
+            <span className="text-[11px] text-muted-foreground">Start-, blokkeer- &amp; uurtarief, gratis minuten, ERE</span>
           </span>
           <ChevronDown size={18} className="text-muted-foreground transition-transform duration-200" style={{ transform: advancedOpen ? "rotate(180deg)" : "none" }} />
         </button>
@@ -181,7 +181,7 @@ export function TariffControls({
                 {input.tariffs.idleFeeEnabled && (
                   <div className="space-y-2.5 rounded-xl border border-border-soft/60 bg-muted/20 p-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-[13px] text-muted-foreground">Gem. stilstaande min / sessie</p>
+                      <p className="text-[13px] text-muted-foreground">Gem. stilstaande min / sessie <span className="opacity-70">(over alle sessies)</span></p>
                       <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.usage.idleMinutesPerSession}
                         aria-label="Gemiddelde stilstaande minuten per sessie"
                         onChange={(e) => updateInput((d) => { d.usage.idleMinutesPerSession = parseNumber(e.target.value, d.usage.idleMinutesPerSession); })} />
@@ -192,23 +192,41 @@ export function TariffControls({
                         aria-label="Gratis minuten"
                         onChange={(e) => updateInput((d) => { d.tariffs.idleGraceMinutes = parseNumber(e.target.value, d.tariffs.idleGraceMinutes); })} />
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[13px] text-muted-foreground">% sessies dat blokkeertarief betaalt</p>
-                      <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.usage.idleBillableSharePct}
-                        aria-label="Percentage sessies dat blokkeertarief betaalt"
-                        onChange={(e) => updateInput((d) => { d.usage.idleBillableSharePct = parseNumber(e.target.value, d.usage.idleBillableSharePct); })} />
-                    </div>
-                    {/* Transparante berekening — zo komen we aan de blokkeer-opbrengst. */}
+                    {/* Transparante berekening — ná de gratis minuten betaalt iedereen. */}
                     <div className="space-y-0.5 border-t border-border-soft/60 pt-2 text-[11px] leading-relaxed text-muted-foreground">
                       <p>
-                        max(0, {number(input.usage.idleMinutesPerSession)} − {number(input.tariffs.idleGraceMinutes)}) × {number(input.usage.idleBillableSharePct)}%
-                        = <span className="font-semibold text-foreground">{number(pricing.effectiveBillableIdleMinutesPerSession, 1)}</span> belaste min/sessie
+                        max(0, {number(input.usage.idleMinutesPerSession)} − {number(input.tariffs.idleGraceMinutes)})
+                        = <span className="font-semibold text-foreground">{number(pricing.billableIdleMinutesPerSession, 0)}</span> belaste min/sessie
                       </p>
                       <p>
                         × {number(input.usage.sessionsPerChargePointMonth)} sessies × {euro(input.tariffs.idleFeePerMinute, 2)}
                         = <span className="font-semibold text-foreground">{euro(pricing.idleFeeRevenuePerChargePointMonth)}</span> / laadpunt / maand
                       </p>
-                      <p className="opacity-70">Theoretisch max (sessieduur − laadtijd): {number(pricing.derivedIdleMinutesPerSession)} min/sessie — niet meegerekend.</p>
+                      <p className="opacity-70">Het gemiddelde geldt over álle sessies (sommigen rijden meteen weg, sommigen niet); ná de gratis minuten betaalt iedereen.</p>
+                    </div>
+                  </div>
+                )}
+                <SwitchRow
+                  title="Bedrag per uur"
+                  sub="Per uur aan de paal (hele sessie)"
+                  active={input.tariffs.perHourFeeEnabled}
+                  amount={input.tariffs.perHourFeePerHour}
+                  onToggle={() => updateInput((d) => { d.tariffs.perHourFeeEnabled = !d.tariffs.perHourFeeEnabled; })}
+                  onAmount={(n) => updateInput((d) => { d.tariffs.perHourFeePerHour = n; })}
+                />
+                {input.tariffs.perHourFeeEnabled && (
+                  <div className="space-y-2.5 rounded-xl border border-border-soft/60 bg-muted/20 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[13px] text-muted-foreground">Gem. tijd aan de paal / sessie (uren)</p>
+                      <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="decimal" value={input.usage.averageSessionDurationHours}
+                        aria-label="Gemiddelde tijd aan de paal per sessie in uren"
+                        onChange={(e) => updateInput((d) => { d.usage.averageSessionDurationHours = parseNumber(e.target.value, d.usage.averageSessionDurationHours); })} />
+                    </div>
+                    <div className="space-y-0.5 border-t border-border-soft/60 pt-2 text-[11px] leading-relaxed text-muted-foreground">
+                      <p>
+                        {number(input.usage.sessionsPerChargePointMonth)} sessies × {number(input.usage.averageSessionDurationHours, 1)} uur × {euro(input.tariffs.perHourFeePerHour, 2)}
+                        = <span className="font-semibold text-foreground">{euro(pricing.perHourFeeRevenuePerChargePointMonth)}</span> / laadpunt / maand
+                      </p>
                     </div>
                   </div>
                 )}

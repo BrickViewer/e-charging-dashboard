@@ -129,6 +129,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       chargeTariffPerKwh: numOr(chargeRate),
       idleFeePerMinute: numOr(idleFee),
       startFeePerSession: numOr(String(td.startFeePerSession ?? "")),
+      perHourFeePerHour: td.perHourFeeEnabled ? numOr(String(td.perHourFeePerHour ?? "")) : null,
       idleGraceMinutes: numOr(idleGrace),
       validUntil: quote!.valid_until ?? null,
       offerDetails: od,

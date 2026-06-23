@@ -49,6 +49,7 @@ export interface OfferDetails {
   stelpostGraafwerk?: number | null;
   // Tarief-overrides (default uit de instellingen / configurator).
   startFeePerSession?: number | null;
+  perHourFeePerHour?: number | null;
   serviceFeePerKwh?: number | null;
   servicemonteurPerHour?: number | null;
   voorrijkostenPerKm?: number | null;

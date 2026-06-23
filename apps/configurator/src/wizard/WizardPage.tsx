@@ -181,6 +181,9 @@ export default function WizardPage() {
     ...(input.tariffs.idleFeeEnabled
       ? [{ label: "Blokkeertarief", value: `${euro(Math.round(pricing.idleFeeRevenuePerChargePointMonth * sockets))}/mnd` }]
       : []),
+    ...(input.tariffs.perHourFeeEnabled
+      ? [{ label: "Uurtarief", value: `${euro(Math.round(pricing.perHourFeeRevenuePerChargePointMonth * sockets))}/mnd` }]
+      : []),
     ...(ereEnabled ? [{ label: "ERE-subsidie", value: `+ ${euro(settings.ereSubsidyPerKwh, 2)} / kWh` }] : []),
   ];
 
@@ -190,7 +193,10 @@ export default function WizardPage() {
     { label: "Verwacht verbruik", value: `${input.usage.kwhPerChargePointMonth.toLocaleString("nl-NL")} kWh p.p./mnd` },
     { label: "Totale investering", value: `${euro(investmentMinTotal)} – ${euro(investmentMaxTotal)}` },
     ...(input.tariffs.idleFeeEnabled
-      ? [{ label: "Blokkeertarief", value: `${euro(Math.round(pricing.idleFeeRevenuePerChargePointMonth * sockets))}/mnd · ${number(pricing.effectiveBillableIdleMinutesPerSession, 1)} belaste min/sessie` }]
+      ? [{ label: "Blokkeertarief", value: `${euro(Math.round(pricing.idleFeeRevenuePerChargePointMonth * sockets))}/mnd · ${number(pricing.billableIdleMinutesPerSession, 0)} belaste min/sessie` }]
+      : []),
+    ...(input.tariffs.perHourFeeEnabled
+      ? [{ label: "Uurtarief", value: `${euro(Math.round(pricing.perHourFeeRevenuePerChargePointMonth * sockets))}/mnd · ${euro(input.tariffs.perHourFeePerHour, 2)}/uur` }]
       : []),
     { label: "ERE-subsidie", value: ereEnabled ? `Aan (+ ${euro(settings.ereSubsidyPerKwh, 2)}/kWh)` : "Uit" },
   ];
