@@ -14,6 +14,7 @@ export function StageColumn({
   dragDisabled,
   onAdd,
   onCardClick,
+  onMarkLost,
 }: {
   stage: LeadStage;
   leads: LeadWithTasks[];
@@ -21,6 +22,7 @@ export function StageColumn({
   dragDisabled?: boolean;
   onAdd: () => void;
   onCardClick: (l: LeadWithTasks) => void;
+  onMarkLost?: (l: LeadWithTasks) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `stage:${stage.id}` });
   const total = leads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
@@ -57,6 +59,7 @@ export function StageColumn({
               ownerName={ownerName(l.owner_user_id)}
               dragDisabled={dragDisabled}
               onClick={() => onCardClick(l)}
+              onMarkLost={onMarkLost ? () => onMarkLost(l) : undefined}
             />
           ))}
         </SortableContext>
