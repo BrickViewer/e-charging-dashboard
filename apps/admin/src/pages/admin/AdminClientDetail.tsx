@@ -35,6 +35,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientOrders, useUpdateOrder, useHandoffOrder, ORDER_STATUSES } from "@/hooks/useInstallations";
+import { useUpdateCompany, useUpdatePerson } from "@/hooks/useContacts";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -80,6 +81,8 @@ export default function AdminClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const updateCompany = useUpdateCompany();
+  const updatePerson = useUpdatePerson();
   const { role } = useAuth();
   const { data: clientData, isLoading } = useClientById(id);
   const { data: settlements } = useClientSettlements(id);
@@ -293,18 +296,22 @@ export default function AdminClientDetail() {
       if (error) throw error;
 
       // Houd de gekoppelde contacten de bron van waarheid: naam → bedrijf,
-      // contactgegevens → persoon. De propagate-trigger synct daarna alle
-      // gekoppelde leads/klanten/offertes. (Adres/kvk blijven klant-/billing-lokaal.)
+      // contactgegevens → persoon, via de useContacts-mutaties (juiste cache-invalidatie
+      // van companies/persons/leads). De propagate-trigger synct daarna alle gekoppelde
+      // leads/klanten/offertes. (Adres/kvk blijven klant-/billing-lokaal.)
       if (clientData.company_id && asText(editData.company_name).trim()) {
-        await supabase.from("companies").update({ name: asText(editData.company_name).trim() }).eq("id", clientData.company_id);
+        await updateCompany.mutateAsync({ id: clientData.company_id, patch: { name: asText(editData.company_name).trim() } });
       }
       if (clientData.person_id) {
-        await supabase.from("persons").update({
-          first_name: asText(editData.contact_first_name) || null,
-          last_name: asText(editData.contact_last_name) || null,
-          email: asText(editData.contact_email) || null,
-          phone: editData.contact_phone ? `${editData.contact_country_code || "+31"}${editData.contact_phone}` : null,
-        }).eq("id", clientData.person_id);
+        await updatePerson.mutateAsync({
+          id: clientData.person_id,
+          patch: {
+            first_name: asText(editData.contact_first_name) || null,
+            last_name: asText(editData.contact_last_name) || null,
+            email: asText(editData.contact_email) || null,
+            phone: editData.contact_phone ? `${editData.contact_country_code || "+31"}${editData.contact_phone}` : null,
+          },
+        });
       }
 
       await logActivity({

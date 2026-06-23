@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Building2, Mail } from "lucide-react";
 import { CompanyPicker } from "@/components/contacts/CompanyPicker";
 import { PersonPicker } from "@/components/contacts/PersonPicker";
-import { useClientForCompany } from "@/hooks/useContacts";
+import { useClientForCompany, useUpdateCompany, useUpdatePerson } from "@/hooks/useContacts";
 
 // Klant aanmaken: alleen de basis die nodig is om de klant uit te nodigen.
 // Tarieven en contractdefaults blijven technisch gevuld, maar staan niet in deze startflow.
@@ -40,6 +40,8 @@ export default function AdminClientWizard() {
   });
 
   const existingClient = useClientForCompany(company.company_id || undefined).data;
+  const updateCompany = useUpdateCompany();
+  const updatePerson = useUpdatePerson();
   const canSubmit = !!company.company_id && !!company.person_id && !!company.contact_email.trim() && !existingClient;
 
   const handleSave = async () => {
@@ -53,13 +55,21 @@ export default function AdminClientWizard() {
     }
     setSaving(true);
     try {
-      // E-mail/telefoon vastleggen op de persoon (bron van waarheid); de sync-trigger
-      // vult daarna company_name/contact_* op de klant vanuit company_id/person_id.
+      // E-mail/telefoon vastleggen op de persoon (bron van waarheid) via de mutatie (cache-invalidatie);
+      // de sync-trigger vult daarna company_name/contact_* op de klant vanuit company_id/person_id.
       if (company.person_id && (company.contact_email.trim() || company.contact_phone.trim())) {
         const personPatch: { email?: string; phone?: string } = {};
         if (company.contact_email.trim()) personPatch.email = company.contact_email.trim();
         if (company.contact_phone.trim()) personPatch.phone = company.contact_phone.trim();
-        await supabase.from("persons").update(personPatch).eq("id", company.person_id);
+        await updatePerson.mutateAsync({ id: company.person_id, patch: personPatch });
+      }
+      // KvK/BTW horen bij het bedrijf (bron van waarheid) → daarheen schrijven; de propagate-trigger
+      // synct ze daarna naar de klant. Zo ontstaat geen client-only KvK die afwijkt van het bedrijf.
+      if (company.company_id && (company.kvk.trim() || company.btw_number.trim())) {
+        const companyPatch: { kvk?: string; btw_number?: string } = {};
+        if (company.kvk.trim()) companyPatch.kvk = company.kvk.trim();
+        if (company.btw_number.trim()) companyPatch.btw_number = company.btw_number.trim();
+        await updateCompany.mutateAsync({ id: company.company_id, patch: companyPatch });
       }
 
       const { data: client, error: clientErr } = await supabase
