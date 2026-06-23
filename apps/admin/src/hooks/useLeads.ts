@@ -194,24 +194,6 @@ export function useUpdateLead() {
   });
 }
 
-// Markeer een lead als verloren: verplaats naar de opgegeven is_lost-fase + leg de
-// reden vast. De trigger zet status='lost' + lost_at. (Gewonnen gaat automatisch via
-// de offerte-/conversie-flow.)
-export function useMarkLeadLost() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, lostStageId, reason }: { id: string; lostStageId: string; reason: string }) => {
-      const { error } = await supabase.from("leads").update({ stage_id: lostStageId, lost_reason: reason }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: (_d, { id }) => {
-      qc.invalidateQueries({ queryKey: ["leads"] });
-      qc.invalidateQueries({ queryKey: ["lead", id] });
-      qc.invalidateQueries({ queryKey: ["lead-activities", id] });
-    },
-  });
-}
-
 export function useDeleteLead() {
   const qc = useQueryClient();
   return useMutation({

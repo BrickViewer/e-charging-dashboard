@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarClock, Clock, ListChecks, MapPin, User, XCircle } from "lucide-react";
+import { CalendarClock, Clock, ListChecks, MapPin, User } from "lucide-react";
 import type { LeadWithTasks } from "@/hooks/useLeads";
 
 const euro = (n: number | null | undefined) =>
@@ -36,14 +36,12 @@ export function LeadCard({
   lead,
   ownerName,
   onClick,
-  onMarkLost,
   overlay,
   dragDisabled,
 }: {
   lead: LeadWithTasks;
   ownerName?: string | null;
   onClick?: () => void;
-  onMarkLost?: () => void;
   overlay?: boolean;
   dragDisabled?: boolean;
 }) {
@@ -72,24 +70,10 @@ export function LeadCard({
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-tight text-foreground">{lead.company_name}</p>
-        <div className="flex flex-shrink-0 items-center gap-1.5">
-          {onMarkLost && !overlay && (
-            <button
-              type="button"
-              title="Markeer als verloren"
-              aria-label="Markeer als verloren"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); onMarkLost(); }}
-              className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-            >
-              <XCircle className="h-4 w-4" />
-            </button>
-          )}
-          <span
-            className={`mt-1 h-2 w-2 rounded-full ${PRIORITY_COLOR[lead.priority] ?? "bg-zinc-400"}`}
-            title={`Prioriteit: ${lead.priority}`}
-          />
-        </div>
+        <span
+          className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${PRIORITY_COLOR[lead.priority] ?? "bg-zinc-400"}`}
+          title={`Prioriteit: ${lead.priority}`}
+        />
       </div>
       <div className="mt-1.5 space-y-1">
         {lead.contact_name && (

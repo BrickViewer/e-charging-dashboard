@@ -1696,7 +1696,6 @@ export type Database = {
           id: string
           kvk: string | null
           location_type: string | null
-          lost_at: string | null
           lost_reason: string | null
           message_body: string | null
           message_subject: string | null
@@ -1745,7 +1744,6 @@ export type Database = {
           id?: string
           kvk?: string | null
           location_type?: string | null
-          lost_at?: string | null
           lost_reason?: string | null
           message_body?: string | null
           message_subject?: string | null
@@ -1794,7 +1792,6 @@ export type Database = {
           id?: string
           kvk?: string | null
           location_type?: string | null
-          lost_at?: string | null
           lost_reason?: string | null
           message_body?: string | null
           message_subject?: string | null

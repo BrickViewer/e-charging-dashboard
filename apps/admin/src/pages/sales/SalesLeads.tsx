@@ -3,13 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, SlidersHorizontal, Target, Euro, Trophy, ListChecks, Archive } from "lucide-react";
+import { Plus, Search, SlidersHorizontal, Target, Euro, Trophy, ListChecks } from "lucide-react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useOrganization } from "@/hooks/useAdminData";
 import { useLeads, useLeadStages, useTeamProfiles, type LeadWithTasks } from "@/hooks/useLeads";
 import { KanbanBoard } from "@/components/sales/KanbanBoard";
-import { LeadsArchiveList } from "@/components/sales/LeadsArchiveList";
-import { MarkLostDialog } from "@/components/sales/MarkLostDialog";
 import { AddLeadDialog } from "@/components/sales/AddLeadDialog";
 import { LeadDetailSheet } from "@/components/sales/LeadDetailSheet";
 import { StageManagerDialog } from "@/components/sales/StageManagerDialog";
@@ -44,10 +42,8 @@ export default function SalesLeads() {
   const [addStageId, setAddStageId] = useState<string | undefined>(undefined);
   const [stageMgrOpen, setStageMgrOpen] = useState(false);
   const [selected, setSelected] = useState<LeadWithTasks | null>(null);
-  const [showArchive, setShowArchive] = useState(false);
-  const [lostLead, setLostLead] = useState<LeadWithTasks | null>(null);
 
-  const stages = useMemo(() => stagesQ.data ?? [], [stagesQ.data]);
+  const stages = stagesQ.data ?? [];
   const allLeads = useMemo(() => leadsQ.data ?? [], [leadsQ.data]);
   const profiles = profilesQ.data ?? [];
 
@@ -69,12 +65,6 @@ export default function SalesLeads() {
       return true;
     });
   }, [allLeads, debounced, ownerFilter, sourceFilter]);
-
-  // Actief = open fases/leads; archief = afgehandeld (gewonnen + verloren).
-  const activeStages = useMemo(() => stages.filter((s) => !s.is_won && !s.is_lost), [stages]);
-  const activeLeads = useMemo(() => leads.filter((l) => l.status === "open"), [leads]);
-  const archiveLeads = useMemo(() => leads.filter((l) => l.status === "won" || l.status === "lost"), [leads]);
-  const lostStageId = useMemo(() => stages.find((s) => s.is_lost)?.id ?? null, [stages]);
 
   // KPI's (op de volledige set, niet gefilterd)
   const openLeads = allLeads.filter((l) => l.status === "open");
@@ -100,9 +90,6 @@ export default function SalesLeads() {
           <p className="mt-1 text-sm text-muted-foreground">Salespijplijn — sleep leads tussen de fasen.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setShowArchive((v) => !v)}>
-            <Archive className="mr-2 h-4 w-4" /> {showArchive ? "Verberg archief" : "Toon archief"}
-          </Button>
           <Button variant="outline" onClick={() => setStageMgrOpen(true)}>
             <SlidersHorizontal className="mr-2 h-4 w-4" /> Fasen beheren
           </Button>
@@ -160,29 +147,25 @@ export default function SalesLeads() {
             <Plus className="mr-2 h-4 w-4" /> Lead toevoegen
           </Button>
         </div>
-      ) : showArchive ? (
-        <LeadsArchiveList leads={archiveLeads} ownerName={ownerName} onRowClick={(l) => setSelected(l)} />
       ) : (
         <>
           {dragDisabled && (
             <p className="text-xs text-muted-foreground">Filter actief — wis de filters om kaarten te kunnen slepen.</p>
           )}
           <KanbanBoard
-            stages={activeStages}
-            leads={activeLeads}
+            stages={stages}
+            leads={leads}
             ownerName={ownerName}
             dragDisabled={dragDisabled}
             onAddInStage={(stageId) => { setAddStageId(stageId); setAddOpen(true); }}
             onCardClick={(l) => setSelected(l)}
-            onMarkLost={(l) => setLostLead(l)}
           />
         </>
       )}
 
       <AddLeadDialog open={addOpen} onOpenChange={setAddOpen} organizationId={org.data?.id} stages={stages} defaultStageId={addStageId} />
       <StageManagerDialog open={stageMgrOpen} onOpenChange={setStageMgrOpen} organizationId={org.data?.id} stages={stages} />
-      <LeadDetailSheet lead={selectedLive} open={!!selected} onOpenChange={(v) => !v && setSelected(null)} stages={stages} profiles={profiles} onMarkLost={(l) => { setSelected(null); setLostLead(l); }} />
-      <MarkLostDialog lead={lostLead} lostStageId={lostStageId} open={!!lostLead} onOpenChange={(v) => !v && setLostLead(null)} />
+      <LeadDetailSheet lead={selectedLive} open={!!selected} onOpenChange={(v) => !v && setSelected(null)} stages={stages} profiles={profiles} />
     </div>
   );
 }

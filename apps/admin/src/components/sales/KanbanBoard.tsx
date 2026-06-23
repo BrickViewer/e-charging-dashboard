@@ -24,7 +24,6 @@ export function KanbanBoard({
   dragDisabled,
   onAddInStage,
   onCardClick,
-  onMarkLost,
 }: {
   stages: LeadStage[];
   leads: LeadWithTasks[];
@@ -32,7 +31,6 @@ export function KanbanBoard({
   dragDisabled?: boolean;
   onAddInStage: (stageId: string) => void;
   onCardClick: (l: LeadWithTasks) => void;
-  onMarkLost?: (l: LeadWithTasks) => void;
 }) {
   const reorder = useReorderLeads();
   const leadById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
@@ -138,7 +136,6 @@ export function KanbanBoard({
             dragDisabled={dragDisabled}
             onAdd={() => onAddInStage(stage.id)}
             onCardClick={onCardClick}
-            onMarkLost={onMarkLost}
           />
         ))}
       </div>
