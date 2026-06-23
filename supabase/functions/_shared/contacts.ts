@@ -22,17 +22,28 @@ export async function resolveOrCreateCompany(
 ): Promise<string | null> {
   const name = (c.name ?? "").trim();
   if (!name) return null;
+  // Niet-lege attrs die we mogen schrijven/bijwerken (last-write-wins; companies = bron van waarheid).
+  const attrs: Record<string, string> = {};
+  if (c.kvk && c.kvk.trim()) attrs.kvk = c.kvk.trim();
+  if (c.website && c.website.trim()) attrs.website = c.website.trim();
+  if (c.sector && c.sector.trim()) attrs.sector = c.sector.trim();
+  if (c.street && c.street.trim()) attrs.address_street = c.street.trim();
+  if (c.postal && c.postal.trim()) attrs.postal_code = c.postal.trim();
+  if (c.city && c.city.trim()) attrs.city = c.city.trim();
+
   const { data: existing } = await sb
     .from("companies").select("id")
     .eq("organization_id", org).eq("normalized_name", name.toLowerCase()).limit(1).maybeSingle();
-  if (existing?.id) return existing.id as string;
+  if (existing?.id) {
+    // Bestaand bedrijf: niet-lege meegegeven attrs bijwerken zodat het niet veroudert.
+    if (Object.keys(attrs).length > 0) {
+      await sb.from("companies").update(attrs).eq("id", existing.id);
+    }
+    return existing.id as string;
+  }
   const { data: created, error } = await sb
     .from("companies")
-    .insert({
-      organization_id: org, name,
-      kvk: c.kvk || null, website: c.website || null, sector: c.sector || null,
-      address_street: c.street || null, postal_code: c.postal || null, city: c.city || null,
-    })
+    .insert({ organization_id: org, name, ...attrs })
     .select("id").single();
   if (error) throw error;
   return created.id as string;
@@ -46,14 +57,25 @@ export async function resolveOrCreatePerson(
   const name = (p.name ?? "").trim();
   const email = (p.email ?? "").trim();
   if (!name && !email) return null;
+  // Niet-lege contact-attrs die we op een bestaande persoon mogen bijwerken (naam laten we
+  // met rust om geen goede naam te degraderen bij een partiële intake-invoer).
+  const attrs: Record<string, string> = {};
+  if (p.phone && p.phone.trim()) attrs.phone = p.phone.trim();
+  if (p.role && p.role.trim()) attrs.role = p.role.trim();
+
+  let existingId: string | null = null;
   if (email) {
     const { data: byEmail } = await sb
       .from("persons").select("id").eq("organization_id", org).ilike("email", email).limit(1).maybeSingle();
-    if (byEmail?.id) return byEmail.id as string;
+    if (byEmail?.id) existingId = byEmail.id as string;
   } else if (name) {
     const { data: byName } = await sb
       .from("persons").select("id").eq("organization_id", org).ilike("full_name", name).limit(1).maybeSingle();
-    if (byName?.id) return byName.id as string;
+    if (byName?.id) existingId = byName.id as string;
+  }
+  if (existingId) {
+    if (Object.keys(attrs).length > 0) await sb.from("persons").update(attrs).eq("id", existingId);
+    return existingId;
   }
   const { first_name, last_name } = splitName(name);
   const { data: created, error } = await sb
@@ -67,7 +89,10 @@ export async function resolveOrCreatePerson(
   if ((error as { code?: string } | null)?.code === "23505" && email) {
     const { data: dup } = await sb
       .from("persons").select("id").eq("organization_id", org).ilike("email", email).limit(1).maybeSingle();
-    if (dup?.id) return dup.id as string;
+    if (dup?.id) {
+      if (Object.keys(attrs).length > 0) await sb.from("persons").update(attrs).eq("id", dup.id);
+      return dup.id as string;
+    }
   }
   throw error;
 }
