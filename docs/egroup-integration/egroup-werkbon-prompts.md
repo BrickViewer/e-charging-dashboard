@@ -4,6 +4,12 @@
 > werkbon-app — een aparte codebase, niet deze repo). De data komt al correct binnen vanuit het
 > E-Charging-dashboard; deze prompts gaan puur over **weergave + voorvullen** in de e-portal.
 
+> ⚠️ **Scope:** het voorvullen (Prompt 2) geldt **alleen voor opdrachten die via E-Charging binnenkomen**
+> (`orders.source = 'e_charging_dashboard'` / `orders.external_system = 'e-charging'`). **Eigen
+> e-portal-opdrachten** (handmatig/`source <> 'e_charging_dashboard'`) houden hun **bestaande flow** en
+> worden niet aangeraakt. Prompt 1 (witregels) is generieke weergave en mag overal gelden — dat verandert
+> alleen hoe meerregelige tekst getoond wordt, niet het gedrag van eigen opdrachten.
+
 ## Datamodel (ter referentie — niets aan wijzigen)
 - `orders.notes` = volledige opdrachtomschrijving ("Levering en installatie"-scope), mét witregels (`\n\n`).
 - `orders.description` = korte samenvatting (bv. "5 laadpunten").
@@ -35,14 +41,19 @@ of aan de data.
 ## Prompt 2 — Werkbon: omschrijving tonen + uitgevoerde werkzaamheden voorvullen
 
 ```
-In de werkbon-app moet de monteur de opdrachtomschrijving uit de offerte zien én alvast voorgevuld
-krijgen bij "Uitgevoerde werkzaamheden".
+In de werkbon-app moet de monteur, voor opdrachten die via E-Charging zijn binnengekomen, de
+opdrachtomschrijving uit de offerte zien én alvast voorgevuld krijgen bij "Uitgevoerde werkzaamheden".
+
+SCOPE — BELANGRIJK: dit geldt UITSLUITEND voor E-Charging-opdrachten, d.w.z.
+orders.source = 'e_charging_dashboard' (of orders.external_system = 'e-charging'). Eigen e-portal-
+opdrachten (handmatig aangemaakt, source <> 'e_charging_dashboard') houden hun BESTAANDE werkbon-flow en
+worden NIET voorgevuld of aangepast.
 
 Data: een werkbon (work_orders) is gekoppeld aan een opdracht via order_id (en order_line_id). De
 opdrachtomschrijving staat in orders.notes (volledige "Levering en installatie"-scope; terugval op
 orders.description of order_lines.work_description).
 
-Gewenst gedrag:
+Gewenst gedrag (alleen wanneer orders.source = 'e_charging_dashboard'):
 1. Bij het AANMAKEN van een werkbon (de "+ Werkbon"-actie): vul work_orders.notes (Omschrijving) én
    work_orders.performed_work (Uitgevoerde werkzaamheden) alvast met orders.notes van de gekoppelde
    opdracht — ALLEEN als ze nog leeg zijn (overschrijf nooit wat de monteur al heeft ingevuld).
