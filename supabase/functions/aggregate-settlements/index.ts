@@ -102,6 +102,25 @@ Deno.serve(async (req: Request) => {
       if (months.length > 36) break; // safety
     }
 
+    // Catch-up: maanden mét geldige (niet-excluded, client-gekoppelde) sessies die nog GEEN
+    // settlement hebben — bv. door het smalle default-venster of een (her)koppeling/park —
+    // ook meenemen. Zo blijft geen maand met sessies zonder settlement hangen (zelf-helend).
+    // aggregateMonth slaat final-status rijen al over, dus afgeronde maanden blijven ongemoeid.
+    try {
+      const { data: gapMonths, error: gapErr } = await supabase.rpc("settlement_gap_months");
+      if (gapErr) {
+        console.warn("settlement_gap_months failed:", gapErr.message);
+      } else if (Array.isArray(gapMonths)) {
+        const seen = new Set(months.map((mm) => `${mm.year}-${mm.month}`));
+        for (const g of gapMonths as Array<{ year: number; month: number }>) {
+          const key = `${g.year}-${g.month}`;
+          if (!seen.has(key)) { months.push({ year: g.year, month: g.month }); seen.add(key); }
+        }
+      }
+    } catch (e) {
+      console.warn("settlement_gap_months threw:", (e as Error).message);
+    }
+
     for (const { year, month } of months) {
       const result = await aggregateMonth(supabase, year, month);
       results.push({ year, month, ...result });

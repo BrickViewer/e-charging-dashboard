@@ -91,8 +91,8 @@ Deno.serve(async (req: Request) => {
     // 3. Invoices (self-billing facturen van Road aan E-Group BV)
     const invoiceResult = await syncInvoices(client, supabase);
 
-    // 4. Trigger aggregate-settlements voor huidig + vorig kwartaal.
-    //    Best-effort: failures breken de sync-response niet.
+    // 4. Trigger aggregate-settlements (default: huidige + vorige maand, plus catch-up van
+    //    maanden mét sessies maar zonder settlement). Best-effort: failures breken de sync niet.
     let aggregateResult: unknown = null;
     try {
       aggregateResult = await invokeAggregateSettlements({});
