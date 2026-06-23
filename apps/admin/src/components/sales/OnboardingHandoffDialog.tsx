@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useHandoffOrder, useUpdateOrderSite } from "@/hooks/useInstallations";
 import { primaryOrder, type OnboardingClient } from "@/hooks/useOnboarding";
+import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
 
 const emptyToNull = (s: string) => { const t = s.trim(); return t === "" ? null : t; };
 
@@ -43,7 +44,7 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
       site_contact_email: order.site_contact_email ?? client?.contact_email ?? "",
       site_contact_phone: order.site_contact_phone ?? client?.contact_phone ?? "",
       service_summary: order.service_summary ?? "",
-      notes: order.notes ?? "",
+      notes: order.notes ?? DEFAULT_LEVERING_TEXT,
     });
   }, [order?.id, client?.contact_name, client?.contact_email, client?.contact_phone, client?.billing_address_street, client?.billing_address_postal, client?.billing_address_city]); // eslint-disable-line react-hooks/exhaustive-deps
 
