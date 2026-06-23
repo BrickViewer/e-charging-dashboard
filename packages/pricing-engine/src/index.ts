@@ -96,7 +96,8 @@ export const defaultDemoPresets = [
 
 export const configuratorSettingsSchema = z.object({
   // e-charging-marge: vast bedrag per kWh dat e-charging op het verbruik verdient.
-  echargingMarginPerKwh: z.number().min(0).default(0.05),
+  // Default €0,10/kWh = onze service-fee (gelijk aan offerTemplate.serviceFeePerKwh).
+  echargingMarginPerKwh: z.number().min(0).default(0.10),
   defaultContractDurationMonths: z.number().int().positive().default(12),
   defaultNoticePeriodMonths: z.number().int().min(0).default(3),
   defaultChargeTariffPerKwh: z.number().min(0).default(0.58),
@@ -221,7 +222,7 @@ export type PricingResult = {
 };
 
 export const defaultConfiguratorSettings: ConfiguratorSettings = configuratorSettingsSchema.parse({
-  echargingMarginPerKwh: 0.05,
+  echargingMarginPerKwh: 0.10,
   defaultContractDurationMonths: 12,
   defaultNoticePeriodMonths: 3,
   defaultChargeTariffPerKwh: 0.58,

@@ -147,7 +147,7 @@ export const defaultDemoPresets = [
 ];
 
 export const defaultConfiguratorSettings: ConfiguratorSettings = {
-  echargingMarginPerKwh: 0.05,
+  echargingMarginPerKwh: 0.10,
   defaultContractDurationMonths: 12,
   defaultNoticePeriodMonths: 3,
   defaultChargeTariffPerKwh: 0.58,
