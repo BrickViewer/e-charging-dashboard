@@ -105,10 +105,33 @@ function CurrencyInput({
   value: number;
   onChange: (value: number) => void;
 }) {
+  // Tekst-gebufferd: terwijl je typt blijft de ruwe tekst staan (komma/decimaal/leeg kan
+  // tussentijds), pas bij blur normaliseren. Externe wijzigingen syncen alleen buiten focus.
+  const [text, setText] = useState(() => String(value));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!editing) setText(String(value)); }, [value, editing]);
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Input inputMode="decimal" value={String(value)} onChange={(event) => onChange(toNumber(event.target.value, value))} />
+      <Input
+        inputMode="decimal"
+        value={text}
+        onFocus={() => setEditing(true)}
+        onChange={(event) => {
+          const raw = event.target.value;
+          setText(raw);
+          if (raw.trim() === "") return;
+          const parsed = toNumber(raw, NaN);
+          if (Number.isFinite(parsed)) onChange(parsed);
+        }}
+        onBlur={() => {
+          setEditing(false);
+          const parsed = toNumber(text, NaN);
+          if (text.trim() === "" || !Number.isFinite(parsed)) { setText(String(value)); return; }
+          onChange(parsed);
+          setText(String(parsed));
+        }}
+      />
     </div>
   );
 }

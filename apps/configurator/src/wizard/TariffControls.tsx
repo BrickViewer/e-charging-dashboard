@@ -1,8 +1,59 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import type { ConfiguratorSettings, PricingInput, PricingResult } from "@echarging/pricing-engine";
 import { ChevronDown, Minus, Plus } from "lucide-react";
 import { euro, number, parseNumber } from "./format";
+
+// Toon een getal in een TYPEBARE vorm (komma-decimaal, geen duizendtallen).
+function fmtEdit(value: number): string {
+  return Number.isFinite(value) ? value.toLocaleString("nl-NL", { useGrouping: false, maximumFractionDigits: 4 }) : "";
+}
+
+// Tekst-gebufferd getalveld: terwijl je typt blijft de ruwe tekst staan (je kunt dus
+// "0,", een lege waarde of "1,5" tussentijds typen) en de projectie werkt live mee zodra
+// het parseert. Bij blur normaliseren we. Externe wijzigingen (locatietype/settings)
+// syncen alleen als je NIET in het veld staat.
+function NumberField({ value, onChange, className, ariaLabel, min, max, integer, inputMode = "decimal" }: {
+  value: number; onChange: (n: number) => void; className?: string; ariaLabel?: string;
+  min?: number; max?: number; integer?: boolean; inputMode?: "decimal" | "numeric";
+}) {
+  const [text, setText] = useState(() => fmtEdit(value));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!editing) setText(fmtEdit(value)); }, [value, editing]);
+
+  const clamp = (n: number) => {
+    let v = integer ? Math.round(n) : n;
+    if (min != null) v = Math.max(min, v);
+    if (max != null) v = Math.min(max, v);
+    return v;
+  };
+
+  return (
+    <input
+      className={className}
+      type="text"
+      inputMode={inputMode}
+      value={text}
+      aria-label={ariaLabel}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setText(raw);
+        if (raw.trim() === "") return; // leeg → niets committen; behoud de waarde
+        const parsed = parseNumber(raw, NaN);
+        if (Number.isFinite(parsed)) onChange(clamp(parsed));
+      }}
+      onBlur={() => {
+        setEditing(false);
+        const parsed = parseNumber(text, NaN);
+        if (text.trim() === "" || !Number.isFinite(parsed)) { setText(fmtEdit(value)); return; }
+        const v = clamp(parsed);
+        onChange(v);
+        setText(fmtEdit(v));
+      }}
+    />
+  );
+}
 
 function Control({ label, value, sub, children }: { label: string; value?: string; sub?: string; children?: React.ReactNode }) {
   return (
@@ -29,7 +80,7 @@ function Stepper({ value, min, max, onChange }: { value: number; min: number; ma
   return (
     <div className="stepper-sm">
       <button type="button" className="stepper-btn" aria-label="Minder" onClick={() => onChange(clamp(value - 1))}><Minus size={18} /></button>
-      <input className="stepper-value" inputMode="numeric" value={value} onChange={(e) => onChange(clamp(parseNumber(e.target.value, value)))} />
+      <NumberField className="stepper-value" inputMode="numeric" value={value} min={min} max={max} integer ariaLabel="Aantal laadpunten" onChange={onChange} />
       <button type="button" className="stepper-btn" aria-label="Meer" onClick={() => onChange(clamp(value + 1))}><Plus size={18} /></button>
     </div>
   );
@@ -46,8 +97,8 @@ function SwitchRow({ title, sub, active, amount, onToggle, onAmount }: {
       </div>
       <div className="flex items-center gap-2">
         {active && (
-          <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="decimal" value={amount}
-            aria-label={`${title} bedrag`} onChange={(e) => onAmount(parseNumber(e.target.value, amount))} />
+          <NumberField className="text-input !min-h-9 w-[68px] text-sm" value={amount} min={0}
+            ariaLabel={`${title} bedrag`} onChange={onAmount} />
         )}
         <button type="button" className="switch-track" data-active={active} onClick={onToggle} aria-pressed={active} aria-label={title}>
           <div className="switch-thumb" />
@@ -182,15 +233,15 @@ export function TariffControls({
                   <div className="space-y-2.5 rounded-xl border border-border-soft/60 bg-muted/20 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[13px] text-muted-foreground">Gem. stilstaande min / sessie <span className="opacity-70">(over alle sessies)</span></p>
-                      <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.usage.idleMinutesPerSession}
-                        aria-label="Gemiddelde stilstaande minuten per sessie"
-                        onChange={(e) => updateInput((d) => { d.usage.idleMinutesPerSession = parseNumber(e.target.value, d.usage.idleMinutesPerSession); })} />
+                      <NumberField className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.usage.idleMinutesPerSession}
+                        ariaLabel="Gemiddelde stilstaande minuten per sessie" min={0} integer
+                        onChange={(n) => updateInput((d) => { d.usage.idleMinutesPerSession = n; })} />
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[13px] text-muted-foreground">Gratis minuten vóór blokkeertarief</p>
-                      <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.tariffs.idleGraceMinutes}
-                        aria-label="Gratis minuten"
-                        onChange={(e) => updateInput((d) => { d.tariffs.idleGraceMinutes = parseNumber(e.target.value, d.tariffs.idleGraceMinutes); })} />
+                      <NumberField className="text-input !min-h-9 w-[68px] text-sm" inputMode="numeric" value={input.tariffs.idleGraceMinutes}
+                        ariaLabel="Gratis minuten" min={0} integer
+                        onChange={(n) => updateInput((d) => { d.tariffs.idleGraceMinutes = n; })} />
                     </div>
                     {/* Transparante berekening — ná de gratis minuten betaalt iedereen. */}
                     <div className="space-y-0.5 border-t border-border-soft/60 pt-2 text-[11px] leading-relaxed text-muted-foreground">
@@ -218,9 +269,9 @@ export function TariffControls({
                   <div className="space-y-2.5 rounded-xl border border-border-soft/60 bg-muted/20 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[13px] text-muted-foreground">Gem. tijd aan de paal / sessie (uren)</p>
-                      <input className="text-input !min-h-9 w-[68px] text-sm" inputMode="decimal" value={input.usage.averageSessionDurationHours}
-                        aria-label="Gemiddelde tijd aan de paal per sessie in uren"
-                        onChange={(e) => updateInput((d) => { d.usage.averageSessionDurationHours = parseNumber(e.target.value, d.usage.averageSessionDurationHours); })} />
+                      <NumberField className="text-input !min-h-9 w-[68px] text-sm" value={input.usage.averageSessionDurationHours}
+                        ariaLabel="Gemiddelde tijd aan de paal per sessie in uren" min={0}
+                        onChange={(n) => updateInput((d) => { d.usage.averageSessionDurationHours = n; })} />
                     </div>
                     <div className="space-y-0.5 border-t border-border-soft/60 pt-2 text-[11px] leading-relaxed text-muted-foreground">
                       <p>
