@@ -196,20 +196,6 @@ function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
   return null;
 }
 
-function normalizeLines(lineItems: unknown): HandoffLine[] {
-  if (!Array.isArray(lineItems)) return [];
-  return lineItems
-    .map((raw) => {
-      const item = (raw ?? {}) as Record<string, unknown>;
-      const description = String(item.description ?? "").trim();
-      const qty = Number(item.qty ?? item.quantity ?? 1) || 0;
-      const unit_price = Number(item.unit_price ?? item.unitPrice ?? 0) || 0;
-      const total = Number(item.total ?? qty * unit_price) || 0;
-      return { description, qty, unit_price, total };
-    })
-    .filter((l) => l.description.length > 0);
-}
-
 // Site-velden die E-Group verplicht stelt (project NOT NULL). Lege velden
 // blokkeren de handoff zodat de gebruiker ze eerst aanvult.
 export const REQUIRED_SITE_FIELDS = ["site_street", "site_house_number", "site_postal", "site_city"] as const;
@@ -247,7 +233,12 @@ export function buildHandoffPayload(input: BuildHandoffInput): HandoffPayload {
     lead?.address_street,
   );
 
-  const lines = normalizeLines(quote?.line_items);
+  // Eén samenvattende werkregel: de e-portal toont één rij per order_line, dus niet per
+  // quote-regel splitsen (dat gaf dubbele opdrachtregels). Scope staat in notes, kosten in totals.
+  const workLabel = (order.service_summary ?? "").trim() || "laadinfrastructuur";
+  const lines: HandoffLine[] = [
+    { description: `Levering & installatie — ${workLabel}`, qty: 1, unit_price: 0, total: 0 },
+  ];
 
   return {
     external_reference: order.id,

@@ -50,6 +50,23 @@ status op de gebruikelijke manier laten wijzigen via de bestaande werkbon/opdrac
 4. **(Optioneel) filter op bron**: kunnen filteren op "alleen extern aangeleverd"
    (`external_system is not null`) is handig voor het verwerken van binnengekomen opdrachten.
 
+## Opdracht-detail: omschrijving/notitie met witregels tonen
+
+De velden `orders.notes` (en `orders.description`) bevatten **meerregelige** tekst met **witregels**
+(alinea's gescheiden door een lege regel, `\n\n`) — bijvoorbeeld de "Levering en installatie"-scope uit de
+offerte ("Het leveren, monteren en aansluiten van … / T.b.v. de load balancing … / Meterkast wordt
+uitgebreid …"). Toon deze in de **opdracht-/werkbon-detailweergave met behoud van de regelafbrekingen en
+witregels**:
+
+- CSS (eenvoudigst): render het veld in een element met `white-space: pre-wrap;` (of `pre-line;`), bv.
+  `<p style={{ whiteSpace: "pre-wrap" }}>{order.notes}</p>`.
+- Of zonder CSS: splits op `\n` en render per regel, bv.
+  `order.notes.split("\n").map((r, i) => <p key={i}>{r || " "}</p>)`.
+
+Zonder dit collapse't de browser de newlines tot **één lange lap tekst** (HTML whitespace-collapsing), wat de
+opdracht onleesbaar maakt. **De data komt al correct binnen mét witregels** (de intake slaat ze 1-op-1 op);
+dit is puur een weergavekwestie in de frontend.
+
 ## Belangrijk
 
 - Wijzig de bestaande **status-lifecycle niet** (`bevestigd → te_plannen → ingepland →

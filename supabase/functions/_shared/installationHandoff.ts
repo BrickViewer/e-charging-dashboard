@@ -70,21 +70,6 @@ function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
 }
 
 // deno-lint-ignore no-explicit-any
-function normalizeLines(lineItems: any): any[] {
-  if (!Array.isArray(lineItems)) return [];
-  return lineItems
-    .map((raw) => {
-      const item = raw ?? {};
-      const description = String(item.description ?? "").trim();
-      const qty = Number(item.qty ?? item.quantity ?? 1) || 0;
-      const unit_price = Number(item.unit_price ?? item.unitPrice ?? 0) || 0;
-      const total = Number(item.total ?? qty * unit_price) || 0;
-      return { description, qty, unit_price, total };
-    })
-    .filter((l) => l.description.length > 0);
-}
-
-// deno-lint-ignore no-explicit-any
 export function buildHandoffPayload(input: any): any {
   const { order, client, company, lead, quote, callbackUrl } = input;
 
@@ -95,6 +80,10 @@ export function buildHandoffPayload(input: any): any {
   const siteStreet = (order.site_street ?? "").trim();
   const siteHouse = (order.site_house_number ?? "").trim();
   const siteStreetFull = firstNonEmpty([siteStreet, siteHouse].filter(Boolean).join(" "), lead?.address_street);
+
+  // Eén samenvattende werkregel (e-portal toont één rij per order_line). Scope in notes, kosten in totals.
+  const workLabel = (order.service_summary ?? "").trim() || "laadinfrastructuur";
+  const lines = [{ description: `Levering & installatie — ${workLabel}`, qty: 1, unit_price: 0, total: 0 }];
 
   return {
     external_reference: order.id,
@@ -143,7 +132,7 @@ export function buildHandoffPayload(input: any): any {
       phone: firstNonEmpty(order.site_contact_phone, lead?.contact_phone, client?.contact_phone),
       email: firstNonEmpty(order.site_contact_email, lead?.contact_email, client?.contact_email),
     },
-    order_lines: normalizeLines(quote?.line_items),
+    order_lines: lines,
     totals: {
       hardware_cost: quote?.total_hardware_cost ?? null,
       installation_cost: quote?.total_installation_cost ?? null,

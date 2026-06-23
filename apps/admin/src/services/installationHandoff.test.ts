@@ -134,12 +134,12 @@ describe("buildHandoffPayload", () => {
     // Back-office contact = algemeen klantcontact; site_contact = on-site snapshot.
     expect(p.contact).toEqual({ name: "Piet Klant", email: "info@acme.nl", phone: "+31201234567" });
     expect(p.site_contact).toEqual({ name: "Jan Jansen", phone: "+31612345678", email: "jan@acme.nl" });
-    expect(p.order_lines).toHaveLength(2);
+    expect(p.order_lines).toHaveLength(1);
     expect(p.order_lines[0]).toEqual({
-      description: "Levering laadpaal AC 22kW",
-      qty: 10,
-      unit_price: 950,
-      total: 9500,
+      description: "Levering & installatie — 10 laadpunten",
+      qty: 1,
+      unit_price: 0,
+      total: 0,
     });
     expect(p.totals).toEqual({ hardware_cost: 9500, installation_cost: 7500, with_management: true });
   });
@@ -156,18 +156,21 @@ describe("buildHandoffPayload", () => {
     expect(p.customer.kvk_number).toBe("87654321");
     expect(p.customer.street).toBe("Kerkstraat");
     expect(p.customer.email).toBe("lead@x.nl");
-    expect(p.order_lines).toEqual([]);
+    expect(p.order_lines).toEqual([
+      { description: "Levering & installatie — laadinfrastructuur", qty: 1, unit_price: 0, total: 0 },
+    ]);
     expect(p.totals.hardware_cost).toBeNull();
   });
 
-  it("filtert lege regels en berekent total wanneer afwezig", () => {
+  it("stuurt altijd één samenvattende werkregel (e-portal toont één rij per order_line)", () => {
     const p = buildHandoffPayload({
       callbackUrl: base.callbackUrl,
-      order: { id: "o3", site_street: "A", site_house_number: "1", site_postal: "1", site_city: "X" },
-      quote: { line_items: [{ description: "", qty: 2, unit_price: 5 }, { description: "Werk", qty: 2, unit_price: 5 }] },
+      order: { id: "o3", service_summary: "3 laadpunten", site_street: "A", site_house_number: "1", site_postal: "1", site_city: "X" },
+      quote: { line_items: [{ description: "Hardware", qty: 3, unit_price: 5 }, { description: "Installatie", qty: 1, unit_price: 5 }] },
     });
-    expect(p.order_lines).toHaveLength(1);
-    expect(p.order_lines[0]).toEqual({ description: "Werk", qty: 2, unit_price: 5, total: 10 });
+    expect(p.order_lines).toEqual([
+      { description: "Levering & installatie — 3 laadpunten", qty: 1, unit_price: 0, total: 0 },
+    ]);
   });
 
   it("scheidt back-office contact (klant) van site_contact (snapshot)", () => {
