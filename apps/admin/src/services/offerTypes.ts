@@ -57,9 +57,9 @@ export interface OfferDetails {
   // Extra laadkosten-varianten (€/kWh, zelfde eenheid als laadkosten). null = niet ingevuld (geel).
   laadkostenGasten?: number | null;
   laadkostenEigenGebruik?: number | null;
-  // Per-regel zichtbaarheid van het tariefblok in de offerte. Key ontbreekt = standaard
-  // (laadkosten/blokkeertarief/starttarief = aan; uurtarief = aan bij >0; de twee nieuwe = uit).
-  tariffVisible?: Record<string, boolean> | null;
+  // Tariefregels in de offerte: geordende lijst van zichtbare keys (in de lijst = zichtbaar; laatst
+  // aangezette regel bovenaan). Afwezig = standaard (laadkosten/blokkeer/start + uurtarief bij >0; nieuwe uit).
+  tariffOrder?: string[] | null;
   serviceFeePerKwh?: number | null;
   servicemonteurPerHour?: number | null;
   voorrijkostenPerKm?: number | null;
@@ -77,6 +77,8 @@ export interface OfferDetails {
   echargingSignerFunction?: string | null;
   // Body-tekst van de klant-offertemail (per offerte aanpasbaar). Leeg = standaardtekst.
   emailMessage?: string | null;
+  // Ondertekening van de klant-mail (na "Met vriendelijke groet,"). Leeg = naam van de ondertekenaar.
+  emailClosingName?: string | null;
 }
 
 // Standaard body-tekst van de offerte-e-mail aan de klant — voorvulling van het bewerkbare veld.

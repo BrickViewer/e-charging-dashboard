@@ -83,11 +83,14 @@ Deno.serve(async (req) => {
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
 
     if (RESEND_API_KEY) {
-      const customMessage = (quote.offer_details as { emailMessage?: string | null } | null)?.emailMessage ?? null;
+      const od = quote.offer_details as { emailMessage?: string | null; emailClosingName?: string | null } | null;
+      const customMessage = od?.emailMessage ?? null;
+      // Ondertekening: expliciete override > de ondertekenaar > "Team E-Charging" (fallback in renderOfferEmail).
+      const signoffName = (od?.emailClosingName?.trim()) || quote.internal_signer_name || null;
       const { html, text } = renderOfferEmail({
         supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
         contact: quote.prospect_contact, total, acceptUrl, validUntil: quote.valid_until,
-        hasAttachment: !!pdfBase64, customMessage,
+        hasAttachment: !!pdfBase64, customMessage, signoffName,
       });
       const res = await sendEmail({
         to: [recipient],

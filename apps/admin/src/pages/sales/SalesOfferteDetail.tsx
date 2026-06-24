@@ -73,6 +73,10 @@ export default function SalesOfferteDetail() {
   const [mobilePreview, setMobilePreview] = useState(false);
   // Aanpasbare body-tekst van de klant-offertemail (voorgevuld met de standaardtekst).
   const [emailMessage, setEmailMessage] = useState(DEFAULT_OFFER_EMAIL);
+  // Ondertekening van de klant-mail (na "Met vriendelijke groet,"). Leeg = naam ondertekenaar.
+  const [emailClosing, setEmailClosing] = useState("");
+  // Ruwe invoertekst van numerieke od-velden, zodat je vrij kunt typen (komma, tussenstanden, 0,60).
+  const [numDraft, setNumDraft] = useState<Record<string, string>>({});
   // Bewerkbare koppelingen (bedrijf/persoon/lead) — id + label, geseed uit de quote.
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState("");
@@ -111,7 +115,9 @@ export default function SalesOfferteDetail() {
       setIdleGrace(td.idleGraceMinutes != null ? String(td.idleGraceMinutes) : "");
       const odLoaded = ((quote as unknown as { offer_details?: OfferDetails }).offer_details ?? {}) as OfferDetails;
       setOd(odLoaded);
+      setNumDraft({});
       setEmailMessage(odLoaded.emailMessage ?? DEFAULT_OFFER_EMAIL);
+      setEmailClosing(odLoaded.emailClosingName ?? "");
       setSignerUserId(quote.internal_signer_user_id ?? null);
       setCompanyId(quote.company_id ?? null);
       setCompanyName(quote.prospect_company ?? "");
@@ -125,17 +131,34 @@ export default function SalesOfferteDetail() {
   // Compacte setters voor de offerte-velden (overrides; leeg = standaard uit instellingen).
   const odStr = (k: keyof OfferDetails) => (od[k] == null ? "" : String(od[k]));
   const setStr = (k: keyof OfferDetails, v: string) => setOd((o) => ({ ...o, [k]: v.trim() === "" ? null : v }));
-  const setNum = (k: keyof OfferDetails, v: string) => setOd((o) => ({ ...o, [k]: numOr(v) }));
+  // Numeriek veld: toon de ruwe draft-tekst (vrij typen, komma) en bewaar de geparste waarde in od.
+  const numVal = (k: keyof OfferDetails) => numDraft[k as string] ?? (od[k] == null ? "" : String(od[k]).replace(".", ","));
+  const setNum = (k: keyof OfferDetails, v: string) => { setNumDraft((d) => ({ ...d, [k as string]: v })); setOd((o) => ({ ...o, [k]: numOr(v) })); };
   const dateVal = (k: keyof OfferDetails) => { const v = od[k]; return typeof v === "string" ? v.slice(0, 10) : ""; };
   const setDate = (k: keyof OfferDetails, v: string) => setOd((o) => ({ ...o, [k]: v || null }));
-  // Tarief-zichtbaarheid: default-bewust lezen/zetten van od.tariffVisible (defaults gelijk aan resolve()).
-  const tariffDefault = (k: string): boolean => {
-    if (k === "laadkostenGasten" || k === "laadkostenEigenGebruik") return false;
-    if (k === "uurtarief") { const u = numOr(odStr("perHourFeePerHour")); return u != null && u > 0; }
-    return true; // laadkosten / blokkeertarief / starttarief
+  // Tariefregels: volgorde + zichtbaarheid via één geordende lijst (od.tariffOrder). In de lijst = zichtbaar;
+  // laatst aangezette regel komt bovenaan. Default = klassieke regels in vaste volgorde (twee nieuwe uit).
+  const TARIFF_KEYS: Array<[string, string]> = [
+    ["laadkosten", "Laadkosten"], ["laadkostenGasten", "Laadkosten gasten"], ["laadkostenEigenGebruik", "Laadkosten eigen gebruik"],
+    ["blokkeertarief", "Blokkeertarief"], ["starttarief", "Starttarief"], ["uurtarief", "Tarief per uur"],
+  ];
+  const tariffDefaultOrder = (): string[] => {
+    const base = ["laadkosten", "blokkeertarief", "starttarief"];
+    const u = numOr(numVal("perHourFeePerHour")); if (u != null && u > 0) base.push("uurtarief");
+    return base;
   };
-  const tariffShown = (k: string): boolean => od.tariffVisible?.[k] ?? tariffDefault(k);
-  const setTariffShown = (k: string, v: boolean) => setOd((o) => ({ ...o, tariffVisible: { ...(o.tariffVisible ?? {}), [k]: v } }));
+  const tariffOrder = Array.isArray(od.tariffOrder) ? od.tariffOrder : tariffDefaultOrder();
+  const tariffShown = (k: string): boolean => tariffOrder.includes(k);
+  const setTariffShown = (k: string, on: boolean) => {
+    const cur = Array.isArray(od.tariffOrder) ? od.tariffOrder : tariffDefaultOrder();
+    const next = on ? [k, ...cur.filter((x) => x !== k)] : cur.filter((x) => x !== k); // aanzetten = bovenaan
+    setOd((o) => ({ ...o, tariffOrder: next }));
+  };
+  // Toon de toggles in de offerte-volgorde: actieve regels (in volgorde) eerst, dan de inactieve.
+  const orderedTariffRows = [
+    ...tariffOrder.filter((k) => TARIFF_KEYS.some(([key]) => key === k)),
+    ...TARIFF_KEYS.map(([k]) => k).filter((k) => !tariffOrder.includes(k)),
+  ];
 
   const isConcept = quote?.status === "concept";
   const grandTotal = numOr(price) ?? 0;
@@ -166,7 +189,7 @@ export default function SalesOfferteDetail() {
           with_installation: withInstallation,
           charge_rate_per_kwh: withManagement ? numOr(chargeRate) : null,
           tariff_data: tariffData as unknown as never,
-          offer_details: { ...od, emailMessage: emailMessage.trim() || null } as unknown as never,
+          offer_details: { ...od, emailMessage: emailMessage.trim() || null, emailClosingName: emailClosing.trim() || null } as unknown as never,
           internal_signer_user_id: signerUserId,
         },
       });
@@ -462,8 +485,8 @@ export default function SalesOfferteDetail() {
               <div className="col-span-2 space-y-1"><Label className="text-xs">Locatie</Label><Input value={odStr("object")} placeholder={tpl?.defaultObjectTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("object", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Betreft</Label><Input value={odStr("betreft")} placeholder={tpl?.defaultBetreftTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("betreft", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} placeholder={tpl?.defaultAanhef || ""} disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Witruimte boven datum (px)</Label><Input inputMode="numeric" value={odStr("dateGapPx")} placeholder="96" disabled={!isConcept} onChange={(e) => setNum("dateGapPx", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Witruimte boven aanhef (px)</Label><Input inputMode="numeric" value={odStr("aanhefGapPx")} placeholder="84" disabled={!isConcept} onChange={(e) => setNum("aanhefGapPx", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Witruimte boven datum (px)</Label><Input inputMode="numeric" value={numVal("dateGapPx")} placeholder="96" disabled={!isConcept} onChange={(e) => setNum("dateGapPx", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Witruimte boven aanhef (px)</Label><Input inputMode="numeric" value={numVal("aanhefGapPx")} placeholder="84" disabled={!isConcept} onChange={(e) => setNum("aanhefGapPx", e.target.value)} /></div>
               <p className="col-span-2 text-[10px] text-muted-foreground">Standaard 96 / 84 px. Bij lange teksten worden deze automatisch verkleind (tot min. 16 px) zodat het investeringsblok boven de voettekst blijft; een eigen waarde geldt als maximum.</p>
             </div>
           </Section>
@@ -473,7 +496,7 @@ export default function SalesOfferteDetail() {
               <Textarea ref={leveringRef} className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.leveringText ?? DEFAULT_LEVERING_TEXT} disabled={!isConcept} onChange={(e) => setStr("leveringText", e.target.value)} />
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="space-y-1"><Label className="text-xs">Prijs (excl. BTW)</Label><Input inputMode="decimal" value={price} placeholder="0" disabled={!isConcept} onChange={(e) => setPrice(e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Stelpost graafwerk (€)</Label><Input inputMode="decimal" value={odStr("stelpostGraafwerk")} placeholder={String(tpl?.defaultStelpostGraafwerk ?? "")} disabled={!isConcept} onChange={(e) => setNum("stelpostGraafwerk", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Stelpost graafwerk (€)</Label><Input inputMode="decimal" value={numVal("stelpostGraafwerk")} placeholder={String(tpl?.defaultStelpostGraafwerk ?? "")} disabled={!isConcept} onChange={(e) => setNum("stelpostGraafwerk", e.target.value)} /></div>
               </div>
             </Section>
           ) : (
@@ -489,33 +512,29 @@ export default function SalesOfferteDetail() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1"><Label className="text-xs">Laadtarief / kWh (€)</Label><Input inputMode="decimal" value={chargeRate} disabled={!isConcept} onChange={(e) => setChargeRate(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Blokkeertarief / min (€)</Label><Input inputMode="decimal" value={idleFee} disabled={!isConcept} onChange={(e) => setIdleFee(e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Starttarief / keer (€)</Label><Input inputMode="decimal" value={odStr("startFeePerSession")} disabled={!isConcept} onChange={(e) => setNum("startFeePerSession", e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Laadkosten gasten / kWh (€)</Label><Input inputMode="decimal" value={odStr("laadkostenGasten")} disabled={!isConcept} onChange={(e) => setNum("laadkostenGasten", e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Laadkosten eigen gebruik / kWh (€)</Label><Input inputMode="decimal" value={odStr("laadkostenEigenGebruik")} disabled={!isConcept} onChange={(e) => setNum("laadkostenEigenGebruik", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Starttarief / keer (€)</Label><Input inputMode="decimal" value={numVal("startFeePerSession")} disabled={!isConcept} onChange={(e) => setNum("startFeePerSession", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Laadkosten gasten / kWh (€)</Label><Input inputMode="decimal" value={numVal("laadkostenGasten")} disabled={!isConcept} onChange={(e) => setNum("laadkostenGasten", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Laadkosten eigen gebruik / kWh (€)</Label><Input inputMode="decimal" value={numVal("laadkostenEigenGebruik")} disabled={!isConcept} onChange={(e) => setNum("laadkostenEigenGebruik", e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Gratis minuten</Label><Input inputMode="numeric" value={idleGrace} disabled={!isConcept} onChange={(e) => setIdleGrace(e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Service-fee / kWh (€)</Label><Input inputMode="decimal" value={odStr("serviceFeePerKwh")} placeholder={String(tpl?.serviceFeePerKwh ?? "")} disabled={!isConcept} onChange={(e) => setNum("serviceFeePerKwh", e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Servicemonteur / uur (€)</Label><Input inputMode="decimal" value={odStr("servicemonteurPerHour")} placeholder={String(tpl?.servicemonteurPerHour ?? "")} disabled={!isConcept} onChange={(e) => setNum("servicemonteurPerHour", e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Voorrijkosten / km (€)</Label><Input inputMode="decimal" value={odStr("voorrijkostenPerKm")} placeholder={String(tpl?.voorrijkostenPerKm ?? "")} disabled={!isConcept} onChange={(e) => setNum("voorrijkostenPerKm", e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Toeslag werkuur (€)</Label><Input inputMode="decimal" value={odStr("toeslagWerkuur")} placeholder={String(tpl?.toeslagWerkuur ?? "")} disabled={!isConcept} onChange={(e) => setNum("toeslagWerkuur", e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">Activatiekosten / socket (€)</Label><Input inputMode="decimal" value={odStr("activatiekostenPerSocket")} placeholder={String(tpl?.activatiekostenPerSocket ?? "")} disabled={!isConcept} onChange={(e) => setNum("activatiekostenPerSocket", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Service-fee / kWh (€)</Label><Input inputMode="decimal" value={numVal("serviceFeePerKwh")} placeholder={String(tpl?.serviceFeePerKwh ?? "")} disabled={!isConcept} onChange={(e) => setNum("serviceFeePerKwh", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Servicemonteur / uur (€)</Label><Input inputMode="decimal" value={numVal("servicemonteurPerHour")} placeholder={String(tpl?.servicemonteurPerHour ?? "")} disabled={!isConcept} onChange={(e) => setNum("servicemonteurPerHour", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Voorrijkosten / km (€)</Label><Input inputMode="decimal" value={numVal("voorrijkostenPerKm")} placeholder={String(tpl?.voorrijkostenPerKm ?? "")} disabled={!isConcept} onChange={(e) => setNum("voorrijkostenPerKm", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Toeslag werkuur (€)</Label><Input inputMode="decimal" value={numVal("toeslagWerkuur")} placeholder={String(tpl?.toeslagWerkuur ?? "")} disabled={!isConcept} onChange={(e) => setNum("toeslagWerkuur", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Activatiekosten / socket (€)</Label><Input inputMode="decimal" value={numVal("activatiekostenPerSocket")} placeholder={String(tpl?.activatiekostenPerSocket ?? "")} disabled={!isConcept} onChange={(e) => setNum("activatiekostenPerSocket", e.target.value)} /></div>
               </div>
               <div className="mt-4">
                 <Label className="text-xs">Toon in offerte</Label>
-                <p className="text-[10px] text-muted-foreground">Kies welke tariefregels in het "afgesproken instellingen"-blok van de offerte verschijnen.</p>
+                <p className="text-[10px] text-muted-foreground">Kies welke tariefregels in het "afgesproken instellingen"-blok verschijnen. De laatst aangezette regel komt bovenaan — zo bepaal je zelf de volgorde.</p>
                 <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                  {([
-                    ["laadkosten", "Laadkosten"],
-                    ["laadkostenGasten", "Laadkosten gasten"],
-                    ["laadkostenEigenGebruik", "Laadkosten eigen gebruik"],
-                    ["blokkeertarief", "Blokkeertarief"],
-                    ["starttarief", "Starttarief"],
-                    ["uurtarief", "Tarief per uur"],
-                  ] as const).map(([key, label]) => (
-                    <label key={key} className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
-                      <span className="text-xs text-foreground">{label}</span>
-                      <Switch checked={tariffShown(key)} disabled={!isConcept} onCheckedChange={(v) => setTariffShown(key, v)} />
-                    </label>
-                  ))}
+                  {orderedTariffRows.map((key) => {
+                    const label = TARIFF_KEYS.find(([k]) => k === key)?.[1] ?? key;
+                    return (
+                      <label key={key} className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
+                        <span className="text-xs text-foreground">{label}</span>
+                        <Switch checked={tariffShown(key)} disabled={!isConcept} onCheckedChange={(v) => setTariffShown(key, v)} />
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </Section>
@@ -531,9 +550,9 @@ export default function SalesOfferteDetail() {
               ? <p className="mt-1 text-[10px] text-muted-foreground">Bij installatie loopt het contract automatisch vanaf de 1e van de maand na de opleverdatum — ingangsdatum niet nodig.</p>
               : <p className="mt-1 text-[10px] text-muted-foreground">Alleen beheer: vul hier de vaste ingangsdatum in.</p>}
             <div className="mt-2 grid grid-cols-3 gap-2">
-              <div className="space-y-1"><Label className="text-xs">% bij opdracht</Label><Input inputMode="numeric" value={odStr("betaalBijOpdrachtPct")} placeholder={String(tpl?.betaalBijOpdrachtPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijOpdrachtPct", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">% bij start</Label><Input inputMode="numeric" value={odStr("betaalBijStartPct")} placeholder={String(tpl?.betaalBijStartPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijStartPct", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">% na werk</Label><Input inputMode="numeric" value={odStr("betaalNaWerkPct")} placeholder={String(tpl?.betaalNaWerkPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalNaWerkPct", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">% bij opdracht</Label><Input inputMode="numeric" value={numVal("betaalBijOpdrachtPct")} placeholder={String(tpl?.betaalBijOpdrachtPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijOpdrachtPct", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">% bij start</Label><Input inputMode="numeric" value={numVal("betaalBijStartPct")} placeholder={String(tpl?.betaalBijStartPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijStartPct", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">% na werk</Label><Input inputMode="numeric" value={numVal("betaalNaWerkPct")} placeholder={String(tpl?.betaalNaWerkPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalNaWerkPct", e.target.value)} /></div>
             </div>
           </Section>
 
@@ -543,7 +562,12 @@ export default function SalesOfferteDetail() {
               <div className="space-y-1.5">
                 <Label className="text-xs">E-mailbericht aan de klant</Label>
                 <Textarea rows={6} className="leading-relaxed" value={emailMessage} disabled={!isConcept} onChange={(e) => setEmailMessage(e.target.value)} />
-                <p className="text-[10px] text-muted-foreground">De aanhef, de knop "Offerte bekijken en ondertekenen", de geldigheid en de ondertekening worden automatisch toegevoegd. Alinea's scheiden met een lege regel.</p>
+                <p className="text-[10px] text-muted-foreground">De aanhef, de knop "Offerte bekijken en ondertekenen" en de geldigheid worden automatisch toegevoegd. Alinea's scheiden met een lege regel.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Ondertekening (na "Met vriendelijke groet,")</Label>
+                <Input value={emailClosing} placeholder={selectedAdmin?.fullName || "Team E-Charging"} disabled={!isConcept} onChange={(e) => setEmailClosing(e.target.value)} />
+                <p className="text-[10px] text-muted-foreground">Leeg = de naam van de ondertekenaar (anders "Team E-Charging").</p>
               </div>
             </div>
           </Section>

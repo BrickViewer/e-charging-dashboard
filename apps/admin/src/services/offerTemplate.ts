@@ -121,8 +121,8 @@ const mInv = (val: number) => val ? invFmt(val) : yel(invFmt(0));
 const mStel = (val: number) => val ? stelFmt(val) : yel(stelFmt(0));
 
 // --------------------------------------------------------------------------
-// Eén tariefregel in het "afgesproken instellingen"-blok; show bepaalt zichtbaarheid in de offerte.
-export interface TariffLine { label: string; amount: number | null; unit: string; show: boolean }
+// Eén zichtbare tariefregel in het "afgesproken instellingen"-blok (volgorde = od.tariffOrder).
+export interface TariffLine { label: string; amount: number | null; unit: string }
 
 interface ResolvedModel {
   company: string; hasCompany: boolean; contactName: string; addr1: string; addr2: string;
@@ -165,21 +165,23 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   }
   const dateIso = firstStr(od.offerDate, data.date) || new Date().toISOString();
 
-  // Tariefregels in vaste volgorde; show = override (od.tariffVisible) of de standaard.
+  // Tariefregel-bedragen; welke regels + in welke volgorde komt verderop uit od.tariffOrder.
   const laadkosten = firstNum(data.chargeTariffPerKwh);
   const blokkeertarief = firstNum(data.idleFeePerMinute);
   const starttarief = firstNum(od.startFeePerSession, data.startFeePerSession);
   const uurtarief = firstNum(od.perHourFeePerHour, data.perHourFeePerHour);
-  const vis = od.tariffVisible ?? {};
-  const showOf = (key: string, def: boolean) => vis[key] ?? def;
-  const tariffLines: TariffLine[] = [
-    { label: "Laadkosten", amount: laadkosten, unit: "per kWh", show: showOf("laadkosten", true) },
-    { label: "Laadkosten gasten", amount: firstNum(od.laadkostenGasten), unit: "per kWh", show: showOf("laadkostenGasten", false) },
-    { label: "Laadkosten eigen gebruik", amount: firstNum(od.laadkostenEigenGebruik), unit: "per kWh", show: showOf("laadkostenEigenGebruik", false) },
-    { label: "Blokkeertarief", amount: blokkeertarief, unit: "per minuut", show: showOf("blokkeertarief", true) },
-    { label: "Starttarief", amount: starttarief, unit: "per keer", show: showOf("starttarief", true) },
-    { label: "Tarief per uur", amount: uurtarief, unit: "per uur", show: showOf("uurtarief", uurtarief != null && uurtarief > 0) },
-  ];
+  // key → regeldefinitie; welke + in welke volgorde komt uit od.tariffOrder (laatst aangezet bovenaan).
+  const tariffDefs: Record<string, TariffLine> = {
+    laadkosten: { label: "Laadkosten", amount: laadkosten, unit: "per kWh" },
+    laadkostenGasten: { label: "Laadkosten gasten", amount: firstNum(od.laadkostenGasten), unit: "per kWh" },
+    laadkostenEigenGebruik: { label: "Laadkosten eigen gebruik", amount: firstNum(od.laadkostenEigenGebruik), unit: "per kWh" },
+    blokkeertarief: { label: "Blokkeertarief", amount: blokkeertarief, unit: "per minuut" },
+    starttarief: { label: "Starttarief", amount: starttarief, unit: "per keer" },
+    uurtarief: { label: "Tarief per uur", amount: uurtarief, unit: "per uur" },
+  };
+  const defaultOrder = ["laadkosten", "blokkeertarief", "starttarief", ...(uurtarief != null && uurtarief > 0 ? ["uurtarief"] : [])];
+  const order = Array.isArray(od.tariffOrder) ? od.tariffOrder : defaultOrder;
+  const tariffLines: TariffLine[] = order.map((k) => tariffDefs[k]).filter((l): l is TariffLine => !!l);
 
   return {
     // Particulier (geen bedrijf): val terug op de contactnaam zodat cover/briefkop een naam tonen.
@@ -440,12 +442,11 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De eenmalige activatie- en onboardingkosten bedragen:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (excl. BTW)</div></div>`, 24));
     }
     blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
-    const shownTariffs = m.tariffLines.filter((l) => l.show);
-    if (shownTariffs.length) {
+    if (m.tariffLines.length) {
       blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
       // 170px label-kolom past "Laadkosten eigen gebruik:" (was 95px voor de korte labels).
       const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:170px">${esc(lbl)}</div><div>${val}</div></div>`;
-      shownTariffs.forEach((l) => blocks.push(bRaw(tariff(`${l.label}:`, `${mEur(l.amount)} ${l.unit}`), 4)));
+      m.tariffLines.forEach((l) => blocks.push(bRaw(tariff(`${l.label}:`, `${mEur(l.amount)} ${l.unit}`), 4)));
     }
   }
 

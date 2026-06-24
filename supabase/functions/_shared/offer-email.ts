@@ -82,9 +82,11 @@ const bodyParas = (msg: string) => msg.split(/\n\s*\n/).map((s) => s.trim()).fil
 // 1) Verstuur-mail (offerte aanbieden). De PDF zit als bijlage wanneer hasAttachment.
 // De body-tekst is per offerte aanpasbaar (customMessage); aanhef, de knop, de geldigheid en de
 // ondertekening blijven automatisch. Bewust GEEN bedrag in de mailtekst.
-export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; contact?: string | null; total: number; acceptUrl: string; validUntil?: string | null; hasAttachment?: boolean; customMessage?: string | null }): { html: string; text: string } {
+export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; contact?: string | null; total: number; acceptUrl: string; validUntil?: string | null; hasAttachment?: boolean; customMessage?: string | null; signoffName?: string | null }): { html: string; text: string } {
   const vu = nlDate(o.validUntil);
   const bijlageZin = o.hasAttachment ? "De volledige offerte vindt u als <strong>PDF-bijlage</strong> bij deze e-mail." : "";
+  // Ondertekening na "Met vriendelijke groet," — standaard de ondertekenaar, fallback "Team E-Charging".
+  const signoff = (o.signoffName && o.signoffName.trim()) ? o.signoffName.trim() : "Team E-Charging";
   const custom = o.customMessage && o.customMessage.trim() ? o.customMessage.trim() : "";
   const messageHtml = custom
     ? bodyParas(custom) + (o.hasAttachment ? p(bijlageZin) : "")
@@ -97,7 +99,7 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
     messageHtml +
     btn(o.acceptUrl, "Offerte bekijken en ondertekenen") +
     fine(`${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."}`) +
-    greet;
+    `<p style="margin:22px 0 0;font-size:15px;line-height:1.65;color:#374151">Met vriendelijke groet,<br>${escHtml(signoff)}</p>`;
   const messageText = custom
     ? custom + (o.hasAttachment ? "\n\nDe volledige offerte vindt u als PDF-bijlage bij deze e-mail." : "")
     : `Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur.${o.hasAttachment ? " De volledige offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
@@ -111,7 +113,7 @@ Bekijk en onderteken de offerte online: ${o.acceptUrl}
 ${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."}
 
 Met vriendelijke groet,
-Team E-Charging
+${signoff}
 Dwarsweg 8, 5301 KT Zaltbommel · 0418 684272 · info@e-charging.nl`;
   return { html: shell(o.supabaseUrl, inner), text };
 }
