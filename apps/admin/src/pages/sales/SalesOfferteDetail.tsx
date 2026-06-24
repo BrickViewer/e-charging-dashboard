@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { ArrowLeft, Building2, Eye, Loader2, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, lineItemsOf } from "@/hooks/useQuotes";
@@ -127,6 +128,14 @@ export default function SalesOfferteDetail() {
   const setNum = (k: keyof OfferDetails, v: string) => setOd((o) => ({ ...o, [k]: numOr(v) }));
   const dateVal = (k: keyof OfferDetails) => { const v = od[k]; return typeof v === "string" ? v.slice(0, 10) : ""; };
   const setDate = (k: keyof OfferDetails, v: string) => setOd((o) => ({ ...o, [k]: v || null }));
+  // Tarief-zichtbaarheid: default-bewust lezen/zetten van od.tariffVisible (defaults gelijk aan resolve()).
+  const tariffDefault = (k: string): boolean => {
+    if (k === "laadkostenGasten" || k === "laadkostenEigenGebruik") return false;
+    if (k === "uurtarief") { const u = numOr(odStr("perHourFeePerHour")); return u != null && u > 0; }
+    return true; // laadkosten / blokkeertarief / starttarief
+  };
+  const tariffShown = (k: string): boolean => od.tariffVisible?.[k] ?? tariffDefault(k);
+  const setTariffShown = (k: string, v: boolean) => setOd((o) => ({ ...o, tariffVisible: { ...(o.tariffVisible ?? {}), [k]: v } }));
 
   const isConcept = quote?.status === "concept";
   const grandTotal = numOr(price) ?? 0;
@@ -332,7 +341,13 @@ export default function SalesOfferteDetail() {
     );
   }
 
-  const previewSignature = isConcept ? undefined : echargingFromQuote();
+  // In concept: toon de geselecteerde interne ondertekenaar (naam + functie + handtekening) live in de
+  // preview; verzonden/getekend gebruikt de snapshot uit de quote.
+  const previewSignature: OfferSignature | undefined = isConcept
+    ? (selectedAdmin?.signatureDataUrl
+        ? { echargingSignatureDataUrl: selectedAdmin.signatureDataUrl, echargingSignerName: selectedAdmin.fullName, echargingSignerFunction: selectedAdmin.signerTitle }
+        : undefined)
+    : echargingFromQuote();
 
   return (
     <div className="animate-fade-in">
@@ -475,12 +490,33 @@ export default function SalesOfferteDetail() {
                 <div className="space-y-1"><Label className="text-xs">Laadtarief / kWh (€)</Label><Input inputMode="decimal" value={chargeRate} disabled={!isConcept} onChange={(e) => setChargeRate(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Blokkeertarief / min (€)</Label><Input inputMode="decimal" value={idleFee} disabled={!isConcept} onChange={(e) => setIdleFee(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Starttarief / keer (€)</Label><Input inputMode="decimal" value={odStr("startFeePerSession")} disabled={!isConcept} onChange={(e) => setNum("startFeePerSession", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Laadkosten gasten / kWh (€)</Label><Input inputMode="decimal" value={odStr("laadkostenGasten")} disabled={!isConcept} onChange={(e) => setNum("laadkostenGasten", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Laadkosten eigen gebruik / kWh (€)</Label><Input inputMode="decimal" value={odStr("laadkostenEigenGebruik")} disabled={!isConcept} onChange={(e) => setNum("laadkostenEigenGebruik", e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Gratis minuten</Label><Input inputMode="numeric" value={idleGrace} disabled={!isConcept} onChange={(e) => setIdleGrace(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Service-fee / kWh (€)</Label><Input inputMode="decimal" value={odStr("serviceFeePerKwh")} placeholder={String(tpl?.serviceFeePerKwh ?? "")} disabled={!isConcept} onChange={(e) => setNum("serviceFeePerKwh", e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Servicemonteur / uur (€)</Label><Input inputMode="decimal" value={odStr("servicemonteurPerHour")} placeholder={String(tpl?.servicemonteurPerHour ?? "")} disabled={!isConcept} onChange={(e) => setNum("servicemonteurPerHour", e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Voorrijkosten / km (€)</Label><Input inputMode="decimal" value={odStr("voorrijkostenPerKm")} placeholder={String(tpl?.voorrijkostenPerKm ?? "")} disabled={!isConcept} onChange={(e) => setNum("voorrijkostenPerKm", e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Toeslag werkuur (€)</Label><Input inputMode="decimal" value={odStr("toeslagWerkuur")} placeholder={String(tpl?.toeslagWerkuur ?? "")} disabled={!isConcept} onChange={(e) => setNum("toeslagWerkuur", e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Activatiekosten / socket (€)</Label><Input inputMode="decimal" value={odStr("activatiekostenPerSocket")} placeholder={String(tpl?.activatiekostenPerSocket ?? "")} disabled={!isConcept} onChange={(e) => setNum("activatiekostenPerSocket", e.target.value)} /></div>
+              </div>
+              <div className="mt-4">
+                <Label className="text-xs">Toon in offerte</Label>
+                <p className="text-[10px] text-muted-foreground">Kies welke tariefregels in het "afgesproken instellingen"-blok van de offerte verschijnen.</p>
+                <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {([
+                    ["laadkosten", "Laadkosten"],
+                    ["laadkostenGasten", "Laadkosten gasten"],
+                    ["laadkostenEigenGebruik", "Laadkosten eigen gebruik"],
+                    ["blokkeertarief", "Blokkeertarief"],
+                    ["starttarief", "Starttarief"],
+                    ["uurtarief", "Tarief per uur"],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
+                      <span className="text-xs text-foreground">{label}</span>
+                      <Switch checked={tariffShown(key)} disabled={!isConcept} onCheckedChange={(v) => setTariffShown(key, v)} />
+                    </label>
+                  ))}
+                </div>
               </div>
             </Section>
           )}

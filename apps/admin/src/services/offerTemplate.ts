@@ -121,6 +121,9 @@ const mInv = (val: number) => val ? invFmt(val) : yel(invFmt(0));
 const mStel = (val: number) => val ? stelFmt(val) : yel(stelFmt(0));
 
 // --------------------------------------------------------------------------
+// Eén tariefregel in het "afgesproken instellingen"-blok; show bepaalt zichtbaarheid in de offerte.
+export interface TariffLine { label: string; amount: number | null; unit: string; show: boolean }
+
 interface ResolvedModel {
   company: string; hasCompany: boolean; contactName: string; addr1: string; addr2: string;
   dateLong: string; dateShort: string; reference: string;
@@ -130,6 +133,7 @@ interface ResolvedModel {
   dateGap: number; aanhefGap: number;
   eindgroepen: number; eindgroepAmperage: number; leveringText: string; totalInvestment: number; stelpost: number;
   serviceFeePerKwh: number; laadkosten: number | null; blokkeertarief: number | null; starttarief: number | null; uurtarief: number | null;
+  tariffLines: TariffLine[];
   overlegNaam: string; overlegDatum: string;
   servicemonteurPerHour: number; voorrijkostenPerKm: number; toeslagWerkuur: number; activatiekostenPerSocket: number;
   ingangsdatum: string;
@@ -161,6 +165,22 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   }
   const dateIso = firstStr(od.offerDate, data.date) || new Date().toISOString();
 
+  // Tariefregels in vaste volgorde; show = override (od.tariffVisible) of de standaard.
+  const laadkosten = firstNum(data.chargeTariffPerKwh);
+  const blokkeertarief = firstNum(data.idleFeePerMinute);
+  const starttarief = firstNum(od.startFeePerSession, data.startFeePerSession);
+  const uurtarief = firstNum(od.perHourFeePerHour, data.perHourFeePerHour);
+  const vis = od.tariffVisible ?? {};
+  const showOf = (key: string, def: boolean) => vis[key] ?? def;
+  const tariffLines: TariffLine[] = [
+    { label: "Laadkosten", amount: laadkosten, unit: "per kWh", show: showOf("laadkosten", true) },
+    { label: "Laadkosten gasten", amount: firstNum(od.laadkostenGasten), unit: "per kWh", show: showOf("laadkostenGasten", false) },
+    { label: "Laadkosten eigen gebruik", amount: firstNum(od.laadkostenEigenGebruik), unit: "per kWh", show: showOf("laadkostenEigenGebruik", false) },
+    { label: "Blokkeertarief", amount: blokkeertarief, unit: "per minuut", show: showOf("blokkeertarief", true) },
+    { label: "Starttarief", amount: starttarief, unit: "per keer", show: showOf("starttarief", true) },
+    { label: "Tarief per uur", amount: uurtarief, unit: "per uur", show: showOf("uurtarief", uurtarief != null && uurtarief > 0) },
+  ];
+
   return {
     // Particulier (geen bedrijf): val terug op de contactnaam zodat cover/briefkop een naam tonen.
     company: firstStr(data.company, od.tav, data.contactName),
@@ -188,10 +208,7 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     totalInvestment: data.totalInvestment || 0,
     stelpost: firstNum(od.stelpostGraafwerk, tpl.defaultStelpostGraafwerk) ?? 0,
     serviceFeePerKwh: firstNum(od.serviceFeePerKwh, tpl.serviceFeePerKwh) ?? tpl.serviceFeePerKwh,
-    laadkosten: firstNum(data.chargeTariffPerKwh),
-    blokkeertarief: firstNum(data.idleFeePerMinute),
-    starttarief: firstNum(od.startFeePerSession, data.startFeePerSession),
-    uurtarief: firstNum(od.perHourFeePerHour, data.perHourFeePerHour),
+    laadkosten, blokkeertarief, starttarief, uurtarief, tariffLines,
     overlegNaam: firstStr(od.overlegNaam),
     overlegDatum: od.overlegDatum ? fmtDateLong(od.overlegDatum) : "",
     servicemonteurPerHour: firstNum(od.servicemonteurPerHour, tpl.servicemonteurPerHour) ?? 0,
@@ -423,12 +440,13 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De eenmalige activatie- en onboardingkosten bedragen:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (excl. BTW)</div></div>`, 24));
     }
     blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
-    blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
-    const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:95px">${esc(lbl)}</div><div>${val}</div></div>`;
-    blocks.push(bRaw(tariff("Laadkosten:", `${mEur(m.laadkosten)} per kWh`), 4));
-    blocks.push(bRaw(tariff("Blokkeertarief:", `${mEur(m.blokkeertarief)} per minuut`), 4));
-    blocks.push(bRaw(tariff("Starttarief:", `${mEur(m.starttarief)} per keer`), 4));
-    if (m.uurtarief != null && m.uurtarief > 0) blocks.push(bRaw(tariff("Tarief per uur:", `${mEur(m.uurtarief)} per uur`), 4));
+    const shownTariffs = m.tariffLines.filter((l) => l.show);
+    if (shownTariffs.length) {
+      blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
+      // 170px label-kolom past "Laadkosten eigen gebruik:" (was 95px voor de korte labels).
+      const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:170px">${esc(lbl)}</div><div>${val}</div></div>`;
+      shownTariffs.forEach((l) => blocks.push(bRaw(tariff(`${l.label}:`, `${mEur(l.amount)} ${l.unit}`), 4)));
+    }
   }
 
   // --- Uitgangspunten / voorwaarden ---

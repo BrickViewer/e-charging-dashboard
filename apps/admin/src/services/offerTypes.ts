@@ -54,6 +54,12 @@ export interface OfferDetails {
   // Tarief-overrides (default uit de instellingen / configurator).
   startFeePerSession?: number | null;
   perHourFeePerHour?: number | null;
+  // Extra laadkosten-varianten (€/kWh, zelfde eenheid als laadkosten). null = niet ingevuld (geel).
+  laadkostenGasten?: number | null;
+  laadkostenEigenGebruik?: number | null;
+  // Per-regel zichtbaarheid van het tariefblok in de offerte. Key ontbreekt = standaard
+  // (laadkosten/blokkeertarief/starttarief = aan; uurtarief = aan bij >0; de twee nieuwe = uit).
+  tariffVisible?: Record<string, boolean> | null;
   serviceFeePerKwh?: number | null;
   servicemonteurPerHour?: number | null;
   voorrijkostenPerKm?: number | null;
