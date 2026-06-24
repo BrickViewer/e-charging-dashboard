@@ -160,7 +160,7 @@ export function clientFromEnv(): GraphClient | null {
 
 // Standaard dossier-map + submappen (idempotent via ensureFolder). Eén bron van waarheid
 // voor zowel quote-sharepoint-off (offerte) als object-ensure-folder (bij object-aanmaak).
-export const DOSSIER_SUBFOLDERS = ["Foto's", "Tekeningen", "Diverse", "Leveranciers", "Facturen", "Opdracht"];
+export const DOSSIER_SUBFOLDERS = ["Aanvraag", "Foto's", "Tekeningen", "Diverse", "Leveranciers", "Facturen", "Opdracht", "Oplevering"];
 
 export async function ensureDossierFolder(
   gc: GraphClient,

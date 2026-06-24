@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { GraphFetchFn } from "@/hooks/useGraphApi";
 
 // Vaste dossier-submappen.
-export const DOSSIER_SUBFOLDERS = ["Foto's", "Tekeningen", "Diverse", "Leveranciers", "Facturen", "Opdracht"];
+export const DOSSIER_SUBFOLDERS = ["Aanvraag", "Foto's", "Tekeningen", "Diverse", "Leveranciers", "Facturen", "Opdracht", "Oplevering"];
 
 export interface SharePointItem {
   id: string;
