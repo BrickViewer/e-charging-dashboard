@@ -32,7 +32,7 @@ export function ObjectSelectDialog({ open, onClose, lead, onConfirm, pending }: 
     (async () => {
       setChecking(true);
       try {
-        const m = await findMatchingLocation({ org: lead.organization_id, company: lead.company_id, street: lead.address_street ?? "", postal: lead.postal_code ?? "", city: lead.city ?? "" });
+        const m = await findMatchingLocation({ org: lead.organization_id, company: lead.company_id, street: lead.address_street ?? "", postal: lead.postal_code ?? "", city: lead.city ?? "", lead: lead.id });
         if (!cancelled) setMatch(m);
       } catch { /* match is best-effort */ }
       finally { if (!cancelled) setChecking(false); }

@@ -63,20 +63,20 @@ export function ObjectCreateDialog({ open, onClose, onCreated, defaultCompany = 
   useEffect(() => {
     if (!open) return;
     const s = dStreet.trim(); const p = dPostal.trim(); const c = dCity.trim();
-    if (!s && !p && !c) { setMatch(null); return; }
+    if (!s && !p && !c && !lead) { setMatch(null); return; }
     let cancelled = false;
     (async () => {
       setChecking(true);
       try {
         const org = await resolveOrgId();
         if (!org) return;
-        const m = await findMatchingLocation({ org, company: company?.id ?? null, street: s, postal: p, city: c, house: house || null });
+        const m = await findMatchingLocation({ org, company: company?.id ?? null, street: s, postal: p, city: c, house: house || null, lead: lead?.id ?? null });
         if (!cancelled) setMatch(m);
       } catch { /* best-effort */ }
       finally { if (!cancelled) setChecking(false); }
     })();
     return () => { cancelled = true; };
-  }, [open, dStreet, dPostal, dCity, company?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, dStreet, dPostal, dCity, company?.id, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canSubmit = !create.isPending && Boolean(street.trim() || displayName.trim() || company || person);
 

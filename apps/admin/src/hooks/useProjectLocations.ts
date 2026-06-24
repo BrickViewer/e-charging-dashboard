@@ -104,6 +104,18 @@ export function useProjectLocationsByPerson(personId: string | undefined) {
   });
 }
 
+export function useProjectLocationsByLead(leadId: string | undefined) {
+  return useQuery({
+    queryKey: ["project-locations", "lead", leadId],
+    enabled: !!leadId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("project_locations").select("*, quotes(count)").eq("lead_id", leadId!).order("location_number", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as ProjectLocationWithCounts[];
+    },
+  });
+}
+
 export type ObjectSearchResult = { id: string; location_number: number; display_name: string; address_street: string | null; city: string | null; company_id: string | null };
 
 export function useProjectLocationSearch(query: string) {
@@ -123,7 +135,12 @@ export function useProjectLocationSearch(query: string) {
 }
 
 // Genormaliseerde object-match (zelfde DB-functie als de edge-fns). Voor de "bestaat al"-melding.
-export async function findMatchingLocation(opts: { org: string; company: string | null; street: string; postal: string; city: string; house?: string | null }): Promise<ProjectLocation | null> {
+// Lead-first: heeft de lead al een object, geef dat terug (spiegelt resolveProjectLocation in de edge).
+export async function findMatchingLocation(opts: { org: string; company: string | null; street: string; postal: string; city: string; house?: string | null; lead?: string | null }): Promise<ProjectLocation | null> {
+  if (opts.lead) {
+    const { data: leadObj } = await supabase.from("project_locations").select("*").eq("lead_id", opts.lead).order("location_number", { ascending: true }).limit(1).maybeSingle();
+    if (leadObj) return leadObj as ProjectLocation;
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (supabase.rpc as any)("find_matching_project_location", {
     p_org: opts.org, p_company: opts.company ?? null, p_street: opts.street, p_postal: opts.postal, p_city: opts.city, p_house: opts.house ?? null,

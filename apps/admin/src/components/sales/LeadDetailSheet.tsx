@@ -27,6 +27,7 @@ import {
 import { useCreateQuoteFromLead, useLeadQuotes } from "@/hooks/useQuotes";
 import { ObjectSelectDialog } from "@/components/contacts/ObjectSelectDialog";
 import { ObjectCreateDialog } from "@/components/contacts/ObjectCreateDialog";
+import { useProjectLocationsByLead } from "@/hooks/useProjectLocations";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessBeheer } from "@/lib/workspaces";
@@ -101,6 +102,7 @@ export function LeadDetailSheet({
   const tasks = useLeadTasks(open ? lead?.id : undefined);
   const activities = useLeadActivities(open ? lead?.id : undefined);
   const quotes = useLeadQuotes(open ? lead?.id : undefined);
+  const leadObjects = useProjectLocationsByLead(open ? lead?.id : undefined);
 
   const [form, setForm] = useState<Record<string, string | boolean | null>>({});
   const [dirty, setDirty] = useState(false);
@@ -480,6 +482,21 @@ export function LeadDetailSheet({
                           );
                         })}
                         {quotes.data?.length === 0 && <p className="text-xs text-muted-foreground">Nog geen offertes.</p>}
+                      </div>
+                    </InfoCard>
+
+                    <InfoCard title="Object" icon={MapPin} action={<button className="text-xs font-medium text-primary hover:underline" onClick={() => setObjectCreateOpen(true)}>+ Object</button>}>
+                      <div className="space-y-1.5">
+                        {(leadObjects.data ?? []).map((o) => (
+                          <button key={o.id} onClick={() => { onOpenChange(false); navigate(`/sales/contacten?object=${o.id}`); }} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
+                            <span className="font-medium tabular-nums">{o.location_number}</span>
+                            <span className="truncate">{[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</span>
+                            {o.folder_web_url
+                              ? <a href={o.folder_web_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="ml-auto shrink-0 text-[11px] text-primary hover:underline">map</a>
+                              : <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">map volgt…</span>}
+                          </button>
+                        ))}
+                        {leadObjects.data?.length === 0 && <p className="text-xs text-muted-foreground">Nog geen object gekoppeld.</p>}
                       </div>
                     </InfoCard>
 

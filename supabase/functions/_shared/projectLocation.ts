@@ -15,6 +15,14 @@ export async function resolveProjectLocation(
   const city = (args.city ?? "").trim();
   const postal = (args.postal ?? "").trim();
 
+  // 0) Lead-first: heeft deze lead al een object, hergebruik dat (deterministisch, geen dubbel per lead).
+  if (args.lead) {
+    const { data: leadObj } = await sb.from("project_locations")
+      .select("id, location_number").eq("lead_id", args.lead)
+      .order("location_number", { ascending: true }).limit(1).maybeSingle();
+    if (leadObj) return { id: leadObj.id, location_number: Number(leadObj.location_number) };
+  }
+
   // 1) Bestaand object zoeken (genormaliseerde best-match).
   const { data: matches } = await sb.rpc("find_matching_project_location", {
     p_org: args.org, p_company: args.company ?? null, p_street: street, p_postal: postal, p_city: city, p_house: args.house ?? null,
