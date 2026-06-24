@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ArrowLeft, Eye, Loader2, Send, Trash2, PenLine, UserPlus } from "lucide-react";
-import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, lineItemsOf } from "@/hooks/useQuotes";
+import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, lineItemsOf } from "@/hooks/useQuotes";
 import { useCompany } from "@/hooks/useContacts";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useAuth } from "@/hooks/useAuth";
@@ -45,6 +45,7 @@ export default function SalesOfferteDetail() {
   const update = useUpdateQuote();
   const send = useSendQuote();
   const requestSignoff = useRequestSignoff();
+  const internalSignLink = useInternalSignLink();
   const del = useDeleteQuote();
   const { user } = useAuth();
   const adminsQ = useSignableAdmins();
@@ -263,6 +264,17 @@ export default function SalesOfferteDetail() {
     finally { setBusy(null); }
   };
 
+  // Toegewezen ondertekenaar opent zijn eigen ondertekenlink (waar je tekent of wijzigt).
+  const openSignLink = async () => {
+    if (busy || !quote) return;
+    try {
+      setBusy("Link openen…");
+      const token = await internalSignLink.mutateAsync({ quoteId: quote.id });
+      window.open(`/offerte/intern/${token}`, "_blank", "noopener");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Ondertekenlink openen mislukt"); }
+    finally { setBusy(null); }
+  };
+
   const doDelete = async () => {
     if (!quote) return;
     if (!window.confirm(`Offerte ${quote.quote_number} definitief verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
@@ -325,8 +337,11 @@ export default function SalesOfferteDetail() {
         <div className="min-w-0 space-y-4">
           <Section title="Bedrijf & scope">
             <div className="mb-3">
-              <p className="text-sm font-medium text-foreground">{quote.prospect_company || "—"}</p>
-              <p className="text-[11px] text-muted-foreground">{quote.prospect_contact || ""}</p>
+              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                {quote.prospect_company || quote.prospect_contact || "—"}
+                {!quote.company_id ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Particulier</span> : null}
+              </p>
+              {quote.company_id ? <p className="text-[11px] text-muted-foreground">{quote.prospect_contact || ""}</p> : null}
               {company && (company.kvk || company.btw_number || company.website) ? (
                 <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
                   {company.kvk ? <p>KvK: {company.kvk}</p> : null}
@@ -445,9 +460,21 @@ export default function SalesOfferteDetail() {
                 </Button>
               )}
               {quote.status === "intern_ter_ondertekening" && (
-                <Button variant="outline" onClick={resendSignoff} disabled={!!busy}>
-                  {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} {busy ?? "Opnieuw sturen"}
-                </Button>
+                quote.internal_signer_user_id === user?.id ? (
+                  <>
+                    <Button variant="outline" onClick={resendSignoff} disabled={!!busy}><Send className="mr-1.5 h-4 w-4" /> Opnieuw sturen</Button>
+                    <Button onClick={openSignLink} disabled={!!busy}>
+                      {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <PenLine className="mr-1.5 h-4 w-4" />} {busy ?? "Beoordelen & ondertekenen"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-muted-foreground">Wacht op goedkeuring van {quote.internal_signer_name || "—"}</span>
+                    <Button variant="outline" onClick={resendSignoff} disabled={!!busy}>
+                      {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} {busy ?? "Opnieuw sturen"}
+                    </Button>
+                  </>
+                )
               )}
               {quote.status === "verstuurd" && (
                 <Button onClick={resendToCustomer} disabled={!!busy}>

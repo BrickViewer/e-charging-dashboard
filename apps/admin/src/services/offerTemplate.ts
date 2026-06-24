@@ -120,7 +120,7 @@ const mStel = (val: number) => val ? stelFmt(val) : yel(stelFmt(0));
 
 // --------------------------------------------------------------------------
 interface ResolvedModel {
-  company: string; contactName: string; addr1: string; addr2: string;
+  company: string; hasCompany: boolean; contactName: string; addr1: string; addr2: string;
   dateLong: string; dateShort: string; reference: string;
   onzeReferentie: string; object: string; betreft: string; aanhef: string;
   numChargePoints: number; numPoles: number; chargerModel: string; loadBalancer: string;
@@ -159,7 +159,9 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   const dateIso = firstStr(od.offerDate, data.date) || new Date().toISOString();
 
   return {
-    company: data.company || "",
+    // Particulier (geen bedrijf): val terug op de contactnaam zodat cover/briefkop een naam tonen.
+    company: firstStr(data.company, od.tav, data.contactName),
+    hasCompany: !!firstStr(data.company),
     contactName: firstStr(od.tav, data.contactName),
     addr1, addr2,
     dateLong: fmtDateLong(dateIso),
@@ -361,10 +363,11 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   // --- Briefkop + Levering en installatie ---
   const recipient = [
     `<div>${mStr(m.company, "Bedrijfsnaam")}</div>`,
-    `<div>T.a.v. ${mStr(m.contactName, "tav")}</div>`,
+    // Bij een particulier (geen bedrijf) is de naamregel al de persoon → geen aparte T.a.v.-regel.
+    m.hasCompany ? `<div>T.a.v. ${mStr(m.contactName, "tav")}</div>` : "",
     `<div>${mStr(m.addr1, "Adres")}</div>`,
     `<div>${mStr(m.addr2, "Postcode en woonplaats")}</div>`,
-  ].join("");
+  ].filter(Boolean).join("");
   const refRow = (lbl: string, valHtml: string) =>
     `<div style="display:flex"><div style="width:128px">${esc(lbl)}</div><div>: ${valHtml}</div></div>`;
   blocks.push(bRaw(`<div style="line-height:1.5">${recipient}</div>`, 14));

@@ -74,7 +74,8 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
     const contract = snap.pricing_input?.contract ?? {};
     const od = (quote.offer_details ?? {}) as { addressStreet?: string; addressPostalCode?: string; addressCity?: string };
     setF({
-      company_name: quote.prospect_company ?? company.data?.name ?? "",
+      // Particulier (geen bedrijf): val terug op de contactpersoon zodat "Bedrijfsnaam" gevuld is.
+      company_name: quote.prospect_company ?? company.data?.name ?? quote.prospect_contact ?? person.data?.full_name ?? "",
       kvk: company.data?.kvk ?? "",
       btw_number: company.data?.btw_number ?? "",
       contact_name: quote.prospect_contact ?? person.data?.full_name ?? "",

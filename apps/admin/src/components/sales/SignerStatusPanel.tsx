@@ -97,6 +97,8 @@ export function SignerStatusPanel({
               <p className="text-[11px] text-muted-foreground">{selected?.fullName} krijgt een e-mail om te beoordelen en te tekenen.</p>
             ) : null}
           </div>
+        ) : status === "intern_ter_ondertekening" ? (
+          <p className="text-[11px] text-muted-foreground">Wacht op goedkeuring van <span className="font-medium text-foreground">{internalName}</span>{signerUserId && signerUserId === currentUserId ? " (jij)" : ""}.</p>
         ) : (
           <p className="text-sm text-foreground">{internalName}</p>
         )}

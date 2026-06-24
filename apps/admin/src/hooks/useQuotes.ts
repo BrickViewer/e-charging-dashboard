@@ -16,10 +16,10 @@ export function useQuotes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quotes")
-        .select("id, quote_number, prospect_company, status, total_hardware_cost, total_installation_cost, valid_until, created_at, lead_id, client_id")
+        .select("id, quote_number, prospect_company, prospect_contact, status, total_hardware_cost, total_installation_cost, valid_until, created_at, lead_id, client_id, internal_signer_name, internal_signer_user_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as Pick<Quote, "id" | "quote_number" | "prospect_company" | "status" | "total_hardware_cost" | "total_installation_cost" | "valid_until" | "created_at" | "lead_id" | "client_id">[];
+      return (data ?? []) as Pick<Quote, "id" | "quote_number" | "prospect_company" | "prospect_contact" | "status" | "total_hardware_cost" | "total_installation_cost" | "valid_until" | "created_at" | "lead_id" | "client_id" | "internal_signer_name" | "internal_signer_user_id">[];
     },
   });
 }
@@ -218,6 +218,21 @@ export function useRequestSignoff() {
     onSuccess: (_d, { quoteId }) => {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["quote", quoteId] });
+    },
+  });
+}
+
+// Mint een verse ondertekenlink voor de TOEGEWEZEN ondertekenaar (in-app), zonder e-mail.
+export function useInternalSignLink() {
+  return useMutation({
+    mutationFn: async ({ quoteId }: { quoteId: string }): Promise<string> => {
+      const { data, error } = await supabase.functions.invoke<{ status: string; message?: string; token?: string }>(
+        "quote-internal-sign-link",
+        { body: { quote_id: quoteId } },
+      );
+      if (error) throw error;
+      if (data?.status !== "ok" || !data.token) throw new Error(data?.message || "Ondertekenlink aanmaken mislukt");
+      return data.token;
     },
   });
 }

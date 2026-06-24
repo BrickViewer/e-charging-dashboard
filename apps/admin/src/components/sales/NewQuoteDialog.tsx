@@ -80,7 +80,7 @@ export function NewQuoteDialog({ open, onClose, onCreated }: { open: boolean; on
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Bedrijf (optioneel)</Label><CompanyPicker value={company?.id ?? null} valueLabel={company?.label ?? null} onChange={(id, c) => setCompany(id ? { id, label: c?.name ?? "" } : null)} /></div>
             <div className="space-y-1.5"><Label className="text-xs">Persoon (optioneel)</Label><PersonPicker value={person?.id ?? null} valueLabel={person?.label ?? null} onChange={(id, p) => setPerson(id ? { id, label: p?.full_name ?? "" } : null)} /></div>
-            <p className="text-[11px] text-muted-foreground">Het object levert het offertenummer. De regels vul je daarna in het detail in.</p>
+            <p className="text-[11px] text-muted-foreground">Het object levert het offertenummer. Voor een <strong>particulier</strong> laat je het bedrijf leeg en kies je alleen een persoon.</p>
           </div>
         )}
 

@@ -11,6 +11,7 @@ import { NewQuoteDialog } from "@/components/sales/NewQuoteDialog";
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const STATUS: Record<string, { label: string; cls: string }> = {
   concept: { label: "Concept", cls: "bg-zinc-100 text-zinc-600" },
+  intern_ter_ondertekening: { label: "Ter ondertekening", cls: "bg-blue-100 text-blue-700" },
   verstuurd: { label: "Verstuurd", cls: "bg-amber-100 text-amber-700" },
   getekend: { label: "Getekend", cls: "bg-green-100 text-green-700" },
   verlopen: { label: "Verlopen", cls: "bg-zinc-100 text-zinc-500" },
@@ -79,10 +80,15 @@ export default function SalesOffertes() {
                 return (
                   <tr key={qt.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => navigate(`/sales/offertes/${qt.id}`)}>
                     <td className="px-4 py-2.5 font-medium text-foreground tabular-nums">{qt.quote_number}</td>
-                    <td className="px-4 py-2.5 text-foreground">{qt.prospect_company || "—"}</td>
+                    <td className="px-4 py-2.5 text-foreground">{qt.prospect_company || qt.prospect_contact || "—"}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{euro(total)}</td>
                     <td className="px-4 py-2.5 text-muted-foreground">{qt.valid_until || "—"}</td>
-                    <td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${st.cls}`}>{st.label}</span></td>
+                    <td className="px-4 py-2.5">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${st.cls}`}>{st.label}</span>
+                      {qt.status === "intern_ter_ondertekening" && qt.internal_signer_name ? (
+                        <span className="ml-1.5 text-[11px] text-muted-foreground">→ {qt.internal_signer_name}</span>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}
