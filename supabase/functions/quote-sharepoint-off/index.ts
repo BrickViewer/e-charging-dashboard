@@ -2,14 +2,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { resolveProjectLocation } from "../_shared/projectLocation.ts";
-import { GraphClient, sanitizeName, base64ToBytes } from "../_shared/sharepoint.ts";
+import { GraphClient, sanitizeName, base64ToBytes, ensureDossierFolder } from "../_shared/sharepoint.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 
 // quote-sharepoint-off — maakt server-side (app-only) het dossier + de ongetekende OFF aan.
 // Vervangt de browser/delegated-variant, zodat admins geen Microsoft-Graph-token nodig hebben.
 // Body: { quote_id, off_pdf_base64 }. Idempotent (skip als off_item_id al gezet).
 
-const DOSSIER_SUBFOLDERS = ["Foto's", "Tekeningen", "Diverse", "Leveranciers", "Facturen", "Opdracht"];
 const corsHeaders = CORS_INTERNAL;
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -87,16 +86,11 @@ Deno.serve(async (req) => {
     let folderId = loc.folder_item_id;
     if (!folderId) {
       const folderName = sanitizeName(`${addrLabel} (${locNumber})`);
-      const dossier = await gc.ensureFolder(driveId, rootItemId ?? await gc.getDriveRootItemId(driveId), folderName);
-      folderId = dossier.id;
-      let opdrachtId = "";
-      for (const sub of DOSSIER_SUBFOLDERS) {
-        const f = await gc.ensureFolder(driveId, dossier.id, sub);
-        if (sub === "Opdracht") opdrachtId = f.id;
-      }
+      const d = await ensureDossierFolder(gc, driveId, rootItemId ?? await gc.getDriveRootItemId(driveId), folderName);
+      folderId = d.folderId;
       await sb.from("project_locations").update({
-        display_name: folderName, folder_item_id: dossier.id, folder_web_url: dossier.webUrl,
-        opdracht_item_id: opdrachtId, updated_at: new Date().toISOString(),
+        display_name: folderName, folder_item_id: d.folderId, folder_web_url: d.webUrl,
+        opdracht_item_id: d.opdrachtId, updated_at: new Date().toISOString(),
       }).eq("id", locId);
     }
 

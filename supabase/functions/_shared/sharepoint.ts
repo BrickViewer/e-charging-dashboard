@@ -158,6 +158,25 @@ export function clientFromEnv(): GraphClient | null {
   return new GraphClient(t, c, s);
 }
 
+// Standaard dossier-map + submappen (idempotent via ensureFolder). Eén bron van waarheid
+// voor zowel quote-sharepoint-off (offerte) als object-ensure-folder (bij object-aanmaak).
+export const DOSSIER_SUBFOLDERS = ["Foto's", "Tekeningen", "Diverse", "Leveranciers", "Facturen", "Opdracht"];
+
+export async function ensureDossierFolder(
+  gc: GraphClient,
+  driveId: string,
+  parentItemId: string,
+  folderName: string,
+): Promise<{ folderId: string; webUrl: string; opdrachtId: string }> {
+  const dossier = await gc.ensureFolder(driveId, parentItemId, folderName);
+  let opdrachtId = "";
+  for (const sub of DOSSIER_SUBFOLDERS) {
+    const f = await gc.ensureFolder(driveId, dossier.id, sub);
+    if (sub === "Opdracht") opdrachtId = f.id;
+  }
+  return { folderId: dossier.id, webUrl: dossier.webUrl, opdrachtId };
+}
+
 export function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/^data:[^,]+,/, ""));
   const out = new Uint8Array(bin.length);

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useCreateQuoteFromLead, useLeadQuotes } from "@/hooks/useQuotes";
 import { ObjectSelectDialog } from "@/components/contacts/ObjectSelectDialog";
+import { ObjectCreateDialog } from "@/components/contacts/ObjectCreateDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessBeheer } from "@/lib/workspaces";
@@ -93,6 +94,7 @@ export function LeadDetailSheet({
   const convert = useConvertLeadToClient();
   const createQuote = useCreateQuoteFromLead();
   const [objectDialogOpen, setObjectDialogOpen] = useState(false);
+  const [objectCreateOpen, setObjectCreateOpen] = useState(false);
   const addTask = useAddTask();
   const toggleTask = useToggleTask();
   const deleteTask = useDeleteTask();
@@ -290,6 +292,7 @@ export function LeadDetailSheet({
                       <DropdownMenuContent align="end">
                         {!lead.converted_client_id && <DropdownMenuItem onClick={() => setConfirmConvert(true)}><UserPlus className="mr-2 h-4 w-4" />Converteer naar klant</DropdownMenuItem>}
                         <DropdownMenuItem onClick={launchConfigurator}><WandSparkles className="mr-2 h-4 w-4" />{hasConfiguration ? "Configuratie bewerken" : "Start configurator"}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setObjectCreateOpen(true)}><MapPin className="mr-2 h-4 w-4" />Object toevoegen</DropdownMenuItem>
                         {lead.converted_client_id && canBeheer && <DropdownMenuItem onClick={() => navigate(`/admin/klanten/${lead.converted_client_id}`)}><ExternalLink className="mr-2 h-4 w-4" />Bekijk klant</DropdownMenuItem>}
                         <DropdownMenuSeparator />
                         {wonStage && <DropdownMenuItem onClick={() => moveToStage(wonStage.id)}><Trophy className="mr-2 h-4 w-4 text-green-600" />Markeer gewonnen</DropdownMenuItem>}
@@ -604,6 +607,14 @@ export function LeadDetailSheet({
         lead={{ id: lead.id, organization_id: lead.organization_id, company_id: lead.company_id, company_name: lead.company_name, address_street: lead.address_street, postal_code: lead.postal_code, city: lead.city }}
         onConfirm={confirmObject}
         pending={createQuote.isPending}
+      />
+      <ObjectCreateDialog
+        open={objectCreateOpen}
+        onClose={() => setObjectCreateOpen(false)}
+        onCreated={() => toast.success("Object aangemaakt — SharePoint-map wordt aangemaakt")}
+        defaultLead={{ id: lead.id, label: lead.company_name || "Lead" }}
+        defaultCompany={lead.company_id ? { id: lead.company_id, label: lead.company_name || "Bedrijf" } : null}
+        defaultPerson={lead.person_id ? { id: lead.person_id, label: lead.contact_name || "Contact" } : null}
       />
     </>
   );

@@ -68,6 +68,9 @@ verify_jwt = false
 [functions.object-delete]
 verify_jwt = true
 
+[functions.object-ensure-folder]
+verify_jwt = false
+
 [functions.order-handoff]
 verify_jwt = true
 
