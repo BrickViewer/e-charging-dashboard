@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { ArrowLeft, Eye, Loader2, Plus, Send, Trash2, PenLine, UserPlus } from "lucide-react";
-import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
+import { ArrowLeft, Eye, Loader2, Send, Trash2, PenLine, UserPlus } from "lucide-react";
+import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, lineItemsOf } from "@/hooks/useQuotes";
 import { useCompany } from "@/hooks/useContacts";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useAuth } from "@/hooks/useAuth";
@@ -55,7 +55,8 @@ export default function SalesOfferteDetail() {
   const companyQ = useCompany(quote?.company_id ?? undefined);
   const company = companyQ.data;
 
-  const [items, setItems] = useState<QuoteLineItem[]>([]);
+  // Eén prijs i.p.v. losse offerteregels — calculatie gebeurt in Excel.
+  const [price, setPrice] = useState("");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [withManagement, setWithManagement] = useState(true);
@@ -72,7 +73,11 @@ export default function SalesOfferteDetail() {
 
   useEffect(() => {
     if (quote) {
-      setItems(lineItemsOf(quote));
+      // Begin-prijs afleiden uit bestaande regels (som), anders uit de totaalkolommen.
+      const liSum = lineItemsOf(quote).reduce((s, i) => s + (Number(i.total) || 0), 0);
+      const totalsSum = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
+      const initial = liSum || totalsSum;
+      setPrice(initial ? String(initial) : "");
       setEmail(quote.prospect_email ?? "");
       setNotes(quote.notes ?? "");
       setWithManagement(quote.with_management !== false);
@@ -94,20 +99,14 @@ export default function SalesOfferteDetail() {
   const setDate = (k: keyof OfferDetails, v: string) => setOd((o) => ({ ...o, [k]: v || null }));
 
   const isConcept = quote?.status === "concept";
-  const grandTotal = items.reduce((s, i) => s + (Number(i.total) || 0), 0);
-
-  const setItem = (idx: number, patch: Partial<QuoteLineItem>) =>
-    setItems((arr) => arr.map((it, i) => {
-      if (i !== idx) return it;
-      const next = { ...it, ...patch };
-      next.total = Math.round((Number(next.qty) || 0) * (Number(next.unit_price) || 0));
-      return next;
-    }));
+  const grandTotal = numOr(price) ?? 0;
 
   const save = async () => {
     if (!quote) return;
-    const hardware = items[0]?.total ?? 0;
-    const installation = items.slice(1).reduce((s, i) => s + (Number(i.total) || 0), 0);
+    const p = grandTotal;
+    // Eén samenvattende regel (calculatie in Excel); totaal in total_installation_cost zodat
+    // de offertelijst + E-Group-handoff het juiste bedrag tonen.
+    const lineItems = [{ description: withInstallation ? "Levering & installatie" : "Activatie & onboarding beheer", qty: 1, unit_price: p, total: p }];
     const tariffData = withManagement && (numOr(chargeRate) != null || numOr(idleFee) != null || numOr(idleGrace) != null)
       ? { chargeTariffPerKwh: numOr(chargeRate), idleFeePerMinute: numOr(idleFee), idleGraceMinutes: numOr(idleGrace) }
       : null;
@@ -115,9 +114,9 @@ export default function SalesOfferteDetail() {
       await update.mutateAsync({
         id: quote.id,
         patch: {
-          line_items: items as unknown as never,
-          total_hardware_cost: hardware,
-          total_installation_cost: installation,
+          line_items: lineItems as unknown as never,
+          total_hardware_cost: 0,
+          total_installation_cost: p,
           prospect_email: email.trim() || null,
           notes: notes.trim() || null,
           with_management: withManagement,
@@ -142,7 +141,7 @@ export default function SalesOfferteDetail() {
       date: quote!.sent_at ?? null,
       company: quote!.prospect_company ?? "",
       contactName: quote!.prospect_contact ?? null,
-      numChargePoints: quote!.num_charge_points ?? (Number(items[0]?.qty) || null),
+      numChargePoints: quote!.num_charge_points ?? null,
       totalInvestment: grandTotal,
       withManagement,
       withInstallation,
@@ -336,38 +335,8 @@ export default function SalesOfferteDetail() {
               withInstallation={withInstallation}
               withManagement={withManagement}
               disabled={!isConcept}
-              onChange={({ withInstallation: wi, withManagement: wm }) => {
-                setWithInstallation(wi); setWithManagement(wm);
-                if (!wi && wm) setItems((a) => a.length ? a : [{ description: "Activatie & onboarding beheer", qty: 1, unit_price: 0, total: 0 }]);
-              }}
+              onChange={({ withInstallation: wi, withManagement: wm }) => { setWithInstallation(wi); setWithManagement(wm); }}
             />
-          </Section>
-
-          <Section title="Offerteregels">
-            <div className="space-y-2">
-              {items.map((it, idx) => (
-                <div key={idx} className="grid grid-cols-[1fr_56px_84px_84px_auto] items-center gap-2">
-                  <Input className="h-9" value={it.description} disabled={!isConcept} onChange={(e) => setItem(idx, { description: e.target.value })} />
-                  <Input className="h-9 text-center" inputMode="numeric" value={it.qty} disabled={!isConcept} onChange={(e) => setItem(idx, { qty: Number(e.target.value) || 0 })} />
-                  <Input className="h-9 text-right" inputMode="numeric" value={it.unit_price} disabled={!isConcept} onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) || 0 })} />
-                  <span className="text-right text-sm font-semibold">{euro(it.total)}</span>
-                  {isConcept && (
-                    <button className="text-muted-foreground hover:text-red-600" onClick={() => setItems((a) => a.filter((_, i) => i !== idx))}>
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-              {isConcept && (
-                <Button variant="outline" size="sm" onClick={() => setItems((a) => [...a, { description: "", qty: 1, unit_price: 0, total: 0 }])}>
-                  <Plus className="mr-1.5 h-4 w-4" /> Regel toevoegen
-                </Button>
-              )}
-            </div>
-            <div className="mt-3 flex items-center justify-between border-t pt-3">
-              <span className="text-sm font-bold text-foreground">{withInstallation ? "Totaal investering" : "Eenmalige kosten"}</span>
-              <span className="text-lg font-extrabold text-foreground">{euro(grandTotal)}</span>
-            </div>
           </Section>
 
           <Section title="Briefkop & adres">
@@ -384,11 +353,18 @@ export default function SalesOfferteDetail() {
             </div>
           </Section>
 
-          {withInstallation && (
+          {withInstallation ? (
             <Section title="Levering & installatie" hint="Het belangrijkste, meest variërende deel — alinea's scheiden met een lege regel. De rest van de offerte schuift automatisch mee.">
               <Textarea rows={16} className="leading-relaxed" value={od.leveringText ?? DEFAULT_LEVERING_TEXT} disabled={!isConcept} onChange={(e) => setStr("leveringText", e.target.value)} />
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="col-span-2 space-y-1"><Label className="text-xs">Stelpost graafwerk (€)</Label><Input inputMode="decimal" value={odStr("stelpostGraafwerk")} placeholder={String(tpl?.defaultStelpostGraafwerk ?? "")} disabled={!isConcept} onChange={(e) => setNum("stelpostGraafwerk", e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Prijs (excl. BTW)</Label><Input inputMode="decimal" value={price} placeholder="0" disabled={!isConcept} onChange={(e) => setPrice(e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Stelpost graafwerk (€)</Label><Input inputMode="decimal" value={odStr("stelpostGraafwerk")} placeholder={String(tpl?.defaultStelpostGraafwerk ?? "")} disabled={!isConcept} onChange={(e) => setNum("stelpostGraafwerk", e.target.value)} /></div>
+              </div>
+            </Section>
+          ) : (
+            <Section title="Eenmalige kosten" hint="De eenmalige activatie-/onboardingkost voor het beheer van de bestaande laadpalen.">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1"><Label className="text-xs">Activatiekosten (excl. BTW)</Label><Input inputMode="decimal" value={price} placeholder="0" disabled={!isConcept} onChange={(e) => setPrice(e.target.value)} /></div>
               </div>
             </Section>
           )}
