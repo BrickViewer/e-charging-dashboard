@@ -11,9 +11,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData } from "@/services/offerPdf";
 import type { OfferDetails, OfferTemplateValues } from "@/services/offerTypes";
 
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
-const fmtNlDate = (iso?: string | null) => { if (!iso) return "—"; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }); };
-
 type QuoteSummary = {
   quoteNumber: string;
   company?: string | null;
@@ -62,15 +59,6 @@ const echargingSig = (q: QuoteSummary) => ({
   echargingSignerName: q.internalSignerName ?? null,
   echargingSignerFunction: q.internalSignerFunction ?? null,
 });
-
-function InfoRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={strong ? "text-right font-bold text-foreground" : "text-right font-medium text-foreground"}>{value}</span>
-    </div>
-  );
-}
 
 export default function OfferInternalSign() {
   const { token } = useParams<{ token: string }>();
@@ -221,13 +209,6 @@ export default function OfferInternalSign() {
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Offerte {quote.quoteNumber}</p>
               <h1 className="mt-1 text-xl font-bold leading-snug">Beoordelen en ondertekenen</h1>
               <p className="text-sm text-muted-foreground">Voor {quote.company || "de klant"}{quote.contact ? ` · ${quote.contact}` : ""}</p>
-            </div>
-
-            <div className="space-y-2.5 rounded-xl border bg-muted/30 p-4">
-              <InfoRow label="Eenmalige investering" value={`${euro(quote.total)} excl. BTW`} strong />
-              {quote.numChargePoints ? <InfoRow label="Laadpunten" value={String(quote.numChargePoints)} /> : null}
-              {quote.withManagement && quote.durationMonths ? <InfoRow label="Looptijd beheer" value={`${quote.durationMonths} maanden`} /> : null}
-              <InfoRow label="Geldig t/m" value={fmtNlDate(quote.validUntil)} />
             </div>
 
             {/* Voorgevulde ondertekening (read-only) */}
