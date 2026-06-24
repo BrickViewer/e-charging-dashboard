@@ -38,6 +38,10 @@ export interface OfferDetails {
   betreft?: string | null;
   aanhef?: string | null;
   tav?: string | null;              // T.a.v. — override van prospect_contact
+  // Briefkop-witruimte (px). Leeg = standaard (96 / 84). Geldt als MAXIMUM; bij lange tekst
+  // krimpt de auto-fit deze automatisch kleiner zodat het investeringsblok boven de footer blijft.
+  dateGapPx?: number | null;        // witruimte boven "Zaltbommel, {datum}"
+  aanhefGapPx?: number | null;      // witruimte boven "Geachte {aanhef},"
   // Scope (levering en installatie) — vrije meerregelige tekst; standaard = DEFAULT_LEVERING_TEXT.
   leveringText?: string | null;
   // (Legacy) gestructureerde scope-velden — niet meer in de UI, blijven voor back-compat.

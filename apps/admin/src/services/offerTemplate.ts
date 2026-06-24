@@ -125,6 +125,7 @@ interface ResolvedModel {
   onzeReferentie: string; object: string; betreft: string; aanhef: string;
   numChargePoints: number; numPoles: number; chargerModel: string; loadBalancer: string;
   withManagement: boolean; withInstallation: boolean;
+  dateGap: number; aanhefGap: number;
   eindgroepen: number; eindgroepAmperage: number; leveringText: string; totalInvestment: number; stelpost: number;
   serviceFeePerKwh: number; laadkosten: number | null; blokkeertarief: number | null; starttarief: number | null; uurtarief: number | null;
   overlegNaam: string; overlegDatum: string;
@@ -173,6 +174,8 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     aanhef: firstStr(od.aanhef, tpl.defaultAanhef),
     withManagement: data.withManagement !== false,
     withInstallation: data.withInstallation !== false,
+    dateGap: firstNum(od.dateGapPx) ?? DATE_GAP_DEFAULT,
+    aanhefGap: firstNum(od.aanhefGapPx) ?? AANHEF_GAP_DEFAULT,
     numChargePoints: n,
     numPoles: firstNum(od.numPoles, n) ?? n,
     chargerModel: firstStr(od.chargerModel, tpl.defaultChargerModel),
@@ -285,11 +288,17 @@ const CONTENT_TOP = 172;
 const CONTENT_BOTTOM = 84;
 const LETTER_FONT = 12.5;
 const CONTENT_W = PAGE_W - 2 * PAD;
+// Briefkop-witruimtes (px) — standaarden + ondergrens voor de auto-fit, en de
+// veiligheidsmarge boven de footer-hairline (Note nooit doorgestreept).
+const DATE_GAP_DEFAULT = 96;
+const AANHEF_GAP_DEFAULT = 84;
+const GAP_FLOOR = 16;
+const FOOTER_CLEARANCE = 16;
 
 // Een blok = één atomair stuk brief. marginTop staat LOS van de html zodat we 'm per
 // pagina kunnen resetten (eerste blok op een vervolgpagina krijgt geen gat). keep =
 // "houd bij het volgende blok" (geen weeskop onderaan een pagina).
-interface Block { html: string; mt: number; keep?: boolean; brk?: boolean }
+interface Block { html: string; mt: number; keep?: boolean; brk?: boolean; tag?: "dateGap" | "aanhefGap" }
 
 const bSec = (t: string, mt = 24, color: string = GREEN): Block =>
   ({ html: `<div style="font-weight:700;color:${color};text-decoration:underline">${esc(t)}</div>`, mt, keep: true });
@@ -371,9 +380,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   const refRow = (lbl: string, valHtml: string) =>
     `<div style="display:flex"><div style="width:128px">${esc(lbl)}</div><div>: ${valHtml}</div></div>`;
   blocks.push(bRaw(`<div style="line-height:1.5">${recipient}</div>`, 14));
-  blocks.push(bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, 96));
+  blocks.push({ ...bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, m.dateGap), tag: "dateGap" });
   blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:20px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, 18));
-  blocks.push(bRaw(`<div>Geachte ${esc(m.aanhef)},</div>`, 84));
+  blocks.push({ ...bRaw(`<div>Geachte ${esc(m.aanhef)},</div>`, m.aanhefGap), tag: "aanhefGap" });
   const introScope = m.withInstallation && m.withManagement
     ? "leveren, monteren, aansluiten en beheren van uw laadpalen"
     : m.withInstallation
@@ -389,8 +398,11 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // gescheiden door een lege regel → losse blokken zodat alles netjes herpagineert.
     m.leveringText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
       .forEach((para, i) => blocks.push(bP(esc(para).replace(/\n/g, "<br/>"), i === 0 ? 8 : 22)));
-    blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic"><span style="text-decoration:underline">${mInv(m.totalInvestment)}</span> (totaal excl. BTW)</div></div>`, 24));
-    blocks.push(bRaw(`<div style="font-style:italic">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`, 30));
+    // Investering + stelpost/Note als ÉÉN atomair blok (splitst nooit; Note blijft bij het bedrag).
+    blocks.push(bRaw(
+      `<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic"><span style="text-decoration:underline">${mInv(m.totalInvestment)}</span> (totaal excl. BTW)</div></div>` +
+      `<div style="font-style:italic;margin-top:30px">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`,
+      24));
   } else if (m.withManagement) {
     blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
   }
@@ -486,7 +498,8 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
 
 // Verdeel de blokken greedy over A4-pagina's (header/footer per pagina herhaald).
 function paginateLetter(blocks: Block[], heights: number[]): Block[][] {
-  const contentH = PAGE_H - CONTENT_TOP - CONTENT_BOTTOM;
+  // FOOTER_CLEARANCE: marge boven de footer-hairline zodat geen blok 'm raakt (Note nooit doorgestreept).
+  const contentH = PAGE_H - CONTENT_TOP - CONTENT_BOTTOM - FOOTER_CLEARANCE;
   const pages: Block[][] = [];
   let cur: Block[] = [];
   let used = 0;
@@ -535,6 +548,30 @@ export function buildOfferPages(
   document.body.appendChild(measure);
   const heights = nodes.map((d) => d.offsetHeight);
   document.body.removeChild(measure);
+
+  // Auto-fit: krimp ALLEEN de twee briefkop-witruimtes (datum/aanhef) als pagina 1 (alles vóór de
+  // eerste geforceerde paginabreuk) niet binnen het budget past — zodat het investeringsblok boven de
+  // footer blijft. Korte teksten passen al → niets doen (nooit vergroten). mt is los van de gemeten
+  // hoogtes, dus herpagineren kan zonder hermeten.
+  const firstBrk = blocks.findIndex((b) => b.brk);
+  const sliceEnd = firstBrk === -1 ? blocks.length : firstBrk;
+  let p1Total = 0;
+  for (let i = 0; i < sliceEnd; i++) p1Total += heights[i] + blocks[i].mt; // op pagina 1 telt ook blok 0 z'n mt
+  const budget = PAGE_H - CONTENT_TOP - CONTENT_BOTTOM - FOOTER_CLEARANCE;
+  const overflow = p1Total - budget;
+  if (overflow > 0) {
+    const dateB = blocks.find((b) => b.tag === "dateGap");
+    const aanhefB = blocks.find((b) => b.tag === "aanhefGap");
+    const dSlack = Math.max(0, (dateB?.mt ?? 0) - GAP_FLOOR);
+    const aSlack = Math.max(0, (aanhefB?.mt ?? 0) - GAP_FLOOR);
+    const slack = dSlack + aSlack;
+    if (slack > 0 && dateB && aanhefB) {
+      const reduce = Math.min(overflow, slack);
+      const dCut = Math.round((reduce * dSlack) / slack);
+      dateB.mt -= dCut;
+      aanhefB.mt -= reduce - dCut; // rest naar de aanhef → som klopt exact
+    }
+  }
 
   const pages = paginateLetter(blocks, heights);
   const total = pages.length;

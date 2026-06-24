@@ -447,6 +447,9 @@ export default function SalesOfferteDetail() {
               <div className="col-span-2 space-y-1"><Label className="text-xs">Locatie</Label><Input value={odStr("object")} placeholder={tpl?.defaultObjectTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("object", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Betreft</Label><Input value={odStr("betreft")} placeholder={tpl?.defaultBetreftTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("betreft", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} placeholder={tpl?.defaultAanhef || ""} disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Witruimte boven datum (px)</Label><Input inputMode="numeric" value={odStr("dateGapPx")} placeholder="96" disabled={!isConcept} onChange={(e) => setNum("dateGapPx", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Witruimte boven aanhef (px)</Label><Input inputMode="numeric" value={odStr("aanhefGapPx")} placeholder="84" disabled={!isConcept} onChange={(e) => setNum("aanhefGapPx", e.target.value)} /></div>
+              <p className="col-span-2 text-[10px] text-muted-foreground">Standaard 96 / 84 px. Bij lange teksten worden deze automatisch verkleind (tot min. 16 px) zodat het investeringsblok boven de voettekst blijft; een eigen waarde geldt als maximum.</p>
             </div>
           </Section>
 
