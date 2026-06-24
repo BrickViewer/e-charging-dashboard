@@ -480,8 +480,11 @@ export default function SalesOfferteDetail() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1"><Label className="text-xs">Overleg met</Label><Input value={odStr("overlegNaam")} disabled={!isConcept} onChange={(e) => setStr("overlegNaam", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Overleg d.d.</Label><Input type="date" value={dateVal("overlegDatum")} disabled={!isConcept} onChange={(e) => setDate("overlegDatum", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Ingangsdatum</Label><Input type="date" value={dateVal("ingangsdatum")} disabled={!isConcept} onChange={(e) => setDate("ingangsdatum", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Ingangsdatum</Label><Input type="date" value={dateVal("ingangsdatum")} disabled={!isConcept || withInstallation} onChange={(e) => setDate("ingangsdatum", e.target.value)} /></div>
             </div>
+            {withInstallation
+              ? <p className="mt-1 text-[10px] text-muted-foreground">Bij installatie loopt het contract automatisch vanaf de 1e van de maand na de opleverdatum — ingangsdatum niet nodig.</p>
+              : <p className="mt-1 text-[10px] text-muted-foreground">Alleen beheer: vul hier de vaste ingangsdatum in.</p>}
             <div className="mt-2 grid grid-cols-3 gap-2">
               <div className="space-y-1"><Label className="text-xs">% bij opdracht</Label><Input inputMode="numeric" value={odStr("betaalBijOpdrachtPct")} placeholder={String(tpl?.betaalBijOpdrachtPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijOpdrachtPct", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">% bij start</Label><Input inputMode="numeric" value={odStr("betaalBijStartPct")} placeholder={String(tpl?.betaalBijStartPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijStartPct", e.target.value)} /></div>

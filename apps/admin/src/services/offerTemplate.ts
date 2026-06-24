@@ -449,7 +449,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(m.withInstallation
       ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
       : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mInv(m.totalInvestment)} (excl. BTW).`, 8));
-    blocks.push(bFb(`De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
+    blocks.push(bFb(m.withInstallation
+      ? "De overeenkomst gaat in op de eerste dag van de kalendermaand volgend op de opleverdatum."
+      : `De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
     blocks.push(bFb("De overeenkomst wordt aangegaan voor een periode van één (1) jaar, te rekenen vanaf de ingangsdatum. Na afloop van deze periode wordt de overeenkomst telkens stilzwijgend verlengd met een periode van één (1) jaar, tenzij opdrachtgever of aannemer de overeenkomst schriftelijk opzegt met inachtneming van een opzegtermijn van drie (3) maanden vóór het einde van de lopende contractperiode."));
   }
   if (m.withInstallation) {
