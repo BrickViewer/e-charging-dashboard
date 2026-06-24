@@ -51,6 +51,7 @@ const SalesOffertes = lazy(() => import("./pages/sales/SalesOffertes"));
 // Marketing pages — lazy loaded
 const MarketingBlogs = lazy(() => import("./pages/marketing/MarketingBlogs"));
 const BlogEditor = lazy(() => import("./pages/marketing/BlogEditor"));
+const ContentPipeline = lazy(() => import("./pages/marketing/ContentPipeline"));
 
 // refetchOnWindowFocus uit: terugkeren naar het tabblad mag geen achtergrond-
 // refetch (en dus geen geflikker / sluitende panelen) veroorzaken. Data blijft
@@ -206,7 +207,8 @@ const App = () => (
                   <WorkspaceLayout />
                 </RequireAuth>
               }>
-                <Route index element={<Navigate to="/marketing/blogs" replace />} />
+                <Route index element={<Navigate to="/marketing/content" replace />} />
+                <Route path="content" element={<ContentPipeline />} />
                 <Route path="blogs" element={<MarketingBlogs />} />
                 <Route path="blogs/nieuw" element={<BlogEditor />} />
                 <Route path="blogs/:id" element={<BlogEditor />} />

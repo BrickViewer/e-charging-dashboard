@@ -12,6 +12,7 @@ import {
   MonitorPlay,
   AlertTriangle,
   Rocket,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/contexts/authContextValue";
@@ -65,9 +66,10 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
   marketing: {
     key: "marketing",
     label: "Marketing",
-    home: "/marketing/blogs",
+    home: "/marketing/content",
     roles: ["admin", "manager", "marketing"],
     items: [
+      { to: "/marketing/content", icon: Sparkles, label: "Content" },
       { to: "/marketing/blogs", icon: Newspaper, label: "Blogs" },
     ],
   },

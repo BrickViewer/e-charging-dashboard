@@ -103,6 +103,7 @@ export type Database = {
       }
       blog_posts: {
         Row: {
+          aeo_score: number | null
           author_name: string | null
           canonical_url: string | null
           category: string | null
@@ -117,20 +118,27 @@ export type Database = {
           excerpt: string | null
           faq: Json
           featured: boolean
+          generated_by: string | null
           id: string
+          internal_link_suggestions: Json
+          meta_variants: Json
           noindex: boolean
           organization_id: string
           published_at: string | null
           reading_minutes: number | null
+          review_state: string
           seo_description: string | null
+          seo_score: number | null
           seo_title: string | null
           slug: string
+          source_topic_id: string | null
           status: string
           tags: string[]
           title: string
           updated_at: string
         }
         Insert: {
+          aeo_score?: number | null
           author_name?: string | null
           canonical_url?: string | null
           category?: string | null
@@ -145,20 +153,27 @@ export type Database = {
           excerpt?: string | null
           faq?: Json
           featured?: boolean
+          generated_by?: string | null
           id?: string
+          internal_link_suggestions?: Json
+          meta_variants?: Json
           noindex?: boolean
           organization_id?: string
           published_at?: string | null
           reading_minutes?: number | null
+          review_state?: string
           seo_description?: string | null
+          seo_score?: number | null
           seo_title?: string | null
           slug: string
+          source_topic_id?: string | null
           status?: string
           tags?: string[]
           title: string
           updated_at?: string
         }
         Update: {
+          aeo_score?: number | null
           author_name?: string | null
           canonical_url?: string | null
           category?: string | null
@@ -173,14 +188,20 @@ export type Database = {
           excerpt?: string | null
           faq?: Json
           featured?: boolean
+          generated_by?: string | null
           id?: string
+          internal_link_suggestions?: Json
+          meta_variants?: Json
           noindex?: boolean
           organization_id?: string
           published_at?: string | null
           reading_minutes?: number | null
+          review_state?: string
           seo_description?: string | null
+          seo_score?: number | null
           seo_title?: string | null
           slug?: string
+          source_topic_id?: string | null
           status?: string
           tags?: string[]
           title?: string
@@ -194,118 +215,162 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "blog_posts_source_topic_id_fkey"
+            columns: ["source_topic_id"]
+            isOneToOne: false
+            referencedRelation: "content_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_point_fault_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          fault_id: string
+          from_status: Database["public"]["Enums"]["fault_status"] | null
+          id: string
+          note: string | null
+          to_status: Database["public"]["Enums"]["fault_status"] | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          fault_id: string
+          from_status?: Database["public"]["Enums"]["fault_status"] | null
+          id?: string
+          note?: string | null
+          to_status?: Database["public"]["Enums"]["fault_status"] | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          fault_id?: string
+          from_status?: Database["public"]["Enums"]["fault_status"] | null
+          id?: string
+          note?: string | null
+          to_status?: Database["public"]["Enums"]["fault_status"] | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_fault_events_fault_id_fkey"
+            columns: ["fault_id"]
+            isOneToOne: false
+            referencedRelation: "charge_point_faults"
+            referencedColumns: ["id"]
+          },
         ]
       }
       charge_point_faults: {
         Row: {
-          id: string
+          assigned_to: string | null
+          auto_recovered: boolean
           charge_point_id: string
-          location_id: string | null
           client_id: string | null
-          organization_id: string | null
-          status: Database["public"]["Enums"]["fault_status"]
-          severity: Database["public"]["Enums"]["fault_severity"]
+          created_at: string
+          customer_contacted_at: string | null
           detected_at: string
+          eflux_reported_at: string | null
+          email_sent_at: string | null
           fault_reason: string
+          first_status: string | null
+          id: string
+          location_id: string | null
+          notes: string | null
+          organization_id: string | null
+          resolved_at: string | null
           road_connectivity_state: string | null
           road_operational_status: string | null
-          first_status: string | null
-          resolved_at: string | null
-          auto_recovered: boolean
-          assigned_to: string | null
-          eflux_reported_at: string | null
-          customer_contacted_at: string | null
-          visit_scheduled_at: string | null
-          visit_date: string | null
-          notes: string | null
-          email_sent_at: string | null
-          created_at: string
+          severity: Database["public"]["Enums"]["fault_severity"]
+          status: Database["public"]["Enums"]["fault_status"]
           updated_at: string
+          visit_date: string | null
+          visit_scheduled_at: string | null
         }
         Insert: {
-          id?: string
+          assigned_to?: string | null
+          auto_recovered?: boolean
           charge_point_id: string
-          location_id?: string | null
           client_id?: string | null
-          organization_id?: string | null
-          status?: Database["public"]["Enums"]["fault_status"]
-          severity?: Database["public"]["Enums"]["fault_severity"]
+          created_at?: string
+          customer_contacted_at?: string | null
           detected_at?: string
+          eflux_reported_at?: string | null
+          email_sent_at?: string | null
           fault_reason: string
-          road_connectivity_state?: string | null
-          road_operational_status?: string | null
           first_status?: string | null
-          resolved_at?: string | null
-          auto_recovered?: boolean
-          assigned_to?: string | null
-          eflux_reported_at?: string | null
-          customer_contacted_at?: string | null
-          visit_scheduled_at?: string | null
-          visit_date?: string | null
-          notes?: string | null
-          email_sent_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
           id?: string
-          charge_point_id?: string
           location_id?: string | null
-          client_id?: string | null
+          notes?: string | null
           organization_id?: string | null
-          status?: Database["public"]["Enums"]["fault_status"]
-          severity?: Database["public"]["Enums"]["fault_severity"]
-          detected_at?: string
-          fault_reason?: string
+          resolved_at?: string | null
           road_connectivity_state?: string | null
           road_operational_status?: string | null
-          first_status?: string | null
-          resolved_at?: string | null
-          auto_recovered?: boolean
-          assigned_to?: string | null
-          eflux_reported_at?: string | null
-          customer_contacted_at?: string | null
-          visit_scheduled_at?: string | null
-          visit_date?: string | null
-          notes?: string | null
-          email_sent_at?: string | null
-          created_at?: string
+          severity?: Database["public"]["Enums"]["fault_severity"]
+          status?: Database["public"]["Enums"]["fault_status"]
           updated_at?: string
-        }
-        Relationships: []
-      }
-      charge_point_fault_events: {
-        Row: {
-          id: string
-          fault_id: string
-          user_id: string | null
-          event_type: string
-          from_status: Database["public"]["Enums"]["fault_status"] | null
-          to_status: Database["public"]["Enums"]["fault_status"] | null
-          note: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          fault_id: string
-          user_id?: string | null
-          event_type: string
-          from_status?: Database["public"]["Enums"]["fault_status"] | null
-          to_status?: Database["public"]["Enums"]["fault_status"] | null
-          note?: string | null
-          created_at?: string
+          visit_date?: string | null
+          visit_scheduled_at?: string | null
         }
         Update: {
-          id?: string
-          fault_id?: string
-          user_id?: string | null
-          event_type?: string
-          from_status?: Database["public"]["Enums"]["fault_status"] | null
-          to_status?: Database["public"]["Enums"]["fault_status"] | null
-          note?: string | null
+          assigned_to?: string | null
+          auto_recovered?: boolean
+          charge_point_id?: string
+          client_id?: string | null
           created_at?: string
+          customer_contacted_at?: string | null
+          detected_at?: string
+          eflux_reported_at?: string | null
+          email_sent_at?: string | null
+          fault_reason?: string
+          first_status?: string | null
+          id?: string
+          location_id?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          resolved_at?: string | null
+          road_connectivity_state?: string | null
+          road_operational_status?: string | null
+          severity?: Database["public"]["Enums"]["fault_severity"]
+          status?: Database["public"]["Enums"]["fault_status"]
+          updated_at?: string
+          visit_date?: string | null
+          visit_scheduled_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_faults_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_faults_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_faults_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_faults_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charge_points: {
         Row: {
@@ -745,6 +810,7 @@ export type Database = {
           contact_phone: string | null
           contract_duration_months: number | null
           contract_start_date: string | null
+          country: string
           created_at: string
           echarging_fee_per_kwh: number | null
           eflux_account_id: string | null
@@ -768,7 +834,6 @@ export type Database = {
           revenue_share_percentage: number | null
           status: string | null
           updated_at: string
-          country: string
           vat_liable: boolean
           vat_status: string | null
           vat_status_confirmed_at: string | null
@@ -791,6 +856,7 @@ export type Database = {
           contact_phone?: string | null
           contract_duration_months?: number | null
           contract_start_date?: string | null
+          country?: string
           created_at?: string
           echarging_fee_per_kwh?: number | null
           eflux_account_id?: string | null
@@ -814,7 +880,6 @@ export type Database = {
           revenue_share_percentage?: number | null
           status?: string | null
           updated_at?: string
-          country?: string
           vat_liable?: boolean
           vat_status?: string | null
           vat_status_confirmed_at?: string | null
@@ -837,6 +902,7 @@ export type Database = {
           contact_phone?: string | null
           contract_duration_months?: number | null
           contract_start_date?: string | null
+          country?: string
           created_at?: string
           echarging_fee_per_kwh?: number | null
           eflux_account_id?: string | null
@@ -860,7 +926,6 @@ export type Database = {
           revenue_share_percentage?: number | null
           status?: string | null
           updated_at?: string
-          country?: string
           vat_liable?: boolean
           vat_status?: string | null
           vat_status_confirmed_at?: string | null
@@ -1048,6 +1113,7 @@ export type Database = {
           lead_id: string | null
           organization_id: string
           scopes: string[]
+          seed_config: Json | null
           settings_id: string
           settings_version: number
           status: string
@@ -1061,6 +1127,7 @@ export type Database = {
           lead_id?: string | null
           organization_id: string
           scopes?: string[]
+          seed_config?: Json | null
           settings_id: string
           settings_version: number
           status?: string
@@ -1074,6 +1141,7 @@ export type Database = {
           lead_id?: string | null
           organization_id?: string
           scopes?: string[]
+          seed_config?: Json | null
           settings_id?: string
           settings_version?: number
           status?: string
@@ -1157,6 +1225,269 @@ export type Database = {
           ip_hash?: string | null
         }
         Relationships: []
+      }
+      content_distributions: {
+        Row: {
+          channel: string
+          content_ref_id: string
+          content_ref_type: string
+          created_at: string
+          error: string | null
+          external_id: string | null
+          id: string
+          organization_id: string
+          payload: Json
+          scheduled_for: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          content_ref_id: string
+          content_ref_type?: string
+          created_at?: string
+          error?: string | null
+          external_id?: string | null
+          id?: string
+          organization_id?: string
+          payload?: Json
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          content_ref_id?: string
+          content_ref_type?: string
+          created_at?: string
+          error?: string | null
+          external_id?: string | null
+          id?: string
+          organization_id?: string
+          payload?: Json
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_distributions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_engine_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          organization_id: string
+          settings: Json
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          settings?: Json
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          settings?: Json
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_engine_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_seen_sources: {
+        Row: {
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          organization_id: string
+          produced_topic_id: string | null
+          source_type: string
+          source_url: string
+          times_seen: number
+          title: string | null
+          title_hash: string | null
+          url_hash: string
+        }
+        Insert: {
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          organization_id?: string
+          produced_topic_id?: string | null
+          source_type: string
+          source_url: string
+          times_seen?: number
+          title?: string | null
+          title_hash?: string | null
+          url_hash: string
+        }
+        Update: {
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          organization_id?: string
+          produced_topic_id?: string | null
+          source_type?: string
+          source_url?: string
+          times_seen?: number
+          title?: string | null
+          title_hash?: string | null
+          url_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_seen_sources_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_seen_sources_produced_topic_id_fkey"
+            columns: ["produced_topic_id"]
+            isOneToOne: false
+            referencedRelation: "content_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_topics: {
+        Row: {
+          aeo_score: number | null
+          assigned_category: string | null
+          assigned_category_slug: string | null
+          blog_post_id: string | null
+          created_at: string
+          created_by: string | null
+          dedup_of: string | null
+          generated_by: string | null
+          id: string
+          novelty_key: string
+          novelty_score: number | null
+          organization_id: string
+          quality_score: number | null
+          raw_summary: string | null
+          raw_title: string
+          rejected_reason: string | null
+          reviewer_notes: string | null
+          scheduled_for: string | null
+          seo_score: number | null
+          source_name: string | null
+          source_type: string
+          source_url: string | null
+          status: string
+          target_cluster: string | null
+          target_keyword: string | null
+          updated_at: string
+        }
+        Insert: {
+          aeo_score?: number | null
+          assigned_category?: string | null
+          assigned_category_slug?: string | null
+          blog_post_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          dedup_of?: string | null
+          generated_by?: string | null
+          id?: string
+          novelty_key: string
+          novelty_score?: number | null
+          organization_id?: string
+          quality_score?: number | null
+          raw_summary?: string | null
+          raw_title: string
+          rejected_reason?: string | null
+          reviewer_notes?: string | null
+          scheduled_for?: string | null
+          seo_score?: number | null
+          source_name?: string | null
+          source_type: string
+          source_url?: string | null
+          status?: string
+          target_cluster?: string | null
+          target_keyword?: string | null
+          updated_at?: string
+        }
+        Update: {
+          aeo_score?: number | null
+          assigned_category?: string | null
+          assigned_category_slug?: string | null
+          blog_post_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          dedup_of?: string | null
+          generated_by?: string | null
+          id?: string
+          novelty_key?: string
+          novelty_score?: number | null
+          organization_id?: string
+          quality_score?: number | null
+          raw_summary?: string | null
+          raw_title?: string
+          rejected_reason?: string | null
+          reviewer_notes?: string | null
+          scheduled_for?: string | null
+          seo_score?: number | null
+          source_name?: string | null
+          source_type?: string
+          source_url?: string | null
+          status?: string
+          target_cluster?: string | null
+          target_keyword?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_topics_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_topics_dedup_of_fkey"
+            columns: ["dedup_of"]
+            isOneToOne: false
+            referencedRelation: "content_topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_topics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       customer_configurations: {
         Row: {
@@ -1352,11 +1683,13 @@ export type Database = {
           completed_at: string | null
           created_at: string
           created_by: string | null
+          delivered_at: string | null
           egroup_order_id: string | null
           egroup_order_number: string | null
           external_ref: string | null
           external_status: string | null
           handoff_at: string | null
+          handoff_started_at: string | null
           id: string
           invoiced_at: string | null
           last_sync_error: string | null
@@ -1383,11 +1716,13 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          delivered_at?: string | null
           egroup_order_id?: string | null
           egroup_order_number?: string | null
           external_ref?: string | null
           external_status?: string | null
           handoff_at?: string | null
+          handoff_started_at?: string | null
           id?: string
           invoiced_at?: string | null
           last_sync_error?: string | null
@@ -1414,11 +1749,13 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          delivered_at?: string | null
           egroup_order_id?: string | null
           egroup_order_number?: string | null
           external_ref?: string | null
           external_status?: string | null
           handoff_at?: string | null
+          handoff_started_at?: string | null
           id?: string
           invoiced_at?: string | null
           last_sync_error?: string | null
@@ -1476,6 +1813,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      internal_role_grants: {
+        Row: {
+          created_at: string
+          email: string
+          granted_by: string | null
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          granted_by?: string | null
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          granted_by?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: []
       }
       lead_activities: {
         Row: {
@@ -1971,9 +2329,9 @@ export type Database = {
           address_city: string | null
           address_postal: string | null
           address_street: string | null
-          country: string
           bic: string | null
           btw_number: string | null
+          country: string
           created_at: string
           dashboard_url: string | null
           default_charge_rate_per_kwh: number | null
@@ -2005,16 +2363,13 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          fault_detection_enabled?: boolean
-          fault_heartbeat_grace_minutes?: number
-          fault_notification_email?: string
           address?: string | null
           address_city?: string | null
           address_postal?: string | null
           address_street?: string | null
           bic?: string | null
-          country?: string
           btw_number?: string | null
+          country?: string
           created_at?: string
           dashboard_url?: string | null
           default_charge_rate_per_kwh?: number | null
@@ -2029,6 +2384,9 @@ export type Database = {
           eflux_master_account_id?: string | null
           eflux_provider_id?: string | null
           email?: string | null
+          fault_detection_enabled?: boolean
+          fault_heartbeat_grace_minutes?: number
+          fault_notification_email?: string
           iban?: string | null
           id?: string
           kvk?: string | null
@@ -2048,8 +2406,8 @@ export type Database = {
           address_postal?: string | null
           address_street?: string | null
           bic?: string | null
-          country?: string
           btw_number?: string | null
+          country?: string
           created_at?: string
           dashboard_url?: string | null
           default_charge_rate_per_kwh?: number | null
@@ -2234,7 +2592,9 @@ export type Database = {
           house_number?: string | null
           id?: string
           lead_id?: string | null
-          location_number?: number
+          location_number: number
+          normalized_postal?: string | null
+          normalized_street?: string | null
           notes?: string | null
           opdracht_item_id?: string | null
           organization_id: string
@@ -2258,6 +2618,8 @@ export type Database = {
           id?: string
           lead_id?: string | null
           location_number?: number
+          normalized_postal?: string | null
+          normalized_street?: string | null
           notes?: string | null
           opdracht_item_id?: string | null
           organization_id?: string
@@ -2266,7 +2628,43 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "project_locations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_locations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_locations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_locations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_locations_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quote_acceptances: {
         Row: {
@@ -2373,6 +2771,82 @@ export type Database = {
           },
         ]
       }
+      quote_signature_evidence: {
+        Row: {
+          acceptance_id: string | null
+          authority_confirmed: boolean
+          created_at: string
+          document_sha256: string | null
+          id: string
+          ip: string | null
+          organization_id: string
+          quote_id: string
+          signed_at: string
+          signer_email: string | null
+          signer_function: string | null
+          signer_name: string
+          terms_accepted: boolean
+          terms_version: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          acceptance_id?: string | null
+          authority_confirmed?: boolean
+          created_at?: string
+          document_sha256?: string | null
+          id?: string
+          ip?: string | null
+          organization_id: string
+          quote_id: string
+          signed_at?: string
+          signer_email?: string | null
+          signer_function?: string | null
+          signer_name: string
+          terms_accepted?: boolean
+          terms_version?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          acceptance_id?: string | null
+          authority_confirmed?: boolean
+          created_at?: string
+          document_sha256?: string | null
+          id?: string
+          ip?: string | null
+          organization_id?: string
+          quote_id?: string
+          signed_at?: string
+          signer_email?: string | null
+          signer_function?: string | null
+          signer_name?: string
+          terms_accepted?: boolean
+          terms_version?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_signature_evidence_acceptance_id_fkey"
+            columns: ["acceptance_id"]
+            isOneToOne: false
+            referencedRelation: "quote_acceptances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_signature_evidence_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_signature_evidence_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotes: {
         Row: {
           calculation_data: Json | null
@@ -2382,6 +2856,7 @@ export type Database = {
           client_id: string | null
           company_id: string | null
           created_at: string
+          document_number: number | null
           energy_cost_per_kwh: number | null
           ere_rate_per_kwh: number | null
           estimated_kwh_per_point: number | null
@@ -2398,9 +2873,14 @@ export type Database = {
           monthly_projection: Json | null
           notes: string | null
           num_charge_points: number | null
+          off_item_id: string | null
+          off_web_url: string | null
           offer_details: Json
+          opd_item_id: string | null
+          opd_web_url: string | null
           organization_id: string
           person_id: string | null
+          project_location_id: string | null
           prospect_company: string | null
           prospect_contact: string | null
           prospect_email: string | null
@@ -2417,12 +2897,6 @@ export type Database = {
           total_installation_cost: number | null
           updated_at: string | null
           valid_until: string | null
-          document_number: number | null
-          off_item_id: string | null
-          off_web_url: string | null
-          opd_item_id: string | null
-          opd_web_url: string | null
-          project_location_id: string | null
           with_management: boolean
         }
         Insert: {
@@ -2433,6 +2907,7 @@ export type Database = {
           client_id?: string | null
           company_id?: string | null
           created_at?: string
+          document_number?: number | null
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           estimated_kwh_per_point?: number | null
@@ -2449,8 +2924,14 @@ export type Database = {
           monthly_projection?: Json | null
           notes?: string | null
           num_charge_points?: number | null
+          off_item_id?: string | null
+          off_web_url?: string | null
+          offer_details?: Json
+          opd_item_id?: string | null
+          opd_web_url?: string | null
           organization_id: string
           person_id?: string | null
+          project_location_id?: string | null
           prospect_company?: string | null
           prospect_contact?: string | null
           prospect_email?: string | null
@@ -2467,12 +2948,6 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
-          document_number?: number | null
-          off_item_id?: string | null
-          off_web_url?: string | null
-          opd_item_id?: string | null
-          opd_web_url?: string | null
-          project_location_id?: string | null
           with_management?: boolean
         }
         Update: {
@@ -2483,6 +2958,7 @@ export type Database = {
           client_id?: string | null
           company_id?: string | null
           created_at?: string
+          document_number?: number | null
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           estimated_kwh_per_point?: number | null
@@ -2499,9 +2975,14 @@ export type Database = {
           monthly_projection?: Json | null
           notes?: string | null
           num_charge_points?: number | null
+          off_item_id?: string | null
+          off_web_url?: string | null
           offer_details?: Json
+          opd_item_id?: string | null
+          opd_web_url?: string | null
           organization_id?: string
           person_id?: string | null
+          project_location_id?: string | null
           prospect_company?: string | null
           prospect_contact?: string | null
           prospect_email?: string | null
@@ -2518,12 +2999,6 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
-          document_number?: number | null
-          off_item_id?: string | null
-          off_web_url?: string | null
-          opd_item_id?: string | null
-          opd_web_url?: string | null
-          project_location_id?: string | null
           with_management?: boolean
         }
         Relationships: [
@@ -2562,6 +3037,13 @@ export type Database = {
             referencedRelation: "persons"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "quotes_project_location_id_fkey"
+            columns: ["project_location_id"]
+            isOneToOne: false
+            referencedRelation: "project_locations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       settlements: {
@@ -2574,9 +3056,9 @@ export type Database = {
           eflux_reimbursed_at: string | null
           ere_estimate: number
           fee_waived: boolean
-          invoice_number: string | null
           gross_revenue: number
           id: string
+          invoice_number: string | null
           invoice_sent_at: string | null
           month: number
           paid_at: string | null
@@ -2599,9 +3081,9 @@ export type Database = {
           eflux_reimbursed_at?: string | null
           ere_estimate?: number
           fee_waived?: boolean
-          invoice_number?: string | null
           gross_revenue?: number
           id?: string
+          invoice_number?: string | null
           invoice_sent_at?: string | null
           month: number
           paid_at?: string | null
@@ -2624,9 +3106,9 @@ export type Database = {
           eflux_reimbursed_at?: string | null
           ere_estimate?: number
           fee_waived?: boolean
-          invoice_number?: string | null
           gross_revenue?: number
           id?: string
+          invoice_number?: string | null
           invoice_sent_at?: string | null
           month?: number
           paid_at?: string | null
@@ -2654,36 +3136,45 @@ export type Database = {
         Row: {
           charge_rate_per_kwh: number | null
           client_id: string
+          contract_duration_months: number | null
           created_at: string
+          echarging_fee_per_kwh: number | null
           energy_cost_per_kwh: number | null
           ere_rate_per_kwh: number | null
           id: string
           idle_tariff_per_min: number
           location_id: string | null
+          notice_period_months: number | null
           start_tariff: number
           valid_from: string | null
         }
         Insert: {
           charge_rate_per_kwh?: number | null
           client_id: string
+          contract_duration_months?: number | null
           created_at?: string
+          echarging_fee_per_kwh?: number | null
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           id?: string
           idle_tariff_per_min?: number
           location_id?: string | null
+          notice_period_months?: number | null
           start_tariff?: number
           valid_from?: string | null
         }
         Update: {
           charge_rate_per_kwh?: number | null
           client_id?: string
+          contract_duration_months?: number | null
           created_at?: string
+          echarging_fee_per_kwh?: number | null
           energy_cost_per_kwh?: number | null
           ere_rate_per_kwh?: number | null
           id?: string
           idle_tariff_per_min?: number
           location_id?: string | null
+          notice_period_months?: number | null
           start_tariff?: number
           valid_from?: string | null
         }
@@ -2727,10 +3218,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      assign_document_number: {
-        Args: { p_location_id: string }
-        Returns: number
-      }
       accept_client_invitation: {
         Args: { accepted_user_id: string; invitation_token_hash: string }
         Returns: {
@@ -2751,6 +3238,10 @@ export type Database = {
           schedule: string
         }[]
       }
+      admin_settlement_kpis: {
+        Args: { p_cur_month: number; p_cur_year: number; p_year: number }
+        Returns: Json
+      }
       amsterdam_month_bounds: {
         Args: { p_month: number; p_year: number }
         Returns: {
@@ -2762,6 +3253,18 @@ export type Database = {
         Args: { settlement_ids: string[] }
         Returns: {
           approved_count: number
+        }[]
+      }
+      assign_document_number: {
+        Args: { p_location_id: string }
+        Returns: number
+      }
+      confirm_client_vat_status: {
+        Args: { p_client_id: string; p_vat_status: string }
+        Returns: {
+          id: string
+          vat_status: string
+          vat_status_confirmed_at: string
         }[]
       }
       create_activity_log: {
@@ -2789,10 +3292,60 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_client_from_quote: {
+        Args: {
+          p_quote_id: string
+          p_reviewed?: Json
+          p_target_client_id?: string
+        }
+        Returns: Json
+      }
       erase_client_for_privacy: {
         Args: { p_client_id: string; p_performed_by: string; p_reason: string }
         Returns: Json
       }
+      find_matching_project_location: {
+        Args: {
+          p_city?: string
+          p_company: string
+          p_house?: string
+          p_org: string
+          p_postal: string
+          p_street: string
+        }
+        Returns: {
+          address_street: string | null
+          city: string | null
+          client_id: string | null
+          company_id: string | null
+          created_at: string
+          descriptive_label: string | null
+          display_name: string
+          doc_seq: number
+          folder_item_id: string | null
+          folder_web_url: string | null
+          house_number: string | null
+          id: string
+          lead_id: string | null
+          location_number: number
+          normalized_postal: string | null
+          normalized_street: string | null
+          notes: string | null
+          opdracht_item_id: string | null
+          organization_id: string
+          person_id: string | null
+          postal_code: string | null
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_locations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_integration_secret: { Args: { p_name: string }; Returns: string }
       get_portal_dashboard_kpis: {
         Args: never
         Returns: {
@@ -2816,9 +3369,9 @@ export type Database = {
           org_address_city: string
           org_address_postal: string
           org_address_street: string
-          org_country: string
           org_bic: string
           org_btw_number: string
+          org_country: string
           org_email: string
           org_iban: string
           org_kvk: string
@@ -2890,36 +3443,74 @@ export type Database = {
           paid_count: number
         }[]
       }
+      monthly_financial_overview: {
+        Args: { p_year?: number }
+        Returns: {
+          assigned_reimb: number
+          cnt_approved: number
+          cnt_calculated: number
+          cnt_charged_back: number
+          cnt_invoice_paid: number
+          cnt_invoice_sent: number
+          cnt_live: number
+          cnt_paid: number
+          eflux_credit_excl: number
+          eflux_credit_incl: number
+          eflux_net_incl: number
+          eflux_usage_incl: number
+          fee_total: number
+          gross_total: number
+          month: number
+          payout_total: number
+          recon_diff_incl: number
+          recon_status: string
+          sessions_count: number
+          sessions_kwh: number
+          sessions_reimb_excl: number
+          sessions_reimb_incl: number
+          settlements_final: number
+          settlements_total: number
+          tie_out_ok: boolean
+          unassigned_reimb: number
+          year: number
+        }[]
+      }
+      move_stage: { Args: { p_dir: number; p_id: string }; Returns: undefined }
+      next_offer_number: { Args: never; Returns: string }
+      next_settlement_invoice_number: { Args: never; Returns: string }
+      reorder_leads: { Args: { p_updates: Json }; Returns: undefined }
+      set_location_client: {
+        Args: { client_id: string; location_id: string }
+        Returns: Json
+      }
+      set_location_service_fee: {
+        Args: { p_fee: number; p_location_id: string }
+        Returns: Json
+      }
       set_settlement_fee_waived: {
         Args: { p_settlement_id: string; p_waived: boolean }
         Returns: {
-          id: string
-          fee_waived: boolean
+          client_payout: number
           echarging_fee_per_kwh: number
           echarging_revenue: number
-          client_payout: number
-        }[]
-      }
-      confirm_client_vat_status: {
-        Args: { p_client_id: string; p_vat_status: string }
-        Returns: {
+          fee_waived: boolean
           id: string
-          vat_status: string
-          vat_status_confirmed_at: string
         }[]
       }
+      settlement_gap_months: {
+        Args: never
+        Returns: {
+          month: number
+          year: number
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       unapprove_settlements: {
         Args: { settlement_ids: string[] }
         Returns: {
           unapproved_count: number
         }[]
-      }
-      move_stage: { Args: { p_dir: number; p_id: string }; Returns: undefined }
-      next_offer_number: { Args: never; Returns: string }
-      reorder_leads: { Args: { p_updates: Json }; Returns: undefined }
-      set_location_client: {
-        Args: { client_id: string; location_id: string }
-        Returns: Json
       }
       update_portal_company_details: {
         Args: {
@@ -2940,6 +3531,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      upsert_location_tariff: {
+        Args: { p_location_id: string; p_quote_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       access_request_status: "pending" | "approved" | "denied"
@@ -2950,6 +3545,7 @@ export type Database = {
         | "superadmin"
         | "sales"
         | "marketing"
+      fault_severity: "storing" | "verdacht"
       fault_status:
         | "nieuw"
         | "eflux_gemeld"
@@ -2958,7 +3554,6 @@ export type Database = {
         | "opgelost"
         | "automatisch_hersteld"
         | "vals_alarm"
-      fault_severity: "storing" | "verdacht"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3094,6 +3689,16 @@ export const Constants = {
         "superadmin",
         "sales",
         "marketing",
+      ],
+      fault_severity: ["storing", "verdacht"],
+      fault_status: [
+        "nieuw",
+        "eflux_gemeld",
+        "klant_gecontacteerd",
+        "bezoek_ingepland",
+        "opgelost",
+        "automatisch_hersteld",
+        "vals_alarm",
       ],
     },
   },
