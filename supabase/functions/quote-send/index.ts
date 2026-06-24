@@ -83,10 +83,11 @@ Deno.serve(async (req) => {
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
 
     if (RESEND_API_KEY) {
+      const customMessage = (quote.offer_details as { emailMessage?: string | null } | null)?.emailMessage ?? null;
       const { html, text } = renderOfferEmail({
         supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
         contact: quote.prospect_contact, total, acceptUrl, validUntil: quote.valid_until,
-        hasAttachment: !!pdfBase64,
+        hasAttachment: !!pdfBase64, customMessage,
       });
       const res = await sendEmail({
         to: [recipient],

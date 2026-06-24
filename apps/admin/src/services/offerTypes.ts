@@ -65,4 +65,12 @@ export interface OfferDetails {
   betaalNaWerkPct?: number | null;
   echargingSignerName?: string | null;
   echargingSignerFunction?: string | null;
+  // Body-tekst van de klant-offertemail (per offerte aanpasbaar). Leeg = standaardtekst.
+  emailMessage?: string | null;
 }
+
+// Standaard body-tekst van de offerte-e-mail aan de klant — voorvulling van het bewerkbare veld.
+// MOET gelijk blijven aan de fallback in supabase/functions/_shared/offer-email.ts (renderOfferEmail).
+export const DEFAULT_OFFER_EMAIL =
+  "Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur.\n\n" +
+  "In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.";
