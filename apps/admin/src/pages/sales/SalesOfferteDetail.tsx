@@ -59,7 +59,6 @@ export default function SalesOfferteDetail() {
   // Eén prijs i.p.v. losse offerteregels — calculatie gebeurt in Excel.
   const [price, setPrice] = useState("");
   const [email, setEmail] = useState("");
-  const [notes, setNotes] = useState("");
   const [withManagement, setWithManagement] = useState(true);
   const [withInstallation, setWithInstallation] = useState(true);
   const [chargeRate, setChargeRate] = useState("");
@@ -103,7 +102,6 @@ export default function SalesOfferteDetail() {
       const initial = liSum || totalsSum;
       setPrice(initial ? String(initial) : "");
       setEmail(quote.prospect_email ?? "");
-      setNotes(quote.notes ?? "");
       setWithManagement(quote.with_management !== false);
       setWithInstallation(quote.with_installation !== false);
       setChargeRate(quote.charge_rate_per_kwh != null ? String(quote.charge_rate_per_kwh) : "");
@@ -155,7 +153,6 @@ export default function SalesOfferteDetail() {
           company_id: companyId,
           person_id: personId,
           lead_id: leadId,
-          notes: notes.trim() || null,
           with_management: withManagement,
           with_installation: withInstallation,
           charge_rate_per_kwh: withManagement ? numOr(chargeRate) : null,
@@ -501,9 +498,8 @@ export default function SalesOfferteDetail() {
             </div>
           </Section>
 
-          <Section title="Notitie & e-mail">
+          <Section title="E-mail aan de klant">
             <div className="space-y-3">
-              <div className="space-y-1.5"><Label className="text-xs">Notitie (op de offerte)</Label><Textarea rows={2} value={notes} disabled={!isConcept} onChange={(e) => setNotes(e.target.value)} /></div>
               <div className="space-y-1.5"><Label className="text-xs">E-mail ontvanger</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={quote.status === "getekend"} /></div>
               <div className="space-y-1.5">
                 <Label className="text-xs">E-mailbericht aan de klant</Label>
