@@ -136,6 +136,7 @@ export type AwaitingClientQuote = {
   charge_rate_per_kwh: number | null;
   energy_cost_per_kwh: number | null;
   with_management: boolean | null;
+  with_installation: boolean | null;
   calculation_snapshot: unknown;
   offer_details: unknown;
   created_at: string;
@@ -148,7 +149,7 @@ export function useSignedQuotesAwaitingClient() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quotes")
-        .select("id, quote_number, prospect_company, prospect_contact, prospect_email, company_id, person_id, lead_id, project_location_id, total_hardware_cost, total_installation_cost, charge_rate_per_kwh, energy_cost_per_kwh, with_management, calculation_snapshot, offer_details, created_at")
+        .select("id, quote_number, prospect_company, prospect_contact, prospect_email, company_id, person_id, lead_id, project_location_id, total_hardware_cost, total_installation_cost, charge_rate_per_kwh, energy_cost_per_kwh, with_management, with_installation, calculation_snapshot, offer_details, created_at")
         .eq("status", "getekend")
         .is("client_id", null)
         .order("signed_at", { ascending: false });

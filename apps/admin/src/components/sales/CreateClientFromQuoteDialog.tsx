@@ -3,8 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { ScopeSelector } from "@/components/sales/ScopeSelector";
 import { useCompany, usePerson } from "@/hooks/useContacts";
 import { useCreateClientFromQuote } from "@/hooks/useQuotes";
 import { useAllClients } from "@/hooks/useAdminData";
@@ -22,6 +22,7 @@ export type QuoteForClient = {
   company_id: string | null;
   person_id: string | null;
   with_management: boolean | null;
+  with_installation: boolean | null;
   charge_rate_per_kwh: number | null;
   energy_cost_per_kwh: number | null;
   calculation_snapshot: unknown;
@@ -47,6 +48,7 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
 
   const [f, setF] = useState<Record<string, string>>({});
   const [managed, setManaged] = useState(true);
+  const [needsInstall, setNeedsInstall] = useState(true);
   const [mode, setMode] = useState<"new" | "existing">("new");
   const [targetClientId, setTargetClientId] = useState<string>("");
   const [clientSearch, setClientSearch] = useState("");
@@ -85,6 +87,7 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
       notice_period_months: contract.noticePeriodMonths != null ? String(contract.noticePeriodMonths) : "",
     });
     setManaged(quote.with_management !== false);
+    setNeedsInstall(quote.with_installation !== false);
   }, [open, quote?.id, company.data, person.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const t = (k: string) => f[k] ?? "";
@@ -117,6 +120,7 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
           contract_duration_months: numOr(t("contract_duration_months")),
           notice_period_months: numOr(t("notice_period_months")),
           managed,
+          needs_installation: needsInstall,
         },
       });
       toast.success("Klantaccount aangemaakt");
@@ -223,13 +227,11 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
             <p className="mt-1.5 text-[11px] text-muted-foreground">Tarieven (laad-/start-/blokkeertarief en onze service-fee) stel je per locatie in, niet op het klantaccount.</p>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium text-foreground">Met beheer</p>
-              <p className="text-[11px] text-muted-foreground">Dashboard + maandelijkse afrekening. Uit = alleen levering &amp; installatie.</p>
-            </div>
-            <Switch checked={managed} onCheckedChange={setManaged} />
-          </div>
+          <ScopeSelector
+            withInstallation={needsInstall}
+            withManagement={managed}
+            onChange={({ withInstallation: wi, withManagement: wm }) => { setNeedsInstall(wi); setManaged(wm); }}
+          />
           </>
           )}
         </div>

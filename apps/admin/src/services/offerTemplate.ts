@@ -62,6 +62,7 @@ export interface OfferTemplateData {
   numChargePoints?: number | null;
   totalInvestment: number;
   withManagement?: boolean;
+  withInstallation?: boolean;
   durationMonths?: number | null;
   noticeMonths?: number | null;
   chargeTariffPerKwh?: number | null; // laadkosten
@@ -123,6 +124,7 @@ interface ResolvedModel {
   dateLong: string; dateShort: string; reference: string;
   onzeReferentie: string; object: string; betreft: string; aanhef: string;
   numChargePoints: number; numPoles: number; chargerModel: string; loadBalancer: string;
+  withManagement: boolean; withInstallation: boolean;
   eindgroepen: number; eindgroepAmperage: number; leveringText: string; totalInvestment: number; stelpost: number;
   serviceFeePerKwh: number; laadkosten: number | null; blokkeertarief: number | null; starttarief: number | null; uurtarief: number | null;
   overlegNaam: string; overlegDatum: string;
@@ -167,6 +169,8 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     object: firstStr(od.object, tpl.defaultObjectTemplate),
     betreft: firstStr(od.betreft, tpl.defaultBetreftTemplate),
     aanhef: firstStr(od.aanhef, tpl.defaultAanhef),
+    withManagement: data.withManagement !== false,
+    withInstallation: data.withInstallation !== false,
     numChargePoints: n,
     numPoles: firstNum(od.numPoles, n) ?? n,
     chargerModel: firstStr(od.chargerModel, tpl.defaultChargerModel),
@@ -367,30 +371,48 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push(bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, 96));
   blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:20px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, 18));
   blocks.push(bRaw(`<div>Geachte ${esc(m.aanhef)},</div>`, 84));
-  blocks.push(bP("Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren, aansluiten en beheren van uw laadpalen.", 12));
-  blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
-  blocks.push(bSec("Levering en installatie", 30, GREEN));
-  // De scope-tekst is bewerkbare vrije tekst (offer_details.leveringText); alinea's
-  // gescheiden door een lege regel → losse blokken zodat alles netjes herpagineert.
-  m.leveringText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
-    .forEach((para, i) => blocks.push(bP(esc(para).replace(/\n/g, "<br/>"), i === 0 ? 8 : 22)));
-  blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (totaal excl. BTW)</div></div>`, 24));
-  blocks.push(bRaw(`<div style="font-style:italic">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`, 30));
+  const introScope = m.withInstallation && m.withManagement
+    ? "leveren, monteren, aansluiten en beheren van uw laadpalen"
+    : m.withInstallation
+      ? "leveren, monteren en aansluiten van uw laadpalen"
+      : "het beheer van uw bestaande laadpalen";
+  blocks.push(bP(`Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het ${introScope}.`, 12));
 
-  // --- Beheermodule ---
-  blocks.push({ ...bSec("Beheermodule laadpalen", 0, GREEN), brk: true });
-  blocks.push(bP("Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:", 10));
-  BEHEER_POINTS.forEach(([t, b], i) => blocks.push(bRaw(
-    `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
-    i === 0 ? 14 : 22)));
-  blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
-  blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
-  blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
-  const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:95px">${esc(lbl)}</div><div>${val}</div></div>`;
-  blocks.push(bRaw(tariff("Laadkosten:", `${mEur(m.laadkosten)} per kWh`), 4));
-  blocks.push(bRaw(tariff("Blokkeertarief:", `${mEur(m.blokkeertarief)} per minuut`), 4));
-  blocks.push(bRaw(tariff("Starttarief:", `${mEur(m.starttarief)} per keer`), 4));
-  if (m.uurtarief != null && m.uurtarief > 0) blocks.push(bRaw(tariff("Tarief per uur:", `${mEur(m.uurtarief)} per uur`), 4));
+  // --- Levering en installatie (alleen bij installatie-scope) ---
+  if (m.withInstallation) {
+    if (m.withManagement) blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
+    blocks.push(bSec("Levering en installatie", 30, GREEN));
+    // De scope-tekst is bewerkbare vrije tekst (offer_details.leveringText); alinea's
+    // gescheiden door een lege regel → losse blokken zodat alles netjes herpagineert.
+    m.leveringText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
+      .forEach((para, i) => blocks.push(bP(esc(para).replace(/\n/g, "<br/>"), i === 0 ? 8 : 22)));
+    blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (totaal excl. BTW)</div></div>`, 24));
+    blocks.push(bRaw(`<div style="font-style:italic">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`, 30));
+  } else if (m.withManagement) {
+    blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
+  }
+
+  // --- Beheermodule (alleen bij beheer-scope) ---
+  if (m.withManagement) {
+    blocks.push(m.withInstallation ? { ...bSec("Beheermodule laadpalen", 0, GREEN), brk: true } : bSec("Beheermodule laadpalen", 30, GREEN));
+    blocks.push(bP(m.withInstallation
+      ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
+      : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:", 10));
+    BEHEER_POINTS.forEach(([t, b], i) => blocks.push(bRaw(
+      `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
+      i === 0 ? 14 : 22)));
+    blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
+    if (!m.withInstallation && m.totalInvestment > 0) {
+      blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De eenmalige activatie- en onboardingkosten bedragen:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (excl. BTW)</div></div>`, 24));
+    }
+    blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
+    blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
+    const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:95px">${esc(lbl)}</div><div>${val}</div></div>`;
+    blocks.push(bRaw(tariff("Laadkosten:", `${mEur(m.laadkosten)} per kWh`), 4));
+    blocks.push(bRaw(tariff("Blokkeertarief:", `${mEur(m.blokkeertarief)} per minuut`), 4));
+    blocks.push(bRaw(tariff("Starttarief:", `${mEur(m.starttarief)} per keer`), 4));
+    if (m.uurtarief != null && m.uurtarief > 0) blocks.push(bRaw(tariff("Tarief per uur:", `${mEur(m.uurtarief)} per uur`), 4));
+  }
 
   // --- Uitgangspunten / voorwaarden ---
   const row2 = (l: string, r: string) => `<div style="display:flex"><div style="width:330px">${l}</div><div>${r}</div></div>`;
@@ -398,29 +420,39 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
   blocks.push(bSec("Prijsstelling", 19, HEAD));
   blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", 8));
-  blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
-  blocks.push(bSec("Storingen", 19, HEAD));
-  blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
-  blocks.push(bRaw(row2("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 6));
-  blocks.push(bRaw(row2("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
-  blocks.push(bRaw(row2("Voor werktijden tussen 17.00 uur en 08.00 uur", "75 % toeslag."), 12));
-  blocks.push(bRaw(row2("Voor zaterdagen", "75 % toeslag."), 1));
-  blocks.push(bRaw(row2("Zon en feestdagen", "125 % toeslag."), 1));
-  blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend.", 16));
-  blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
+  if (m.withInstallation) blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
+  if (m.withManagement) {
+    blocks.push(bSec("Storingen", 19, HEAD));
+    blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
+    blocks.push(bRaw(row2("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 6));
+    blocks.push(bRaw(row2("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
+    blocks.push(bRaw(row2("Voor werktijden tussen 17.00 uur en 08.00 uur", "75 % toeslag."), 12));
+    blocks.push(bRaw(row2("Voor zaterdagen", "75 % toeslag."), 1));
+    blocks.push(bRaw(row2("Zon en feestdagen", "125 % toeslag."), 1));
+    blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend.", 16));
+    blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
+  }
   blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 19, HEAD));
   blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
-  blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.toeslagWerkuur)} gehanteerd worden:`));
-  blocks.push(bSub("50% Avonduren (17.00 &ndash; 23.00 uur)"));
-  blocks.push(bSub("75% Nachturen (23.00 &ndash; 07.00 uur) en zaterdag (normale werkuren)"));
-  blocks.push(bSub("125% Zon- en feestdagen (normale werkuren)"));
+  if (m.withInstallation) {
+    blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.toeslagWerkuur)} gehanteerd worden:`));
+    blocks.push(bSub("50% Avonduren (17.00 &ndash; 23.00 uur)"));
+    blocks.push(bSub("75% Nachturen (23.00 &ndash; 07.00 uur) en zaterdag (normale werkuren)"));
+    blocks.push(bSub("125% Zon- en feestdagen (normale werkuren)"));
+  }
   blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
-  blocks.push(bSec("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule", 19, HEAD));
-  blocks.push(bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8));
-  blocks.push(bFb(`De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
-  blocks.push(bFb("De overeenkomst wordt aangegaan voor een periode van één (1) jaar, te rekenen vanaf de ingangsdatum. Na afloop van deze periode wordt de overeenkomst telkens stilzwijgend verlengd met een periode van één (1) jaar, tenzij opdrachtgever of aannemer de overeenkomst schriftelijk opzegt met inachtneming van een opzegtermijn van drie (3) maanden vóór het einde van de lopende contractperiode."));
-  blocks.push(bSec("Niet in deze aanbieding opgenomen", 19, HEAD));
-  blocks.push(bFb("Hak-, graaf-, frees-, breek-, timmer-, schilder-, kit-, metsel- en stucadoorswerk, tenzij anders omschreven.", 8));
+  if (m.withManagement) {
+    blocks.push(bSec("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule", 19, HEAD));
+    blocks.push(m.withInstallation
+      ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
+      : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mInv(m.totalInvestment)} (excl. BTW).`, 8));
+    blocks.push(bFb(`De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
+    blocks.push(bFb("De overeenkomst wordt aangegaan voor een periode van één (1) jaar, te rekenen vanaf de ingangsdatum. Na afloop van deze periode wordt de overeenkomst telkens stilzwijgend verlengd met een periode van één (1) jaar, tenzij opdrachtgever of aannemer de overeenkomst schriftelijk opzegt met inachtneming van een opzegtermijn van drie (3) maanden vóór het einde van de lopende contractperiode."));
+  }
+  if (m.withInstallation) {
+    blocks.push(bSec("Niet in deze aanbieding opgenomen", 19, HEAD));
+    blocks.push(bFb("Hak-, graaf-, frees-, breek-, timmer-, schilder-, kit-, metsel- en stucadoorswerk, tenzij anders omschreven.", 8));
+  }
 
   // --- Aansprakelijkheid / aanpak / handtekening ---
   const sigImg = signature?.signatureDataUrl
@@ -436,8 +468,8 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   const dots = "………………….…………";
   blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", 0, HEAD), brk: true });
   blocks.push(bFb(esc(AANSPRAKELIJKHEID), 9));
-  blocks.push(bFb(`Betalingen levering en installatie: ${esc(m.betaalBijOpdracht)}% bij opdracht, ${esc(m.betaalBijStart)}% bij start werkzaamheden en ${esc(m.betaalNaWerk)}% na werkzaamheden.`));
-  blocks.push(bFb("Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte self-billing factuur."));
+  if (m.withInstallation) blocks.push(bFb(`Betalingen levering en installatie: ${esc(m.betaalBijOpdracht)}% bij opdracht, ${esc(m.betaalBijStart)}% bij start werkzaamheden en ${esc(m.betaalNaWerk)}% na werkzaamheden.`));
+  if (m.withManagement) blocks.push(bFb("Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte self-billing factuur."));
   blocks.push(bFb("Betalingen binnen 14 dagen na factuurdatum."));
   blocks.push(bSec("Onze aanpak", 24, HEAD));
   blocks.push(bP(esc(AANPAK), 9));

@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Eye, Loader2, Plus, Send, Trash2, PenLine, UserPlus } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, lineItemsOf, type QuoteLineItem } from "@/hooks/useQuotes";
@@ -15,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSignableAdmins } from "@/hooks/useSignableAdmins";
 import { SignerStatusPanel } from "@/components/sales/SignerStatusPanel";
 import { CreateClientFromQuoteDialog } from "@/components/sales/CreateClientFromQuoteDialog";
+import { ScopeSelector } from "@/components/sales/ScopeSelector";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
 import type { OfferDetails, OfferTemplateValues } from "@/services/offerTypes";
@@ -45,6 +45,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [withManagement, setWithManagement] = useState(true);
+  const [withInstallation, setWithInstallation] = useState(true);
   const [chargeRate, setChargeRate] = useState("");
   const [idleFee, setIdleFee] = useState("");
   const [idleGrace, setIdleGrace] = useState("");
@@ -61,6 +62,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       setEmail(quote.prospect_email ?? "");
       setNotes(quote.notes ?? "");
       setWithManagement(quote.with_management !== false);
+      setWithInstallation(quote.with_installation !== false);
       setChargeRate(quote.charge_rate_per_kwh != null ? String(quote.charge_rate_per_kwh) : "");
       const td = (quote.tariff_data ?? {}) as Record<string, unknown>;
       setIdleFee(td.idleFeePerMinute != null ? String(td.idleFeePerMinute) : "");
@@ -106,6 +108,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
           prospect_email: email.trim() || null,
           notes: notes.trim() || null,
           with_management: withManagement,
+          with_installation: withInstallation,
           charge_rate_per_kwh: withManagement ? numOr(chargeRate) : null,
           tariff_data: tariffData as unknown as never,
           offer_details: od as unknown as never,
@@ -129,6 +132,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
       numChargePoints: quote!.num_charge_points ?? (Number(items[0]?.qty) || null),
       totalInvestment: grandTotal,
       withManagement,
+      withInstallation,
       durationMonths: numOr(String(contract.durationMonths ?? "")),
       noticeMonths: numOr(String(contract.noticePeriodMonths ?? "")),
       chargeTariffPerKwh: numOr(chargeRate),
@@ -286,13 +290,16 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
               <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium">{STATUS_LABEL[quote.status] ?? quote.status}</span>
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">Met beheer</p>
-                <p className="text-[11px] text-muted-foreground">e-Charging dashboard + opbrengstdeling. Uit = alleen levering &amp; installatie.</p>
-              </div>
-              <Switch checked={withManagement} onCheckedChange={setWithManagement} disabled={!isConcept} />
-            </div>
+            <ScopeSelector
+              withInstallation={withInstallation}
+              withManagement={withManagement}
+              disabled={!isConcept}
+              onChange={({ withInstallation: wi, withManagement: wm }) => {
+                setWithInstallation(wi); setWithManagement(wm);
+                // Beheer-only: seed een activatie-/onboardingregel als er nog geen regels zijn.
+                if (!wi && wm) setItems((a) => a.length ? a : [{ description: "Activatie & onboarding beheer", qty: 1, unit_price: 0, total: 0 }]);
+              }}
+            />
 
             <div>
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Offerteregels</p>
@@ -317,7 +324,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                 )}
               </div>
               <div className="mt-3 flex items-center justify-between border-t pt-3">
-                <span className="text-sm font-bold text-foreground">Totaal investering</span>
+                <span className="text-sm font-bold text-foreground">{withInstallation ? "Totaal investering" : "Eenmalige kosten"}</span>
                 <span className="text-lg font-extrabold text-foreground">{euro(grandTotal)}</span>
               </div>
             </div>
@@ -346,20 +353,24 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                     <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} placeholder={tpl?.defaultAanhef || ""} disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
                   </div>
                 </div>
-                {/* Levering en installatie — bewerkbare vrije tekst (standaard = sjabloontekst) */}
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold text-foreground">Levering en installatie (tekst)</p>
-                  <Textarea rows={7} className="text-xs leading-relaxed" value={od.leveringText ?? DEFAULT_LEVERING_TEXT} disabled={!isConcept} onChange={(e) => setStr("leveringText", e.target.value)} />
-                  <p className="mt-1 text-[10px] text-muted-foreground">Alinea's scheiden met een lege regel. De rest van de offerte schuift automatisch mee.</p>
-                </div>
-                {/* Investering */}
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold text-foreground">Investering</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="col-span-2 space-y-1"><Label className="text-xs">Stelpost graafwerk (€)</Label><Input inputMode="decimal" value={odStr("stelpostGraafwerk")} placeholder={String(tpl?.defaultStelpostGraafwerk ?? "")} disabled={!isConcept} onChange={(e) => setNum("stelpostGraafwerk", e.target.value)} /></div>
-                  </div>
-                </div>
-                {/* Portaal-tarieven ("Een laadpaal die voor u werkt") + service-fee + storingstarieven, in één blok. */}
+                {/* Levering en installatie + investering — alleen bij installatie-scope. */}
+                {withInstallation && (
+                  <>
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-semibold text-foreground">Levering en installatie (tekst)</p>
+                      <Textarea rows={7} className="text-xs leading-relaxed" value={od.leveringText ?? DEFAULT_LEVERING_TEXT} disabled={!isConcept} onChange={(e) => setStr("leveringText", e.target.value)} />
+                      <p className="mt-1 text-[10px] text-muted-foreground">Alinea's scheiden met een lege regel. De rest van de offerte schuift automatisch mee.</p>
+                    </div>
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-semibold text-foreground">Investering</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2 space-y-1"><Label className="text-xs">Stelpost graafwerk (€)</Label><Input inputMode="decimal" value={odStr("stelpostGraafwerk")} placeholder={String(tpl?.defaultStelpostGraafwerk ?? "")} disabled={!isConcept} onChange={(e) => setNum("stelpostGraafwerk", e.target.value)} /></div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {/* Tarieven & storingen — alleen relevant bij beheer-scope. */}
+                {withManagement && (
                 <div>
                   <p className="mb-1.5 text-[11px] font-semibold text-foreground">Tarieven &amp; storingen</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -374,6 +385,7 @@ export function QuoteDetailSheet({ quoteId, open, onOpenChange }: { quoteId: str
                     <div className="space-y-1"><Label className="text-xs">Activatiekosten / socket (€)</Label><Input inputMode="decimal" value={odStr("activatiekostenPerSocket")} placeholder={String(tpl?.activatiekostenPerSocket ?? "")} disabled={!isConcept} onChange={(e) => setNum("activatiekostenPerSocket", e.target.value)} /></div>
                   </div>
                 </div>
+                )}
                 {/* Datums + storingstarieven (overrides) */}
                 <div>
                   <p className="mb-1.5 text-[11px] font-semibold text-foreground">Afspraken &amp; datums</p>
