@@ -42,6 +42,10 @@ Deno.serve(async (req) => {
     const recipient = (typeof body.email === "string" && body.email.trim()) || quote.prospect_email;
     if (!recipient) return json({ status: "error", message: "Geen e-mailadres bekend voor deze offerte" }, 400);
 
+    // Effectieve naam van de ondertekenaar voor de mail-ondertekening. Begint bij de DB-waarde en
+    // wordt hieronder bijgewerkt bij zelf-ondertekenen (anders blijft 'quote' stale → "Team E-Charging").
+    let internalSignerName: string | null = quote.internal_signer_name ?? null;
+
     // Zelf-ondertekenen: stempel de eigen (server-side gelezen) handtekening op de offerte
     // voordat die naar de klant gaat. Alleen voor ingelogde admin/superadmin.
     if (body.internal_self_sign === true) {
@@ -60,6 +64,7 @@ Deno.serve(async (req) => {
         internal_signature_data_url: prof.signature_data_url,
         internal_signed_at: new Date().toISOString(),
       }).eq("id", quoteId);
+      internalSignerName = prof.full_name ?? null;
       await serviceClient.from("quote_internal_signings").update({ status: "revoked" }).eq("quote_id", quoteId).eq("status", "pending");
     }
 
@@ -83,14 +88,16 @@ Deno.serve(async (req) => {
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
 
     if (RESEND_API_KEY) {
-      const od = quote.offer_details as { emailMessage?: string | null; emailClosingName?: string | null } | null;
+      const od = quote.offer_details as { emailMessage?: string | null; emailClosingName?: string | null; emailGreeting?: string | null } | null;
       const customMessage = od?.emailMessage ?? null;
       // Ondertekening: expliciete override > de ondertekenaar > "Team E-Charging" (fallback in renderOfferEmail).
-      const signoffName = (od?.emailClosingName?.trim()) || quote.internal_signer_name || null;
+      const signoffName = (od?.emailClosingName?.trim()) || internalSignerName || null;
+      // Aanhef: expliciete override > automatisch "Beste {contact}," (fallback in renderOfferEmail).
+      const greeting = od?.emailGreeting?.trim() || null;
       const { html, text } = renderOfferEmail({
         supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
         contact: quote.prospect_contact, total, acceptUrl, validUntil: quote.valid_until,
-        hasAttachment: !!pdfBase64, customMessage, signoffName,
+        hasAttachment: !!pdfBase64, customMessage, signoffName, greeting,
       });
       const res = await sendEmail({
         to: [recipient],

@@ -75,6 +75,8 @@ export interface OfferDetails {
   betaalNaWerkPct?: number | null;
   echargingSignerName?: string | null;
   echargingSignerFunction?: string | null;
+  // Aanhef van de klant-mail (eerste regel). Leeg = automatisch "Beste {contact}," / "Geachte heer/mevrouw,".
+  emailGreeting?: string | null;
   // Body-tekst van de klant-offertemail (per offerte aanpasbaar). Leeg = standaardtekst.
   emailMessage?: string | null;
   // Ondertekening van de klant-mail (na "Met vriendelijke groet,"). Leeg = naam van de ondertekenaar.

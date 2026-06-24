@@ -71,6 +71,8 @@ export default function SalesOfferteDetail() {
   const [busy, setBusy] = useState<string | null>(null);
   const [createClientOpen, setCreateClientOpen] = useState(false);
   const [mobilePreview, setMobilePreview] = useState(false);
+  // Aanhef van de klant-mail (eerste regel). Leeg = automatisch "Beste {contact},".
+  const [emailGreeting, setEmailGreeting] = useState("");
   // Aanpasbare body-tekst van de klant-offertemail (voorgevuld met de standaardtekst).
   const [emailMessage, setEmailMessage] = useState(DEFAULT_OFFER_EMAIL);
   // Ondertekening van de klant-mail (na "Met vriendelijke groet,"). Leeg = naam ondertekenaar.
@@ -116,6 +118,7 @@ export default function SalesOfferteDetail() {
       const odLoaded = ((quote as unknown as { offer_details?: OfferDetails }).offer_details ?? {}) as OfferDetails;
       setOd(odLoaded);
       setNumDraft({});
+      setEmailGreeting(odLoaded.emailGreeting ?? "");
       setEmailMessage(odLoaded.emailMessage ?? DEFAULT_OFFER_EMAIL);
       setEmailClosing(odLoaded.emailClosingName ?? "");
       setSignerUserId(quote.internal_signer_user_id ?? null);
@@ -189,7 +192,7 @@ export default function SalesOfferteDetail() {
           with_installation: withInstallation,
           charge_rate_per_kwh: withManagement ? numOr(chargeRate) : null,
           tariff_data: tariffData as unknown as never,
-          offer_details: { ...od, emailMessage: emailMessage.trim() || null, emailClosingName: emailClosing.trim() || null } as unknown as never,
+          offer_details: { ...od, emailGreeting: emailGreeting.trim() || null, emailMessage: emailMessage.trim() || null, emailClosingName: emailClosing.trim() || null } as unknown as never,
           internal_signer_user_id: signerUserId,
         },
       });
@@ -560,9 +563,14 @@ export default function SalesOfferteDetail() {
             <div className="space-y-3">
               <div className="space-y-1.5"><Label className="text-xs">E-mail ontvanger</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={quote.status === "getekend"} /></div>
               <div className="space-y-1.5">
+                <Label className="text-xs">Aanhef</Label>
+                <Input value={emailGreeting} placeholder={personName.trim() ? `Beste ${personName.trim()},` : "Geachte heer/mevrouw,"} disabled={!isConcept} onChange={(e) => setEmailGreeting(e.target.value)} />
+                <p className="text-[10px] text-muted-foreground">Leeg = automatisch "Beste {personName.trim() || "…"},". Pas aan voor een andere aanspreking.</p>
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-xs">E-mailbericht aan de klant</Label>
                 <Textarea rows={6} className="leading-relaxed" value={emailMessage} disabled={!isConcept} onChange={(e) => setEmailMessage(e.target.value)} />
-                <p className="text-[10px] text-muted-foreground">De aanhef, de knop "Offerte bekijken en ondertekenen" en de geldigheid worden automatisch toegevoegd. Alinea's scheiden met een lege regel.</p>
+                <p className="text-[10px] text-muted-foreground">Begin je bericht <strong>zónder aanhef</strong> (die staat hierboven). De knop "Offerte bekijken en ondertekenen" en de geldigheid worden automatisch toegevoegd. Alinea's scheiden met een lege regel.</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Ondertekening (na "Met vriendelijke groet,")</Label>
