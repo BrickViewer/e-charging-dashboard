@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { ArrowLeft, Eye, Loader2, Send, Trash2, PenLine, UserPlus } from "lucide-react";
+import { ArrowLeft, Building2, Eye, Loader2, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, lineItemsOf } from "@/hooks/useQuotes";
-import { useCompany } from "@/hooks/useContacts";
+import { useCompany, usePerson } from "@/hooks/useContacts";
+import { useLead } from "@/hooks/useLeads";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useAuth } from "@/hooks/useAuth";
 import { useSignableAdmins } from "@/hooks/useSignableAdmins";
@@ -55,6 +56,9 @@ export default function SalesOfferteDetail() {
   // Bedrijfsgegevens (KvK/BTW/website) via de company_id-koppeling — bron van waarheid is het company-record.
   const companyQ = useCompany(quote?.company_id ?? undefined);
   const company = companyQ.data;
+  // Gekoppelde records (verificatie): persoon + lead, naast het bedrijf.
+  const person = usePerson(quote?.person_id ?? undefined).data;
+  const lead = useLead(quote?.lead_id ?? undefined).data;
 
   // Eén prijs i.p.v. losse offerteregels — calculatie gebeurt in Excel.
   const [price, setPrice] = useState("");
@@ -356,6 +360,38 @@ export default function SalesOfferteDetail() {
               disabled={!isConcept}
               onChange={({ withInstallation: wi, withManagement: wm }) => { setWithInstallation(wi); setWithManagement(wm); }}
             />
+          </Section>
+
+          <Section title="Koppelingen" hint="Controleer of de offerte aan de juiste contacten hangt — bij conversie neemt het systeem deze over.">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  {quote.company_id ? (
+                    <span className="truncate font-medium text-foreground">{company?.name ?? "…"}{company?.kvk ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">KvK {company.kvk}</span> : null}</span>
+                  ) : <span className="text-muted-foreground">Bedrijf — niet gekoppeld</span>}
+                </div>
+                {quote.company_id ? <Link to={`/sales/contacten?company=${quote.company_id}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
+                <div className="flex min-w-0 items-center gap-2">
+                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  {quote.person_id ? (
+                    <span className="truncate font-medium text-foreground">{person?.full_name ?? "…"}{person?.email ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{person.email}</span> : null}</span>
+                  ) : <span className="text-muted-foreground">Persoon — niet gekoppeld</span>}
+                </div>
+                {quote.person_id ? <Link to={`/sales/contacten?person=${quote.person_id}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Target className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  {quote.lead_id ? (
+                    <span className="truncate font-medium text-foreground">{lead?.company_name || lead?.contact_name || "…"}</span>
+                  ) : <span className="text-muted-foreground">Lead — niet gekoppeld</span>}
+                </div>
+                {quote.lead_id ? <Link to={`/sales/leads?lead=${quote.lead_id}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
+              </div>
+            </div>
           </Section>
 
           <Section title="Briefkop & adres">

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -46,6 +47,16 @@ export default function SalesLeads() {
   const stages = stagesQ.data ?? [];
   const allLeads = useMemo(() => leadsQ.data ?? [], [leadsQ.data]);
   const profiles = profilesQ.data ?? [];
+
+  // Deep-link ?lead=<id> (bv. vanuit een offerte) → open die lead in de detailsheet.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const lid = searchParams.get("lead");
+    if (!lid || !allLeads.length) return;
+    const l = allLeads.find((x) => x.id === lid);
+    if (l) setSelected(l);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, allLeads, setSearchParams]);
 
   // Slepen kan de volgorde corrumperen zodra de board een gefilterde subset
   // toont → DnD uit zolang een filter/zoekterm actief is.
