@@ -286,7 +286,7 @@ export default function WorkspaceLayout() {
         {/* min-w-0: laat main krimpen i.p.v. meegroeien met brede content (Kanban),
             zodat overflow-x-auto-blokken intern scrollen en de pagina niet horizontaal schuift. */}
         <main className="flex-1 min-w-0 min-h-screen lg:ml-[240px]">
-          <div className="p-4 lg:p-8 max-w-7xl mx-auto">
+          <div className="w-full px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
             <Outlet />
           </div>
         </main>

@@ -274,7 +274,7 @@ export default function AdminClients() {
           />
         </div>
         <Select value={statusFilter} onValueChange={handleStatus}>
-          <SelectTrigger className="w-[170px] portal-card">
+          <SelectTrigger className="w-full sm:w-[170px] portal-card">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

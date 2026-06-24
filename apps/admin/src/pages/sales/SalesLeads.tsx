@@ -99,7 +99,7 @@ export default function SalesLeads() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi icon={Target} label="Open leads" value={String(openLeads.length)} />
         <Kpi icon={Euro} label="Pijplijnwaarde" value={euro(pipelineValue)} />
         <Kpi icon={Trophy} label="Gewonnen deze maand" value={String(wonThisMonth)} />
@@ -112,7 +112,7 @@ export default function SalesLeads() {
           <Input className="pl-9" placeholder="Zoek op bedrijf, contact, plaats…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Alle eigenaren</SelectItem>
             <SelectItem value="none">Geen eigenaar</SelectItem>
@@ -120,7 +120,7 @@ export default function SalesLeads() {
           </SelectContent>
         </Select>
         <Select value={sourceFilter} onValueChange={setSourceFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Alle bronnen</SelectItem>
             {sources.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
