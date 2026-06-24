@@ -415,14 +415,28 @@ export function LeadDetailSheet({
                   <EditForm lead={lead} form={form} set={set} text={text} updateLead={updateLead} onLaunchConfigurator={launchConfigurator} />
                 ) : (
                   <>
-                    <InfoCard title="Bedrijf & contact" icon={Building2}>
-                      <DetailRow label="Bedrijf" value={lead.company_name} />
-                      <DetailRow label="KvK" value={lead.kvk} />
-                      <DetailRow label="Website" value={lead.website} />
-                      <DetailRow label="Sector" value={lead.sector} />
-                      <DetailRow label="Contactpersoon" value={[lead.contact_name, lead.contact_role].filter(Boolean).join(" · ")} />
-                      <DetailRow label="E-mail" value={lead.contact_email} />
-                      <DetailRow label="Telefoon" value={lead.contact_phone} />
+                    {/* Een lead is een kans bovenop contacten — toon waar 'ie aan hangt + doorklik naar het dossier. */}
+                    <InfoCard title="Koppelingen" icon={Building2}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2 rounded-lg border p-2 text-sm">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            {lead.company_id
+                              ? <span className="truncate"><span className="font-medium text-foreground">{lead.company_name}</span>{lead.kvk ? <span className="ml-1.5 text-[11px] text-muted-foreground">KvK {lead.kvk}</span> : null}</span>
+                              : <span className="text-muted-foreground">Bedrijf — niet gekoppeld</span>}
+                          </div>
+                          {lead.company_id ? <button className="shrink-0 text-xs text-primary hover:underline" onClick={() => { onOpenChange(false); navigate(`/sales/contacten?company=${lead.company_id}`); }}>bekijken →</button> : null}
+                        </div>
+                        <div className="flex items-center justify-between gap-2 rounded-lg border p-2 text-sm">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <UserPlus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            {lead.person_id
+                              ? <span className="truncate"><span className="font-medium text-foreground">{lead.contact_name}</span>{lead.contact_email ? <span className="ml-1.5 text-[11px] text-muted-foreground">{lead.contact_email}</span> : null}</span>
+                              : <span className="text-muted-foreground">Persoon — niet gekoppeld</span>}
+                          </div>
+                          {lead.person_id ? <button className="shrink-0 text-xs text-primary hover:underline" onClick={() => { onOpenChange(false); navigate(`/sales/contacten?person=${lead.person_id}`); }}>bekijken →</button> : null}
+                        </div>
+                      </div>
                     </InfoCard>
 
                     {(lead.message_body || lead.message_subject) && (
@@ -826,7 +840,7 @@ function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
       </InfoCard>
 
       <InfoCard title="Contactpersoon" icon={UserPlus}>
-        <ERow label="Persoon"><PersonPicker value={lead.person_id} valueLabel={lead.contact_name} companyId={lead.company_id} placeholder={lead.company_id ? "Kies of zoek persoon…" : "Kies eerst een bedrijf"} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { person_id: id } })} /></ERow>
+        <ERow label="Persoon"><PersonPicker value={lead.person_id} valueLabel={lead.contact_name} companyId={lead.company_id} placeholder="Kies of zoek persoon…" onChange={(id) => updateLead.mutate({ id: lead.id, patch: { person_id: id } })} /></ERow>
         {lead.person_id ? (
           <div className="pt-3"><PersonFields personId={lead.person_id} /></div>
         ) : (

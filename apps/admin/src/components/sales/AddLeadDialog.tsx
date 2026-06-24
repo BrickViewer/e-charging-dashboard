@@ -64,7 +64,8 @@ export function AddLeadDialog({
   }, [open, defaultStageId, fallbackStage]);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const canSubmit = !!form.company_id && !!organizationId && !!form.stage_id;
+  // Een lead is een kans bovenop contacten: bedrijf én/of persoon (incl. particulier) volstaat.
+  const canSubmit = (!!form.company_id || !!form.person_id) && !!organizationId && !!form.stage_id;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -74,9 +75,9 @@ export function AddLeadDialog({
         stage_id: form.stage_id,
         company_id: form.company_id || null,
         person_id: form.person_id || null,
-        // company_name/contact_* worden door de sync-trigger gevuld vanuit het
-        // gekoppelde bedrijf/persoon; we sturen de naam mee als veilige fallback.
-        company_name: form.company_name.trim() || "Onbekend bedrijf",
+        // company_name/contact_* worden door de sync-trigger gevuld vanuit het gekoppelde
+        // bedrijf/persoon; bij een particulier (geen bedrijf) valt 'm terug op de persoonsnaam.
+        company_name: form.company_name.trim() || form.person_name.trim() || "Particulier",
         city: form.city.trim() || null,
         location_type: form.location_type || null,
         estimated_charge_points: form.estimated_charge_points ? Math.round(num(form.estimated_charge_points) ?? 0) : null,
@@ -117,7 +118,7 @@ export function AddLeadDialog({
           }}
         >
           <div className="space-y-1.5">
-            <Label>Bedrijf *</Label>
+            <Label>Bedrijf (optioneel)</Label>
             <CompanyPicker
               value={form.company_id || null}
               valueLabel={form.company_name || null}
@@ -125,13 +126,14 @@ export function AddLeadDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Contactpersoon</Label>
+            <Label>Contactpersoon (optioneel)</Label>
             <PersonPicker
               value={form.person_id || null}
               valueLabel={form.person_name || null}
               companyId={form.company_id || null}
               onChange={(id, person) => setForm((f) => ({ ...f, person_id: id ?? "", person_name: person?.full_name ?? "" }))}
             />
+            <p className="text-[11px] text-muted-foreground">Kies een bedrijf en/of persoon — minstens één. Geen bedrijf = particulier.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -188,7 +190,7 @@ export function AddLeadDialog({
 
         <DialogFooter className="mt-3 shrink-0 border-t pt-3">
           {!canSubmit && (
-            <p className="mr-auto self-center text-xs text-muted-foreground">Vul een bedrijfsnaam in en kies een fase.</p>
+            <p className="mr-auto self-center text-xs text-muted-foreground">Kies een bedrijf en/of contactpersoon, en een fase.</p>
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Annuleren</Button>
           <Button onClick={submit} disabled={!canSubmit || createLead.isPending}>
