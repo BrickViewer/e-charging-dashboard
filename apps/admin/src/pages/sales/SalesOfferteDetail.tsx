@@ -17,6 +17,9 @@ import { SignerStatusPanel } from "@/components/sales/SignerStatusPanel";
 import { CreateClientFromQuoteDialog } from "@/components/sales/CreateClientFromQuoteDialog";
 import { ScopeSelector } from "@/components/sales/ScopeSelector";
 import { OfferPreview } from "@/components/sales/OfferPreview";
+import { CompanyPicker } from "@/components/contacts/CompanyPicker";
+import { PersonPicker } from "@/components/contacts/PersonPicker";
+import { LeadPicker } from "@/components/contacts/LeadPicker";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
 import { DEFAULT_OFFER_EMAIL, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
@@ -53,13 +56,6 @@ export default function SalesOfferteDetail() {
   const quote = quoteQ.data;
   const tpl = settingsQ.data?.offerTemplate;
   const admins = adminsQ.data ?? [];
-  // Bedrijfsgegevens (KvK/BTW/website) via de company_id-koppeling — bron van waarheid is het company-record.
-  const companyQ = useCompany(quote?.company_id ?? undefined);
-  const company = companyQ.data;
-  // Gekoppelde records (verificatie): persoon + lead, naast het bedrijf.
-  const person = usePerson(quote?.person_id ?? undefined).data;
-  const lead = useLead(quote?.lead_id ?? undefined).data;
-
   // Eén prijs i.p.v. losse offerteregels — calculatie gebeurt in Excel.
   const [price, setPrice] = useState("");
   const [email, setEmail] = useState("");
@@ -77,6 +73,18 @@ export default function SalesOfferteDetail() {
   const [mobilePreview, setMobilePreview] = useState(false);
   // Aanpasbare body-tekst van de klant-offertemail (voorgevuld met de standaardtekst).
   const [emailMessage, setEmailMessage] = useState(DEFAULT_OFFER_EMAIL);
+  // Bewerkbare koppelingen (bedrijf/persoon/lead) — id + label, geseed uit de quote.
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState("");
+  const [personId, setPersonId] = useState<string | null>(null);
+  const [personName, setPersonName] = useState("");
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [leadName, setLeadName] = useState("");
+  // Display-/detailgegevens volgen de lokale ids (KvK via company, e-mail via person, lead-naam).
+  const company = useCompany(companyId ?? undefined).data;
+  const person = usePerson(personId ?? undefined).data;
+  const lead = useLead(leadId ?? undefined).data;
+  useEffect(() => { if (lead) setLeadName(lead.company_name || lead.contact_name || ""); }, [lead]);
 
   useEffect(() => {
     if (quote) {
@@ -97,6 +105,12 @@ export default function SalesOfferteDetail() {
       setOd(odLoaded);
       setEmailMessage(odLoaded.emailMessage ?? DEFAULT_OFFER_EMAIL);
       setSignerUserId(quote.internal_signer_user_id ?? null);
+      setCompanyId(quote.company_id ?? null);
+      setCompanyName(quote.prospect_company ?? "");
+      setPersonId(quote.person_id ?? null);
+      setPersonName(quote.prospect_contact ?? "");
+      setLeadId(quote.lead_id ?? null);
+      setLeadName("");
     }
   }, [quote]);
 
@@ -127,6 +141,11 @@ export default function SalesOfferteDetail() {
           total_hardware_cost: 0,
           total_installation_cost: p,
           prospect_email: email.trim() || null,
+          prospect_company: companyName.trim() || null,
+          prospect_contact: personName.trim() || null,
+          company_id: companyId,
+          person_id: personId,
+          lead_id: leadId,
           notes: notes.trim() || null,
           with_management: withManagement,
           with_installation: withInstallation,
@@ -148,8 +167,8 @@ export default function SalesOfferteDetail() {
     return {
       quoteNumber: quote!.quote_number ?? "",
       date: quote!.sent_at ?? null,
-      company: quote!.prospect_company ?? "",
-      contactName: quote!.prospect_contact ?? null,
+      company: companyName || "",
+      contactName: personName || null,
       numChargePoints: quote!.num_charge_points ?? null,
       totalInvestment: grandTotal,
       withManagement,
@@ -342,10 +361,10 @@ export default function SalesOfferteDetail() {
           <Section title="Bedrijf & scope">
             <div className="mb-3">
               <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                {quote.prospect_company || quote.prospect_contact || "—"}
-                {!quote.company_id ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Particulier</span> : null}
+                {companyName || personName || "—"}
+                {!companyId ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Particulier</span> : null}
               </p>
-              {quote.company_id ? <p className="text-[11px] text-muted-foreground">{quote.prospect_contact || ""}</p> : null}
+              {companyId ? <p className="text-[11px] text-muted-foreground">{personName || ""}</p> : null}
               {company && (company.kvk || company.btw_number || company.website) ? (
                 <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
                   {company.kvk ? <p>KvK: {company.kvk}</p> : null}
@@ -362,36 +381,53 @@ export default function SalesOfferteDetail() {
             />
           </Section>
 
-          <Section title="Koppelingen" hint="Controleer of de offerte aan de juiste contacten hangt — bij conversie neemt het systeem deze over.">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  {quote.company_id ? (
-                    <span className="truncate font-medium text-foreground">{company?.name ?? "…"}{company?.kvk ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">KvK {company.kvk}</span> : null}</span>
-                  ) : <span className="text-muted-foreground">Bedrijf — niet gekoppeld</span>}
+          <Section title="Koppelingen" hint="Controleer/wijzig aan welke contacten de offerte hangt — bij conversie neemt het systeem deze over.">
+            {isConcept ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between"><Label className="text-xs">Bedrijf</Label>{companyId ? <Link to={`/sales/contacten?company=${companyId}`} className="text-[11px] text-primary hover:underline">bekijken →</Link> : null}</div>
+                  <CompanyPicker value={companyId} valueLabel={companyName || null} onChange={(id, c) => { setCompanyId(id); setCompanyName(id ? (c?.name ?? companyName) : ""); }} />
                 </div>
-                {quote.company_id ? <Link to={`/sales/contacten?company=${quote.company_id}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
-                <div className="flex min-w-0 items-center gap-2">
-                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  {quote.person_id ? (
-                    <span className="truncate font-medium text-foreground">{person?.full_name ?? "…"}{person?.email ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{person.email}</span> : null}</span>
-                  ) : <span className="text-muted-foreground">Persoon — niet gekoppeld</span>}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between"><Label className="text-xs">Persoon</Label>{personId ? <Link to={`/sales/contacten?person=${personId}`} className="text-[11px] text-primary hover:underline">bekijken →</Link> : null}</div>
+                  <PersonPicker value={personId} valueLabel={personName || null} companyId={companyId} onChange={(id, p) => { setPersonId(id); setPersonName(id ? (p?.full_name ?? personName) : ""); }} />
                 </div>
-                {quote.person_id ? <Link to={`/sales/contacten?person=${quote.person_id}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Target className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  {quote.lead_id ? (
-                    <span className="truncate font-medium text-foreground">{lead?.company_name || lead?.contact_name || "…"}</span>
-                  ) : <span className="text-muted-foreground">Lead — niet gekoppeld</span>}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between"><Label className="text-xs">Lead</Label>{leadId ? <Link to={`/sales/leads?lead=${leadId}`} className="text-[11px] text-primary hover:underline">bekijken →</Link> : null}</div>
+                  <LeadPicker value={leadId} valueLabel={leadName || null} onChange={(id, label) => { setLeadId(id); setLeadName(id ? (label ?? leadName) : ""); }} />
                 </div>
-                {quote.lead_id ? <Link to={`/sales/leads?lead=${quote.lead_id}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
               </div>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {companyId ? (
+                      <span className="truncate font-medium text-foreground">{companyName || company?.name || "…"}{company?.kvk ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">KvK {company.kvk}</span> : null}</span>
+                    ) : <span className="text-muted-foreground">Bedrijf — niet gekoppeld</span>}
+                  </div>
+                  {companyId ? <Link to={`/sales/contacten?company=${companyId}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {personId ? (
+                      <span className="truncate font-medium text-foreground">{personName || person?.full_name || "…"}{person?.email ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{person.email}</span> : null}</span>
+                    ) : <span className="text-muted-foreground">Persoon — niet gekoppeld</span>}
+                  </div>
+                  {personId ? <Link to={`/sales/contacten?person=${personId}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Target className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {leadId ? (
+                      <span className="truncate font-medium text-foreground">{leadName || lead?.company_name || lead?.contact_name || "…"}</span>
+                    ) : <span className="text-muted-foreground">Lead — niet gekoppeld</span>}
+                  </div>
+                  {leadId ? <Link to={`/sales/leads?lead=${leadId}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
+                </div>
+              </div>
+            )}
           </Section>
 
           <Section title="Briefkop & adres">

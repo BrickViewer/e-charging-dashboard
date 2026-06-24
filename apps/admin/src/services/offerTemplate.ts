@@ -248,7 +248,7 @@ function pageEl(inner: string, fontSize = 13): HTMLElement {
 const headerRow = (t: string) =>
   `<tr>` +
   `<td style="vertical-align:middle;text-align:right;height:19px;line-height:19px;padding:0 8px 0 0;white-space:nowrap">${t}</td>` +
-  `<td style="vertical-align:middle;padding:0;width:6px"><div style="padding-top:4px"><div style="width:6px;height:6px;background:#8c8c8c"></div></div></td>` +
+  `<td style="vertical-align:middle;padding:0;width:6px"><div style="height:19px;display:flex;align-items:center"><div style="width:6px;height:6px;background:#8c8c8c"></div></div></td>` +
   `</tr>`;
 const g = (t: string) => `<span style="color:${GREEN}">${t}</span>`;
 
