@@ -33,6 +33,8 @@ Deno.serve(async (req) => {
   const ereEnabled = body.ere === true;
   const investmentMinTotal = Number.isFinite(Number(body.investmentMinTotal)) ? Number(body.investmentMinTotal) : null;
   const investmentMaxTotal = Number.isFinite(Number(body.investmentMaxTotal)) ? Number(body.investmentMaxTotal) : null;
+  const validScopes = ["installatie_beheer", "alleen_installatie", "alleen_beheer"];
+  const scope = validScopes.includes(body.scope) ? body.scope : "installatie_beheer";
 
   try {
     const { data: session, error: sessionError } = await serviceClient
@@ -71,6 +73,10 @@ Deno.serve(async (req) => {
       ere: ereEnabled,
       investment_min_total: investmentMinTotal,
       investment_max_total: investmentMaxTotal,
+      scope,
+      // Eenmalige activatie-/onboardingkost (alleen relevant bij alleen-beheer) — vastgelegd
+      // hier waar de settings beschikbaar zijn, zodat quote-create-from-lead 'm 1:1 overneemt.
+      activation_fee_total: (settings.offerTemplate?.activatiekostenPerSocket ?? 0) * input.hardware.chargePoints,
     };
 
     const savedAt = new Date().toISOString();

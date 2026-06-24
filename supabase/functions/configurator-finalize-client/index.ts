@@ -36,6 +36,10 @@ Deno.serve(async (req) => {
   const ereEnabled = body.ere === true;
   const investmentMinTotal = Number.isFinite(Number(body.investmentMinTotal)) ? Number(body.investmentMinTotal) : null;
   const investmentMaxTotal = Number.isFinite(Number(body.investmentMaxTotal)) ? Number(body.investmentMaxTotal) : null;
+  const validScopes = ["installatie_beheer", "alleen_installatie", "alleen_beheer"];
+  const scope = validScopes.includes(body.scope) ? body.scope : "installatie_beheer";
+  const withManagement = scope !== "alleen_installatie";
+  const withInstallation = scope !== "alleen_beheer";
 
   try {
     const { data: session, error: sessionError } = await serviceClient
@@ -141,6 +145,8 @@ Deno.serve(async (req) => {
       await serviceClient.from("clients").update({
         contract_duration_months: input.contract.durationMonths,
         notice_period_months: input.contract.noticePeriodMonths,
+        managed: withManagement,
+        needs_installation: withInstallation,
         status: "actief",
       }).eq("id", existing.id);
     } else {
@@ -162,6 +168,8 @@ Deno.serve(async (req) => {
           billing_address_city: input.customer.city || null,
           contract_duration_months: input.contract.durationMonths,
           notice_period_months: input.contract.noticePeriodMonths,
+          managed: withManagement,
+          needs_installation: withInstallation,
           status: "actief",
           notes: clientNotes,
         })

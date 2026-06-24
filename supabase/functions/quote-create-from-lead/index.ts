@@ -38,8 +38,13 @@ Deno.serve(async (req) => {
     if (leadErr) throw leadErr;
     if (!lead) return json({ status: "error", message: "Lead niet gevonden" }, 404);
 
-    const withManagement = body.with_management !== false; // default: met beheer
     const cfg = (lead.configuration ?? null) as Record<string, any> | null;
+    // Scope uit de configurator (lead.configuration.scope) → installatie/beheer-assen.
+    // Expliciete body-overrides hebben voorrang (handmatige aanmaak).
+    const validScopes = ["installatie_beheer", "alleen_installatie", "alleen_beheer"];
+    const scope = validScopes.includes(cfg?.scope) ? (cfg!.scope as string) : "installatie_beheer";
+    const withManagement = body.with_management !== undefined ? body.with_management !== false : scope !== "alleen_installatie";
+    const withInstallation = body.with_installation !== undefined ? body.with_installation !== false : scope !== "alleen_beheer";
     const pi = cfg?.pricing_input ?? null;
     const pr = cfg?.pricing_result ?? null;
     const estPoints = num(lead.estimated_charge_points);
@@ -58,22 +63,28 @@ Deno.serve(async (req) => {
     if (pi) {
       // Voorvullen vanuit de opgeslagen configuratie.
       const sockets = Math.max(1, Math.round(num(pi.hardware?.chargePoints) ?? 1));
-      const invMin = Math.max(0, num(cfg?.investment_min_total) ?? 0);
-      const invMax = Math.max(invMin, num(cfg?.investment_max_total) ?? invMin);
-      const avg = Math.round((invMin + invMax) / 2);
-      hardwareTotal = invMin;
-      installationTotal = Math.max(0, avg - invMin);
       numChargePoints = sockets;
-      lineItems = [
-        { description: `Laadpunten (hardware) — ${sockets} stuks`, qty: sockets, unit_price: sockets > 0 ? Math.round(hardwareTotal / sockets) : hardwareTotal, total: hardwareTotal },
-        { description: "Installatie, aansluiting & oplevering", qty: 1, unit_price: installationTotal, total: installationTotal },
-      ];
       tariffData = pi.tariffs ?? null;
       calcData = pr ?? null;
       calcSnapshot = cfg;
       monthlyProjection = pr?.totals ?? null;
       chargeRate = num(pi.tariffs?.chargeTariffPerKwh);
       energyCost = num(pi.tariffs?.energyCostPerKwh);
+      if (withInstallation) {
+        const invMin = Math.max(0, num(cfg?.investment_min_total) ?? 0);
+        const invMax = Math.max(invMin, num(cfg?.investment_max_total) ?? invMin);
+        const avg = Math.round((invMin + invMax) / 2);
+        hardwareTotal = invMin;
+        installationTotal = Math.max(0, avg - invMin);
+        lineItems = [
+          { description: `Laadpunten (hardware) — ${sockets} stuks`, qty: sockets, unit_price: sockets > 0 ? Math.round(hardwareTotal / sockets) : hardwareTotal, total: hardwareTotal },
+          { description: "Installatie, aansluiting & oplevering", qty: 1, unit_price: installationTotal, total: installationTotal },
+        ];
+      } else {
+        // Alleen beheer: geen hardware/installatie — eenmalige activatie-/onboardingkost.
+        const activation = Math.max(0, num(cfg?.activation_fee_total) ?? 0);
+        lineItems = [{ description: "Activatie & onboarding beheer", qty: 1, unit_price: activation, total: activation }];
+      }
     } else {
       // Blanco offerte (zonder configurator) — de verkoper vult de regels in.
       const qty = estPoints && estPoints > 0 ? Math.round(estPoints) : 1;
@@ -139,6 +150,7 @@ Deno.serve(async (req) => {
         project_location_id: locId,
         document_number: docNum,
         with_management: withManagement,
+        with_installation: withInstallation,
         valid_until: validUntil,
         num_charge_points: numChargePoints,
         charge_rate_per_kwh: chargeRate,

@@ -6,6 +6,12 @@ import { defaultConfiguratorSettings, pricingInputSchema } from "@echarging/pric
 // Alle cijfers komen uit de admin-instellingen (ConfiguratorSettings). Hieronder
 // staan alleen afgeleide helpers — geen hardcoded tarieven/grenzen meer.
 
+// Offerte-scope: twee assen (installatie × beheer) → 3 keuzes (zie admin/src/lib/quoteScope.ts).
+export type ConfigScope = "installatie_beheer" | "alleen_installatie" | "alleen_beheer";
+export function scopeFlags(scope: ConfigScope): { withInstallation: boolean; withManagement: boolean } {
+  return { withInstallation: scope !== "alleen_beheer", withManagement: scope !== "alleen_installatie" };
+}
+
 function firstLocationKey(settings: ConfiguratorSettings): string {
   return settings.locationTypes[0]?.key ?? "workplace";
 }
@@ -72,6 +78,8 @@ type WizardStore = {
   investmentMaxTotal: number;
   // ERE-subsidie aan/uit (tarief zelf staat in settings.ereSubsidyPerKwh).
   ereEnabled: boolean;
+  // Offerte-scope (installatie+beheer | alleen installatie | alleen beheer).
+  scope: ConfigScope;
   settings: ConfiguratorSettings;
   settingsVersion: number;
   applySettings: (settings: ConfiguratorSettings, version: number) => void;
@@ -79,11 +87,12 @@ type WizardStore = {
   setSockets: (count: number) => void;
   setInvestmentRange: (min: number, max: number) => void;
   setEreEnabled: (enabled: boolean) => void;
+  setScope: (scope: ConfigScope) => void;
   setLocationType: (locationType: string) => void;
   // Laadt een eerder opgeslagen configuratie (lead) volledig in.
   hydrateFromSaved: (
     input: PricingInput,
-    extras: { ere: boolean; investmentMin: number | null; investmentMax: number | null },
+    extras: { ere: boolean; investmentMin: number | null; investmentMax: number | null; scope?: ConfigScope },
   ) => void;
 };
 
@@ -95,6 +104,7 @@ export const useWizardStore = create<WizardStore>()(
     investmentMinTotal: initialBand.min,
     investmentMaxTotal: initialBand.max,
     ereEnabled: defaultConfiguratorSettings.ereEnabledByDefault,
+    scope: "installatie_beheer",
     settings: defaultConfiguratorSettings,
     settingsVersion: 1,
     applySettings: (settings, version) =>
@@ -151,6 +161,7 @@ export const useWizardStore = create<WizardStore>()(
         state.input.hardware.hardwareInvestment = Math.round((lo + hi) / 2);
       }),
     setEreEnabled: (enabled) => set((state) => { state.ereEnabled = enabled; }),
+    setScope: (scope) => set((state) => { state.scope = scope; }),
     setLocationType: (locationType) =>
       set((state) => {
         state.input.customer.locationType = locationType;
@@ -170,6 +181,7 @@ export const useWizardStore = create<WizardStore>()(
           state.investmentMaxTotal = band.max;
         }
         state.ereEnabled = extras.ere;
+        if (extras.scope) state.scope = extras.scope;
       }),
   })),
 );

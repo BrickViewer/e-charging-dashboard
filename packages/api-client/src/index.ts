@@ -103,6 +103,7 @@ export function createConfiguratorApi(options: RequestOptions = {}) {
         ere?: boolean;
         investmentMinTotal?: number;
         investmentMaxTotal?: number;
+        scope?: string;
       },
     ) {
       return requestJson<SaveToLeadResponse>(
@@ -119,6 +120,7 @@ export function createConfiguratorApi(options: RequestOptions = {}) {
         ere?: boolean;
         investmentMinTotal?: number;
         investmentMaxTotal?: number;
+        scope?: string;
       },
     ) {
       return requestJson<FinalizeClientResponse>(

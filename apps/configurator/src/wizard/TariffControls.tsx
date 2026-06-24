@@ -121,6 +121,9 @@ export function TariffControls({
   setEreEnabled,
   isFullscreen,
   settings,
+  withInstallation = true,
+  withManagement = true,
+  activationFeeTotal = 0,
 }: {
   input: PricingInput;
   pricing: PricingResult;
@@ -134,6 +137,9 @@ export function TariffControls({
   setEreEnabled: (b: boolean) => void;
   isFullscreen: boolean;
   settings: ConfiguratorSettings;
+  withInstallation?: boolean;
+  withManagement?: boolean;
+  activationFeeTotal?: number;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const sockets = input.hardware.chargePoints;
@@ -185,18 +191,23 @@ export function TariffControls({
             onChange={(n) => updateInput((d) => { d.usage.sessionsPerChargePointMonth = n; })} />
         </Control>
 
-        <Control
-          label="Totale investering"
-          value={`${euro(investmentMin)} – ${euro(investmentMax)}`}
-          sub={`≈ ${euro(Math.round(investmentMin / sockets))} – ${euro(Math.round(investmentMax / sockets))} per laadpunt`}
-        >
-          <Slider.Root className="rng-root" min={0} max={investMax} step={ranges.investmentSliderStep} minStepsBetweenThumbs={1}
-            value={[investmentMin, investmentMax]} onValueChange={([lo, hi]) => setInvestmentRange(lo, hi)}>
-            <Slider.Track className="rng-track"><Slider.Range className="rng-range" /></Slider.Track>
-            <Slider.Thumb className="rng-thumb" aria-label="Minimale investering" />
-            <Slider.Thumb className="rng-thumb" aria-label="Maximale investering" />
-          </Slider.Root>
-        </Control>
+        {/* Investering alleen bij installatie-scope; bij alleen-beheer toon je de eenmalige activatiekost. */}
+        {withInstallation ? (
+          <Control
+            label="Totale investering"
+            value={`${euro(investmentMin)} – ${euro(investmentMax)}`}
+            sub={`≈ ${euro(Math.round(investmentMin / sockets))} – ${euro(Math.round(investmentMax / sockets))} per laadpunt`}
+          >
+            <Slider.Root className="rng-root" min={0} max={investMax} step={ranges.investmentSliderStep} minStepsBetweenThumbs={1}
+              value={[investmentMin, investmentMax]} onValueChange={([lo, hi]) => setInvestmentRange(lo, hi)}>
+              <Slider.Track className="rng-track"><Slider.Range className="rng-range" /></Slider.Track>
+              <Slider.Thumb className="rng-thumb" aria-label="Minimale investering" />
+              <Slider.Thumb className="rng-thumb" aria-label="Maximale investering" />
+            </Slider.Root>
+          </Control>
+        ) : withManagement && activationFeeTotal > 0 ? (
+          <Control label="Activatiekosten" value={`${euro(activationFeeTotal)}`} sub="eenmalig — onboarding van uw bestaande laadpalen" />
+        ) : null}
       </div>
 
       {/* ---- GEAVANCEERD ---- */}

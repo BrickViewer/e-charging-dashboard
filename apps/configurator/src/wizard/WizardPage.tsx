@@ -5,7 +5,7 @@ import { calculatePricing, defaultConfiguratorSettings } from "@echarging/pricin
 import { Info, Maximize2, Minimize2 } from "lucide-react";
 import { configuratorApi } from "../api";
 import logoBright from "../assets/logo-bright.svg";
-import { useWizardStore } from "./store";
+import { useWizardStore, scopeFlags, type ConfigScope } from "./store";
 import { TariffControls } from "./TariffControls";
 import { FinalizePanel } from "./FinalizePanel";
 import { encodeDemoCfg } from "./demoLink";
@@ -95,6 +95,36 @@ function EarningsStrip({
   );
 }
 
+const SCOPE_OPTIONS: { key: ConfigScope; label: string; hint: string }[] = [
+  { key: "installatie_beheer", label: "Installatie + beheer", hint: "Levering, installatie én beheer." },
+  { key: "alleen_installatie", label: "Alleen installatie", hint: "Alleen levering & installatie." },
+  { key: "alleen_beheer", label: "Alleen beheer", hint: "Beheer van bestaande laadpalen." },
+];
+
+function ScopeChooser({ scope, setScope }: { scope: ConfigScope; setScope: (s: ConfigScope) => void }) {
+  return (
+    <div className="cfg-scope">
+      <p className="field-label mb-2">Wat wilt u afnemen?</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {SCOPE_OPTIONS.map((o) => {
+          const on = scope === o.key;
+          return (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => setScope(o.key)}
+              className={`rounded-2xl border p-3 text-left transition-colors ${on ? "border-primary bg-primary/10" : "border-border-soft/70 hover:border-primary/40"}`}
+            >
+              <span className={`block text-sm font-semibold ${on ? "text-primary" : "text-foreground"}`}>{o.label}</span>
+              <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">{o.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function WizardPage() {
   const params = useParams({ strict: false }) as { sessionId?: string };
   const sessionId = params.sessionId ?? "local-preview";
@@ -119,8 +149,12 @@ export default function WizardPage() {
     setLocationType,
     ereEnabled,
     setEreEnabled,
+    scope,
+    setScope,
     hydrateFromSaved,
   } = useWizardStore();
+  const { withInstallation, withManagement } = scopeFlags(scope);
+  const activationFeeTotal = settings.offerTemplate.activatiekostenPerSocket * input.hardware.chargePoints;
 
   const pricing = useMemo(() => calculatePricing(input, settings), [input, settings]);
 
@@ -164,15 +198,20 @@ export default function WizardPage() {
   const effectiveMonth = pricing.totals.customerPerMonth + ereMaand;
   const effectiveYear = effectiveMonth * 12;
   const profitable = effectiveMonth > 0;
-  const paybackLoYears = profitable ? investmentMinTotal / effectiveMonth / 12 : null;
-  const paybackHiYears = profitable ? investmentMaxTotal / effectiveMonth / 12 : null;
+  // Terugverdientijd alleen relevant als er een investering is (installatie-scope).
+  const paybackLoYears = profitable && withInstallation ? investmentMinTotal / effectiveMonth / 12 : null;
+  const paybackHiYears = profitable && withInstallation ? investmentMaxTotal / effectiveMonth / 12 : null;
 
   const assumptions = [
     { label: "Laadpunten", value: String(sockets) },
     { label: "Verbruik", value: `${input.usage.kwhPerChargePointMonth.toLocaleString("nl-NL")} kWh p.p./mnd` },
     { label: "Laadtarief", value: `${euro(input.tariffs.chargeTariffPerKwh, 2)} / kWh` },
     { label: "Looptijd", value: `${input.contract.durationMonths} maanden` },
-    { label: "Investering", value: `${euro(investmentMinTotal)} – ${euro(investmentMaxTotal)}` },
+    ...(withInstallation
+      ? [{ label: "Investering", value: `${euro(investmentMinTotal)} – ${euro(investmentMaxTotal)}` }]
+      : activationFeeTotal > 0
+        ? [{ label: "Activatiekosten", value: `${euro(activationFeeTotal)} eenmalig` }]
+        : []),
     ...(input.tariffs.idleFeeEnabled
       ? [{ label: "Blokkeertarief", value: `${euro(Math.round(pricing.idleFeeRevenuePerChargePointMonth * sockets))}/mnd` }]
       : []),
@@ -186,7 +225,11 @@ export default function WizardPage() {
     { label: "Laadpunten", value: String(sockets) },
     { label: "Laadtarief", value: `${euro(input.tariffs.chargeTariffPerKwh, 2)} / kWh` },
     { label: "Verwacht verbruik", value: `${input.usage.kwhPerChargePointMonth.toLocaleString("nl-NL")} kWh p.p./mnd` },
-    { label: "Totale investering", value: `${euro(investmentMinTotal)} – ${euro(investmentMaxTotal)}` },
+    ...(withInstallation
+      ? [{ label: "Totale investering", value: `${euro(investmentMinTotal)} – ${euro(investmentMaxTotal)}` }]
+      : activationFeeTotal > 0
+        ? [{ label: "Activatiekosten", value: `${euro(activationFeeTotal)} eenmalig` }]
+        : []),
     ...(input.tariffs.idleFeeEnabled
       ? [{ label: "Blokkeertarief", value: `${euro(Math.round(pricing.idleFeeRevenuePerChargePointMonth * sockets))}/mnd · ${number(pricing.billableIdleMinutesPerSession, 0)} belaste min/sessie` }]
       : []),
@@ -264,7 +307,7 @@ export default function WizardPage() {
 
   const finalizeMutation = useMutation({
     mutationFn: async () => {
-      const payload = { input, settingsVersion, ere: ereEnabled, investmentMinTotal, investmentMaxTotal };
+      const payload = { input, settingsVersion, ere: ereEnabled, investmentMinTotal, investmentMaxTotal, scope };
       // Altijd opslaan op een lead (geen klant). Heeft de sessie nog geen lead,
       // dan maakt de backend er één aan; de klant ontstaat pas bij offerte-acceptatie.
       const res = await configuratorApi.saveToLead(sessionId, payload);
@@ -320,6 +363,7 @@ export default function WizardPage() {
 
         {/* Rechts: instellingen */}
         <aside className="cfg-controls">
+          <ScopeChooser scope={scope} setScope={setScope} />
           <TariffControls
             input={input}
             pricing={pricing}
@@ -333,6 +377,9 @@ export default function WizardPage() {
             setEreEnabled={setEreEnabled}
             isFullscreen={isFullscreen}
             settings={settings}
+            withInstallation={withInstallation}
+            withManagement={withManagement}
+            activationFeeTotal={activationFeeTotal}
           />
         </aside>
       </div>
