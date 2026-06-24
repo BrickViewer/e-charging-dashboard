@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, Json } from "@/integrations/supabase/types";
 import { slugify } from "@/lib/slug";
 import { categorySlug } from "@/lib/blogTaxonomy";
 
@@ -121,5 +121,47 @@ export function useDeleteTopic() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["content-topics"] }),
+  });
+}
+
+// ---- Content-engine instellingen (feeds, concurrenten, drempels, kill-switch) ----
+
+export type ContentEngineSettings = {
+  discovery_enabled?: boolean;
+  generation_enabled?: boolean;
+  min_quality?: number;
+  min_seo?: number;
+  min_aeo?: number;
+  novelty_threshold?: number;
+  feeds?: { url: string; name?: string }[];
+  competitors?: { sitemap?: string; url?: string; name?: string }[];
+  channels?: { linkedin?: boolean; newsletter?: boolean };
+};
+
+export function useContentSettings() {
+  return useQuery({
+    queryKey: ["content-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("content_engine_settings")
+        .select("id, settings")
+        .eq("is_active", true)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; settings: ContentEngineSettings } | null;
+    },
+  });
+}
+
+export function useUpdateContentSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, settings }: { id: string; settings: ContentEngineSettings }) => {
+      const { error } = await supabase.from("content_engine_settings").update({ settings: settings as unknown as Json }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["content-settings"] }),
   });
 }

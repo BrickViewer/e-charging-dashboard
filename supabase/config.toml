@@ -35,6 +35,9 @@ verify_jwt = false
 [functions.contact-intake]
 verify_jwt = false
 
+[functions.content-discovery]
+verify_jwt = false
+
 [functions.delete-team-member]
 verify_jwt = true
 

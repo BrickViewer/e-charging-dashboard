@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Sparkles, Newspaper } from "lucide-react";
+import { Plus, Sparkles, Newspaper, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import {
   useContentTopics, useCreateTopic, SOURCE_LABEL, type ContentTopic, type TopicSource,
 } from "@/hooks/useContentPipeline";
 import { TopicSheet } from "@/components/marketing/TopicSheet";
+import { ContentSettingsSheet } from "@/components/marketing/ContentSettingsSheet";
 
 // Kolommen op het bord: meerdere statussen kunnen onder één kolom vallen.
 const COLUMNS: { key: string; label: string; statuses: string[] }[] = [
@@ -27,6 +28,7 @@ export default function ContentPipeline() {
   const create = useCreateTopic();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const topics = useMemo(() => topicsQ.data ?? [], [topicsQ.data]);
   const byColumn = useMemo(() => {
@@ -51,7 +53,10 @@ export default function ContentPipeline() {
             Van onderwerp → concept (AI-gegenereerd, met SEO/AEO-score) → jouw goedkeuring → publiceren.
           </p>
         </div>
-        <Button onClick={() => setNewOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Nieuw onderwerp</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setSettingsOpen(true)}><Settings className="mr-1.5 h-4 w-4" /> Instellingen</Button>
+          <Button onClick={() => setNewOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Nieuw onderwerp</Button>
+        </div>
       </div>
 
       {topicsQ.isLoading ? (
@@ -120,6 +125,7 @@ export default function ContentPipeline() {
       />
 
       <TopicSheet topicId={selectedId} open={!!selectedId} onOpenChange={(v) => !v && setSelectedId(null)} />
+      <ContentSettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }
