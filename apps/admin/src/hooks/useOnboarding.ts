@@ -56,6 +56,8 @@ export type OnboardingClient = {
   contact_phone: string | null;
   created_at: string;
   payment_onboarding_status: string | null;
+  needs_installation: boolean | null;
+  managed: boolean | null;
   vat_status: string | null;
   kvk: string | null;
   btw_number: string | null;
@@ -69,7 +71,7 @@ export type OnboardingClient = {
 
 const CLIENT_SELECT =
   "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, contact_phone, created_at, " +
-  "payment_onboarding_status, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
+  "payment_onboarding_status, needs_installation, managed, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
   "installation_orders(id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes), " +
   "locations(id), client_invitations(id, status)";
@@ -111,6 +113,8 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
   if (isDetailsComplete(c)) return "archief";
   if (c.portal_user_id) return "gegevens";        // uitnodiging geaccepteerd, gegevens nog niet compleet
   if (hasLocation) return "klant_uitnodigen";
+  // Alleen-beheer (geen installatie): sla de installateur-stappen (bij installateur/opgeleverd/factureren) over.
+  if (c.needs_installation === false) return "locaties_koppelen";
   if (invoiced) return "locaties_koppelen";
   if (delivered) return "opgeleverd";
   if (handedOff) return "bij_installateur";
