@@ -389,7 +389,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // gescheiden door een lege regel → losse blokken zodat alles netjes herpagineert.
     m.leveringText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
       .forEach((para, i) => blocks.push(bP(esc(para).replace(/\n/g, "<br/>"), i === 0 ? 8 : 22)));
-    blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (totaal excl. BTW)</div></div>`, 24));
+    blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic"><span style="text-decoration:underline">${mInv(m.totalInvestment)}</span> (totaal excl. BTW)</div></div>`, 24));
     blocks.push(bRaw(`<div style="font-style:italic">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`, 30));
   } else if (m.withManagement) {
     blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
