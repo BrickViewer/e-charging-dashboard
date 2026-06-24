@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,6 +85,15 @@ export default function SalesOfferteDetail() {
   const person = usePerson(personId ?? undefined).data;
   const lead = useLead(leadId ?? undefined).data;
   useEffect(() => { if (lead) setLeadName(lead.company_name || lead.contact_name || ""); }, [lead]);
+
+  // Levering & installatie-tekstveld groeit automatisch mee met de inhoud (geen vaste grote bak).
+  const leveringRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = leveringRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [od.leveringText, withInstallation]);
 
   useEffect(() => {
     if (quote) {
@@ -446,7 +455,7 @@ export default function SalesOfferteDetail() {
 
           {withInstallation ? (
             <Section title="Levering & installatie" hint="Het belangrijkste, meest variërende deel — alinea's scheiden met een lege regel. De rest van de offerte schuift automatisch mee.">
-              <Textarea rows={16} className="leading-relaxed" value={od.leveringText ?? DEFAULT_LEVERING_TEXT} disabled={!isConcept} onChange={(e) => setStr("leveringText", e.target.value)} />
+              <Textarea ref={leveringRef} className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.leveringText ?? DEFAULT_LEVERING_TEXT} disabled={!isConcept} onChange={(e) => setStr("leveringText", e.target.value)} />
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="space-y-1"><Label className="text-xs">Prijs (excl. BTW)</Label><Input inputMode="decimal" value={price} placeholder="0" disabled={!isConcept} onChange={(e) => setPrice(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Stelpost graafwerk (€)</Label><Input inputMode="decimal" value={odStr("stelpostGraafwerk")} placeholder={String(tpl?.defaultStelpostGraafwerk ?? "")} disabled={!isConcept} onChange={(e) => setNum("stelpostGraafwerk", e.target.value)} /></div>
