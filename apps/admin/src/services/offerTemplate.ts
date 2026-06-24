@@ -114,7 +114,9 @@ function esc(v: unknown): string {
 const HL = "#fff59d";
 const yel = (t: string) => `<span style="background:${HL};border-radius:2px;padding:0 2px">${t}</span>`;
 const mStr = (val: string, placeholder: string) => (val && val.trim()) ? esc(val) : yel(esc(placeholder));
-const mEur = (val: number | null | undefined) => (val != null && val !== 0) ? money2(val) : yel(money2(0));
+// Geel = niet ingevuld (null/undefined). Een bewust ingevoerde 0 (bv. blokkeertarief 0,00) is een
+// echte waarde → gewoon "€ 0,00", niet geel.
+const mEur = (val: number | null | undefined) => (val != null) ? money2(val) : yel(money2(0));
 const mInv = (val: number) => val ? invFmt(val) : yel(invFmt(0));
 const mStel = (val: number) => val ? stelFmt(val) : yel(stelFmt(0));
 
