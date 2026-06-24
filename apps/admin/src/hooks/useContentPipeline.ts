@@ -136,6 +136,7 @@ export type ContentEngineSettings = {
   feeds?: { url: string; name?: string }[];
   competitors?: { sitemap?: string; url?: string; name?: string }[];
   channels?: { linkedin?: boolean; newsletter?: boolean };
+  newsletter_recipients?: string[];
 };
 
 export function useContentSettings() {

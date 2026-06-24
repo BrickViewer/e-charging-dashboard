@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -96,6 +97,21 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
               aPlaceholder="https://concurrent.nl/sitemap.xml" bPlaceholder="naam (optioneel)"
               onChange={(rows) => setField("competitors", rows.map((r) => ({ sitemap: r.a, name: r.b || undefined })))}
             />
+
+            {/* Distributie */}
+            <section className="space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Distributie</p>
+              <ToggleRow label="Nieuwsbrief" desc="Stuur bij publiceren een mail naar de ontvangers (Resend)."
+                checked={!!s.channels?.newsletter} onChange={(v) => setField("channels", { ...s.channels, newsletter: v })} />
+              <ToggleRow label="LinkedIn" desc="Zet een LinkedIn-item in de wachtrij (via Hey_Reach-routine)."
+                checked={!!s.channels?.linkedin} onChange={(v) => setField("channels", { ...s.channels, linkedin: v })} />
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nieuwsbrief-ontvangers (één per regel)</Label>
+                <Textarea rows={3} value={(s.newsletter_recipients ?? []).join("\n")}
+                  onChange={(e) => setField("newsletter_recipients", e.target.value.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean))}
+                  placeholder="naam@bedrijf.nl" />
+              </div>
+            </section>
 
             <div className="flex items-center justify-between border-t pt-4">
               <Button variant="outline" onClick={runDiscovery} disabled={running}>
