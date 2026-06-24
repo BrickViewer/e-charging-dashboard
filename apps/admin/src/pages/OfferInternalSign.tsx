@@ -9,7 +9,7 @@ import logoFull from "@/assets/logo-full-color.svg";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData } from "@/services/offerPdf";
-import type { OfferDetails, OfferTemplateValues } from "@/services/offerTypes";
+import { DEFAULT_OFFER_EMAIL, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 
 type QuoteSummary = {
   quoteNumber: string;
@@ -226,6 +226,15 @@ export default function OfferInternalSign() {
                   {quote.internalSignerFunction ? <p className="text-xs text-muted-foreground">{quote.internalSignerFunction}</p> : null}
                   <p className="text-xs text-muted-foreground">E-Charging B.V.</p>
                 </div>
+              </div>
+            </div>
+
+            {/* E-mailbericht dat de klant ontvangt bij goedkeuring (ter controle vóór ondertekenen). */}
+            <div className="space-y-2">
+              <h2 className="text-base font-bold">E-mailbericht aan de klant</h2>
+              <p className="text-sm text-muted-foreground">Dit ontvangt de klant bij de offerte. De aanhef, de knop "Offerte bekijken en ondertekenen" en de ondertekening worden automatisch toegevoegd.</p>
+              <div className="whitespace-pre-line rounded-lg border bg-muted/30 p-3 text-sm leading-relaxed text-foreground">
+                {(quote.offerDetails?.emailMessage?.trim()) || DEFAULT_OFFER_EMAIL}
               </div>
             </div>
 
