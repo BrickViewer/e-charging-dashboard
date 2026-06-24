@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FileText, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useQuotes } from "@/hooks/useQuotes";
-import { QuoteDetailSheet } from "@/components/sales/QuoteDetailSheet";
 import { NewQuoteDialog } from "@/components/sales/NewQuoteDialog";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -20,19 +19,17 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 
 export default function SalesOffertes() {
   const quotes = useQuotes();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const q = useDebouncedValue(search, 200).trim().toLowerCase();
-  const [selected, setSelected] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   useEffect(() => {
+    // Bestaande deeplinks (?quote=<id>, bv. vanuit een lead) → naar de detailpagina.
     const qid = searchParams.get("quote");
-    if (qid) {
-      setSelected(qid);
-      setSearchParams({}, { replace: true });
-    }
-  }, [searchParams, setSearchParams]);
+    if (qid) navigate(`/sales/offertes/${qid}`, { replace: true });
+  }, [searchParams, navigate]);
 
   const all = useMemo(() => quotes.data ?? [], [quotes.data]);
   const filtered = useMemo(
@@ -80,7 +77,7 @@ export default function SalesOffertes() {
                 const total = (Number(qt.total_hardware_cost) || 0) + (Number(qt.total_installation_cost) || 0);
                 const st = STATUS[qt.status] ?? { label: qt.status, cls: "bg-muted text-muted-foreground" };
                 return (
-                  <tr key={qt.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => setSelected(qt.id)}>
+                  <tr key={qt.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => navigate(`/sales/offertes/${qt.id}`)}>
                     <td className="px-4 py-2.5 font-medium text-foreground tabular-nums">{qt.quote_number}</td>
                     <td className="px-4 py-2.5 text-foreground">{qt.prospect_company || "—"}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{euro(total)}</td>
@@ -95,8 +92,7 @@ export default function SalesOffertes() {
         </div>
       )}
 
-      <QuoteDetailSheet quoteId={selected} open={!!selected} onOpenChange={(v) => !v && setSelected(null)} />
-      <NewQuoteDialog open={newOpen} onClose={() => setNewOpen(false)} onCreated={(quoteId) => setSelected(quoteId)} />
+      <NewQuoteDialog open={newOpen} onClose={() => setNewOpen(false)} onCreated={(quoteId) => navigate(`/sales/offertes/${quoteId}`)} />
     </div>
   );
 }

@@ -99,7 +99,7 @@ async function preloadCover(url: string): Promise<string | null> {
   }
 }
 
-async function awaitNodeImages(el: HTMLElement): Promise<void> {
+export async function awaitNodeImages(el: HTMLElement): Promise<void> {
   const imgs = Array.from(el.querySelectorAll("img"));
   await Promise.all(
     imgs.map((img) =>
@@ -110,22 +110,40 @@ async function awaitNodeImages(el: HTMLElement): Promise<void> {
   );
 }
 
-export async function generateOfferPdf(data: OfferPdfData, signature?: OfferSignature): Promise<jsPDF> {
+// Logo-raster + cover één keer laden + cachen — de live preview hergebruikt dit (geen refetch per toetsaanslag).
+let assetsReady: Promise<{ logoUrl: string | null; coverUrl: string | null }> | null = null;
+function ensureAssets(): Promise<{ logoUrl: string | null; coverUrl: string | null }> {
+  if (assetsReady) return assetsReady;
+  assetsReady = (async () => {
+    const [logoDataUrl, coverUrl] = await Promise.all([rasterizeLogo(logoUrl), preloadCover(COVER_URL)]);
+    return { logoUrl: logoDataUrl, coverUrl };
+  })();
+  return assetsReady;
+}
+
+function toTemplateSignature(signature?: OfferSignature): OfferTemplateSignature | undefined {
+  if (!signature) return undefined;
+  return {
+    signerName: signature.signerName,
+    signatureDataUrl: signature.signatureDataUrl,
+    date: signature.signatureDataUrl ? (signature.date ?? new Date().toISOString()) : (signature.date ?? null),
+    echargingSignatureDataUrl: signature.echargingSignatureDataUrl ?? null,
+    echargingSignerName: signature.echargingSignerName ?? null,
+    echargingSignerFunction: signature.echargingSignerFunction ?? null,
+  };
+}
+
+// Bouwt de A4-pagina-nodes (cover + brief): exact de DOM die naar de PDF wordt gerasterd.
+// Hergebruikt door de PDF-generator én de live on-screen preview (OfferPreview).
+// LET OP: roep awaitNodeImages(node) pas aan NÁ het mounten in de DOM.
+export async function renderOfferPages(data: OfferPdfData, signature?: OfferSignature): Promise<HTMLElement[]> {
   await ensureFonts();
-  const [logoDataUrl, coverUrl] = await Promise.all([rasterizeLogo(logoUrl), preloadCover(COVER_URL)]);
+  const assets = await ensureAssets();
+  return buildOfferPages(data, assets, toTemplateSignature(signature));
+}
 
-  const sig: OfferTemplateSignature | undefined = signature
-    ? {
-        signerName: signature.signerName,
-        signatureDataUrl: signature.signatureDataUrl,
-        date: signature.signatureDataUrl ? (signature.date ?? new Date().toISOString()) : (signature.date ?? null),
-        echargingSignatureDataUrl: signature.echargingSignatureDataUrl ?? null,
-        echargingSignerName: signature.echargingSignerName ?? null,
-        echargingSignerFunction: signature.echargingSignerFunction ?? null,
-      }
-    : undefined;
-
-  const pages = buildOfferPages(data, { logoUrl: logoDataUrl, coverUrl }, sig);
+export async function generateOfferPdf(data: OfferPdfData, signature?: OfferSignature): Promise<jsPDF> {
+  const pages = await renderOfferPages(data, signature);
 
   // Off-screen host zodat layout + fonts resolven (niet display:none).
   const host = document.createElement("div");

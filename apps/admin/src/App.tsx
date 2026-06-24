@@ -47,6 +47,7 @@ const AdminConfiguratorSettings = lazy(() => import("./pages/admin/AdminConfigur
 const SalesLeads = lazy(() => import("./pages/sales/SalesLeads"));
 const SalesContacts = lazy(() => import("./pages/sales/SalesContacts"));
 const SalesOffertes = lazy(() => import("./pages/sales/SalesOffertes"));
+const SalesOfferteDetail = lazy(() => import("./pages/sales/SalesOfferteDetail"));
 
 // Marketing pages — lazy loaded
 const MarketingBlogs = lazy(() => import("./pages/marketing/MarketingBlogs"));
@@ -196,6 +197,7 @@ const App = () => (
                 <Route path="contacten" element={<SalesContacts />} />
                 <Route path="objecten/:id" element={<ObjectRedirect />} />
                 <Route path="offertes" element={<SalesOffertes />} />
+                <Route path="offertes/:id" element={<SalesOfferteDetail />} />
                 <Route path="installaties" element={<Navigate to="/sales/onboarding" replace />} />
                 <Route path="onboarding" element={<SalesOnboarding />} />
                 <Route path="configurator" element={<AdminConfiguratorSettings />} />
