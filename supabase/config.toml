@@ -35,10 +35,16 @@ verify_jwt = false
 [functions.contact-intake]
 verify_jwt = false
 
+[functions.content-brief]
+verify_jwt = false
+
 [functions.content-discovery]
 verify_jwt = false
 
 [functions.content-distribute]
+verify_jwt = false
+
+[functions.content-keyword-research]
 verify_jwt = false
 
 [functions.delete-team-member]

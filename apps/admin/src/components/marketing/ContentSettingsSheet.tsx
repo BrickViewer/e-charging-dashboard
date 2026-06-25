@@ -24,6 +24,7 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
 
   const setField = <K extends keyof ContentEngineSettings>(k: K, v: ContentEngineSettings[K]) => setS((c) => ({ ...c, [k]: v }));
   const feeds = s.feeds ?? [];
+  const seeds = s.keyword_seeds ?? [];
 
   const save = async () => {
     if (!row) return;
@@ -91,6 +92,36 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
                 aPlaceholder="https://site.nl/feed" bPlaceholder="naam"
                 onChange={(rows) => setField("feeds", rows.map((r) => ({ url: r.a, name: r.b || undefined })))}
               />
+            </section>
+
+            {/* Zaad-termen voor zoekvraag-onderzoek */}
+            <section className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Zaad-termen voor zoekvraag-onderzoek</p>
+              <p className="text-[11px] text-muted-foreground">Onderwerpen waarop we Google-suggesties ophalen om te zien waar je doelgroep op zoekt. Vul een onderwerp + (optioneel) doelgroep in. Staan al voor je ingevuld.</p>
+              <ListSection
+                title=""
+                addLabel="Zaad-term toevoegen"
+                rows={seeds.map((sd, i) => ({ key: i, a: sd.term, b: sd.audience ?? "" }))}
+                aPlaceholder="laadpaal vve" bPlaceholder="vve/vastgoed/bedrijf"
+                onChange={(rows) => setField("keyword_seeds", rows.map((r) => ({ term: r.a, audience: r.b || undefined, cluster: r.b || undefined })))}
+              />
+            </section>
+
+            {/* Schrijven met AI (Claude) */}
+            <section className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Schrijven met AI (Claude)</p>
+              <p className="text-[11px] text-muted-foreground">Gebruikt voor gespreksvragen en blogconcepten. Vereist de Claude-sleutel (ANTHROPIC_API_KEY); zonder sleutel blijft alles handmatig.</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Model</Label>
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  value={s.generation_model ?? "claude-opus-4-8"}
+                  onChange={(e) => setField("generation_model", e.target.value)}
+                >
+                  <option value="claude-opus-4-8">Opus 4.8 (beste kwaliteit)</option>
+                  <option value="claude-sonnet-4-6">Sonnet 4.6 (sneller/goedkoper)</option>
+                </select>
+              </div>
             </section>
 
             {/* Distributie */}

@@ -141,6 +141,9 @@ Deno.serve(async (req: Request) => {
       } catch (_) { errors++; }
     }
 
+    // Koppel de nieuwe onderwerpen aan de zoekvragen van de doelgroep (Laag B; gratis, in SQL).
+    await sb.rpc("content_match_topics_to_keywords", {});
+
     // Leg het tijdstip van deze run vast zodat de UI "Laatst opgehaald" kan tonen (ook bij 0 nieuwe).
     if (settingsRow?.id) {
       await sb.from("content_engine_settings")

@@ -11,7 +11,8 @@ import { toast } from "sonner";
 import { CheckCircle2, ExternalLink, Pencil, Rocket, Trash2, XCircle } from "lucide-react";
 import { BLOG_CATEGORIES, categorySlug } from "@/lib/blogTaxonomy";
 import {
-  useContentTopic, useUpdateTopic, useDeleteTopic, TOPIC_STATUS_LABEL, SOURCE_LABEL,
+  useContentTopic, useUpdateTopic, useDeleteTopic, useContentKeywords, useGenerateBrief,
+  TOPIC_STATUS_LABEL, SOURCE_LABEL, INTENT_LABEL,
 } from "@/hooks/useContentPipeline";
 import { useBlogPost, useUpdateBlogPost } from "@/hooks/useBlogPosts";
 import DOMPurify from "dompurify";
@@ -20,6 +21,8 @@ export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | 
   const topicQ = useContentTopic(open ? topicId ?? undefined : undefined);
   const update = useUpdateTopic();
   const del = useDeleteTopic();
+  const keywordsQ = useContentKeywords();
+  const genBrief = useGenerateBrief();
   const topic = topicQ.data;
 
   const [form, setForm] = useState<Record<string, string>>({});
@@ -76,6 +79,18 @@ export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | 
     onOpenChange(false);
   };
 
+  const generateBrief = async () => {
+    if (!topic) return;
+    try {
+      const r = await genBrief.mutateAsync(topic.id);
+      if (r?.status === "no_key") { toast.message(r.message || "Claude-sleutel ontbreekt nog"); return; }
+      if ((r?.generated ?? 0) > 0) toast.success("Gespreksvraag gegenereerd");
+      else toast.message("Geen briefing gegenereerd (controleer de Claude-sleutel of probeer opnieuw)");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Briefing mislukt"); }
+  };
+
+  const matchedKw = topic?.matched_keyword_id ? (keywordsQ.data ?? []).find((k) => k.id === topic.matched_keyword_id) ?? null : null;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="ec-scroll w-full overflow-y-auto sm:max-w-xl">
@@ -130,6 +145,45 @@ export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | 
               )}
               <Button size="sm" variant="ghost" className="ml-auto text-red-600" onClick={remove}><Trash2 className="mr-1.5 h-4 w-4" /> Verwijderen</Button>
             </div>
+
+            {/* SEO-koppeling + gespreksvraag (Laag B + C) */}
+            {(matchedKw || topic.conversation_question || topic.status === "idea") && (
+              <div className="space-y-3 rounded-lg border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">Gespreksvraag &amp; achtergrond</p>
+                  {topic.status === "idea" && (
+                    <Button size="sm" variant="outline" onClick={generateBrief} disabled={genBrief.isPending}>
+                      {genBrief.isPending ? "Bezig..." : topic.conversation_question ? "Opnieuw" : "Genereer briefing"}
+                    </Button>
+                  )}
+                </div>
+                {matchedKw && (
+                  <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                    Zoekvraag: <span className="font-medium text-foreground">{matchedKw.query}</span>
+                    <span className="rounded bg-muted px-1">{INTENT_LABEL[matchedKw.intent] ?? matchedKw.intent}</span>
+                    {topic.seo_opportunity != null && <span>kans {Math.round(Number(topic.seo_opportunity) * 100)}%</span>}
+                    <button
+                      className="text-primary hover:underline"
+                      onClick={async () => { set("target_keyword")(matchedKw.query); await update.mutateAsync({ id: topic.id, patch: { target_keyword: matchedKw.query } }); toast.success("Doel-zoekwoord ingesteld"); }}
+                    >overnemen</button>
+                  </p>
+                )}
+                {topic.conversation_question ? (
+                  <>
+                    <div className="rounded-md bg-primary/5 p-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-primary">Bespreek dit op de opname</p>
+                      <p className="mt-0.5 text-sm font-medium text-foreground">{topic.conversation_question}</p>
+                    </div>
+                    {topic.background && <div className="whitespace-pre-line text-xs text-muted-foreground">{topic.background}</div>}
+                    {topic.suggested_angle && (
+                      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Invalshoek:</span> {topic.suggested_angle}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Nog geen gespreksvraag. Klik "Genereer briefing" (vereist de Claude-sleutel).</p>
+                )}
+              </div>
+            )}
 
             {/* Concept-review (als er een gekoppeld concept is) */}
             {topic.blog_post_id ? (

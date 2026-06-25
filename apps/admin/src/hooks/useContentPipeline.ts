@@ -9,7 +9,18 @@ import { categorySlug } from "@/lib/blogTaxonomy";
 
 // discussed_at is toegevoegd in migratie 20260625190000 (onderwerpen-inbox); de gegenereerde types worden
 // pas later ververst, dus hier lokaal aanvullen (Row/Update) i.p.v. types.ts met de hand bewerken.
-export type ContentTopic = Database["public"]["Tables"]["content_topics"]["Row"] & { discussed_at?: string | null; source_published_at?: string | null };
+export type ContentTopic = Database["public"]["Tables"]["content_topics"]["Row"] & {
+  discussed_at?: string | null;
+  source_published_at?: string | null;
+  // SEO-blogmotor (lokaal aangevuld tot types.ts is geregenereerd)
+  matched_keyword_id?: string | null;
+  match_strength?: number | null;
+  seo_opportunity?: number | null;
+  conversation_question?: string | null;
+  background?: string | null;
+  suggested_angle?: string | null;
+  brief_generated_at?: string | null;
+};
 export type ContentTopicInsert = Database["public"]["Tables"]["content_topics"]["Insert"];
 export type ContentTopicUpdate = Database["public"]["Tables"]["content_topics"]["Update"];
 
@@ -166,9 +177,9 @@ export function useDeleteTopic() {
 export function useGenerateBlogFromRecording() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { title: string; recorded_on?: string | null; transcript: string }) => {
+    mutationFn: async (input: { title: string; recorded_on?: string | null; transcript: string; topic_id?: string | null }) => {
       const { data, error } = await supabase.functions.invoke("recording-to-blog", {
-        body: { title: input.title, recorded_on: input.recorded_on ?? null, transcript: input.transcript },
+        body: { title: input.title, recorded_on: input.recorded_on ?? null, transcript: input.transcript, topic_id: input.topic_id ?? null },
       });
       if (error) throw new Error(error.message || "Genereren mislukt");
       const r = data as { status: string; blog_post_id?: string; message?: string };
@@ -196,7 +207,65 @@ export type ContentEngineSettings = {
   channels?: { linkedin?: boolean; newsletter?: boolean };
   newsletter_recipients?: string[];
   last_discovery_at?: string;
+  // SEO-blogmotor
+  keyword_seeds?: { term: string; cluster?: string; audience?: string }[];
+  last_keyword_research_at?: string;
+  generation_model?: string;
+  generation_max_tokens?: number;
 };
+
+// ---- Zoekvragen van de doelgroep (content_keywords, Laag A) ----
+
+export type ContentKeyword = {
+  id: string;
+  query: string;
+  cluster: string | null;
+  intent: string;
+  audience: string | null;
+  source: string;
+  priority: number;
+  times_seen: number;
+  status: string;
+};
+
+export const INTENT_LABEL: Record<string, string> = {
+  informational: "Informatief",
+  commercial: "Commercieel",
+  transactional: "Transactioneel",
+  navigational: "Navigatie",
+};
+
+export function useContentKeywords() {
+  return useQuery({
+    queryKey: ["content-keywords"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("content_keywords")
+        .select("id, query, cluster, intent, audience, source, priority, times_seen, status")
+        .eq("status", "active")
+        .order("priority", { ascending: false })
+        .order("times_seen", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as ContentKeyword[];
+    },
+  });
+}
+
+// Zoekvraag-onderzoek nu draaien (content-keyword-research): Google Autocomplete -> content_keywords.
+export function useRunKeywordResearch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("content-keyword-research", { body: {} });
+      if (error) throw new Error(error.message || "Onderzoek mislukt");
+      return data as { status: string; created?: number; skipped?: number; errors?: number; message?: string } | null;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["content-keywords"] });
+      qc.invalidateQueries({ queryKey: ["content-settings"] });
+    },
+  });
+}
 
 // Nieuwsagent nu draaien (content-discovery, force). Hergebruikt door de weekflow-stap en de instellingen.
 export function useRunDiscovery() {
@@ -210,6 +279,22 @@ export function useRunDiscovery() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["content-topics"] });
       qc.invalidateQueries({ queryKey: ["content-settings"] });
+    },
+  });
+}
+
+// Gespreksvraag + achtergrond genereren (content-brief, Laag C). Slaapt zonder Claude-sleutel.
+export function useGenerateBrief() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (topicId: string) => {
+      const { data, error } = await supabase.functions.invoke("content-brief", { body: { topic_id: topicId } });
+      if (error) throw new Error(error.message || "Briefing mislukt");
+      return data as { status: string; generated?: number; message?: string } | null;
+    },
+    onSuccess: (_d, topicId) => {
+      qc.invalidateQueries({ queryKey: ["content-topics"] });
+      qc.invalidateQueries({ queryKey: ["content-topic", topicId] });
     },
   });
 }
