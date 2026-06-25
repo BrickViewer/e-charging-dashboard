@@ -47,6 +47,8 @@ export default function ContentPipeline() {
   const profileNames = profileNamesQ.data ?? {};
   // Onderwerpen-inbox = handmatig toegevoegde ideeën die nog niet de pijplijn in zijn.
   const inbox = useMemo(() => topics.filter((t) => t.source_type === "manual" && t.status === "idea"), [topics]);
+  // Nieuwsbriefing = door de AI-nieuwsagent ontdekte onderwerpen om in het overleg te bespreken.
+  const briefing = useMemo(() => topics.filter((t) => ["rss", "competitor", "web_research"].includes(t.source_type) && t.status === "idea"), [topics]);
 
   const quickAdd = async () => {
     const title = quickTitle.trim();
@@ -171,6 +173,33 @@ export default function ContentPipeline() {
             <Sparkles className="mr-1.5 h-4 w-4" /> {genFromRec.isPending ? "Bezig..." : "Genereer concept"}
           </Button>
         </div>
+      </section>
+
+      {/* Nieuwsbriefing: door de AI-nieuwsagent ontdekte onderwerpen om in het overleg te bespreken. */}
+      <section className="rounded-xl border bg-card p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-bold text-foreground"><Newspaper className="h-4 w-4 text-primary" /> Nieuwsbriefing</h2>
+            <p className="text-xs text-muted-foreground">Door de AI-nieuwsagent ontdekte ontwikkelingen uit de vertrouwde bronnen. Bespreek ze in het overleg en keur de relevante goed voor een concept.</p>
+          </div>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{briefing.length}</span>
+        </div>
+        <ul className="mt-2 divide-y">
+          {briefing.slice(0, 12).map((t) => (
+            <li key={t.id} className="flex items-start justify-between gap-3 py-2.5">
+              <button onClick={() => setSelectedId(t.id)} className="min-w-0 flex-1 text-left">
+                <p className="line-clamp-2 text-sm font-medium text-foreground">{t.raw_title}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {SOURCE_LABEL[t.source_type] ?? t.source_type}{t.source_name ? ` · ${t.source_name}` : ""} · {fmtDate(t.created_at)}
+                </p>
+              </button>
+              <Button size="sm" variant="outline" onClick={() => approveForDraft(t.id)}>Goedkeuren</Button>
+            </li>
+          ))}
+          {briefing.length === 0 && (
+            <li className="py-3 text-center text-xs text-muted-foreground">Nog geen ontdekte onderwerpen. Voeg vertrouwde bronnen toe via Instellingen en klik "Nu ophalen".</li>
+          )}
+        </ul>
       </section>
 
       {topicsQ.isLoading ? (

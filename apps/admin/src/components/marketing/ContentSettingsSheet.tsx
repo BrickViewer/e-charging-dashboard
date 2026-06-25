@@ -11,6 +11,13 @@ import { Plus, Play, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useContentSettings, useUpdateContentSettings, type ContentEngineSettings } from "@/hooks/useContentPipeline";
 
+// Vertrouwde-bronnen-startlijst uit het marketingplan. Bewust namen (geen vaste RSS-URL's): je voegt
+// een bron met één klik toe en vult zelf de exacte RSS/sitemap-URL in voordat je ontdekking aanzet.
+const TRUSTED_SOURCES = [
+  "ElaadNL", "NKL Nederland", "RVO / Rijksoverheid", "eViolin", "DOET", "Netbeheer Nederland",
+  "Solar & Storage Magazine", "Energeia", "Automotive-online", "Change Inc",
+];
+
 export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const settingsQ = useContentSettings();
   const update = useUpdateContentSettings();
@@ -77,6 +84,28 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
                 <NumField label="Min. SEO" value={s.min_seo} onChange={(v) => setField("min_seo", v)} />
                 <NumField label="Min. AEO" value={s.min_aeo} onChange={(v) => setField("min_aeo", v)} />
                 <NumField label="Noviteit (0-1)" step="0.05" value={s.novelty_threshold} onChange={(v) => setField("novelty_threshold", v)} />
+              </div>
+            </section>
+
+            {/* Voorgestelde vertrouwde bronnen (startlijst uit het marketingplan) */}
+            <section className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Voorgestelde vertrouwde bronnen</p>
+              <p className="text-[11px] text-muted-foreground">Eén klik voegt de bron als feed toe; vul daarna de exacte RSS/sitemap-URL in.</p>
+              <div className="flex flex-wrap gap-1.5">
+                {TRUSTED_SOURCES.map((name) => {
+                  const added = feeds.some((f) => (f.name ?? "").toLowerCase() === name.toLowerCase());
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      disabled={added}
+                      onClick={() => setField("feeds", [...feeds, { url: "", name }])}
+                      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+                    >
+                      <Plus className="h-3 w-3" /> {name}
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
