@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Plus, Play, Trash2 } from "lucide-react";
+import { Plus, Play, Trash2, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useContentSettings, useUpdateContentSettings, type ContentEngineSettings } from "@/hooks/useContentPipeline";
 
@@ -18,6 +18,7 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
 
   const [s, setS] = useState<ContentEngineSettings>({});
   const [running, setRunning] = useState(false);
+  const [kwRunning, setKwRunning] = useState(false);
   useEffect(() => { if (row?.settings) setS(row.settings); }, [row?.settings]);
 
   if (!open) return null;
@@ -42,11 +43,26 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
       const { data, error } = await supabase.functions.invoke("content-discovery", { body: { force: true } });
       if (error) throw error;
       const r = data as { created?: number; skipped?: number; errors?: number } | null;
-      toast.success(`Discovery klaar — ${r?.created ?? 0} nieuw, ${r?.skipped ?? 0} dubbel/bekend, ${r?.errors ?? 0} fout`);
+      toast.success(`Nieuws opgehaald: ${r?.created ?? 0} nieuw, ${r?.skipped ?? 0} bekend, ${r?.errors ?? 0} fout`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Discovery mislukt");
+      toast.error(e instanceof Error ? e.message : "Ophalen mislukt");
     } finally {
       setRunning(false);
+    }
+  };
+
+  const runKeywords = async () => {
+    setKwRunning(true);
+    try {
+      if (row) await update.mutateAsync({ id: row.id, settings: s });
+      const { data, error } = await supabase.functions.invoke("content-keyword-research", { body: {} });
+      if (error) throw error;
+      const r = data as { created?: number; skipped?: number; message?: string } | null;
+      toast.success(`Zoekwoorden bijgewerkt: ${r?.created ?? 0} nieuw, ${r?.skipped ?? 0} bekend`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bijwerken mislukt");
+    } finally {
+      setKwRunning(false);
     }
   };
 
@@ -139,11 +155,14 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
               </div>
             </section>
 
-            <div className="flex items-center justify-between border-t pt-4">
+            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
               <Button variant="outline" onClick={runDiscovery} disabled={running}>
-                <Play className="mr-1.5 h-4 w-4" /> {running ? "Bezig…" : "Nu ophalen"}
+                <Play className="mr-1.5 h-4 w-4" /> {running ? "Bezig..." : "Nieuws ophalen"}
               </Button>
-              <Button onClick={save} disabled={update.isPending}>{update.isPending ? "Opslaan…" : "Opslaan"}</Button>
+              <Button variant="outline" onClick={runKeywords} disabled={kwRunning}>
+                <Search className="mr-1.5 h-4 w-4" /> {kwRunning ? "Bezig..." : "Zoekwoorden bijwerken"}
+              </Button>
+              <Button className="ml-auto" onClick={save} disabled={update.isPending}>{update.isPending ? "Opslaan..." : "Opslaan"}</Button>
             </div>
           </div>
         )}

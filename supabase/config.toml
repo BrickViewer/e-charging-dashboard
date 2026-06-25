@@ -47,6 +47,9 @@ verify_jwt = false
 [functions.content-keyword-research]
 verify_jwt = false
 
+[functions.content-research]
+verify_jwt = false
+
 [functions.delete-team-member]
 verify_jwt = true
 

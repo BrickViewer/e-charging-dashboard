@@ -12,6 +12,7 @@ import { categorySlug } from "@/lib/blogTaxonomy";
 export type ContentTopic = Database["public"]["Tables"]["content_topics"]["Row"] & {
   discussed_at?: string | null;
   source_published_at?: string | null;
+  agenda_at?: string | null;
   // SEO-blogmotor (lokaal aangevuld tot types.ts is geregenereerd)
   matched_keyword_id?: string | null;
   match_strength?: number | null;
@@ -144,6 +145,36 @@ export function useMarkTopicDiscussed() {
   });
 }
 
+// Stap 1 -> stap 2: onderwerp op de agenda zetten (of er weer af halen).
+export function useSetAgenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, on }: { id: string; on: boolean }) => {
+      const { error } = await supabase
+        .from("content_topics")
+        .update({ agenda_at: on ? new Date().toISOString() : null } as unknown as ContentTopicUpdate)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["content-topics"] }),
+  });
+}
+
+// Onderwerp negeren (uit de pool halen).
+export function useIgnoreTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("content_topics")
+        .update({ status: "rejected", rejected_reason: "genegeerd" } as unknown as ContentTopicUpdate)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["content-topics"] }),
+  });
+}
+
 // Naam-map (user_id → volledige naam) om de inbrenger van een onderwerp te tonen.
 export function useProfileNames() {
   return useQuery({
@@ -210,6 +241,7 @@ export type ContentEngineSettings = {
   // SEO-blogmotor
   keyword_seeds?: { term: string; cluster?: string; audience?: string }[];
   last_keyword_research_at?: string;
+  last_research_at?: string;
   generation_model?: string;
   generation_max_tokens?: number;
 };
@@ -295,6 +327,22 @@ export function useGenerateBrief() {
     onSuccess: (_d, topicId) => {
       qc.invalidateQueries({ queryKey: ["content-topics"] });
       qc.invalidateQueries({ queryKey: ["content-topic", topicId] });
+    },
+  });
+}
+
+// Onderwerpen verzamelen via Claude-web-research (content-research). Slaapt zonder Claude-sleutel.
+export function useRunResearch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("content-research", { body: {} });
+      if (error) throw new Error(error.message || "Verzamelen mislukt");
+      return data as { status: string; found?: number; created?: number; skipped?: number; message?: string } | null;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["content-topics"] });
+      qc.invalidateQueries({ queryKey: ["content-settings"] });
     },
   });
 }

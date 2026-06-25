@@ -1,20 +1,19 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings, Plus, RefreshCw, Mic, Sparkles, ExternalLink, Globe, Search } from "lucide-react";
+import { Settings, Plus, Mic, Sparkles, ExternalLink, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  useContentTopics, useCreateTopic, useUpdateTopic, useMarkTopicDiscussed, useProfileNames,
-  useGenerateBlogFromRecording, useContentSettings, useRunDiscovery, useContentKeywords, useRunKeywordResearch,
-  SOURCE_LABEL, INTENT_LABEL, type ContentTopic,
+  useContentTopics, useCreateTopic, useUpdateTopic, useMarkTopicDiscussed,
+  useGenerateBlogFromRecording, useContentSettings, useContentKeywords,
+  useRunResearch, useSetAgenda, useIgnoreTopic, type ContentTopic,
 } from "@/hooks/useContentPipeline";
 import { TopicSheet } from "@/components/marketing/TopicSheet";
 import { ContentSettingsSheet } from "@/components/marketing/ContentSettingsSheet";
 
-const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "");
 const fmtWhen = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString("nl-NL", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "nog niet";
 
@@ -41,16 +40,17 @@ export default function ContentPipeline() {
   const navigate = useNavigate();
   const topicsQ = useContentTopics();
   const settingsQ = useContentSettings();
+  const keywordsQ = useContentKeywords();
   const create = useCreateTopic();
   const update = useUpdateTopic();
   const markDiscussed = useMarkTopicDiscussed();
-  const profileNamesQ = useProfileNames();
   const genFromRec = useGenerateBlogFromRecording();
-  const runDiscovery = useRunDiscovery();
-  const keywordsQ = useContentKeywords();
-  const runKeywordResearch = useRunKeywordResearch();
+  const research = useRunResearch();
+  const setAgenda = useSetAgenda();
+  const ignoreTopic = useIgnoreTopic();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
   const [recTitle, setRecTitle] = useState("");
@@ -59,50 +59,63 @@ export default function ContentPipeline() {
   const [recTopicId, setRecTopicId] = useState("");
 
   const topics = useMemo(() => topicsQ.data ?? [], [topicsQ.data]);
-  const profileNames = profileNamesQ.data ?? {};
   const settings = settingsQ.data?.settings;
-  const sources = useMemo(() => {
-    const feeds = (settings?.feeds ?? []).map((f) => ({ name: f.name || f.url, url: f.url }));
-    const comps = (settings?.competitors ?? []).map((c) => ({ name: c.name || c.sitemap || c.url || "", url: c.sitemap || c.url || "" }));
-    return [...feeds, ...comps].filter((s) => s.name);
-  }, [settings]);
-
-  const keywords = useMemo(() => keywordsQ.data ?? [], [keywordsQ.data]);
   const keywordById = useMemo(() => {
-    const m: Record<string, { query: string; intent: string }> = {};
-    for (const k of keywords) m[k.id] = { query: k.query, intent: k.intent };
+    const m: Record<string, { query: string }> = {};
+    for (const k of keywordsQ.data ?? []) m[k.id] = { query: k.query };
     return m;
-  }, [keywords]);
-  // Agenda op SEO-kans (meest waardevolle onderwerpen eerst); ongekoppelde/eigen ideeen onderaan.
-  const agenda = useMemo(
-    () => topics.filter((t) => t.status === "idea").sort((a, b) => (b.seo_opportunity ?? -1) - (a.seo_opportunity ?? -1)),
+  }, [keywordsQ.data]);
+
+  const byOpportunity = (a: ContentTopic, b: ContentTopic) => (b.seo_opportunity ?? -1) - (a.seo_opportunity ?? -1);
+  // Stap 1 = pool: idea, nog niet op de agenda, en een echte vraag of een eigen idee.
+  const pool = useMemo(
+    () => topics.filter((t) => t.status === "idea" && !t.agenda_at && (t.conversation_question || t.source_type === "manual")).sort(byOpportunity),
     [topics],
   );
-  const discovered = useMemo(() => agenda.filter((t) => !["manual", "recording"].includes(t.source_type)), [agenda]);
+  // Stap 2 = agenda: idea + op de agenda gezet.
+  const agenda = useMemo(() => topics.filter((t) => t.status === "idea" && !!t.agenda_at).sort(byOpportunity), [topics]);
   const writing = useMemo(() => topics.filter((t) => ["approved_for_draft", "drafting"].includes(t.status)), [topics]);
   const publishing = useMemo(() => topics.filter((t) => ["drafted", "scheduled", "published"].includes(t.status)), [topics]);
   const rejectedCount = topics.filter((t) => t.status === "rejected").length;
 
+  const metaLine = (t: ContentTopic) => {
+    const kw = t.matched_keyword_id ? keywordById[t.matched_keyword_id] : null;
+    if (kw) return `Zoekvraag: ${kw.query}${t.seo_opportunity != null ? ` - kans ${Math.round(Number(t.seo_opportunity) * 100)}%` : ""}`;
+    if (t.target_keyword) return `Zoekwoord: ${t.target_keyword}`;
+    if (t.source_type === "manual") return "Eigen idee";
+    return "";
+  };
+  const toggle = (id: string) => setExpandedId((cur) => (cur === id ? null : id));
+
+  const runResearch = async () => {
+    try {
+      const r = await research.mutateAsync();
+      if (r?.status === "no_key") { toast.message(r.message || "Claude-sleutel ontbreekt nog"); return; }
+      if (r?.status !== "ok") { toast.error(r?.message || "Verzamelen mislukt"); return; }
+      toast.success(`Verzameld: ${r?.created ?? 0} nieuwe onderwerpen (${r?.skipped ?? 0} al bekend)`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Verzamelen mislukt"); }
+  };
   const quickAdd = async () => {
     const title = quickTitle.trim();
     if (!title) return;
     try { await create.mutateAsync({ raw_title: title, source_type: "manual" }); setQuickTitle(""); }
     catch (e) { toast.error(e instanceof Error ? e.message : "Toevoegen mislukt"); }
   };
+  const addToAgenda = async (id: string) => {
+    try { await setAgenda.mutateAsync({ id, on: true }); toast.success("Op de agenda gezet"); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Mislukt"); }
+  };
+  const removeFromAgenda = async (id: string) => {
+    try { await setAgenda.mutateAsync({ id, on: false }); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Mislukt"); }
+  };
+  const ignore = async (id: string) => {
+    try { await ignoreTopic.mutateAsync(id); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Mislukt"); }
+  };
   const approveForDraft = async (id: string) => {
     try { await update.mutateAsync({ id, patch: { status: "approved_for_draft" } }); toast.success("Klaargezet om uit te schrijven"); }
     catch (e) { toast.error(e instanceof Error ? e.message : "Mislukt"); }
-  };
-  const fetchNow = async () => {
-    try { const r = await runDiscovery.mutateAsync(); toast.success(`Opgehaald: ${r?.created ?? 0} nieuw, ${r?.skipped ?? 0} bekend, ${r?.errors ?? 0} fout`); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "Ophalen mislukt"); }
-  };
-  const researchNow = async () => {
-    try {
-      const r = await runKeywordResearch.mutateAsync();
-      if (r?.status === "no_seeds") { toast.message(r.message || "Nog geen zaad-termen ingesteld"); return; }
-      toast.success(`Zoekvragen bijgewerkt: ${r?.created ?? 0} nieuw, ${r?.skipped ?? 0} bekend`);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Onderzoek mislukt"); }
   };
   const generateFromRecording = async () => {
     if (!recTitle.trim() || !recTranscript.trim()) return;
@@ -116,104 +129,91 @@ export default function ContentPipeline() {
     }
   };
 
-  const sourceBadge = (t: ContentTopic) =>
-    t.source_type === "manual" ? "Eigen idee" : t.source_type === "recording" ? "Opname" : `${SOURCE_LABEL[t.source_type] ?? t.source_type}${t.source_name ? ` - ${t.source_name}` : ""}`;
-
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-1">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><Sparkles className="h-6 w-6 text-primary" /> Contentmachine</h1>
-          <p className="text-sm text-muted-foreground">Zo loopt de week: ophalen, bespreken, schrijven, publiceren.</p>
+          <p className="text-sm text-muted-foreground">Zo loopt de week: verzamelen, bespreken, schrijven, publiceren.</p>
         </div>
         <Button variant="outline" onClick={() => setSettingsOpen(true)}><Settings className="mr-1.5 h-4 w-4" /> Instellingen</Button>
       </div>
 
       {/* STAP 1 - VERZAMELEN */}
-      <StepCard n={1} title="Verzamelen" day="Automatisch op woensdag - de nieuwsagent scant je bronnen" count={discovered.length}>
-        <div className="rounded-lg border bg-muted/20 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="flex items-center gap-1.5 text-xs font-medium text-foreground"><Globe className="h-3.5 w-3.5" /> Gescande bronnen</p>
-            <button onClick={() => setSettingsOpen(true)} className="text-[11px] font-medium text-primary hover:underline">beheer</button>
+      <StepCard n={1} title="Verzamelen" day="Claude zoekt het web af naar de juiste onderwerpen" count={pool.length}>
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-foreground">Onderwerpen verzamelen</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Claude onderzoekt online waar je doelgroep op zoekt en maakt er vragen van. Laatst: {fmtWhen(settings?.last_research_at)}</p>
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Betrouwbare nieuwslijsten (RSS) die we automatisch uitlezen - al voor je ingevuld.</p>
-          {sources.length === 0 ? (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Nog geen bronnen ingesteld. Klik "beheer" en voeg vertrouwde bronnen toe (bijv. ElaadNL, RVO, Solar &amp; Storage).</p>
-          ) : (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {sources.map((s, i) => (
-                <span key={i} className="rounded-full border bg-background px-2 py-0.5 text-[11px] text-foreground" title={s.url}>{s.name}</span>
-              ))}
-            </div>
-          )}
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <span className="text-[11px] text-muted-foreground">Laatst opgehaald: {fmtWhen(settings?.last_discovery_at)}</span>
-            <Button size="sm" variant="outline" onClick={fetchNow} disabled={runDiscovery.isPending}>
-              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${runDiscovery.isPending ? "animate-spin" : ""}`} /> Nu ophalen
-            </Button>
-          </div>
+          <Button size="sm" onClick={runResearch} disabled={research.isPending}>
+            <Sparkles className={`mr-1.5 h-4 w-4 ${research.isPending ? "animate-pulse" : ""}`} /> {research.isPending ? "Bezig..." : "Verzamelen"}
+          </Button>
         </div>
 
-        <div className="rounded-lg border bg-muted/20 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="flex items-center gap-1.5 text-xs font-medium text-foreground"><Search className="h-3.5 w-3.5" /> Wat je doelgroep googelt</p>
-            <Button size="sm" variant="outline" onClick={researchNow} disabled={runKeywordResearch.isPending}>
-              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${runKeywordResearch.isPending ? "animate-spin" : ""}`} /> Nu onderzoeken
-            </Button>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Zoekvragen die we via Google vonden, gesorteerd op kans. Hier hoef je niets te doen; ze bepalen welke onderwerpen het meest waard zijn om over te schrijven.</p>
-          {keywords.length === 0 ? (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Nog geen zoekvragen. Klik "Nu onderzoeken".</p>
-          ) : (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {keywords.slice(0, 18).map((k) => (
-                <span key={k.id} className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                  {k.query}
-                  <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">{INTENT_LABEL[k.intent] ?? k.intent}</span>
-                </span>
-              ))}
-            </div>
-          )}
-          <p className="mt-2 text-[11px] text-muted-foreground">Laatst onderzocht: {fmtWhen(settings?.last_keyword_research_at)}</p>
-        </div>
+        <ul className="divide-y">
+          {pool.map((t) => (
+            <li key={t.id} className="py-2">
+              <div className="flex items-start justify-between gap-2">
+                <button onClick={() => toggle(t.id)} className="min-w-0 flex-1 text-left">
+                  <p className="text-sm font-medium text-foreground">{t.conversation_question || t.raw_title}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{metaLine(t)}</p>
+                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button size="sm" variant="outline" onClick={() => addToAgenda(t.id)}><Plus className="mr-1 h-3.5 w-3.5" /> Toevoegen</Button>
+                  <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => ignore(t.id)}>Negeren</Button>
+                </div>
+              </div>
+              {expandedId === t.id && (t.background || t.source_url) && (
+                <div className="mt-1 space-y-1.5 rounded-md bg-muted/30 p-2">
+                  {t.background && <p className="whitespace-pre-line text-xs text-muted-foreground">{t.background}</p>}
+                  {t.source_url && <a href={t.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">bron <ExternalLink className="h-3 w-3" /></a>}
+                </div>
+              )}
+            </li>
+          ))}
+          {pool.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">Nog geen onderwerpen. Klik "Verzamelen" om Claude online te laten zoeken.</li>}
+        </ul>
 
-        <div>
-          <Label className="text-xs">Eigen idee of observatie toevoegen (door de week)</Label>
+        <div className="border-t pt-3">
+          <Label className="text-xs">Eigen idee toevoegen</Label>
           <div className="mt-1 flex gap-2">
             <Input value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); quickAdd(); } }}
-              placeholder="Hier moeten we het over hebben..." />
+              placeholder="Waar moeten we het over hebben?" />
             <Button onClick={quickAdd} disabled={!quickTitle.trim() || create.isPending}><Plus className="mr-1.5 h-4 w-4" /> Toevoegen</Button>
           </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">Zodra ingeschakeld draait dit wekelijks automatisch. Er gaat nooit iets vanzelf live.</p>
       </StepCard>
 
       {/* STAP 2 - BESPREKEN */}
-      <StepCard n={2} title="Bespreken" day="Donderdag in het overleg - dit is de agenda" count={agenda.length}>
+      <StepCard n={2} title="Bespreken" day="Je agenda voor het overleg - klap een vraag open en tik af" count={agenda.length}>
         <ul className="divide-y">
           {agenda.map((t) => (
-            <li key={t.id} className="flex items-start justify-between gap-3 py-2.5">
-              <button onClick={() => setSelectedId(t.id)} className="min-w-0 flex-1 text-left">
-                <p className="text-sm font-medium text-foreground">{t.raw_title}</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {sourceBadge(t)}{t.source_type === "manual"
-                    ? ` - ${(t.created_by && profileNames[t.created_by]) || "onbekend"} - ${fmtDate(t.created_at)}`
-                    : t.source_published_at ? ` - Gepubliceerd: ${fmtDate(t.source_published_at)}` : ""}
-                </p>
-                {t.matched_keyword_id && keywordById[t.matched_keyword_id] && (
-                  <p className="mt-0.5 text-[11px] font-medium text-primary">
-                    Zoekvraag: {keywordById[t.matched_keyword_id].query}{t.seo_opportunity != null ? ` - kans ${Math.round(Number(t.seo_opportunity) * 100)}%` : ""}
-                  </p>
-                )}
-              </button>
-              <div className="flex shrink-0 items-center gap-1.5">
-                {!t.discussed_at && <Button size="sm" variant="ghost" onClick={() => markDiscussed.mutate({ id: t.id, discussed: true })}>Besproken</Button>}
-                <Button size="sm" variant="outline" onClick={() => approveForDraft(t.id)}>Maak blog</Button>
+            <li key={t.id} className="py-2">
+              <div className="flex items-start justify-between gap-2">
+                <button onClick={() => toggle(t.id)} className="min-w-0 flex-1 text-left">
+                  <p className={`text-sm font-medium ${t.discussed_at ? "text-muted-foreground line-through" : "text-foreground"}`}>{t.conversation_question || t.raw_title}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{metaLine(t)}</p>
+                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {!t.discussed_at && <Button size="sm" variant="ghost" onClick={() => markDiscussed.mutate({ id: t.id, discussed: true })}><Check className="mr-1 h-3.5 w-3.5" /> Besproken</Button>}
+                  <Button size="sm" variant="outline" onClick={() => approveForDraft(t.id)}>Maak blog</Button>
+                </div>
               </div>
+              {expandedId === t.id && (
+                <div className="mt-1 space-y-1.5 rounded-md bg-muted/30 p-2">
+                  {t.background ? <p className="whitespace-pre-line text-xs text-muted-foreground">{t.background}</p> : <p className="text-xs text-muted-foreground">Geen toelichting. Open details voor meer.</p>}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button onClick={() => setSelectedId(t.id)} className="text-[11px] font-medium text-primary hover:underline">Open details</button>
+                    {t.source_url && <a href={t.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">bron <ExternalLink className="h-3 w-3" /></a>}
+                    <button onClick={() => removeFromAgenda(t.id)} className="text-[11px] text-muted-foreground hover:underline">Terug naar verzamelen</button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
-          {agenda.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">Nog niets te bespreken. Haal onderwerpen op (stap 1) of voeg een idee toe.</li>}
+          {agenda.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">Nog niets op de agenda. Voeg onderwerpen toe vanuit stap 1.</li>}
         </ul>
       </StepCard>
 
@@ -228,10 +228,10 @@ export default function ContentPipeline() {
               <select
                 className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                 value={recTopicId}
-                onChange={(e) => { setRecTopicId(e.target.value); const tt = writing.find((w) => w.id === e.target.value); if (tt && !recTitle.trim()) setRecTitle(tt.raw_title); }}
+                onChange={(e) => { setRecTopicId(e.target.value); const tt = writing.find((w) => w.id === e.target.value); if (tt && !recTitle.trim()) setRecTitle(tt.conversation_question || tt.raw_title); }}
               >
                 <option value="">Los concept (geen onderwerp)</option>
-                {writing.map((w) => <option key={w.id} value={w.id}>{w.raw_title}</option>)}
+                {writing.map((w) => <option key={w.id} value={w.id}>{w.conversation_question || w.raw_title}</option>)}
               </select>
             </div>
           )}
@@ -252,7 +252,7 @@ export default function ContentPipeline() {
             <ul className="divide-y">
               {writing.map((t) => (
                 <li key={t.id} className="flex items-center justify-between gap-3 py-2">
-                  <button onClick={() => setSelectedId(t.id)} className="min-w-0 flex-1 text-left text-sm text-foreground">{t.raw_title}</button>
+                  <button onClick={() => setSelectedId(t.id)} className="min-w-0 flex-1 text-left text-sm text-foreground">{t.conversation_question || t.raw_title}</button>
                   <span className="shrink-0 text-[11px] text-muted-foreground">{t.status === "drafting" ? "Bezig" : "Goedgekeurd"}</span>
                 </li>
               ))}
@@ -267,7 +267,7 @@ export default function ContentPipeline() {
           {publishing.map((t) => (
             <li key={t.id} className="flex items-center justify-between gap-3 py-2.5">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{t.raw_title}</p>
+                <p className="truncate text-sm font-medium text-foreground">{t.conversation_question || t.raw_title}</p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">{PUBLISH_LABEL[t.status] ?? t.status}</p>
               </div>
               {t.blog_post_id ? (
@@ -282,7 +282,7 @@ export default function ContentPipeline() {
         <p className="text-[11px] text-muted-foreground">Publiceren doe je in de Blogs-module (de bron van waarheid). Daarna gaat het automatisch naar LinkedIn en de maandelijkse nieuwsbrief, zodra die kanalen aanstaan.</p>
       </StepCard>
 
-      {rejectedCount > 0 && <p className="text-center text-[11px] text-muted-foreground">{rejectedCount} afgewezen onderwerp(en) verborgen.</p>}
+      {rejectedCount > 0 && <p className="text-center text-[11px] text-muted-foreground">{rejectedCount} genegeerd/afgewezen onderwerp(en) verborgen.</p>}
 
       <TopicSheet topicId={selectedId} open={!!selectedId} onOpenChange={(v) => !v && setSelectedId(null)} />
       <ContentSettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />

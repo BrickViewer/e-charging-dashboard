@@ -20,16 +20,19 @@ export async function anthropicMessage(opts: {
   model?: string;
   maxTokens?: number;
   retries?: number;
+  tools?: unknown[];
 }): Promise<string> {
   const model = opts.model || DEFAULT_MODEL;
   const maxTokens = opts.maxTokens ?? 16000;
   const retries = opts.retries ?? 3;
-  const body = {
+  const body: Record<string, unknown> = {
     model,
     max_tokens: maxTokens,
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],
   };
+  // Optionele server-tools (bv. web_search); alleen meesturen indien opgegeven zodat andere calls identiek blijven.
+  if (opts.tools && opts.tools.length > 0) body.tools = opts.tools;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
