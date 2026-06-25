@@ -8,8 +8,9 @@ import { toast } from "sonner";
 import logoFull from "@/assets/logo-full-color.svg";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { offerPdfBlob, offerPdfBase64, type OfferPdfData } from "@/services/offerPdf";
+import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_OFFER_EMAIL, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
+import { OfferPreview } from "@/components/sales/OfferPreview";
 
 type QuoteSummary = {
   quoteNumber: string;
@@ -71,6 +72,7 @@ export default function OfferInternalSign() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<null | "approved" | "edited">(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   // Inloggen vereist: niet-ingelogd -> sla het pad op en stuur naar login.
   useEffect(() => {
@@ -100,18 +102,24 @@ export default function OfferInternalSign() {
 
   const quote = resp?.quote;
 
-  useEffect(() => {
-    if (resp?.status !== "ok" || !quote) return;
-    let url: string | null = null;
-    (async () => {
-      try {
-        const blob = await offerPdfBlob(toPdfData(quote), { ...echargingSig(quote) });
-        url = URL.createObjectURL(blob);
-        setPdfUrl(url);
-      } catch { /* preview-fout mag tekenen niet blokkeren */ }
-    })();
-    return () => { if (url) URL.revokeObjectURL(url); };
-  }, [resp?.status, quote]);
+  // De offerte tonen we inline als schaalbare HTML-viewer; de PDF genereren we pas op verzoek
+  // (mobiel-vriendelijk: geen zware html2canvas-render bij het laden).
+  const openPdf = async () => {
+    if (!quote || pdfBusy) return;
+    if (pdfUrl) { window.open(pdfUrl, "_blank", "noopener"); return; }
+    setPdfBusy(true);
+    try {
+      const blob = await offerPdfBlob(toPdfData(quote), { ...echargingSig(quote) });
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+      window.open(url, "_blank", "noopener");
+    } catch {
+      toast.error("PDF genereren mislukt");
+    } finally { setPdfBusy(false); }
+  };
+
+  // Object-URL opruimen bij verlaten van de pagina.
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
 
   const approve = async () => {
     if (!token || !quote) return;
@@ -186,20 +194,15 @@ export default function OfferInternalSign() {
       </header>
 
       <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[1.65fr_1fr]">
-        {/* Links: de offerte als PDF (met E-Charging-handtekening vooraf ingevuld) */}
+        {/* Links: de offerte als schaalbare viewer (met E-Charging-handtekening vooraf ingevuld) */}
         <div className="flex min-h-0 flex-col gap-2 bg-muted/40 p-3 sm:p-5">
-          {pdfUrl ? (
-            <iframe title="Offerte" src={`${pdfUrl}#view=FitH`} className="min-h-[60vh] w-full flex-1 rounded-lg border bg-white shadow-sm" />
-          ) : (
-            <div className="flex min-h-[60vh] flex-1 items-center justify-center rounded-lg border bg-white text-sm text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Offerte laden…
-            </div>
-          )}
-          {pdfUrl && (
-            <div className="text-center">
-              <a href={pdfUrl} target="_blank" rel="noopener" className="text-xs font-medium text-primary hover:underline">Offerte in nieuw tabblad openen</a>
-            </div>
-          )}
+          <OfferPreview data={toPdfData(quote)} signature={echargingSig(quote) as OfferSignature} className="h-[65vh] w-full lg:h-auto lg:flex-1" />
+          <div className="text-center">
+            <button type="button" onClick={openPdf} disabled={pdfBusy} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-60">
+              {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              Offerte als PDF openen
+            </button>
+          </div>
         </div>
 
         {/* Rechts: info + ondertekenen */}
