@@ -89,7 +89,7 @@ Deno.serve(async (req: Request) => {
     const force = body.force === true;
 
     const { data: settingsRow } = await sb
-      .from("content_engine_settings").select("settings").eq("is_active", true).limit(1).maybeSingle();
+      .from("content_engine_settings").select("id, settings").eq("is_active", true).limit(1).maybeSingle();
     const settings = (settingsRow?.settings ?? {}) as any;
     if (!settings.discovery_enabled && !force) {
       return json({ status: "disabled", message: "discovery_enabled=false" });
@@ -126,6 +126,13 @@ Deno.serve(async (req: Request) => {
           if (title.length >= 8) await ingest("competitor", loc, c.name ?? null, title, null);
         }
       } catch (_) { errors++; }
+    }
+
+    // Leg het tijdstip van deze run vast zodat de UI "Laatst opgehaald" kan tonen (ook bij 0 nieuwe).
+    if (settingsRow?.id) {
+      await sb.from("content_engine_settings")
+        .update({ settings: { ...settings, last_discovery_at: new Date().toISOString() } })
+        .eq("id", settingsRow.id);
     }
 
     return json({ status: "ok", fetched, created, skipped, errors, feeds: feeds.length, competitors: competitors.length });

@@ -195,7 +195,24 @@ export type ContentEngineSettings = {
   competitors?: { sitemap?: string; url?: string; name?: string }[];
   channels?: { linkedin?: boolean; newsletter?: boolean };
   newsletter_recipients?: string[];
+  last_discovery_at?: string;
 };
+
+// Nieuwsagent nu draaien (content-discovery, force). Hergebruikt door de weekflow-stap en de instellingen.
+export function useRunDiscovery() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("content-discovery", { body: { force: true } });
+      if (error) throw new Error(error.message || "Ophalen mislukt");
+      return data as { created?: number; skipped?: number; errors?: number } | null;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["content-topics"] });
+      qc.invalidateQueries({ queryKey: ["content-settings"] });
+    },
+  });
+}
 
 export function useContentSettings() {
   return useQuery({
