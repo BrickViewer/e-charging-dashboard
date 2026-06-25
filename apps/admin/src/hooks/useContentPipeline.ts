@@ -161,6 +161,27 @@ export function useDeleteTopic() {
   });
 }
 
+// Opname-naar-blog: stuurt het transcript naar de edge `recording-to-blog`, die een blog-CONCEPT
+// klaarzet in de bestaande blogs-module (via content_ingest_draft) en het blog_post_id teruggeeft.
+export function useGenerateBlogFromRecording() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { title: string; recorded_on?: string | null; transcript: string }) => {
+      const { data, error } = await supabase.functions.invoke("recording-to-blog", {
+        body: { title: input.title, recorded_on: input.recorded_on ?? null, transcript: input.transcript },
+      });
+      if (error) throw new Error(error.message || "Genereren mislukt");
+      const r = data as { status: string; blog_post_id?: string; message?: string };
+      if (r.status !== "ok" || !r.blog_post_id) throw new Error(r.message || "Genereren mislukt");
+      return r.blog_post_id;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["content-topics"] });
+      qc.invalidateQueries({ queryKey: ["blog-posts"] });
+    },
+  });
+}
+
 // ---- Content-engine instellingen (feeds, concurrenten, drempels, kill-switch) ----
 
 export type ContentEngineSettings = {

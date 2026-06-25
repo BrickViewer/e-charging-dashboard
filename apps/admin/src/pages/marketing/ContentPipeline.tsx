@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Plus, Sparkles, Newspaper, Settings, Inbox } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Sparkles, Newspaper, Settings, Inbox, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,7 @@ import { toast } from "sonner";
 import { BLOG_CATEGORIES } from "@/lib/blogTaxonomy";
 import {
   useContentTopics, useCreateTopic, useUpdateTopic, useMarkTopicDiscussed, useProfileNames,
-  SOURCE_LABEL, type ContentTopic, type TopicSource,
+  useGenerateBlogFromRecording, SOURCE_LABEL, type ContentTopic, type TopicSource,
 } from "@/hooks/useContentPipeline";
 
 const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "");
@@ -27,15 +28,20 @@ const COLUMNS: { key: string; label: string; statuses: string[] }[] = [
 ];
 
 export default function ContentPipeline() {
+  const navigate = useNavigate();
   const topicsQ = useContentTopics();
   const create = useCreateTopic();
   const update = useUpdateTopic();
   const markDiscussed = useMarkTopicDiscussed();
   const profileNamesQ = useProfileNames();
+  const genFromRec = useGenerateBlogFromRecording();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
+  const [recTitle, setRecTitle] = useState("");
+  const [recDate, setRecDate] = useState("");
+  const [recTranscript, setRecTranscript] = useState("");
 
   const topics = useMemo(() => topicsQ.data ?? [], [topicsQ.data]);
   const profileNames = profileNamesQ.data ?? {};
@@ -58,6 +64,17 @@ export default function ContentPipeline() {
       toast.success("Goedgekeurd voor concept");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Mislukt");
+    }
+  };
+  const generateFromRecording = async () => {
+    if (!recTitle.trim() || !recTranscript.trim()) return;
+    try {
+      const blogId = await genFromRec.mutateAsync({ title: recTitle.trim(), recorded_on: recDate || null, transcript: recTranscript });
+      toast.success("Concept aangemaakt — open in de blog-editor");
+      setRecTitle(""); setRecDate(""); setRecTranscript("");
+      navigate(`/marketing/blogs/${blogId}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Genereren mislukt");
     }
   };
   const byColumn = useMemo(() => {
@@ -129,6 +146,31 @@ export default function ContentPipeline() {
           ))}
           {inbox.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">Nog geen open onderwerpen.</li>}
         </ul>
+      </section>
+
+      {/* Opname -> blog: plak het transcript van de wekelijkse sessie; er komt een concept in de blogs-module. */}
+      <section className="rounded-xl border bg-card p-4">
+        <h2 className="flex items-center gap-2 text-base font-bold text-foreground"><Mic className="h-4 w-4 text-primary" /> Opname naar blog</h2>
+        <p className="text-xs text-muted-foreground">Plak het transcript van de wekelijkse opname. Er wordt een blog-concept klaargezet dat je daarna in de blog-editor redigeert en publiceert. Audio-upload met automatische transcriptie komt later.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titel *</Label>
+            <Input value={recTitle} onChange={(e) => setRecTitle(e.target.value)} placeholder="Bijv. Weekoverleg: netcongestie en ERE" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Opnamedatum</Label>
+            <Input type="date" value={recDate} onChange={(e) => setRecDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="mt-3 space-y-1.5">
+          <Label className="text-xs">Transcript *</Label>
+          <Textarea rows={6} value={recTranscript} onChange={(e) => setRecTranscript(e.target.value)} placeholder="Plak hier het uitgeschreven gesprek..." />
+        </div>
+        <div className="mt-3 flex justify-end">
+          <Button onClick={generateFromRecording} disabled={!recTitle.trim() || !recTranscript.trim() || genFromRec.isPending}>
+            <Sparkles className="mr-1.5 h-4 w-4" /> {genFromRec.isPending ? "Bezig..." : "Genereer concept"}
+          </Button>
+        </div>
       </section>
 
       {topicsQ.isLoading ? (

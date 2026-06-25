@@ -1,6 +1,6 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-type Role = "admin" | "manager" | "viewer" | "sales";
+type Role = "admin" | "manager" | "viewer" | "sales" | "marketing";
 
 interface AuthOk {
   ok: true;
@@ -19,6 +19,8 @@ interface AuthOptions {
   // Sta ook de 'sales'-rol toe (bv. de configurator-launcher). Default false zodat
   // overige functies admin/manager-only blijven.
   allowSales?: boolean;
+  // Sta ook de 'marketing'-rol toe (content-machine). Default false.
+  allowMarketing?: boolean;
 }
 
 interface ServiceClient {
@@ -57,7 +59,7 @@ export async function requireAdminOrInternal(
   corsHeaders: Record<string, string>,
   options: AuthOptions = {},
 ): Promise<AuthOk | AuthDenied> {
-  const { allowInternal = true, allowSales = false } = options;
+  const { allowInternal = true, allowSales = false, allowMarketing = false } = options;
   const internalSecret = req.headers.get("x-internal-secret") ?? "";
 
   if (internalSecret) {
@@ -108,13 +110,16 @@ export async function requireAdminOrInternal(
       ? "manager"
       : allowSales && roles.includes("sales")
       ? "sales"
+      : allowMarketing && roles.includes("marketing")
+      ? "marketing"
       : undefined;
-  if (role === "admin" || role === "manager" || role === "sales") {
+  if (role === "admin" || role === "manager" || role === "sales" || role === "marketing") {
     return { ok: true, kind: "user", userId: user.id, role };
   }
 
+  const extra = `${allowSales ? "/sales" : ""}${allowMarketing ? "/marketing" : ""}`;
   return {
     ok: false,
-    response: jsonError(403, `Alleen admin/manager${allowSales ? "/sales" : ""} mag deze actie uitvoeren`, corsHeaders),
+    response: jsonError(403, `Alleen admin/manager${extra} mag deze actie uitvoeren`, corsHeaders),
   };
 }
