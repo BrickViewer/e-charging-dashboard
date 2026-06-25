@@ -69,14 +69,19 @@ export function LeadCard({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold leading-tight text-foreground">{lead.company_name}</p>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold leading-tight text-foreground">{lead.company_name}</p>
+          {!lead.company_id && (
+            <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Particulier</span>
+          )}
+        </div>
         <span
           className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${PRIORITY_COLOR[lead.priority] ?? "bg-zinc-400"}`}
           title={`Prioriteit: ${lead.priority}`}
         />
       </div>
       <div className="mt-1.5 space-y-1">
-        {lead.contact_name && (
+        {lead.contact_name && lead.contact_name !== lead.company_name && (
           <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
             <User className="h-3 w-3 flex-shrink-0" />
             {lead.contact_name}

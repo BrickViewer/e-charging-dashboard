@@ -41,7 +41,10 @@ Deno.serve(async (req) => {
     if (!loc) return json({ status: "error", message: "Object niet gevonden" }, 404);
 
     const orgId = loc.organization_id as string;
-    const companyId = (typeof body.company_id === "string" && body.company_id) ? body.company_id : (loc.company_id as string | null) ?? null;
+    // Honoreer EXACT de keuze uit de dialoog: geen bedrijf gekozen = particulier (company_id null).
+    // NIET terugvallen op het bedrijf van het object — anders erft een standalone-offerte met alleen een
+    // persoon ongewild het bedrijf van dat object (bug: BrickViewer op een particulier-offerte).
+    const companyId = (typeof body.company_id === "string" && body.company_id) ? body.company_id : null;
     const personId = (typeof body.person_id === "string" && body.person_id) ? body.person_id : null;
 
     // Prospect-velden uit het gekoppelde bedrijf/persoon (denormalized cache op de quote).
