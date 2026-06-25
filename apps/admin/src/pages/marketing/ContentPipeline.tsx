@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
   useContentTopics, useCreateTopic, useUpdateTopic, useMarkTopicDiscussed,
   useGenerateBlogFromRecording, useContentSettings, useContentKeywords,
-  useRunResearch, useSetAgenda, useIgnoreTopic, type ContentTopic,
+  useRunResearch, useSetAgenda, useIgnoreTopic, type ContentTopic, type ContentKeyword,
 } from "@/hooks/useContentPipeline";
 import { TopicSheet } from "@/components/marketing/TopicSheet";
 import { ContentSettingsSheet } from "@/components/marketing/ContentSettingsSheet";
@@ -61,8 +61,8 @@ export default function ContentPipeline() {
   const topics = useMemo(() => topicsQ.data ?? [], [topicsQ.data]);
   const settings = settingsQ.data?.settings;
   const keywordById = useMemo(() => {
-    const m: Record<string, { query: string }> = {};
-    for (const k of keywordsQ.data ?? []) m[k.id] = { query: k.query };
+    const m: Record<string, ContentKeyword> = {};
+    for (const k of keywordsQ.data ?? []) m[k.id] = k;
     return m;
   }, [keywordsQ.data]);
 
@@ -86,6 +86,19 @@ export default function ContentPipeline() {
     return "";
   };
   const toggle = (id: string) => setExpandedId((cur) => (cur === id ? null : id));
+  // Echte SEO-signalen (DataForSEO) tonen zodra ze er zijn; anders niets (geen ruis).
+  const renderSignals = (t: ContentTopic) => {
+    const k = t.matched_keyword_id ? keywordById[t.matched_keyword_id] : null;
+    if (!k || k.search_volume == null) return null;
+    return (
+      <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+        <span>Volume {k.search_volume}/mnd</span>
+        {k.keyword_difficulty != null && <span>KD {Math.round(Number(k.keyword_difficulty))}</span>}
+        {t.seo_opportunity != null && <span className="font-medium text-foreground">kans {Math.round(Number(t.seo_opportunity) * 100)}%</span>}
+        {k.serp_gap != null && Number(k.serp_gap) >= 0.6 && <span className="rounded bg-green-100 px-1 font-medium text-green-700">Weinig goed antwoord</span>}
+      </p>
+    );
+  };
 
   const runResearch = async () => {
     try {
@@ -158,6 +171,7 @@ export default function ContentPipeline() {
                 <button onClick={() => toggle(t.id)} className="min-w-0 flex-1 text-left">
                   <p className="text-sm font-medium text-foreground">{t.conversation_question || t.raw_title}</p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">{metaLine(t)}</p>
+                  {renderSignals(t)}
                 </button>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <Button size="sm" variant="outline" onClick={() => addToAgenda(t.id)}><Plus className="mr-1 h-3.5 w-3.5" /> Toevoegen</Button>
@@ -195,6 +209,7 @@ export default function ContentPipeline() {
                 <button onClick={() => toggle(t.id)} className="min-w-0 flex-1 text-left">
                   <p className={`text-sm font-medium ${t.discussed_at ? "text-muted-foreground line-through" : "text-foreground"}`}>{t.conversation_question || t.raw_title}</p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">{metaLine(t)}</p>
+                  {renderSignals(t)}
                 </button>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {!t.discussed_at && <Button size="sm" variant="ghost" onClick={() => markDiscussed.mutate({ id: t.id, discussed: true })}><Check className="mr-1 h-3.5 w-3.5" /> Besproken</Button>}

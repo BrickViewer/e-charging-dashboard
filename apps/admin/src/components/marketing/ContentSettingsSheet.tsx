@@ -9,11 +9,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Plus, Play, Trash2, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useContentSettings, useUpdateContentSettings, type ContentEngineSettings } from "@/hooks/useContentPipeline";
+import { useContentSettings, useUpdateContentSettings, useRunMetrics, useRunSerpGap, useRunClustering, type ContentEngineSettings } from "@/hooks/useContentPipeline";
+
+const fmtAt = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "nog niet");
 
 export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const settingsQ = useContentSettings();
   const update = useUpdateContentSettings();
+  const runMetrics = useRunMetrics();
+  const runSerpGap = useRunSerpGap();
+  const runCluster = useRunClustering();
   const row = settingsQ.data;
 
   const [s, setS] = useState<ContentEngineSettings>({});
@@ -26,6 +31,18 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
   const setField = <K extends keyof ContentEngineSettings>(k: K, v: ContentEngineSettings[K]) => setS((c) => ({ ...c, [k]: v }));
   const feeds = s.feeds ?? [];
   const seeds = s.keyword_seeds ?? [];
+  const author = s.author ?? {};
+  const setAuthor = (patch: Partial<NonNullable<ContentEngineSettings["author"]>>) => setField("author", { ...author, ...patch });
+  // Data-acties (DataForSEO/Claude): eerst opslaan zodat de edge actuele instellingen gebruikt; no_key netjes melden.
+  const runData = async (label: string, mut: { mutateAsync: () => Promise<{ status?: string; message?: string } | null> }) => {
+    try {
+      if (row) await update.mutateAsync({ id: row.id, settings: s });
+      const r = await mut.mutateAsync();
+      if (r?.status === "no_key") { toast.message(r.message || "Sleutel ontbreekt nog"); return; }
+      if (r && r.status !== "ok") { toast.error(r.message || `${label} mislukt`); return; }
+      toast.success(`${label}: klaar`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : `${label} mislukt`); }
+  };
 
   const save = async () => {
     if (!row) return;
@@ -140,6 +157,28 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
               </div>
             </section>
 
+            {/* Zoekdata (DataForSEO) */}
+            <section className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Zoekdata (DataForSEO)</p>
+              <p className="text-[11px] text-muted-foreground">Echte zoekvolumes, difficulty en SERP-analyse vereisen de DataForSEO-sleutels (DATAFORSEO_LOGIN en DATAFORSEO_PASSWORD), op naam ingesteld in de Vault. Zonder sleutels blijft de prioritering op de slimme schatting staan.</p>
+              <p className="text-[11px] text-muted-foreground">Laatst: zoekvolumes {fmtAt(s.last_metrics_at)}, SERP-gap {fmtAt(s.last_serp_gap_at)}, clusters {fmtAt(s.last_cluster_at)}.</p>
+            </section>
+
+            {/* Auteur (E-E-A-T) */}
+            <section className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Auteur (E-E-A-T)</p>
+              <p className="text-[11px] text-muted-foreground">Een geverifieerde auteur (met LinkedIn via sameAs) versterkt je vindbaarheid in Google en AI-antwoorden. Dit komt in de schema-data van elke blog en in de schrijfstijl.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input value={author.name ?? ""} onChange={(e) => setAuthor({ name: e.target.value })} placeholder="Naam" />
+                <Input value={author.role ?? ""} onChange={(e) => setAuthor({ role: e.target.value })} placeholder="Functie, bijv. Specialist laadinfra" />
+              </div>
+              <Input value={author.url ?? ""} onChange={(e) => setAuthor({ url: e.target.value })} placeholder="Profiel-URL (bijv. over-ons-pagina)" />
+              <Textarea rows={2} value={(author.sameAs ?? []).join("\n")}
+                onChange={(e) => setAuthor({ sameAs: e.target.value.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean) })}
+                placeholder="sameAs (1 per regel): LinkedIn-profiel, bedrijfssite..." />
+              <Textarea rows={2} value={author.bio ?? ""} onChange={(e) => setAuthor({ bio: e.target.value })} placeholder="Korte bio (gebruikt in de schrijfstijl)" />
+            </section>
+
             {/* Distributie */}
             <section className="space-y-3">
               <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Distributie</p>
@@ -161,6 +200,15 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
               </Button>
               <Button variant="outline" onClick={runKeywords} disabled={kwRunning}>
                 <Search className="mr-1.5 h-4 w-4" /> {kwRunning ? "Bezig..." : "Zoekwoorden bijwerken"}
+              </Button>
+              <Button variant="outline" onClick={() => runData("Zoekvolumes ophalen", runMetrics)} disabled={runMetrics.isPending}>
+                {runMetrics.isPending ? "Bezig..." : "Zoekvolumes ophalen"}
+              </Button>
+              <Button variant="outline" onClick={() => runData("SERP-gap analyseren", runSerpGap)} disabled={runSerpGap.isPending}>
+                {runSerpGap.isPending ? "Bezig..." : "SERP-gap analyseren"}
+              </Button>
+              <Button variant="outline" onClick={() => runData("Clusters bijwerken", runCluster)} disabled={runCluster.isPending}>
+                {runCluster.isPending ? "Bezig..." : "Clusters bijwerken"}
               </Button>
               <Button className="ml-auto" onClick={save} disabled={update.isPending}>{update.isPending ? "Opslaan..." : "Opslaan"}</Button>
             </div>

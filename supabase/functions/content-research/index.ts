@@ -59,7 +59,9 @@ Deno.serve(async (req) => {
       .order("seo_opportunity", { ascending: false, nullsFirst: false })
       .limit(20);
     const { data: kwRows } = await sb.from("content_keywords")
-      .select("query, intent").eq("status", "active").order("priority", { ascending: false }).limit(25);
+      .select("query, intent").eq("status", "active")
+      .order("opportunity", { ascending: false, nullsFirst: false })
+      .order("priority", { ascending: false }).limit(25);
 
     const news = (newsRows ?? []) as { raw_title: string; raw_summary: string | null; source_name: string | null }[];
     const kws = (kwRows ?? []) as { query: string; intent: string }[];

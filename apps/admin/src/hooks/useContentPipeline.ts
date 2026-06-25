@@ -244,6 +244,10 @@ export type ContentEngineSettings = {
   last_research_at?: string;
   generation_model?: string;
   generation_max_tokens?: number;
+  author?: { name?: string; role?: string; url?: string; sameAs?: string[]; bio?: string };
+  last_metrics_at?: string;
+  last_serp_gap_at?: string;
+  last_cluster_at?: string;
 };
 
 // ---- Zoekvragen van de doelgroep (content_keywords, Laag A) ----
@@ -258,6 +262,12 @@ export type ContentKeyword = {
   priority: number;
   times_seen: number;
   status: string;
+  search_volume?: number | null;
+  keyword_difficulty?: number | null;
+  opportunity?: number | null;
+  serp_gap?: number | null;
+  serp_notes?: string | null;
+  is_pillar?: boolean | null;
 };
 
 export const INTENT_LABEL: Record<string, string> = {
@@ -273,10 +283,10 @@ export function useContentKeywords() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("content_keywords")
-        .select("id, query, cluster, intent, audience, source, priority, times_seen, status")
+        .select("id, query, cluster, intent, audience, source, priority, times_seen, status, search_volume, keyword_difficulty, opportunity, serp_gap, serp_notes, is_pillar")
         .eq("status", "active")
-        .order("priority", { ascending: false })
-        .order("times_seen", { ascending: false });
+        .order("opportunity", { ascending: false, nullsFirst: false })
+        .order("priority", { ascending: false });
       if (error) throw error;
       return (data ?? []) as ContentKeyword[];
     },
@@ -344,6 +354,36 @@ export function useRunResearch() {
       qc.invalidateQueries({ queryKey: ["content-topics"] });
       qc.invalidateQueries({ queryKey: ["content-settings"] });
     },
+  });
+}
+
+// SEO-data-laag (DataForSEO/Claude). Elke hook slaapt netjes (no_key) zonder de bijbehorende sleutel.
+function invokeEdge(qc: ReturnType<typeof useQueryClient>, fn: string) {
+  return async () => {
+    const { data, error } = await supabase.functions.invoke(fn, { body: {} });
+    if (error) throw new Error(error.message || "Mislukt");
+    return data as { status: string; message?: string; enriched?: number; checked?: number; clustered?: number } | null;
+  };
+}
+export function useRunMetrics() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: invokeEdge(qc, "content-metrics"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["content-keywords"] }); qc.invalidateQueries({ queryKey: ["content-topics"] }); qc.invalidateQueries({ queryKey: ["content-settings"] }); },
+  });
+}
+export function useRunSerpGap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: invokeEdge(qc, "content-serp-gap"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["content-keywords"] }); qc.invalidateQueries({ queryKey: ["content-topics"] }); qc.invalidateQueries({ queryKey: ["content-settings"] }); },
+  });
+}
+export function useRunClustering() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: invokeEdge(qc, "content-cluster"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["content-keywords"] }); qc.invalidateQueries({ queryKey: ["content-settings"] }); },
   });
 }
 

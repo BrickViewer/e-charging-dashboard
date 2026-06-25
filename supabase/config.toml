@@ -38,6 +38,9 @@ verify_jwt = false
 [functions.content-brief]
 verify_jwt = false
 
+[functions.content-cluster]
+verify_jwt = false
+
 [functions.content-discovery]
 verify_jwt = false
 
@@ -47,7 +50,13 @@ verify_jwt = false
 [functions.content-keyword-research]
 verify_jwt = false
 
+[functions.content-metrics]
+verify_jwt = false
+
 [functions.content-research]
+verify_jwt = false
+
+[functions.content-serp-gap]
 verify_jwt = false
 
 [functions.delete-team-member]

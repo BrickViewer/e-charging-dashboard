@@ -182,6 +182,9 @@ Deno.serve(async (req) => {
         `VISIE (transcript van de opname):\n${transcript}`,
         slugs.length ? `INTERNE LINKS (alleen deze slugs gebruiken):\n${slugs.map((s) => `- ${s.slug} (${s.title})`).join("\n")}` : null,
         `MERKCONTEXT: Het bedrijf levert en beheert laadinfrastructuur voor zakelijke en vastgoedklanten (kantoren, VvE's, bedrijfspanden, parkeerterreinen): advies, installatie, beheer en facturatie van laadpunten.`,
+        (settings.author && settings.author.name)
+          ? `AUTEUR: ${settings.author.name}${settings.author.role ? `, ${settings.author.role}` : ""}. Schrijf vanuit eigen ervaring en eerste-hands data van het team; benoem concrete praktijkvoorbeelden uit de visie en wees specifiek (E-E-A-T).`
+          : `Schrijf vanuit eigen ervaring en eerste-hands data van het team; benoem concrete praktijkvoorbeelden uit de visie en wees specifiek (E-E-A-T).`,
         topicCtx?.assigned_category ? `CATEGORIE: ${topicCtx.assigned_category}` : null,
         `Titel-suggestie: ${title}`,
       ].filter(Boolean).join("\n\n");
@@ -198,6 +201,7 @@ Deno.serve(async (req) => {
         p_seo_title: draft.seo_title, p_seo_description: draft.seo_description,
         p_seo_score: draft.seo_score, p_aeo_score: draft.aeo_score, p_quality_score: draft.quality_score,
         p_meta_variants: draft.meta_variants, p_internal_link_suggestions: draft.internal_link_suggestions,
+        p_author_name: (settings.author && settings.author.name) ? settings.author.name : null,
         p_generated_by: "agent:claude-blog@v1",
       };
     } else {

@@ -42,8 +42,9 @@ function wordCount(html: string | null | undefined): number {
 const LIST_COLS = "slug, title, excerpt, category, category_slug, tags, featured, author_name, reading_minutes, published_at, updated_at, cover_image_url, cover_image_alt, cover_image_width, cover_image_height";
 const FULL_COLS = `${LIST_COLS}, content, seo_title, seo_description, noindex, canonical_url, faq`;
 
+type AuthorEntity = { name?: string; role?: string; url?: string; sameAs?: string[] };
 // deno-lint-ignore no-explicit-any
-function buildDetail(p: any) {
+function buildDetail(p: any, author?: AuthorEntity | null) {
   const canonical = (typeof p.canonical_url === "string" && p.canonical_url) || `${SITE}${BLOG_PATH}/${p.slug}`;
   const seo_title = clampWords(p.seo_title || p.title, 60);
   const seo_description = clampWords(p.seo_description || p.excerpt, 155);
@@ -58,7 +59,9 @@ function buildDetail(p: any) {
     image,
     datePublished: p.published_at || undefined,
     dateModified: p.updated_at || undefined,
-    author: { "@type": "Organization", name: p.author_name || "E-Charging", url: SITE },
+    author: (author && author.name)
+      ? { "@type": "Person", name: author.name, ...(author.role ? { jobTitle: author.role } : {}), ...(author.url ? { url: author.url } : {}), ...(Array.isArray(author.sameAs) && author.sameAs.length ? { sameAs: author.sameAs } : {}), worksFor: PUBLISHER }
+      : { "@type": "Organization", name: p.author_name || "E-Charging", url: SITE },
     publisher: PUBLISHER,
     mainEntityOfPage: { "@type": "WebPage", "@id": canonical },
     articleSection: p.category || undefined,
@@ -94,7 +97,9 @@ Deno.serve(async (req) => {
         .eq("slug", slug).eq("status", "gepubliceerd").maybeSingle();
       if (error) throw error;
       if (!data) return json({ status: "not_found" }, 404, origin);
-      return json({ status: "ok", post: buildDetail(data) }, 200, origin);
+      const { data: sRow } = await sb.from("content_engine_settings").select("settings").eq("is_active", true).limit(1).maybeSingle();
+      const author = (sRow?.settings as { author?: AuthorEntity } | null)?.author ?? null;
+      return json({ status: "ok", post: buildDetail(data, author) }, 200, origin);
     }
     const { data, error } = await sb.from("blog_posts").select(LIST_COLS)
       .eq("status", "gepubliceerd").order("published_at", { ascending: false, nullsFirst: false });
