@@ -11,13 +11,6 @@ import { Plus, Play, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useContentSettings, useUpdateContentSettings, type ContentEngineSettings } from "@/hooks/useContentPipeline";
 
-// Vertrouwde-bronnen-startlijst uit het marketingplan. Bewust namen (geen vaste RSS-URL's): je voegt
-// een bron met één klik toe en vult zelf de exacte RSS/sitemap-URL in voordat je ontdekking aanzet.
-const TRUSTED_SOURCES = [
-  "ElaadNL", "NKL Nederland", "RVO / Rijksoverheid", "eViolin", "DOET", "Netbeheer Nederland",
-  "Solar & Storage Magazine", "Energeia", "Automotive-online", "Change Inc",
-];
-
 export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const settingsQ = useContentSettings();
   const update = useUpdateContentSettings();
@@ -31,7 +24,6 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
 
   const setField = <K extends keyof ContentEngineSettings>(k: K, v: ContentEngineSettings[K]) => setS((c) => ({ ...c, [k]: v }));
   const feeds = s.feeds ?? [];
-  const competitors = s.competitors ?? [];
 
   const save = async () => {
     if (!row) return;
@@ -76,56 +68,30 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
               <p className="text-[11px] text-muted-foreground">Concepten gaan nooit automatisch live — jij keurt elke blog goed.</p>
             </section>
 
-            {/* Drempels */}
+            {/* Filters */}
             <section className="space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Drempels</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Filters (laat gerust op standaard staan)</p>
+              <p className="text-[11px] text-muted-foreground">Min. kwaliteit/SEO/AEO = minimale score voordat de AI er een concept van maakt. Uniek = hoe nieuw een onderwerp moet zijn; we slaan dingen over die te veel lijken op wat we al hebben.</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <NumField label="Min. kwaliteit" value={s.min_quality} onChange={(v) => setField("min_quality", v)} />
                 <NumField label="Min. SEO" value={s.min_seo} onChange={(v) => setField("min_seo", v)} />
                 <NumField label="Min. AEO" value={s.min_aeo} onChange={(v) => setField("min_aeo", v)} />
-                <NumField label="Noviteit (0-1)" step="0.05" value={s.novelty_threshold} onChange={(v) => setField("novelty_threshold", v)} />
+                <NumField label="Uniek (0-1)" step="0.05" value={s.novelty_threshold} onChange={(v) => setField("novelty_threshold", v)} />
               </div>
             </section>
 
-            {/* Voorgestelde vertrouwde bronnen (startlijst uit het marketingplan) */}
+            {/* Bronnen die we automatisch volgen */}
             <section className="space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Voorgestelde vertrouwde bronnen</p>
-              <p className="text-[11px] text-muted-foreground">Eén klik voegt de bron als feed toe; vul daarna de exacte RSS/sitemap-URL in.</p>
-              <div className="flex flex-wrap gap-1.5">
-                {TRUSTED_SOURCES.map((name) => {
-                  const added = feeds.some((f) => (f.name ?? "").toLowerCase() === name.toLowerCase());
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      disabled={added}
-                      onClick={() => setField("feeds", [...feeds, { url: "", name }])}
-                      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted disabled:opacity-40"
-                    >
-                      <Plus className="h-3 w-3" /> {name}
-                    </button>
-                  );
-                })}
-              </div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Bronnen die we automatisch volgen</p>
+              <p className="text-[11px] text-muted-foreground">Dit zijn nieuwslijsten van betrouwbare sites; we lezen ze uit als je op "Nu ophalen" klikt. Ze staan al voor je ingevuld - je hoeft hier niets te doen, maar je mag bronnen toevoegen of weghalen.</p>
+              <ListSection
+                title=""
+                addLabel="Bron toevoegen"
+                rows={feeds.map((f, i) => ({ key: i, a: f.url, b: f.name ?? "" }))}
+                aPlaceholder="https://site.nl/feed" bPlaceholder="naam"
+                onChange={(rows) => setField("feeds", rows.map((r) => ({ url: r.a, name: r.b || undefined })))}
+              />
             </section>
-
-            {/* Feeds */}
-            <ListSection
-              title="RSS / nieuws-feeds"
-              addLabel="Feed toevoegen"
-              rows={feeds.map((f, i) => ({ key: i, a: f.url, b: f.name ?? "" }))}
-              aPlaceholder="https://…/feed.xml" bPlaceholder="naam (optioneel)"
-              onChange={(rows) => setField("feeds", rows.map((r) => ({ url: r.a, name: r.b || undefined })))}
-            />
-
-            {/* Concurrenten */}
-            <ListSection
-              title="Concurrent-sitemaps"
-              addLabel="Concurrent toevoegen"
-              rows={competitors.map((c, i) => ({ key: i, a: c.sitemap ?? c.url ?? "", b: c.name ?? "" }))}
-              aPlaceholder="https://concurrent.nl/sitemap.xml" bPlaceholder="naam (optioneel)"
-              onChange={(rows) => setField("competitors", rows.map((r) => ({ sitemap: r.a, name: r.b || undefined })))}
-            />
 
             {/* Distributie */}
             <section className="space-y-3">
@@ -190,7 +156,7 @@ function ListSection({
 
   return (
     <section className="space-y-2">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{title}</p>
+      {title ? <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{title}</p> : null}
       <div className="space-y-2">
         {rows.map((r, i) => (
           <div key={r.key} className="flex items-center gap-2">

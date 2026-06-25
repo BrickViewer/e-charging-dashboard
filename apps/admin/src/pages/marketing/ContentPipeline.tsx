@@ -115,6 +115,7 @@ export default function ContentPipeline() {
             <p className="flex items-center gap-1.5 text-xs font-medium text-foreground"><Globe className="h-3.5 w-3.5" /> Gescande bronnen</p>
             <button onClick={() => setSettingsOpen(true)} className="text-[11px] font-medium text-primary hover:underline">beheer</button>
           </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">Betrouwbare nieuwslijsten (RSS) die we automatisch uitlezen - al voor je ingevuld.</p>
           {sources.length === 0 ? (
             <p className="mt-1.5 text-[11px] text-muted-foreground">Nog geen bronnen ingesteld. Klik "beheer" en voeg vertrouwde bronnen toe (bijv. ElaadNL, RVO, Solar &amp; Storage).</p>
           ) : (
