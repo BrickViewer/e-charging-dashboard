@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_OFFER_EMAIL, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { OfferPreview } from "@/components/sales/OfferPreview";
+import { mdBoldToHtml } from "@/lib/emailBody";
 
 type QuoteSummary = {
   quoteNumber: string;
@@ -236,9 +237,10 @@ export default function OfferInternalSign() {
             <div className="space-y-2">
               <h2 className="text-base font-bold">E-mailbericht aan de klant</h2>
               <p className="text-sm text-muted-foreground">Dit ontvangt de klant bij de offerte. De aanhef, de knop "Offerte bekijken en ondertekenen" en de ondertekening worden automatisch toegevoegd.</p>
-              <div className="whitespace-pre-line rounded-lg border bg-muted/30 p-3 text-sm leading-relaxed text-foreground">
-                {(quote.offerDetails?.emailMessage?.trim()) || DEFAULT_OFFER_EMAIL}
-              </div>
+              <div
+                className="rounded-lg border bg-muted/30 p-3 text-sm leading-relaxed text-foreground [&>p]:mb-2 [&>p:last-child]:mb-0 [&_strong]:font-bold"
+                dangerouslySetInnerHTML={{ __html: mdBoldToHtml((quote.offerDetails?.emailMessage?.trim()) || DEFAULT_OFFER_EMAIL) }}
+              />
             </div>
 
             <div className="space-y-2">

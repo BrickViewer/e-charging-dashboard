@@ -84,7 +84,9 @@ export interface OfferDetails {
 }
 
 // Standaard body-tekst van de offerte-e-mail aan de klant — voorvulling van het bewerkbare veld.
+// Platte tekst met markdown-vet (`**woord**`) en lege regel = nieuwe alinea (zie lib/emailBody.ts).
 // MOET gelijk blijven aan de fallback in supabase/functions/_shared/offer-email.ts (renderOfferEmail).
 export const DEFAULT_OFFER_EMAIL =
   "Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur.\n\n" +
-  "In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.";
+  "In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.\n\n" +
+  "De volledige offerte vindt u als **PDF-bijlage** bij deze e-mail.";

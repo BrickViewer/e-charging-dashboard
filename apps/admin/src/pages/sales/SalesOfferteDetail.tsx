@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { EmailBodyEditor } from "@/components/sales/EmailBodyEditor";
 import { toast } from "sonner";
 import { ArrowLeft, Building2, Eye, Loader2, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, lineItemsOf } from "@/hooks/useQuotes";
@@ -569,8 +570,8 @@ export default function SalesOfferteDetail() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">E-mailbericht aan de klant</Label>
-                <Textarea rows={6} className="leading-relaxed" value={emailMessage} disabled={!isConcept} onChange={(e) => setEmailMessage(e.target.value)} />
-                <p className="text-[10px] text-muted-foreground">Begin je bericht <strong>zónder aanhef</strong> (die staat hierboven). De knop "Offerte bekijken en ondertekenen" en de geldigheid worden automatisch toegevoegd. Alinea's scheiden met een lege regel.</p>
+                <EmailBodyEditor value={emailMessage} onChange={setEmailMessage} disabled={!isConcept} />
+                <p className="text-[10px] text-muted-foreground">Begin je bericht <strong>zónder aanhef</strong> (die staat hierboven). Maak woorden vet met de knop of Ctrl/Cmd+B. De knop "Offerte bekijken en ondertekenen" en de geldigheid worden automatisch toegevoegd; alinea's scheiden met een lege regel.</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Ondertekening (na "Met vriendelijke groet,")</Label>
