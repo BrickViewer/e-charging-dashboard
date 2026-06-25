@@ -33,7 +33,8 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
           // Terug naar een opgeslagen bestemming (bv. een interne tekenlink) als die er is.
           let dest = "";
           try { dest = sessionStorage.getItem("ec_post_login") ?? ""; if (dest) sessionStorage.removeItem("ec_post_login"); } catch { /* ignore */ }
-          if (dest) navigate(dest);
+          // Alleen interne, relatieve paden volgen (geen open redirect naar //evil.com of absolute URLs).
+          if (dest && dest.startsWith("/") && !dest.startsWith("//")) navigate(dest);
           else if (isInternal) navigate("/admin");
           else if (role === "client") navigate("/portal");
           else navigate("/");

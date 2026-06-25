@@ -14,6 +14,7 @@ import {
   useContentTopic, useUpdateTopic, useDeleteTopic, TOPIC_STATUS_LABEL, SOURCE_LABEL,
 } from "@/hooks/useContentPipeline";
 import { useBlogPost, useUpdateBlogPost } from "@/hooks/useBlogPosts";
+import DOMPurify from "dompurify";
 
 export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | null; open: boolean; onOpenChange: (v: boolean) => void }) {
   const topicQ = useContentTopic(open ? topicId ?? undefined : undefined);
@@ -209,7 +210,7 @@ function DraftReviewPanel({ blogPostId, onPublished }: { blogPostId: string; onP
       ) : null}
 
       <div className="max-h-64 overflow-y-auto rounded border bg-muted/20 p-2 text-xs prose prose-sm max-w-none"
-        dangerouslySetInnerHTML={{ __html: post.content ?? "<p class='text-muted-foreground'>Geen inhoud.</p>" }} />
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content ?? "<p class='text-muted-foreground'>Geen inhoud.</p>") }} />
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-3">
         {!isPublished && (
