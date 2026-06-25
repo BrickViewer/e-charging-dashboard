@@ -56,15 +56,18 @@ Deno.serve(async (req) => {
         return json({ status: "error", message: "Alleen admin/superadmin kan namens E-Charging tekenen" }, 403);
       }
       const { data: prof } = await serviceClient.from("profiles").select("full_name, signer_title, signature_data_url").eq("user_id", auth.userId).maybeSingle();
-      if (!prof?.signature_data_url) return json({ status: "no_signature", message: "Stel eerst je handtekening in bij Instellingen › Mijn handtekening" }, 422);
+      // Ter plekke getekende handtekening heeft voorrang op de opgeslagen; minstens een van beide vereist.
+      const drawnSig = typeof body.internal_signature_data_url === "string" && body.internal_signature_data_url ? body.internal_signature_data_url : null;
+      const sig = drawnSig ?? prof?.signature_data_url ?? null;
+      if (!sig) return json({ status: "no_signature", message: "Teken je handtekening of stel er een in bij Instellingen › Mijn handtekening" }, 422);
       await serviceClient.from("quotes").update({
         internal_signer_user_id: auth.userId,
-        internal_signer_name: prof.full_name ?? null,
-        internal_signer_function: prof.signer_title ?? null,
-        internal_signature_data_url: prof.signature_data_url,
+        internal_signer_name: prof?.full_name ?? null,
+        internal_signer_function: prof?.signer_title ?? null,
+        internal_signature_data_url: sig,
         internal_signed_at: new Date().toISOString(),
       }).eq("id", quoteId);
-      internalSignerName = prof.full_name ?? null;
+      internalSignerName = prof?.full_name ?? null;
       await serviceClient.from("quote_internal_signings").update({ status: "revoked" }).eq("quote_id", quoteId).eq("status", "pending");
     }
 

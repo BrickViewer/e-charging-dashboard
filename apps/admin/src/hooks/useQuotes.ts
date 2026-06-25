@@ -185,10 +185,10 @@ export function useCreateClientFromQuote() {
 export function useSendQuote() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ quoteId, email, pdfBase64, internalSelfSign }: { quoteId: string; email?: string; pdfBase64?: string; internalSelfSign?: boolean }) => {
+    mutationFn: async ({ quoteId, email, pdfBase64, internalSelfSign, internalSignatureDataUrl }: { quoteId: string; email?: string; pdfBase64?: string; internalSelfSign?: boolean; internalSignatureDataUrl?: string | null }) => {
       const { data, error } = await supabase.functions.invoke<{ status: string; message?: string; acceptUrl?: string }>(
         "quote-send",
-        { body: { quote_id: quoteId, email, pdf_base64: pdfBase64, internal_self_sign: internalSelfSign } },
+        { body: { quote_id: quoteId, email, pdf_base64: pdfBase64, internal_self_sign: internalSelfSign, internal_signature_data_url: internalSignatureDataUrl } },
       );
       if (error) throw error;
       if (data?.status && data.status !== "sent") throw new Error(data.message || "Versturen mislukt");

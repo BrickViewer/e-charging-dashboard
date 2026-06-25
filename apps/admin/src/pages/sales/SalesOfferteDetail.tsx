@@ -19,6 +19,7 @@ import { SignerStatusPanel } from "@/components/sales/SignerStatusPanel";
 import { CreateClientFromQuoteDialog } from "@/components/sales/CreateClientFromQuoteDialog";
 import { ScopeSelector } from "@/components/sales/ScopeSelector";
 import { OfferPreview } from "@/components/sales/OfferPreview";
+import { SignaturePad } from "@/components/SignaturePad";
 import { CompanyPicker } from "@/components/contacts/CompanyPicker";
 import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { LeadPicker } from "@/components/contacts/LeadPicker";
@@ -68,6 +69,7 @@ export default function SalesOfferteDetail() {
   const [idleGrace, setIdleGrace] = useState("");
   const [od, setOd] = useState<OfferDetails>({});
   const [signerUserId, setSignerUserId] = useState<string | null>(null);
+  const [drawnSelfSig, setDrawnSelfSig] = useState<string | null>(null);
   // Eén voortgangs-/busy-vlag over de héle verzendketen → geen dubbele verzending.
   const [busy, setBusy] = useState<string | null>(null);
   const [createClientOpen, setCreateClientOpen] = useState(false);
@@ -261,7 +263,8 @@ export default function SalesOfferteDetail() {
   // Zelf tekenen: stempel eigen handtekening op de PDF en verstuur direct naar de klant.
   const signAndSend = async () => {
     if (busy || !quote || !selfAdmin) return;
-    if (!selfAdmin.signatureDataUrl) { toast.error("Stel eerst je handtekening in bij Instellingen › Mijn handtekening"); return; }
+    const selfSig = drawnSelfSig ?? selfAdmin.signatureDataUrl;
+    if (!selfSig) { toast.error("Teken je handtekening of stel er een in bij Instellingen › Mijn handtekening"); return; }
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
     if (grandTotal <= 0 && !window.confirm("Het offertetotaal is €0. Toch versturen?")) return;
     if (!window.confirm(`Offerte ${quote.quote_number} ondertekenen en versturen naar ${email.trim()}?\nTotaal: ${euro(grandTotal)}`)) return;
@@ -270,12 +273,12 @@ export default function SalesOfferteDetail() {
       await save();
       setBusy("Document voorbereiden…");
       const pdfBase64 = await offerPdfBase64(pdfData(), {
-        echargingSignatureDataUrl: selfAdmin.signatureDataUrl,
+        echargingSignatureDataUrl: selfSig,
         echargingSignerName: selfAdmin.fullName,
         echargingSignerFunction: selfAdmin.signerTitle,
       });
       setBusy("Versturen…");
-      await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64, internalSelfSign: true });
+      await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64, internalSelfSign: true, internalSignatureDataUrl: drawnSelfSig });
       toast.success(`Ondertekend en verstuurd naar ${email.trim()}`);
       setBusy("Dossier bijwerken…");
       await updateSharepointOff(pdfBase64, "De offerte is verstuurd");
@@ -286,7 +289,7 @@ export default function SalesOfferteDetail() {
   // Ander tekent: stuur ter ondertekening (mail met link).
   const sendForSignoff = async () => {
     if (busy || !quote || !selectedAdmin) return;
-    if (!selectedAdmin.hasSignature) { toast.error(`${selectedAdmin.fullName} heeft nog geen handtekening ingesteld`); return; }
+    // De collega kan zijn handtekening op de tekenlink-pagina zelf zetten; vooraf instellen is niet meer vereist.
     if (!window.confirm(`Offerte ${quote.quote_number} ter ondertekening sturen naar ${selectedAdmin.fullName}?`)) return;
     try {
       setBusy("Opslaan…");
@@ -596,6 +599,12 @@ export default function SalesOfferteDetail() {
               currentUserId={user?.id}
               editable={isConcept}
             />
+            {selfSelected && isConcept && (
+              <div className="mt-3 space-y-1.5">
+                <Label className="text-xs">{selfAdmin?.signatureDataUrl ? "Jouw handtekening (teken hier om je opgeslagen handtekening te vervangen)" : "Jouw handtekening (teken hier - je hebt er nog geen opgeslagen)"}</Label>
+                <SignaturePad onChange={setDrawnSelfSig} />
+              </div>
+            )}
           </Section>
 
           {/* Acties */}
@@ -606,7 +615,7 @@ export default function SalesOfferteDetail() {
             </div>
             <div className="flex items-center gap-2">
               {quote.status === "concept" && (
-                <Button onClick={selfSelected ? signAndSend : sendForSignoff} disabled={!!busy || !signerUserId || !selectedAdmin?.hasSignature}>
+                <Button onClick={selfSelected ? signAndSend : sendForSignoff} disabled={!!busy || !signerUserId || (selfSelected && !(drawnSelfSig ?? selfAdmin?.signatureDataUrl))}>
                   {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : selfSelected ? <PenLine className="mr-1.5 h-4 w-4" /> : <Send className="mr-1.5 h-4 w-4" />}
                   {busy ?? (selfSelected ? "Onderteken & verstuur" : "Stuur ter ondertekening")}
                 </Button>

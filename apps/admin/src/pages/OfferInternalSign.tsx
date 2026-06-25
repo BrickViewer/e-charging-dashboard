@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_OFFER_EMAIL, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { OfferPreview } from "@/components/sales/OfferPreview";
+import { SignaturePad } from "@/components/SignaturePad";
 import { mdBoldToHtml } from "@/lib/emailBody";
 
 type QuoteSummary = {
@@ -34,6 +35,9 @@ type QuoteSummary = {
   internalSignerName?: string | null;
   internalSignerFunction?: string | null;
   internalSignatureDataUrl?: string | null;
+  signerProfileName?: string | null;
+  signerProfileFunction?: string | null;
+  recipientEmail?: string | null;
 };
 
 const toPdfData = (q: QuoteSummary): OfferPdfData => ({
@@ -56,10 +60,10 @@ const toPdfData = (q: QuoteSummary): OfferPdfData => ({
   offerTemplate: q.offerTemplate ?? null,
 });
 
-const echargingSig = (q: QuoteSummary) => ({
-  echargingSignatureDataUrl: q.internalSignatureDataUrl ?? null,
-  echargingSignerName: q.internalSignerName ?? null,
-  echargingSignerFunction: q.internalSignerFunction ?? null,
+const echargingSig = (q: QuoteSummary, sig: string | null) => ({
+  echargingSignatureDataUrl: sig,
+  echargingSignerName: q.internalSignerName ?? q.signerProfileName ?? null,
+  echargingSignerFunction: q.internalSignerFunction ?? q.signerProfileFunction ?? null,
 });
 
 export default function OfferInternalSign() {
@@ -74,6 +78,8 @@ export default function OfferInternalSign() {
   const [done, setDone] = useState<null | "approved" | "edited">(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [drawnSig, setDrawnSig] = useState<string | null>(null);
+  const [redraw, setRedraw] = useState(false);
 
   // Inloggen vereist: niet-ingelogd -> sla het pad op en stuur naar login.
   useEffect(() => {
@@ -110,7 +116,7 @@ export default function OfferInternalSign() {
     if (pdfUrl) { window.open(pdfUrl, "_blank", "noopener"); return; }
     setPdfBusy(true);
     try {
-      const blob = await offerPdfBlob(toPdfData(quote), { ...echargingSig(quote) });
+      const blob = await offerPdfBlob(toPdfData(quote), { ...echargingSig(quote, drawnSig ?? quote.internalSignatureDataUrl ?? null) });
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
       window.open(url, "_blank", "noopener");
@@ -126,8 +132,9 @@ export default function OfferInternalSign() {
     if (!token || !quote) return;
     setSubmitting(true);
     try {
-      const signedPdf = await offerPdfBase64(toPdfData(quote), { ...echargingSig(quote) });
-      const { data, error } = await supabase.functions.invoke("quote-internal-sign", { body: { token, action: "approve", signed_pdf_base64: signedPdf } });
+      const sig = drawnSig ?? quote.internalSignatureDataUrl ?? null;
+      const signedPdf = await offerPdfBase64(toPdfData(quote), { ...echargingSig(quote, sig) });
+      const { data, error } = await supabase.functions.invoke("quote-internal-sign", { body: { token, action: "approve", signed_pdf_base64: signedPdf, signature_data_url: drawnSig } });
       if (error) throw new Error("Goedkeuren mislukt");
       const out = data as { status: string; message?: string };
       if (out.status === "approved") setDone("approved");
@@ -187,6 +194,14 @@ export default function OfferInternalSign() {
     );
   }
 
+  const storedSig = quote.internalSignatureDataUrl ?? null;
+  const effectiveSig = drawnSig ?? storedSig;
+  const showPad = redraw || !storedSig || drawnSig != null;
+  const sigName = quote.internalSignerName || quote.signerProfileName || "—";
+  const sigFn = quote.internalSignerFunction || quote.signerProfileFunction || null;
+  const emailGreeting = quote.offerDetails?.emailGreeting?.trim() || `Beste ${quote.contact || "klant"},`;
+  const emailClosing = quote.offerDetails?.emailClosingName?.trim() || quote.internalSignerName || quote.signerProfileName || "Team E-Charging";
+
   return (
     <div className="flex min-h-[100dvh] flex-col bg-muted/30 lg:h-[100dvh] lg:overflow-hidden">
       <header className="flex items-center justify-between gap-3 border-b bg-background px-4 py-3 sm:px-6">
@@ -197,7 +212,7 @@ export default function OfferInternalSign() {
       <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[1.65fr_1fr]">
         {/* Links: de offerte als schaalbare viewer (met E-Charging-handtekening vooraf ingevuld) */}
         <div className="flex min-h-0 flex-col gap-2 bg-muted/40 p-3 sm:p-5">
-          <OfferPreview data={toPdfData(quote)} signature={echargingSig(quote) as OfferSignature} className="h-[65vh] w-full lg:h-auto lg:flex-1" />
+          <OfferPreview data={toPdfData(quote)} signature={echargingSig(quote, effectiveSig) as OfferSignature} className="h-[65vh] w-full lg:h-auto lg:flex-1" />
           <div className="text-center">
             <button type="button" onClick={openPdf} disabled={pdfBusy} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-60">
               {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -215,36 +230,58 @@ export default function OfferInternalSign() {
               <p className="text-sm text-muted-foreground">Voor {quote.company || "de klant"}{quote.contact ? ` · ${quote.contact}` : ""}</p>
             </div>
 
-            {/* Voorgevulde ondertekening (read-only) */}
+            {/* Ondertekening: ter plekke tekenen of de opgeslagen handtekening gebruiken */}
             <div className="space-y-2">
               <h2 className="text-base font-bold">Jouw ondertekening</h2>
-              <p className="text-sm text-muted-foreground">Je tekent met je opgeslagen handtekening. Klopt de offerte? Keur goed — dan gaat 'm direct naar de klant.</p>
-              <div className="rounded-lg border bg-white p-3">
-                <div className="flex h-20 items-center justify-center">
-                  {quote.internalSignatureDataUrl
-                    ? <img src={quote.internalSignatureDataUrl} alt="Handtekening" className="max-h-16 max-w-full" />
-                    : <span className="text-xs text-muted-foreground">Geen handtekening gevonden</span>}
+              {showPad ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Teken hieronder je handtekening. Klopt de offerte? Keur goed - dan gaat 'm direct naar de klant.</p>
+                  <div className="rounded-lg border bg-white p-3">
+                    <SignaturePad onChange={setDrawnSig} />
+                    <div className="mt-1 border-t pt-2 text-sm">
+                      <p className="font-semibold text-foreground">{sigName}</p>
+                      {sigFn ? <p className="text-xs text-muted-foreground">{sigFn}</p> : null}
+                      <p className="text-xs text-muted-foreground">E-Charging B.V.</p>
+                    </div>
+                  </div>
+                  {storedSig ? (
+                    <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => { setDrawnSig(null); setRedraw(false); }}>
+                      Gebruik mijn opgeslagen handtekening
+                    </button>
+                  ) : null}
                 </div>
-                <div className="mt-1 border-t pt-2 text-sm">
-                  <p className="font-semibold text-foreground">{quote.internalSignerName || "—"}</p>
-                  {quote.internalSignerFunction ? <p className="text-xs text-muted-foreground">{quote.internalSignerFunction}</p> : null}
-                  <p className="text-xs text-muted-foreground">E-Charging B.V.</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Je tekent met je opgeslagen handtekening. Klopt de offerte? Keur goed - dan gaat 'm direct naar de klant.</p>
+                  <div className="rounded-lg border bg-white p-3">
+                    <div className="flex h-20 items-center justify-center">
+                      <img src={storedSig as string} alt="Handtekening" className="max-h-16 max-w-full" />
+                    </div>
+                    <div className="mt-1 border-t pt-2 text-sm">
+                      <p className="font-semibold text-foreground">{sigName}</p>
+                      {sigFn ? <p className="text-xs text-muted-foreground">{sigFn}</p> : null}
+                      <p className="text-xs text-muted-foreground">E-Charging B.V.</p>
+                    </div>
+                  </div>
+                  <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setRedraw(true)}>Opnieuw tekenen</button>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* E-mailbericht dat de klant ontvangt bij goedkeuring (ter controle vóór ondertekenen). */}
+            {/* Volledig e-mailbericht dat de klant ontvangt (ter controle vóór ondertekenen). */}
             <div className="space-y-2">
               <h2 className="text-base font-bold">E-mailbericht aan de klant</h2>
-              <p className="text-sm text-muted-foreground">Dit ontvangt de klant bij de offerte. De aanhef, de knop "Offerte bekijken en ondertekenen" en de ondertekening worden automatisch toegevoegd.</p>
-              <div
-                className="rounded-lg border bg-muted/30 p-3 text-sm leading-relaxed text-foreground [&>p]:mb-2 [&>p:last-child]:mb-0 [&_strong]:font-bold"
-                dangerouslySetInnerHTML={{ __html: mdBoldToHtml((quote.offerDetails?.emailMessage?.trim()) || DEFAULT_OFFER_EMAIL) }}
-              />
+              {quote.recipientEmail ? <p className="text-sm text-muted-foreground">Aan: <span className="font-medium text-foreground">{quote.recipientEmail}</span></p> : null}
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm leading-relaxed text-foreground [&_p]:mb-2 [&_strong]:font-bold">
+                <p className="font-medium">{emailGreeting}</p>
+                <div dangerouslySetInnerHTML={{ __html: mdBoldToHtml((quote.offerDetails?.emailMessage?.trim()) || DEFAULT_OFFER_EMAIL) }} />
+                <p>Met vriendelijke groet,<br />{emailClosing}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">De knop "Offerte bekijken en ondertekenen" en de geldigheid worden automatisch toegevoegd.</p>
             </div>
 
             <div className="space-y-2">
-              <Button className="w-full" size="lg" onClick={approve} disabled={submitting || !quote.internalSignatureDataUrl}>
+              <Button className="w-full" size="lg" onClick={approve} disabled={submitting || !effectiveSig}>
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PenLine className="mr-2 h-4 w-4" />}
                 Goedkeuren &amp; versturen naar klant
               </Button>

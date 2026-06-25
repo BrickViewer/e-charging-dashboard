@@ -96,6 +96,10 @@ Deno.serve(async (req) => {
         .order("version", { ascending: false }).limit(1).maybeSingle();
       const offerTemplate = normalizeSettings(settingsRow?.settings).offerTemplate;
 
+      // Profiel van de ingelogde ondertekenaar: fallback voor naam/functie als er nog geen voorgevulde is.
+      const { data: signerProfile } = await sb.from("profiles")
+        .select("full_name, signer_title").eq("user_id", auth.userId).maybeSingle();
+
       const summary = {
         quoteNumber: quote.quote_number,
         company: quote.prospect_company,
@@ -118,6 +122,10 @@ Deno.serve(async (req) => {
         internalSignerName: quote.internal_signer_name ?? null,
         internalSignerFunction: quote.internal_signer_function ?? null,
         internalSignatureDataUrl: quote.internal_signature_data_url ?? null,
+        // Fallbacks + volledige e-mailcontext voor de ondertekenaar.
+        signerProfileName: signerProfile?.full_name ?? null,
+        signerProfileFunction: signerProfile?.signer_title ?? null,
+        recipientEmail: quote.prospect_email ?? null,
       };
       return json({ status: "ok", quote: summary });
     }
@@ -125,9 +133,17 @@ Deno.serve(async (req) => {
     if (action === "approve") {
       const pdfBase64 = typeof body.signed_pdf_base64 === "string" ? body.signed_pdf_base64 : "";
       if (!pdfBase64) return json({ status: "error", message: "Ondertekende PDF ontbreekt" }, 400);
+      // Ter plekke getekende handtekening (optioneel) opslaan zodat de bron-van-waarheid klopt.
+      const drawnSig = typeof body.signature_data_url === "string" && body.signature_data_url ? body.signature_data_url : null;
       const now = new Date().toISOString();
+      const { data: prof } = await sb.from("profiles").select("full_name, signer_title").eq("user_id", auth.userId).maybeSingle();
+      const patch: Record<string, string | null> = { internal_signed_at: now };
+      if (drawnSig) patch.internal_signature_data_url = drawnSig;
+      if (!quote.internal_signer_name) patch.internal_signer_name = prof?.full_name ?? null;
+      if (!quote.internal_signer_function) patch.internal_signer_function = prof?.signer_title ?? null;
+      if (!quote.internal_signer_user_id) patch.internal_signer_user_id = auth.userId;
       await sb.from("quote_internal_signings").update({ status: "signed", signed_at: now }).eq("id", signing.id);
-      await sb.from("quotes").update({ internal_signed_at: now }).eq("id", quote.id);
+      await sb.from("quotes").update(patch).eq("id", quote.id);
       await chainToCustomerSend(quote.id, pdfBase64);
       return json({ status: "approved" });
     }
