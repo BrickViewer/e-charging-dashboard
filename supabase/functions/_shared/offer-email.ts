@@ -56,7 +56,7 @@ function shell(supabaseUrl: string, innerHtml: string): string {
 
 // Bulletproof CTA-knop: VML-roundrect voor Outlook, gewone &lt;a&gt; voor de rest.
 function btn(url: string, label: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0"><tr><td align="left">
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 0"><tr><td align="left">
   <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:48px;v-text-anchor:middle;width:330px;" arcsize="16%" stroke="f" fillcolor="#05A500"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${label}</center></v:roundrect><![endif]-->
   <!--[if !mso]><!-- --><a href="${url}" style="display:inline-block;background:#05A500;border-radius:8px;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;mso-padding-alt:0;line-height:100%">${label}</a><!--<![endif]-->
 </td></tr></table>`;
