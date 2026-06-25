@@ -9,18 +9,23 @@
 // admin-routes laten we door env.ASSETS afhandelen (inclusief de admin-SPA-fallback).
 // LET OP: met een _worker.js negeert Pages `_redirects`/`_headers` → security-headers/CSP hier zetten.
 
-// Content-Security-Policy (voorlopig REPORT-ONLY: blokkeert niets, meldt alleen overtredingen in de
-// console, zodat we de policy kunnen aanscherpen zonder de UI te breken vóór we naar enforce gaan).
-const CSP_REPORT_ONLY = [
+// Content-Security-Policy (HANDHAVEND). script-src 'self' is de kern-anti-XSS-maatregel: er zijn GEEN
+// inline scripts in de build (admin/configurator/redirect.html laden allemaal externe /assets/*.js), dus
+// 'self' breekt niets en sluit injectie van uitvoerbare code af. Beeld/lettertype/style mogen ruimer
+// (inert, kan geen code uitvoeren): img-src https: dekt de OSM-kaarttegels (AdminMspLocaties) +
+// Leaflet-marker-CDN; fonts.googleapis/gstatic voor de @import "Outfit"-webfont; style 'unsafe-inline'
+// voor inline style-attributen (offerte-template/charts/html2canvas). connect-src = Supabase (REST/realtime/
+// storage/functions) + Microsoft (MSAL/Graph). frame-src = MSAL silent-iframe.
+const CSP = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "img-src 'self' data: blob: https://uuldldhmuanmjlyvnagt.supabase.co",
-  "font-src 'self' data:",
-  "style-src 'self' 'unsafe-inline'",
   "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
   "connect-src 'self' https://uuldldhmuanmjlyvnagt.supabase.co wss://uuldldhmuanmjlyvnagt.supabase.co https://login.microsoftonline.com https://graph.microsoft.com",
   "frame-src https://login.microsoftonline.com",
 ].join("; ");
@@ -39,7 +44,7 @@ function withSecurityHeaders(res) {
   if (!ct.includes("text/html")) return res;
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) headers.set(k, v);
-  headers.set("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY);
+  headers.set("Content-Security-Policy", CSP);
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
