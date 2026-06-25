@@ -152,7 +152,9 @@ export default function ContentPipeline() {
               <button onClick={() => setSelectedId(t.id)} className="min-w-0 flex-1 text-left">
                 <p className="text-sm font-medium text-foreground">{t.raw_title}</p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {sourceBadge(t)}{t.source_type === "manual" ? ` - ${(t.created_by && profileNames[t.created_by]) || "onbekend"} - ${fmtDate(t.created_at)}` : ""}
+                  {sourceBadge(t)}{t.source_type === "manual"
+                    ? ` - ${(t.created_by && profileNames[t.created_by]) || "onbekend"} - ${fmtDate(t.created_at)}`
+                    : t.source_published_at ? ` - Gepubliceerd: ${fmtDate(t.source_published_at)}` : ""}
                 </p>
               </button>
               <div className="flex shrink-0 items-center gap-1.5">

@@ -41,8 +41,15 @@ function tag(block: string, name: string): string {
   return m ? m[1] : "";
 }
 
-function parseRss(xml: string): Array<{ title: string; link: string; summary: string }> {
-  const items: Array<{ title: string; link: string; summary: string }> = [];
+function parseDate(s: string): Date | null {
+  const raw = stripTags(s).trim();
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function parseRss(xml: string): Array<{ title: string; link: string; summary: string; published: Date | null }> {
+  const items: Array<{ title: string; link: string; summary: string; published: Date | null }> = [];
   const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
   for (const b of blocks) {
     const title = stripTags(tag(b, "title"));
@@ -52,7 +59,8 @@ function parseRss(xml: string): Array<{ title: string; link: string; summary: st
       if (m) link = m[1];
     }
     const summary = stripTags(tag(b, "description") || tag(b, "summary") || tag(b, "content:encoded")).slice(0, 500);
-    if (title) items.push({ title, link, summary });
+    const published = parseDate(tag(b, "pubDate") || tag(b, "published") || tag(b, "updated") || tag(b, "dc:date"));
+    if (title) items.push({ title, link, summary, published });
   }
   return items;
 }
@@ -100,20 +108,25 @@ Deno.serve(async (req: Request) => {
     const threshold = typeof settings.novelty_threshold === "number" ? settings.novelty_threshold : 0.5;
 
     let fetched = 0, created = 0, skipped = 0, errors = 0;
-    const ingest = async (sourceType: string, sourceUrl: string | null, sourceName: string | null, title: string, summary: string | null) => {
+    const ingest = async (sourceType: string, sourceUrl: string | null, sourceName: string | null, title: string, summary: string | null, publishedAt: string | null) => {
       fetched++;
       const { data, error } = await sb.rpc("content_ingest_source", {
         p_source_type: sourceType, p_source_url: sourceUrl, p_source_name: sourceName,
-        p_title: title, p_summary: summary, p_novelty_threshold: threshold,
+        p_title: title, p_summary: summary, p_novelty_threshold: threshold, p_published_at: publishedAt,
       });
       if (error) { errors++; return; }
       if (data) created++; else skipped++;
     };
 
+    // Alleen nieuws van de afgelopen 2 weken; items zonder geldige datum of ouder dan dat slaan we over.
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
     for (const f of feeds) {
       try {
         const xml = await fetchText(f.url);
-        for (const it of parseRss(xml)) await ingest("rss", it.link || f.url, f.name ?? null, it.title, it.summary);
+        for (const it of parseRss(xml)) {
+          if (!it.published || it.published.getTime() < cutoff) { skipped++; continue; }
+          await ingest("rss", it.link || f.url, f.name ?? null, it.title, it.summary, it.published.toISOString());
+        }
       } catch (_) { errors++; }
     }
     for (const c of competitors) {
@@ -123,7 +136,7 @@ Deno.serve(async (req: Request) => {
         const xml = await fetchText(url);
         for (const loc of parseSitemap(xml).slice(0, 200)) {
           const title = titleFromUrl(loc);
-          if (title.length >= 8) await ingest("competitor", loc, c.name ?? null, title, null);
+          if (title.length >= 8) await ingest("competitor", loc, c.name ?? null, title, null, null);
         }
       } catch (_) { errors++; }
     }

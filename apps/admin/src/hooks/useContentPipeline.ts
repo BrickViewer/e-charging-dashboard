@@ -9,7 +9,7 @@ import { categorySlug } from "@/lib/blogTaxonomy";
 
 // discussed_at is toegevoegd in migratie 20260625190000 (onderwerpen-inbox); de gegenereerde types worden
 // pas later ververst, dus hier lokaal aanvullen (Row/Update) i.p.v. types.ts met de hand bewerken.
-export type ContentTopic = Database["public"]["Tables"]["content_topics"]["Row"] & { discussed_at?: string | null };
+export type ContentTopic = Database["public"]["Tables"]["content_topics"]["Row"] & { discussed_at?: string | null; source_published_at?: string | null };
 export type ContentTopicInsert = Database["public"]["Tables"]["content_topics"]["Insert"];
 export type ContentTopicUpdate = Database["public"]["Tables"]["content_topics"]["Update"];
 
