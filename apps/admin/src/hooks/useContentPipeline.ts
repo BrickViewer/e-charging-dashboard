@@ -7,7 +7,9 @@ import { categorySlug } from "@/lib/blogTaxonomy";
 // Content-pijplijn: onderwerp-wachtrij (content_topics) die voedt naar concept-blogs.
 // De generatie zelf draait skill-gedreven (Claude); hier alleen de CRUD + review-flow.
 
-export type ContentTopic = Database["public"]["Tables"]["content_topics"]["Row"];
+// discussed_at is toegevoegd in migratie 20260625190000 (onderwerpen-inbox); de gegenereerde types worden
+// pas later ververst, dus hier lokaal aanvullen (Row/Update) i.p.v. types.ts met de hand bewerken.
+export type ContentTopic = Database["public"]["Tables"]["content_topics"]["Row"] & { discussed_at?: string | null };
 export type ContentTopicInsert = Database["public"]["Tables"]["content_topics"]["Insert"];
 export type ContentTopicUpdate = Database["public"]["Tables"]["content_topics"]["Update"];
 
@@ -110,6 +112,41 @@ export function useUpdateTopic() {
       qc.invalidateQueries({ queryKey: ["content-topics"] });
       qc.invalidateQueries({ queryKey: ["content-topic", id] });
     },
+  });
+}
+
+// Onderwerpen-inbox: markeer een topic als besproken (of weer open).
+export function useMarkTopicDiscussed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, discussed }: { id: string; discussed: boolean }) => {
+      const { error } = await supabase
+        .from("content_topics")
+        .update({ discussed_at: discussed ? new Date().toISOString() : null } as unknown as ContentTopicUpdate)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ["content-topics"] });
+      qc.invalidateQueries({ queryKey: ["content-topic", id] });
+    },
+  });
+}
+
+// Naam-map (user_id → volledige naam) om de inbrenger van een onderwerp te tonen.
+export function useProfileNames() {
+  return useQuery({
+    queryKey: ["profile-names"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("user_id, full_name");
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const p of (data ?? []) as { user_id: string; full_name: string | null }[]) {
+        if (p.user_id && p.full_name) map[p.user_id] = p.full_name;
+      }
+      return map;
+    },
+    staleTime: 5 * 60 * 1000,
   });
 }
 

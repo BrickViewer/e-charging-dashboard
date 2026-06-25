@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Sparkles, Newspaper, Settings } from "lucide-react";
+import { Plus, Sparkles, Newspaper, Settings, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,8 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { BLOG_CATEGORIES } from "@/lib/blogTaxonomy";
 import {
-  useContentTopics, useCreateTopic, SOURCE_LABEL, type ContentTopic, type TopicSource,
+  useContentTopics, useCreateTopic, useUpdateTopic, useMarkTopicDiscussed, useProfileNames,
+  SOURCE_LABEL, type ContentTopic, type TopicSource,
 } from "@/hooks/useContentPipeline";
+
+const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "");
 import { TopicSheet } from "@/components/marketing/TopicSheet";
 import { ContentSettingsSheet } from "@/components/marketing/ContentSettingsSheet";
 
@@ -26,11 +29,37 @@ const COLUMNS: { key: string; label: string; statuses: string[] }[] = [
 export default function ContentPipeline() {
   const topicsQ = useContentTopics();
   const create = useCreateTopic();
+  const update = useUpdateTopic();
+  const markDiscussed = useMarkTopicDiscussed();
+  const profileNamesQ = useProfileNames();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickTitle, setQuickTitle] = useState("");
 
   const topics = useMemo(() => topicsQ.data ?? [], [topicsQ.data]);
+  const profileNames = profileNamesQ.data ?? {};
+  // Onderwerpen-inbox = handmatig toegevoegde ideeën die nog niet de pijplijn in zijn.
+  const inbox = useMemo(() => topics.filter((t) => t.source_type === "manual" && t.status === "idea"), [topics]);
+
+  const quickAdd = async () => {
+    const title = quickTitle.trim();
+    if (!title) return;
+    try {
+      await create.mutateAsync({ raw_title: title, source_type: "manual" });
+      setQuickTitle("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Toevoegen mislukt");
+    }
+  };
+  const approveForDraft = async (id: string) => {
+    try {
+      await update.mutateAsync({ id, patch: { status: "approved_for_draft" } });
+      toast.success("Goedgekeurd voor concept");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Mislukt");
+    }
+  };
   const byColumn = useMemo(() => {
     const map: Record<string, ContentTopic[]> = {};
     for (const c of COLUMNS) map[c.key] = [];
@@ -58,6 +87,49 @@ export default function ContentPipeline() {
           <Button onClick={() => setNewOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Nieuw onderwerp</Button>
         </div>
       </div>
+
+      {/* Onderwerpen-inbox: lichte team-triage voor het wekelijkse overleg. */}
+      <section className="rounded-xl border bg-card p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-bold text-foreground"><Inbox className="h-4 w-4 text-primary" /> Onderwerpen-inbox</h2>
+            <p className="text-xs text-muted-foreground">Voeg snel een idee of observatie toe voor het wekelijkse overleg. Markeer als besproken of keur goed voor een concept.</p>
+          </div>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{inbox.length}</span>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <Input
+            value={quickTitle}
+            onChange={(e) => setQuickTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); quickAdd(); } }}
+            placeholder="Hier moeten we het over hebben..."
+          />
+          <Button onClick={quickAdd} disabled={!quickTitle.trim() || create.isPending}><Plus className="mr-1.5 h-4 w-4" /> Toevoegen</Button>
+        </div>
+        <ul className="mt-2 divide-y">
+          {inbox.map((t) => (
+            <li key={t.id} className="flex items-start justify-between gap-3 py-2.5">
+              <button onClick={() => setSelectedId(t.id)} className="min-w-0 flex-1 text-left">
+                <p className="text-sm font-medium text-foreground">{t.raw_title}</p>
+                {t.raw_summary && <p className="truncate text-xs text-muted-foreground">{t.raw_summary}</p>}
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {(t.created_by && profileNames[t.created_by]) || "Onbekend"} · {fmtDate(t.created_at)}
+                </p>
+              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${t.discussed_at ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
+                  {t.discussed_at ? "Besproken" : "Open"}
+                </span>
+                {!t.discussed_at && (
+                  <Button size="sm" variant="ghost" onClick={() => markDiscussed.mutate({ id: t.id, discussed: true })}>Besproken</Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => approveForDraft(t.id)}>Goedkeuren</Button>
+              </div>
+            </li>
+          ))}
+          {inbox.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">Nog geen open onderwerpen.</li>}
+        </ul>
+      </section>
 
       {topicsQ.isLoading ? (
         <p className="text-sm text-muted-foreground">Laden…</p>
