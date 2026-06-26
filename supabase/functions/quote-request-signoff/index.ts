@@ -54,10 +54,8 @@ Deno.serve(async (req) => {
       return json({ status: "error", message: "De ondertekenaar moet admin zijn" }, 400);
     }
 
+    // De ondertekenaar hoeft vooraf geen handtekening te hebben: hij tekent op de tekenlink-pagina zelf.
     const { data: prof } = await sb.from("profiles").select("full_name, signer_title, signature_data_url").eq("user_id", signerId).maybeSingle();
-    if (!prof?.signature_data_url) {
-      return json({ status: "no_signature", message: "Deze ondertekenaar heeft nog geen handtekening ingesteld" }, 422);
-    }
 
     const { data: userRes } = await sb.auth.admin.getUserById(signerId);
     const signerEmail = userRes?.user?.email;
@@ -65,9 +63,9 @@ Deno.serve(async (req) => {
 
     // Snapshot de ondertekenaar op de offerte; nog niet getekend (internal_signed_at blijft leeg).
     await sb.from("quotes").update({
-      internal_signer_name: prof.full_name ?? null,
-      internal_signer_function: prof.signer_title ?? null,
-      internal_signature_data_url: prof.signature_data_url,
+      internal_signer_name: prof?.full_name ?? null,
+      internal_signer_function: prof?.signer_title ?? null,
+      internal_signature_data_url: prof?.signature_data_url ?? null,
       internal_signed_at: null,
       status: "intern_ter_ondertekening",
     }).eq("id", quoteId);
@@ -94,7 +92,7 @@ Deno.serve(async (req) => {
     if (RESEND_API_KEY) {
       const { html, text } = renderInternalSignoffRequest({
         supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
-        signerName: prof.full_name ?? "collega", total, reviewUrl,
+        signerName: prof?.full_name ?? "collega", total, reviewUrl,
       });
       const res = await sendEmail({
         to: [signerEmail],
