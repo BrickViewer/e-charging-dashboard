@@ -5,6 +5,7 @@ import {
   Navigation,
   Wallet,
   Target,
+  ListChecks,
   FileText,
   WandSparkles,
   Contact,
@@ -54,6 +55,7 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
     roles: ["admin", "manager", "sales"],
     items: [
       { to: "/sales/leads", icon: Target, label: "Leads" },
+      { to: "/sales/taken", icon: ListChecks, label: "Taken" },
       { to: "/sales/contacten", icon: Contact, label: "Contacten" },
       { to: "/sales/offertes", icon: FileText, label: "Offertes" },
       // Onboarding-pijplijn: de hele flow na de getekende offerte (incl. installateur-handoff)

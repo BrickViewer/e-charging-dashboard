@@ -37,7 +37,7 @@ import { CompanyFields } from "@/components/contacts/CompanyFields";
 import { PersonFields } from "@/components/contacts/PersonFields";
 import {
   useLeadTasks, useLeadActivities, useUpdateLead, useDeleteLead, useAddTask, useToggleTask,
-  useDeleteTask, useConvertLeadToClient, type LeadStage, type LeadWithTasks,
+  useDeleteTask, useUpdateTask, useConvertLeadToClient, type LeadStage, type LeadWithTasks,
 } from "@/hooks/useLeads";
 
 const LOCATION_TYPES: Record<string, string> = {
@@ -99,6 +99,7 @@ export function LeadDetailSheet({
   const addTask = useAddTask();
   const toggleTask = useToggleTask();
   const deleteTask = useDeleteTask();
+  const updateTask = useUpdateTask();
   const tasks = useLeadTasks(open ? lead?.id : undefined);
   const activities = useLeadActivities(open ? lead?.id : undefined);
   const quotes = useLeadQuotes(open ? lead?.id : undefined);
@@ -111,6 +112,8 @@ export function LeadDetailSheet({
   const [confirmConvert, setConfirmConvert] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [newTask, setNewTask] = useState("");
+  const [newTaskAssignee, setNewTaskAssignee] = useState("none");
+  const [newTaskDue, setNewTaskDue] = useState("");
   const [newNote, setNewNote] = useState("");
   const [apptEditing, setApptEditing] = useState(false);
 
@@ -168,6 +171,12 @@ export function LeadDetailSheet({
   const set = (k: string) => (v: string | boolean) => { setForm((f) => ({ ...f, [k]: v })); setDirty(true); };
   const text = (k: string) => (form[k] as string) ?? "";
   const ownerName = (id: string | null) => profiles.find((p) => p.user_id === id)?.full_name ?? null;
+  const addNewTask = () => {
+    const title = newTask.trim();
+    if (!title) return;
+    addTask.mutate({ leadId: lead.id, organizationId: lead.organization_id, title, assignedTo: newTaskAssignee === "none" ? null : newTaskAssignee, dueDate: newTaskDue || null });
+    setNewTask(""); setNewTaskDue("");
+  };
   const canBeheer = canAccessBeheer(role);
   const stageIdx = stages.findIndex((s) => s.id === lead.stage_id);
   const wonStage = stages.find((s) => s.is_won);
@@ -533,26 +542,50 @@ export function LeadDetailSheet({
 
               {/* TO-DO'S */}
               <TabsContent value="tasks" className="mt-4 space-y-3">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Nieuwe taak…" value={newTask} onChange={(e) => setNewTask(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && newTask.trim()) { addTask.mutate({ leadId: lead.id, organizationId: lead.organization_id, title: newTask.trim() }); setNewTask(""); } }}
-                  />
-                  <Button size="icon" onClick={() => { if (!newTask.trim()) return; addTask.mutate({ leadId: lead.id, organizationId: lead.organization_id, title: newTask.trim() }); setNewTask(""); }}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                <div className="space-y-2 rounded-lg border p-2">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Nieuwe taak…" value={newTask} onChange={(e) => setNewTask(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") addNewTask(); }}
+                    />
+                    <Button size="icon" onClick={addNewTask}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
+                      <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Niemand toegewezen</SelectItem>
+                        {profiles.map((p) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || p.user_id.slice(0, 8)}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Input type="date" className="h-8 w-[150px] text-xs" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
-                  {tasks.isLoading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full rounded-lg" />) : (
+                  {tasks.isLoading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />) : (
                     <>
                       {(tasks.data ?? []).map((t) => (
-                        <div key={t.id} className="group flex items-center gap-2 rounded-lg border p-2">
-                          <Checkbox checked={t.done} onCheckedChange={(c) => toggleTask.mutate({ id: t.id, done: !!c, leadId: lead.id })} />
-                          <span className={`flex-1 text-sm ${t.done ? "text-muted-foreground line-through" : "text-foreground"}`}>{t.title}</span>
-                          {t.due_date && <span className="text-[11px] text-muted-foreground">{new Date(t.due_date).toLocaleDateString("nl-NL")}</span>}
-                          <button className="text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100" onClick={() => deleteTask.mutate({ id: t.id, leadId: lead.id })}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                        <div key={t.id} className="group rounded-lg border p-2">
+                          <div className="flex items-center gap-2">
+                            <Checkbox checked={t.done} onCheckedChange={(c) => toggleTask.mutate({ id: t.id, done: !!c, leadId: lead.id })} />
+                            <span className={`flex-1 text-sm ${t.done ? "text-muted-foreground line-through" : "text-foreground"}`}>{t.title}</span>
+                            <button className="text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100" onClick={() => deleteTask.mutate({ id: t.id, leadId: lead.id })}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-2 pl-6">
+                            <Select value={t.assigned_to ?? "none"} onValueChange={(v) => updateTask.mutate({ id: t.id, patch: { assigned_to: v === "none" ? null : v }, leadId: lead.id })}>
+                              <SelectTrigger className="h-6 w-auto gap-1 border-0 bg-transparent px-1 text-[11px] shadow-none focus:ring-0">
+                                {t.assigned_to ? <Avatar className="h-4 w-4"><AvatarFallback className="text-[8px]">{initials(ownerName(t.assigned_to))}</AvatarFallback></Avatar> : null}
+                                <span className="text-muted-foreground">{ownerName(t.assigned_to) ?? "Niemand"}</span>
+                              </SelectTrigger>
+                              <SelectContent align="start">
+                                <SelectItem value="none">Niemand</SelectItem>
+                                {profiles.map((p) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || p.user_id.slice(0, 8)}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Input type="date" className="h-6 w-[140px] border-0 bg-transparent px-1 text-[11px] text-muted-foreground shadow-none focus-visible:ring-0" value={t.due_date ?? ""} onChange={(e) => updateTask.mutate({ id: t.id, patch: { due_date: e.target.value || null }, leadId: lead.id })} />
+                          </div>
                         </div>
                       ))}
                       {tasks.data?.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Nog geen to-do's.</p>}

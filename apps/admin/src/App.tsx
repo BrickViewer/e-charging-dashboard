@@ -45,6 +45,7 @@ const AdminConfiguratorSettings = lazy(() => import("./pages/admin/AdminConfigur
 
 // Sales pages — lazy loaded
 const SalesLeads = lazy(() => import("./pages/sales/SalesLeads"));
+const SalesTasks = lazy(() => import("./pages/sales/SalesTasks"));
 const SalesContacts = lazy(() => import("./pages/sales/SalesContacts"));
 const SalesOffertes = lazy(() => import("./pages/sales/SalesOffertes"));
 const SalesOfferteDetail = lazy(() => import("./pages/sales/SalesOfferteDetail"));
@@ -194,6 +195,7 @@ const App = () => (
               }>
                 <Route index element={<Navigate to="/sales/leads" replace />} />
                 <Route path="leads" element={<SalesLeads />} />
+                <Route path="taken" element={<SalesTasks />} />
                 <Route path="contacten" element={<SalesContacts />} />
                 <Route path="objecten/:id" element={<ObjectRedirect />} />
                 <Route path="offertes" element={<SalesOffertes />} />

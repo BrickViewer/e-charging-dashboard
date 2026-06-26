@@ -134,5 +134,8 @@ verify_jwt = false
 [functions.sharepoint-setup]
 verify_jwt = false
 
+[functions.task-notify]
+verify_jwt = false
+
 [functions.update-portal-bank-details]
 verify_jwt = false

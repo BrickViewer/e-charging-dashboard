@@ -11,6 +11,7 @@ export type LeadActivity = Database["public"]["Tables"]["lead_activities"]["Row"
 export type LeadStageTask = Database["public"]["Tables"]["lead_stage_tasks"]["Row"];
 
 export type LeadWithTasks = Lead & { lead_tasks: { id: string; done: boolean }[] };
+export type TaskWithLead = LeadTask & { leads: { company_name: string | null } | null };
 
 async function currentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
@@ -105,6 +106,23 @@ export function useLeadTasks(leadId: string | undefined) {
         .order("created_at", { ascending: true });
       if (error) throw error;
       return (data ?? []) as LeadTask[];
+    },
+  });
+}
+
+// Alle taken (over leads heen) voor het centrale Taken-overzicht; los = leads null.
+export function useAllTasks() {
+  return useQuery({
+    queryKey: ["all-tasks"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("lead_tasks")
+        .select("*, leads(company_name)")
+        .order("done", { ascending: true })
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as TaskWithLead[];
     },
   });
 }
@@ -238,20 +256,39 @@ export function useReorderLeads() {
 export function useAddTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ leadId, organizationId, title, dueDate }: { leadId: string; organizationId: string; title: string; dueDate?: string | null }) => {
+    mutationFn: async ({ leadId, organizationId, title, dueDate, assignedTo }: { leadId?: string | null; organizationId: string; title: string; dueDate?: string | null; assignedTo?: string | null }) => {
       const uid = await currentUserId();
-      const { error } = await supabase.from("lead_tasks").insert({
-        lead_id: leadId,
+      const payload = {
+        lead_id: leadId ?? null,
         organization_id: organizationId,
         title,
         due_date: dueDate ?? null,
+        assigned_to: assignedTo ?? null,
         created_by: uid,
-      });
+      };
+      const { error } = await supabase.from("lead_tasks").insert(payload as unknown as Database["public"]["Tables"]["lead_tasks"]["Insert"]);
       if (error) throw error;
     },
     onSuccess: (_d, { leadId }) => {
-      qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
+      if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
       qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["all-tasks"] });
+    },
+  });
+}
+
+// Bewerk een taak (titel/datum/toegewezene). Toewijzen aan een ander triggert de e-mailmelding (DB-trigger).
+export function useUpdateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: { title?: string; due_date?: string | null; assigned_to?: string | null }; leadId?: string | null }) => {
+      const { error } = await supabase.from("lead_tasks").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, { leadId }) => {
+      if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["all-tasks"] });
     },
   });
 }
@@ -259,36 +296,37 @@ export function useAddTask() {
 export function useToggleTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, done }: { id: string; done: boolean; leadId: string }) => {
+    mutationFn: async ({ id, done }: { id: string; done: boolean; leadId?: string | null }) => {
       const { error } = await supabase
         .from("lead_tasks")
         .update({ done, completed_at: done ? new Date().toISOString() : null })
         .eq("id", id);
       if (error) throw error;
     },
-    // Optimistisch: meteen afvinken in zowel de takenlijst als de embedded
-    // taken op de board (voorkomt KPI-flikker).
+    // Optimistisch afvinken in de lead-takenlijst + embedded board-taken (voorkomt KPI-flikker).
     onMutate: async ({ id, done, leadId }) => {
-      await qc.cancelQueries({ queryKey: ["lead-tasks", leadId] });
-      const prevTasks = qc.getQueryData<LeadTask[]>(["lead-tasks", leadId]);
       const prevLeads = qc.getQueryData<LeadWithTasks[]>(["leads"]);
-      qc.setQueryData<LeadTask[]>(["lead-tasks", leadId], (old) =>
-        (old ?? []).map((t) => (t.id === id ? { ...t, done } : t)),
-      );
+      let prevTasks: LeadTask[] | undefined;
+      if (leadId) {
+        await qc.cancelQueries({ queryKey: ["lead-tasks", leadId] });
+        prevTasks = qc.getQueryData<LeadTask[]>(["lead-tasks", leadId]);
+        qc.setQueryData<LeadTask[]>(["lead-tasks", leadId], (old) =>
+          (old ?? []).map((t) => (t.id === id ? { ...t, done } : t)),
+        );
+      }
       qc.setQueryData<LeadWithTasks[]>(["leads"], (old) =>
         (old ?? []).map((l) => ({ ...l, lead_tasks: (l.lead_tasks ?? []).map((t) => (t.id === id ? { ...t, done } : t)) })),
       );
       return { prevTasks, prevLeads, leadId };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx) {
-        qc.setQueryData(["lead-tasks", ctx.leadId], ctx.prevTasks);
-        qc.setQueryData(["leads"], ctx.prevLeads);
-      }
+      if (ctx?.leadId && ctx.prevTasks) qc.setQueryData(["lead-tasks", ctx.leadId], ctx.prevTasks);
+      if (ctx?.prevLeads) qc.setQueryData(["leads"], ctx.prevLeads);
     },
     onSettled: (_d, _e, { leadId }) => {
-      qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
+      if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
       qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["all-tasks"] });
     },
   });
 }
@@ -296,13 +334,14 @@ export function useToggleTask() {
 export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id }: { id: string; leadId: string }) => {
+    mutationFn: async ({ id }: { id: string; leadId?: string | null }) => {
       const { error } = await supabase.from("lead_tasks").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: (_d, { leadId }) => {
-      qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
+      if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
       qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["all-tasks"] });
     },
   });
 }
