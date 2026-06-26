@@ -80,6 +80,9 @@ verify_jwt = true
 [functions.lead-convert-to-client]
 verify_jwt = false
 
+[functions.lead-email-intake]
+verify_jwt = false
+
 [functions.lead-intake]
 verify_jwt = false
 

@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, SlidersHorizontal, Target, Euro, Trophy, ListChecks } from "lucide-react";
+import { Plus, Search, SlidersHorizontal, Target, Euro, Trophy, ListChecks, Mail, Copy } from "lucide-react";
+import { toast } from "sonner";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useOrganization } from "@/hooks/useAdminData";
 import { useLeads, useLeadStages, useTeamProfiles, type LeadWithTasks } from "@/hooks/useLeads";
@@ -99,6 +100,14 @@ export default function SalesLeads() {
         <div>
           <h1 className="text-2xl font-semibold">Leads</h1>
           <p className="mt-1 text-sm text-muted-foreground">Salespijplijn — sleep leads tussen de fasen.</p>
+          <button
+            type="button"
+            onClick={() => { navigator.clipboard?.writeText("aanvraag@inbound.e-charging.nl"); toast.success("Adres gekopieerd"); }}
+            title="Stuur een binnengekomen aanvraag hierheen; AI maakt er automatisch een lead van onder Nieuw"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+          >
+            <Mail className="h-3.5 w-3.5" /> Aanvraag doorsturen naar <span className="font-medium text-foreground">aanvraag@inbound.e-charging.nl</span> <Copy className="h-3 w-3" />
+          </button>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setStageMgrOpen(true)}>

@@ -18,6 +18,7 @@ const SOURCE_LABEL: Record<string, string> = {
   manual: "Handmatig",
   website: "Website",
   contactformulier: "Contactformulier",
+  email: "E-mail",
   configurator: "Configurator",
   referral: "Referral",
   campaign: "Campagne",
