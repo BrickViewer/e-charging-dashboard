@@ -44,6 +44,8 @@ export interface OfferDetails {
   aanhefGapPx?: number | null;      // witruimte boven "Geachte {aanhef},"
   // Scope (levering en installatie) — vrije meerregelige tekst; standaard = DEFAULT_LEVERING_TEXT.
   leveringText?: string | null;
+  // Begeleidende aanpak-tekst op pagina 1 bij scope "alleen beheer"; standaard = DEFAULT_BEHEER_INTRO.
+  beheerIntroText?: string | null;
   // (Legacy) gestructureerde scope-velden — niet meer in de UI, blijven voor back-compat.
   chargerModel?: string | null;
   numPoles?: number | null;         // default = num_charge_points
