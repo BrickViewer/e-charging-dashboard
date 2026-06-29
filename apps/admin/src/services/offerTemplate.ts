@@ -459,9 +459,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
       i === 0 ? 14 : 22)));
     blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
-    if (!m.withInstallation && m.totalInvestment != null) {
-      blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De eenmalige activatie- en onboardingkosten bedragen:</div><div style="font-style:italic">${mEur(m.totalInvestment)} (excl. BTW)</div></div>`, 24));
-    }
+    // De eenmalige activatie-/onboardingkosten tonen we alleen onder de voorwaarden (zie hieronder), niet hier.
     // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij installatie+beheer; bij alleen-beheer
     // staat dit blok (gestapeld) al op pagina 1.
     if (m.withInstallation) {
