@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
         numChargePoints: quote.num_charge_points ?? null,
         total,
         withManagement: quote.with_management !== false,
+        withInstallation: quote.with_installation !== false,
         durationMonths: snap?.pricing_input?.contract?.durationMonths ?? null,
         noticeMonths: snap?.pricing_input?.contract?.noticePeriodMonths ?? null,
         chargeTariffPerKwh: num(quote.charge_rate_per_kwh) ?? num(tariffs.chargeTariffPerKwh),

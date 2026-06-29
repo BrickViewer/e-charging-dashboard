@@ -22,6 +22,7 @@ type QuoteSummary = {
   numChargePoints?: number | null;
   total: number;
   withManagement?: boolean;
+  withInstallation?: boolean;
   durationMonths?: number | null;
   noticeMonths?: number | null;
   chargeTariffPerKwh?: number | null;
@@ -49,6 +50,7 @@ const toPdfData = (q: QuoteSummary): OfferPdfData => ({
   numChargePoints: q.numChargePoints ?? null,
   totalInvestment: q.total,
   withManagement: q.withManagement,
+  withInstallation: q.withInstallation,
   durationMonths: q.durationMonths ?? null,
   noticeMonths: q.noticeMonths ?? null,
   chargeTariffPerKwh: q.chargeTariffPerKwh ?? null,
