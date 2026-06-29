@@ -253,8 +253,8 @@ export const DEFAULT_LEVERING_TEXT = LEVERING_INSTALLATIE.join("\n\n");
 // aanpak/onboarding (geen herhaling van de BEHEER_POINTS-opsomming) en vult pagina 1. DEFAULT; per offerte te
 // overschrijven via offer_details.beheerIntroText (alinea's gescheiden door een lege regel).
 const BEHEER_INTRO: string[] = [
-  "Uw laadpalen staan er al — wij zorgen dat ze maximaal voor u gaan renderen. Wij nemen uw bestaande laadinfrastructuur volledig onder onze hoede, zodat u er geen omkijken meer naar heeft.",
-  "Wij starten met een opname op locatie: we controleren uw laadpalen en koppelen ze aan ons platform en uw eigen online dashboard. Op iedere paal plaatsen we een QR-code waarmee u en uw gebruikers een storing met één scan direct bij ons melden. Vanaf dat moment bewaken wij uw palen dag en nacht, verzorgen we de facturatie en uitbetaling en sturen we de tarieven continu bij voor het beste rendement. Hieronder leest u precies wat onze beheermodule voor u doet.",
+  "Uw laadpalen staan er al en wij zorgen dat ze maximaal voor u gaan renderen. Wij nemen uw bestaande laadinfrastructuur volledig onder onze hoede, zodat u er geen omkijken meer naar heeft.",
+  "Wij starten met een opname op locatie: we controleren uw laadpalen en koppelen ze aan ons platform en uw eigen online dashboard. Op iedere paal plaatsen we een QR-code waarmee u en uw gebruikers een storing met één scan direct bij ons melden. Vanaf dat moment bewaken wij uw palen dag en nacht, verzorgen we de facturatie en uitbetaling en stellen we de tarieven continu bij voor het beste rendement.",
 ];
 export const DEFAULT_BEHEER_INTRO = BEHEER_INTRO.join("\n\n");
 
@@ -437,9 +437,16 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   } else if (m.withManagement) {
     blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
     // Begeleidende aanpak-tekst (vrije tekst, alinea's gescheiden door een lege regel) zodat pagina 1 netjes
-    // vult i.p.v. enkel de kop — zelfde herpaginering als leveringText.
+    // vult i.p.v. enkel de kop; zelfde herpaginering als leveringText.
     m.beheerIntroText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
       .forEach((para, i) => blocks.push(bP(esc(para).replace(/\n/g, "<br/>"), i === 0 ? 18 : 14)));
+    // Tarief-instellingen op pagina 1 (gestapeld: label boven, bedrag eronder). Data-gedreven; mEur toont
+    // "€ 0,00" (geel) bij nog niet ingevulde tarieven. Bij installatie+beheer staat dit blok op pagina 2.
+    if (m.tariffLines.length) {
+      blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 24));
+      m.tariffLines.forEach((l, i) => blocks.push(bRaw(
+        `<div>${esc(l.label)}:</div><div>${mEur(l.amount)} ${esc(l.unit)}</div>`, i === 0 ? 10 : 8)));
+    }
   }
 
   // --- Beheermodule (alleen bij beheer-scope) — start altijd strak op een nieuwe pagina ---
@@ -455,12 +462,16 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     if (!m.withInstallation && m.totalInvestment > 0) {
       blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De eenmalige activatie- en onboardingkosten bedragen:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (excl. BTW)</div></div>`, 24));
     }
-    blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
-    if (m.tariffLines.length) {
-      blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
-      // 170px label-kolom past "Laadkosten eigen gebruik:" (was 95px voor de korte labels).
-      const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:170px">${esc(lbl)}</div><div>${val}</div></div>`;
-      m.tariffLines.forEach((l) => blocks.push(bRaw(tariff(`${l.label}:`, `${mEur(l.amount)} ${l.unit}`), 4)));
+    // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij installatie+beheer; bij alleen-beheer
+    // staat dit blok (gestapeld) al op pagina 1.
+    if (m.withInstallation) {
+      blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
+      if (m.tariffLines.length) {
+        blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
+        // 170px label-kolom past "Laadkosten eigen gebruik:" (was 95px voor de korte labels).
+        const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:170px">${esc(lbl)}</div><div>${val}</div></div>`;
+        m.tariffLines.forEach((l) => blocks.push(bRaw(tariff(`${l.label}:`, `${mEur(l.amount)} ${l.unit}`), 4)));
+      }
     }
   }
 
