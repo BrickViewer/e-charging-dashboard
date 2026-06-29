@@ -460,7 +460,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       i === 0 ? 14 : 22)));
     blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
     if (!m.withInstallation && m.totalInvestment != null) {
-      blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De eenmalige activatie- en onboardingkosten bedragen:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (excl. BTW)</div></div>`, 24));
+      blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De eenmalige activatie- en onboardingkosten bedragen:</div><div style="font-style:italic">${mEur(m.totalInvestment)} (excl. BTW)</div></div>`, 24));
     }
     // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij installatie+beheer; bij alleen-beheer
     // staat dit blok (gestapeld) al op pagina 1.
@@ -506,7 +506,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(bSec("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule", 19, HEAD));
     blocks.push(m.withInstallation
       ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
-      : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mInv(m.totalInvestment)} (excl. BTW).`, 8));
+      : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
     blocks.push(bFb(m.withInstallation
       ? "De overeenkomst gaat in op de eerste dag van de kalendermaand volgend op de opleverdatum."
       : `De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
