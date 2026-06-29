@@ -60,7 +60,7 @@ export interface OfferTemplateData {
   contactName?: string | null;
   addressLine?: string | null; // legacy "straat, postcode plaats"
   numChargePoints?: number | null;
-  totalInvestment: number;
+  totalInvestment: number | null;
   withManagement?: boolean;
   withInstallation?: boolean;
   durationMonths?: number | null;
@@ -117,8 +117,8 @@ const mStr = (val: string, placeholder: string) => (val && val.trim()) ? esc(val
 // Geel = niet ingevuld (null/undefined). Een bewust ingevoerde 0 (bv. blokkeertarief 0,00) is een
 // echte waarde → gewoon "€ 0,00", niet geel.
 const mEur = (val: number | null | undefined) => (val != null) ? money2(val) : yel(money2(0));
-const mInv = (val: number) => val ? invFmt(val) : yel(invFmt(0));
-const mStel = (val: number) => val ? stelFmt(val) : yel(stelFmt(0));
+const mInv = (val: number | null | undefined) => (val != null) ? invFmt(val) : yel(invFmt(0));
+const mStel = (val: number | null | undefined) => (val != null) ? stelFmt(val) : yel(stelFmt(0));
 
 // --------------------------------------------------------------------------
 // Eén zichtbare tariefregel in het "afgesproken instellingen"-blok (volgorde = od.tariffOrder).
@@ -131,7 +131,7 @@ interface ResolvedModel {
   numChargePoints: number; numPoles: number; chargerModel: string; loadBalancer: string;
   withManagement: boolean; withInstallation: boolean;
   dateGap: number; aanhefGap: number;
-  eindgroepen: number; eindgroepAmperage: number; leveringText: string; beheerIntroText: string; totalInvestment: number; stelpost: number;
+  eindgroepen: number; eindgroepAmperage: number; leveringText: string; beheerIntroText: string; totalInvestment: number | null; stelpost: number | null;
   serviceFeePerKwh: number; laadkosten: number | null; blokkeertarief: number | null; starttarief: number | null; uurtarief: number | null;
   tariffLines: TariffLine[];
   overlegNaam: string; overlegDatum: string;
@@ -208,8 +208,8 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     eindgroepAmperage: firstNum(od.eindgroepAmperage, tpl.defaultEindgroepAmperage) ?? tpl.defaultEindgroepAmperage,
     leveringText: firstStr(od.leveringText, DEFAULT_LEVERING_TEXT),
     beheerIntroText: firstStr(od.beheerIntroText, DEFAULT_BEHEER_INTRO),
-    totalInvestment: data.totalInvestment || 0,
-    stelpost: firstNum(od.stelpostGraafwerk, tpl.defaultStelpostGraafwerk) ?? 0,
+    totalInvestment: firstNum(data.totalInvestment),
+    stelpost: firstNum(od.stelpostGraafwerk, tpl.defaultStelpostGraafwerk),
     serviceFeePerKwh: firstNum(od.serviceFeePerKwh, tpl.serviceFeePerKwh) ?? tpl.serviceFeePerKwh,
     laadkosten, blokkeertarief, starttarief, uurtarief, tariffLines,
     overlegNaam: firstStr(od.overlegNaam),
@@ -459,7 +459,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
       i === 0 ? 14 : 22)));
     blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
-    if (!m.withInstallation && m.totalInvestment > 0) {
+    if (!m.withInstallation && m.totalInvestment != null) {
       blocks.push(bRaw(`<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De eenmalige activatie- en onboardingkosten bedragen:</div><div style="font-style:italic">${mInv(m.totalInvestment)} (excl. BTW)</div></div>`, 24));
     }
     // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij installatie+beheer; bij alleen-beheer
