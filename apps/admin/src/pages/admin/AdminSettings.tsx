@@ -19,9 +19,10 @@ import {
   Save, Building2, Settings2, Users, KeyRound, UserPlus,
   CheckCircle2, AlertCircle, Loader2, Plug, Landmark, Mail,
   Clock, RefreshCw, Activity, ChevronRight, Hourglass, Trash2, ShieldCheck,
-  Sun, Moon, SunMoon, AlertTriangle, PenLine,
+  Sun, Moon, SunMoon, AlertTriangle, PenLine, MessageSquare,
 } from "lucide-react";
 import { MySignatureCard } from "@/components/admin/MySignatureCard";
+import { FeedbackInbox } from "@/components/feedback/FeedbackInbox";
 import { Microsoft365Card } from "@/components/admin/Microsoft365Card";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -421,6 +422,7 @@ export default function AdminSettings() {
           <TabsTrigger value="automatisering"><Activity className="w-4 h-4 mr-1" />Automatisering</TabsTrigger>
           <TabsTrigger value="handtekening"><PenLine className="w-4 h-4 mr-1" />Mijn handtekening</TabsTrigger>
           <TabsTrigger value="voorkeuren"><SunMoon className="w-4 h-4 mr-1" />Voorkeuren</TabsTrigger>
+          {(role === "admin" || isSuperadmin) && <TabsTrigger value="feedback"><MessageSquare className="w-4 h-4 mr-1" />Feedback</TabsTrigger>}
         </TabsList>
 
         {/* Tab: Bedrijf */}
@@ -957,6 +959,13 @@ export default function AdminSettings() {
         <TabsContent value="handtekening">
           <MySignatureCard />
         </TabsContent>
+
+        {/* Tab: Feedback (admin) — interne feedback inzien en oplossen; screenshots via signed URLs */}
+        {(role === "admin" || isSuperadmin) && (
+          <TabsContent value="feedback">
+            <FeedbackInbox />
+          </TabsContent>
+        )}
 
         {/* Tab: Voorkeuren */}
         <TabsContent value="voorkeuren">

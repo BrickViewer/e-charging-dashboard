@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      feedback: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          created_by: string
+          created_by_email: string | null
+          description: string
+          feedback_type: Database["public"]["Enums"]["feedback_type"]
+          id: string
+          page_url: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          screenshot_path: string | null
+          status: Database["public"]["Enums"]["feedback_status"]
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          created_by?: string
+          created_by_email?: string | null
+          description: string
+          feedback_type: Database["public"]["Enums"]["feedback_type"]
+          id?: string
+          page_url?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          status?: Database["public"]["Enums"]["feedback_status"]
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          created_by?: string
+          created_by_email?: string | null
+          description?: string
+          feedback_type?: Database["public"]["Enums"]["feedback_type"]
+          id?: string
+          page_url?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          status?: Database["public"]["Enums"]["feedback_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       access_requests: {
         Row: {
           decided_at: string | null
@@ -3911,6 +3959,8 @@ export type Database = {
         | "opgelost"
         | "automatisch_hersteld"
         | "vals_alarm"
+      feedback_status: "open" | "in_behandeling" | "opgelost"
+      feedback_type: "bug" | "idee" | "vraag"
     }
     CompositeTypes: {
       [_ in never]: never

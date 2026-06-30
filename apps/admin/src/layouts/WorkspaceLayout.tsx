@@ -5,6 +5,7 @@ import logoBright from "@/assets/logo-bright.svg";
 import logoFullColor from "@/assets/logo-full-color.svg";
 import { Settings, LogOut, Menu, X, ChevronLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FeedbackButton } from "@/components/feedback/FeedbackButton";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -291,6 +292,7 @@ export default function WorkspaceLayout() {
           </div>
         </main>
       </div>
+      <FeedbackButton />
     </div>
   );
 }
