@@ -453,10 +453,12 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     let priceHtml: string;
     if (m.isPrivate) {
       const net = m.totalInvestment;
-      const netR = net == null ? null : Math.round(net);
-      const btwR = net == null ? null : Math.round(net * VAT_RATE);
-      const totR = net == null ? null : (netR as number) + (btwR as number);
-      const fmt = (v: number | null) => v == null ? yel(invFmt(0)) : invFmt(v);
+      // Particulier-prijzen nooit afronden op hele euro's: op de cent (2 decimalen) zodat netto + 21% BTW exact het totaal is.
+      const c = (v: number) => Math.round(v * 100) / 100;
+      const netR = net == null ? null : c(net);
+      const btwR = net == null ? null : c(net * VAT_RATE);
+      const totR = net == null ? null : c((netR as number) + (btwR as number));
+      const fmt = (v: number | null) => v == null ? yel(money2(0)) : money2(v);
       // Tabel zodat de bedragen recht onder elkaar staan (kolom 1, rechts uitgelijnd) en de labels netjes
       // onder elkaar beginnen (kolom 2, links). Tabel = betrouwbare uitlijning onder html2canvas 1.4.1.
       const priceRow = (amount: string, label: string, underline = false) =>
