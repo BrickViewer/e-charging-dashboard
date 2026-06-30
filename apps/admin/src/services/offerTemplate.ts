@@ -453,10 +453,18 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       const btwR = net == null ? null : Math.round(net * VAT_RATE);
       const totR = net == null ? null : (netR as number) + (btwR as number);
       const fmt = (v: number | null) => v == null ? yel(invFmt(0)) : invFmt(v);
+      // Tabel zodat de bedragen recht onder elkaar staan (kolom 1, rechts uitgelijnd) en de labels netjes
+      // onder elkaar beginnen (kolom 2, links). Tabel = betrouwbare uitlijning onder html2canvas 1.4.1.
+      const priceRow = (amount: string, label: string) =>
+        `<tr><td style="text-align:right;white-space:nowrap"><span style="text-decoration:underline">${amount}</span></td><td style="padding-left:8px;white-space:nowrap">${label}</td></tr>`;
       priceHtml =
-        `<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De prijs voor bovenstaande werkzaamheden bedraagt:</div>${priceAmt(fmt(netR), "(exclusief btw)")}</div>` +
-        `<div style="display:flex;justify-content:flex-end;margin-top:2px">${priceAmt(fmt(btwR), "(21% btw)")}</div>` +
-        `<div style="display:flex;justify-content:flex-end;margin-top:2px">${priceAmt(fmt(totR), "(totaalprijs inclusief btw)")}</div>`;
+        `<div style="display:flex;justify-content:space-between;align-items:baseline">` +
+        `<div>De prijs voor bovenstaande werkzaamheden bedraagt:</div>` +
+        `<table style="border-collapse:collapse;font-style:italic;line-height:1.5"><tbody>` +
+        priceRow(fmt(netR), "(exclusief btw)") +
+        priceRow(fmt(btwR), "(21% btw)") +
+        priceRow(fmt(totR), "(totaalprijs inclusief btw)") +
+        `</tbody></table></div>`;
     } else {
       priceHtml = `<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div>${priceAmt(mInv(m.totalInvestment), "(totaal excl. BTW)")}</div>`;
     }
