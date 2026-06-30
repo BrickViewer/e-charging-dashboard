@@ -24,7 +24,7 @@ import { CompanyPicker } from "@/components/contacts/CompanyPicker";
 import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { LeadPicker } from "@/components/contacts/LeadPicker";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
-import { DEFAULT_LEVERING_TEXT, DEFAULT_BEHEER_INTRO } from "@/services/offerTemplate";
+import { DEFAULT_LEVERING_TEXT, defaultBeheerIntro } from "@/services/offerTemplate";
 import { DEFAULT_OFFER_EMAIL, defaultOfferEmail, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -528,7 +528,7 @@ export default function SalesOfferteDetail() {
           ) : (
             <>
               <Section title="Toelichting beheer (pagina 1)" hint="Begeleidende tekst onder 'Wij maken van uw laadpalen een inkomstenbron' — alinea's scheiden met een lege regel. Leeg laten = standaardtekst.">
-                <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? DEFAULT_BEHEER_INTRO} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
+                <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? defaultBeheerIntro({ poles: numOr(numChargePoints), addr1: odStr("addressStreet"), addr2: [odStr("addressPostalCode"), odStr("addressCity")].filter(Boolean).join(" ") })} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
               </Section>
               <Section title="Eenmalige kosten" hint="De eenmalige activatie-/onboardingkost voor het beheer van de bestaande laadpalen.">
                 <div className="grid grid-cols-2 gap-2">

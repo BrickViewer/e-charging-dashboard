@@ -225,7 +225,7 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     eindgroepen: firstNum(od.eindgroepen, tpl.defaultEindgroepen) ?? tpl.defaultEindgroepen,
     eindgroepAmperage: firstNum(od.eindgroepAmperage, tpl.defaultEindgroepAmperage) ?? tpl.defaultEindgroepAmperage,
     leveringText: firstStr(od.leveringText, DEFAULT_LEVERING_TEXT),
-    beheerIntroText: firstStr(od.beheerIntroText, DEFAULT_BEHEER_INTRO),
+    beheerIntroText: firstStr(od.beheerIntroText, defaultBeheerIntro({ poles: n, addr1, addr2 })),
     totalInvestment: firstNum(data.totalInvestment),
     stelpost: firstNum(od.stelpostGraafwerk, tpl.defaultStelpostGraafwerk),
     serviceFeePerKwh: firstNum(od.serviceFeePerKwh, tpl.serviceFeePerKwh) ?? tpl.serviceFeePerKwh,
@@ -267,14 +267,18 @@ const LEVERING_INSTALLATIE: string[] = [
 ];
 export const DEFAULT_LEVERING_TEXT = LEVERING_INSTALLATIE.join("\n\n");
 
-// Standaard begeleidende tekst op pagina 1 bij "alleen beheer" (scope zonder installatie). Beschrijft de
-// aanpak/onboarding (geen herhaling van de BEHEER_POINTS-opsomming) en vult pagina 1. DEFAULT; per offerte te
-// overschrijven via offer_details.beheerIntroText (alinea's gescheiden door een lege regel).
-const BEHEER_INTRO: string[] = [
-  "Uw laadpalen staan er al en wij zorgen dat ze maximaal voor u gaan renderen. Wij nemen uw bestaande laadinfrastructuur volledig onder onze hoede, zodat u er geen omkijken meer naar heeft.",
-  "Wij starten met een opname op locatie: we controleren uw laadpalen en koppelen ze aan ons platform en uw eigen online dashboard. Op iedere paal plaatsen we een QR-code waarmee u en uw gebruikers een storing met één scan direct bij ons melden. Vanaf dat moment bewaken wij uw palen dag en nacht, verzorgen we de facturatie en uitbetaling en stellen we de tarieven continu bij voor het beste rendement.",
-];
-export const DEFAULT_BEHEER_INTRO = BEHEER_INTRO.join("\n\n");
+// Standaard begeleidende tekst op pagina 1 bij "alleen beheer" (scope zonder installatie): een korte samenvatting
+// die de kernafspraak benadrukt (hoeveel laadpalen we beheren en op welk adres). Vult automatisch aantal + adres in;
+// per offerte te overschrijven via offer_details.beheerIntroText (alinea's gescheiden door een lege regel).
+export function defaultBeheerIntro(o?: { poles?: number | null; addr1?: string | null; addr2?: string | null }): string {
+  const p = o?.poles ?? 0;
+  const palen = p > 0 ? `${p} ${p === 1 ? "laadpaal" : "laadpalen"}` : "uw laadpalen";
+  const adres = [o?.addr1, o?.addr2].map((s) => (s ?? "").trim()).filter(Boolean).join(", ");
+  const opAdres = adres ? ` op ${adres}` : "";
+  return `Wij nemen ${palen}${opAdres} volledig in beheer. Uw palen staan er al en wij beheren ze maximaal voor u, zodat u volledig ontzorgd wordt volgens het E-Charging concept.\n\n`
+    + "We koppelen uw laadpalen aan ons platform en uw eigen online dashboard. Op iedere paal plaatsen we een QR-code waarmee u en uw gebruikers een storing met één scan direct bij ons melden. Vanaf dat moment bewaken wij uw palen dag en nacht en verzorgen we de facturatie en uitbetaling.";
+}
+export const DEFAULT_BEHEER_INTRO = defaultBeheerIntro();
 
 const AANSPRAKELIJKHEID = "Iedere aansprakelijkheid van E-Charging B.V. is beperkt tot het bedrag dat in de desbetreffende gebeurtenis onder haar aansprakelijkheidsverzekering wordt uitbetaald.";
 const AANPAK = "Voor de realisatie en beheer van uw laadpalen stellen wij een contactpersoon aan die de schakel vormt tussen u als opdrachtgever en E-Charging. Deze heeft tot taak om de met u gemaakte afspraken op een correcte manier uit te voeren en de realisatie aan te sturen.";
