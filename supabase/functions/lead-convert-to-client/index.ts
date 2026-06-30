@@ -74,6 +74,9 @@ Deno.serve(async (req) => {
         person_id: lead.person_id ?? null,
         company_name: lead.company_name,
         kvk: lead.kvk ?? null,
+        // Particulier (geen bedrijf gekoppeld) → vat_status 'private' (0% bij uitbetaling, geen KvK/BTW).
+        // Mét bedrijf laten we vat_status leeg zodat de klant het in het portaal bevestigt.
+        vat_status: lead.company_id ? null : "private",
         contact_name: lead.contact_name ?? null,
         contact_email: lead.contact_email ?? null,
         contact_phone: lead.contact_phone ?? null,

@@ -97,11 +97,11 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
   const custom = o.customMessage && o.customMessage.trim() ? o.customMessage.trim() : "";
   const messageHtml = custom
     ? bodyParas(custom) // de PDF-bijlagezin staat nu in het bewerkbare bericht zelf (niet meer auto-aanplakken)
-    : p(`Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur. ${bijlageZin}`) +
-      p("In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.");
+    : p(`Hierbij ontvangt u ons voorstel voor ${o.company ? "de levering, installatie en het doorlopende beheer van uw laadinfrastructuur" : "uw laadpunt thuis"}. ${bijlageZin}`) +
+      p(`In de offerte leest u de volledige uitwerking: ${o.company ? "de hardware, de installatie, het doorlopende beheer en de tarieven" : "de laadpaal, de installatie en de kosten"}. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.`);
   const inner =
     eyebrow(`Offerte ${o.quoteNumber}`) +
-    h1(o.company ? `Voorstel voor ${o.company}` : "Uw voorstel voor laadinfrastructuur") +
+    h1(o.company ? `Voorstel voor ${o.company}` : "Uw persoonlijke laadvoorstel") +
     greetingHtml +
     messageHtml +
     btn(o.acceptUrl, "Offerte bekijken en ondertekenen") +
@@ -109,9 +109,9 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
     `<p style="margin:22px 0 0;font-size:15px;line-height:1.65;color:#374151">Met vriendelijke groet,<br>${escHtml(signoff)}</p>`;
   const messageText = custom
     ? stripBold(custom)
-    : `Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur.${o.hasAttachment ? " De volledige offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
+    : `Hierbij ontvangt u ons voorstel voor ${o.company ? "de levering, installatie en het doorlopende beheer van uw laadinfrastructuur" : "uw laadpunt thuis"}.${o.hasAttachment ? " De volledige offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
 
-In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven.`;
+In de offerte leest u de volledige uitwerking: ${o.company ? "de hardware, de installatie, het doorlopende beheer en de tarieven" : "de laadpaal, de installatie en de kosten"}.`;
   const text = `${greetingText}
 
 ${messageText}
