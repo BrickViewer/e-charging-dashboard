@@ -126,6 +126,8 @@ Deno.serve(async (req) => {
       // Leadwaarde volgt het verstuurde offertebedrag (zodat het leads-overzicht de dealwaarde toont).
       const leadTotal = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
       const leadPatch: Record<string, unknown> = { estimated_value: leadTotal };
+      // De offerte is leidend: het aantal laadpunten uit de offerte schrijft terug naar de lead.
+      if (quote.num_charge_points != null) leadPatch.estimated_charge_points = quote.num_charge_points;
       if (stage?.id) leadPatch.stage_id = stage.id;
       await serviceClient.from("leads").update(leadPatch).eq("id", quote.lead_id);
       await serviceClient.from("lead_activities").insert({

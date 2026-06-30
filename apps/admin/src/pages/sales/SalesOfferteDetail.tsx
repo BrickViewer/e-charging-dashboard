@@ -67,6 +67,7 @@ export default function SalesOfferteDetail() {
   const [chargeRate, setChargeRate] = useState("");
   const [idleFee, setIdleFee] = useState("");
   const [idleGrace, setIdleGrace] = useState("");
+  const [numChargePoints, setNumChargePoints] = useState("");
   const [od, setOd] = useState<OfferDetails>({});
   const [signerUserId, setSignerUserId] = useState<string | null>(null);
   const [drawnSelfSig, setDrawnSelfSig] = useState<string | null>(null);
@@ -118,6 +119,7 @@ export default function SalesOfferteDetail() {
       const td = (quote.tariff_data ?? {}) as Record<string, unknown>;
       setIdleFee(td.idleFeePerMinute != null ? String(td.idleFeePerMinute) : "");
       setIdleGrace(td.idleGraceMinutes != null ? String(td.idleGraceMinutes) : "");
+      setNumChargePoints(quote.num_charge_points != null ? String(quote.num_charge_points) : "");
       const odLoaded = ((quote as unknown as { offer_details?: OfferDetails }).offer_details ?? {}) as OfferDetails;
       setOd(odLoaded);
       setNumDraft({});
@@ -185,6 +187,7 @@ export default function SalesOfferteDetail() {
           line_items: lineItems as unknown as never,
           total_hardware_cost: 0,
           total_installation_cost: p,
+          num_charge_points: numOr(numChargePoints) ?? undefined,
           prospect_email: email.trim() || null,
           prospect_company: companyName.trim() || null,
           prospect_contact: personName.trim() || null,
@@ -213,7 +216,7 @@ export default function SalesOfferteDetail() {
       date: quote!.sent_at ?? null,
       company: companyName || "",
       contactName: personName || null,
-      numChargePoints: quote!.num_charge_points ?? null,
+      numChargePoints: numOr(numChargePoints),
       totalInvestment: numOr(price),
       withManagement,
       withInstallation,
@@ -490,6 +493,7 @@ export default function SalesOfferteDetail() {
               <div className="space-y-1"><Label className="text-xs">Onze referentie</Label><Input value={odStr("onzeReferentie")} placeholder={quote.quote_number ?? ""} disabled={!isConcept} onChange={(e) => setStr("onzeReferentie", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Offertedatum</Label><Input type="date" value={dateVal("offerDate")} disabled={!isConcept} onChange={(e) => setDate("offerDate", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Locatie</Label><Input value={odStr("object")} placeholder={tpl?.defaultObjectTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("object", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Aantal laadpunten</Label><Input inputMode="numeric" value={numChargePoints} placeholder={quote.num_charge_points != null ? String(quote.num_charge_points) : ""} disabled={!isConcept} onChange={(e) => setNumChargePoints(e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Betreft</Label><Input value={odStr("betreft")} placeholder={tpl?.defaultBetreftTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("betreft", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} placeholder={tpl?.defaultAanhef || ""} disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Witruimte boven datum (px)</Label><Input inputMode="numeric" value={numVal("dateGapPx")} placeholder="96" disabled={!isConcept} onChange={(e) => setNum("dateGapPx", e.target.value)} /></div>
