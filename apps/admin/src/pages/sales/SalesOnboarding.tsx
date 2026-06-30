@@ -155,7 +155,7 @@ export default function SalesOnboarding() {
 
   const byStage = useMemo(() => {
     const map: Record<OnboardingStage, OnboardingClient[]> = {
-      getekend: [], bij_installateur: [], opgeleverd: [], locaties_koppelen: [], klant_uitnodigen: [], gegevens: [], archief: [],
+      getekend: [], bij_installateur: [], opgeleverd: [], klant_aanmaken: [], locaties_koppelen: [], klant_uitnodigen: [], gegevens: [], archief: [],
     };
     for (const c of filteredClients) map[deriveStage(c)].push(c);
     return map;
