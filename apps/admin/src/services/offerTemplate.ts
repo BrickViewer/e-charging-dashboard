@@ -124,7 +124,6 @@ const mStel = (val: number | null | undefined) => (val != null) ? stelFmt(val) :
 
 // BTW (alleen voor de offerte-WEERGAVE bij particulieren; de pricing-engine blijft netto).
 const VAT_RATE = 0.21;
-const incl = (n: number) => n * (1 + VAT_RATE);
 // Bedrag in de zakelijke offerte-stijl: schuingedrukt, onderstreept, met de label-tekst tussen haakjes erachter.
 const priceAmt = (amount: string, label: string) =>
   `<div style="font-style:italic"><span style="text-decoration:underline">${amount}</span> ${label}</div>`;
@@ -503,7 +502,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     BEHEER_POINTS.forEach(([t, b], i) => blocks.push(bRaw(
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(m.isPrivate && i === 4 ? "Wij verzorgen transactieverwerking, facturatie en uitbetaling. Elke maand ontvangt u een overzichtelijke maandafrekening en betalen wij uw opbrengst aan u uit." : b)}</div></div></div>`,
       i === 0 ? 14 : 22)));
-    blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.isPrivate ? incl(m.serviceFeePerKwh) : m.serviceFeePerKwh)} per geladen kWh${m.isPrivate ? " (incl. BTW)" : ""}. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
+    blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
     // De eenmalige activatie-/onboardingkosten tonen we alleen onder de voorwaarden (zie hieronder), niet hier.
     // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij installatie+beheer; bij alleen-beheer
     // staat dit blok (gestapeld) al op pagina 1.
@@ -523,13 +522,13 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
   blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
   blocks.push(bSec("Prijsstelling", 19, HEAD));
-  blocks.push(bFb(m.isPrivate ? "Alle in deze offerte genoemde bedragen zijn inclusief 21% BTW." : "Genoemde netto bedragen zijn exclusief BTW.", 8));
+  blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", 8));
   if (m.withInstallation) blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
   if (m.withManagement) {
     blocks.push(bSec("Storingen", 19, HEAD));
     blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
-    blocks.push(bRaw(row2("Servicemonteur E-Charging", `${mEur(m.isPrivate ? incl(m.servicemonteurPerHour) : m.servicemonteurPerHour)} per uur`), 6));
-    blocks.push(bRaw(row2("Voorrijkosten", `${mEur(m.isPrivate ? incl(m.voorrijkostenPerKm) : m.voorrijkostenPerKm)} p/km`), 1));
+    blocks.push(bRaw(row2("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 6));
+    blocks.push(bRaw(row2("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
     blocks.push(bRaw(row2("Voor werktijden tussen 17.00 uur en 08.00 uur", "75 % toeslag."), 12));
     blocks.push(bRaw(row2("Voor zaterdagen", "75 % toeslag."), 1));
     blocks.push(bRaw(row2("Zon en feestdagen", "125 % toeslag."), 1));
@@ -539,7 +538,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 19, HEAD));
   blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
   if (m.withInstallation) {
-    blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.isPrivate ? incl(m.toeslagWerkuur) : m.toeslagWerkuur)} gehanteerd worden:`));
+    blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.toeslagWerkuur)} gehanteerd worden:`));
     blocks.push(bSub("50% Avonduren (17.00 &ndash; 23.00 uur)"));
     blocks.push(bSub("75% Nachturen (23.00 &ndash; 07.00 uur) en zaterdag (normale werkuren)"));
     blocks.push(bSub("125% Zon- en feestdagen (normale werkuren)"));
@@ -549,10 +548,8 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   if (m.withManagement) {
     blocks.push(bSec("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule", 19, HEAD));
     blocks.push(m.withInstallation
-      ? bFb(`De activatiekosten bedragen ${mEur(m.isPrivate ? incl(m.activatiekostenPerSocket) : m.activatiekostenPerSocket)} per socket${m.isPrivate ? " (incl. BTW)" : ""}.`, 8)
-      : bFb(m.isPrivate
-          ? `De eenmalige activatie- en onboardingkosten bedragen ${m.totalInvestment != null ? money2(incl(m.totalInvestment)) : yel(money2(0))} (incl. BTW).`
-          : `De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
+      ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
+      : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
     blocks.push(bFb(m.withInstallation
       ? "De overeenkomst gaat in op de eerste dag van de kalendermaand volgend op de opleverdatum."
       : `De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
