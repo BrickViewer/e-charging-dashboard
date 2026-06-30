@@ -13,23 +13,22 @@ import {
   useOnboardingClients, useOnboardingOrders, useUnlinkedLocations, useLinkLocationToClient, useSendOnboardingInvite,
   type OnboardingClient, type OnboardingStage,
 } from "@/hooks/useOnboarding";
-import { clientScope, SCOPE_LABEL, SCOPE_SHORT, SCOPE_BADGE_CLASS, type QuoteScope } from "@/lib/quoteScope";
+import { clientScope, scopeFromFlags, SCOPE_LABEL, SCOPE_SHORT, SCOPE_BADGE_CLASS, type QuoteScope } from "@/lib/quoteScope";
 import { OnboardingHandoffDialog } from "@/components/sales/OnboardingHandoffDialog";
 import { OnboardingInvoiceDialog } from "@/components/sales/OnboardingInvoiceDialog";
-import { CreateClientFromQuoteDialog } from "@/components/sales/CreateClientFromQuoteDialog";
-import { useSignedQuotesAwaitingClient, type AwaitingClientQuote } from "@/hooks/useQuotes";
+import { CreateClientFromQuoteDialog, type QuoteForClient } from "@/components/sales/CreateClientFromQuoteDialog";
+import { useSignedQuotesAwaitingClient } from "@/hooks/useQuotes";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
-const SCOPE_FILTERS: { key: "all" | QuoteScope; label: string }[] = [
-  { key: "all", label: "Alles" },
+const SCOPE_FILTERS: { key: QuoteScope; label: string }[] = [
   { key: "installatie_beheer", label: SCOPE_LABEL.installatie_beheer },
   { key: "alleen_installatie", label: SCOPE_LABEL.alleen_installatie },
   { key: "alleen_beheer", label: SCOPE_LABEL.alleen_beheer },
 ];
 
 function NextAction({
-  client, stage, onLink, onInvite, onHandoff, onInvoice, inviting, navigate,
+  client, stage, onLink, onInvite, onHandoff, onInvoice, onCreate, inviting, navigate,
 }: {
   client: OnboardingClient;
   stage: OnboardingStage;
@@ -37,6 +36,7 @@ function NextAction({
   onInvite: (c: OnboardingClient) => void;
   onHandoff: (c: OnboardingClient) => void;
   onInvoice: (c: OnboardingClient) => void;
+  onCreate: (c: OnboardingClient) => void;
   inviting: boolean;
   navigate: (to: string) => void;
 }) {
@@ -55,6 +55,8 @@ function NextAction({
       );
     case "opgeleverd":
       return <Button size="sm" className={btn} disabled={!order} onClick={() => onInvoice(client)}><Receipt className={ico} /> Factureren</Button>;
+    case "klant_aanmaken":
+      return <Button size="sm" className={btn} onClick={() => onCreate(client)}><UserPlus className={ico} /> Klant account aanmaken</Button>;
     case "locaties_koppelen":
       return <Button size="sm" className={btn} onClick={() => onLink(client)}><Plug className={ico} /> Locaties koppelen</Button>;
     case "klant_uitnodigen":
@@ -133,15 +135,22 @@ export default function SalesOnboarding() {
   const [linkFor, setLinkFor] = useState<OnboardingClient | null>(null);
   const [handoffFor, setHandoffFor] = useState<OnboardingClient | null>(null);
   const [invoiceFor, setInvoiceFor] = useState<OnboardingClient | null>(null);
-  const [createFor, setCreateFor] = useState<AwaitingClientQuote | null>(null);
+  const [createFor, setCreateFor] = useState<QuoteForClient | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [showArchive, setShowArchive] = useState(false);
-  const [scopeFilter, setScopeFilter] = useState<"all" | QuoteScope>("all");
+  const [scopeFilter, setScopeFilter] = useState<QuoteScope>("installatie_beheer");
 
-  // Echte klanten + clientloze 'order-only' installatie-orders (alleen-installatie) in dezelfde pijplijn.
+  // Echte klanten + clientloze 'order-only' installatie-orders in dezelfde pijplijn, gefilterd op de gekozen scope.
   const filteredClients = useMemo(
-    () => [...(clients ?? []), ...(orders ?? [])].filter((c) => scopeFilter === "all" || clientScope(c.needs_installation, c.managed) === scopeFilter),
+    () => [...(clients ?? []), ...(orders ?? [])].filter((c) => clientScope(c.needs_installation, c.managed) === scopeFilter),
     [clients, orders, scopeFilter],
+  );
+
+  // Getekende offertes zonder order/klant → intake "Klant account aanmaken" in de Getekend-kolom. Alleen voor
+  // alleen-beheer: installatie-scopes krijgen automatisch een order (trigger) en lopen via Getekend → Doorsturen.
+  const awaitingForScope = useMemo(
+    () => scopeFilter !== "alleen_beheer" ? [] : (awaiting ?? []).filter((q) => scopeFromFlags(q.with_installation !== false, q.with_management !== false) === scopeFilter),
+    [awaiting, scopeFilter],
   );
 
   const byStage = useMemo(() => {
@@ -167,8 +176,7 @@ export default function SalesOnboarding() {
     }
   };
 
-  const visibleKeys = scopeFilter === "all" ? null : STAGES_BY_SCOPE[scopeFilter];
-  const stages = ONBOARDING_STAGES.filter((s) => (showArchive || s.key !== "archief") && (!visibleKeys || visibleKeys.includes(s.key)));
+  const stages = ONBOARDING_STAGES.filter((s) => (showArchive || s.key !== "archief") && STAGES_BY_SCOPE[scopeFilter].includes(s.key));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -204,37 +212,12 @@ export default function SalesOnboarding() {
       ) : (
         <div className="relative">
           <div className="flex gap-3 overflow-x-auto pb-2">
-          {/* Tussenstap: getekende offertes zonder klantaccount → review & aanmaken (alleen in het totaaloverzicht). */}
-          {scopeFilter === "all" && (
-          <div className="flex min-w-[210px] max-w-[300px] flex-1 flex-col rounded-xl border bg-muted/20">
-            <div className="border-b px-3 py-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: "#3b82f6" }} />
-                  <span className="truncate text-sm font-semibold">Getekend</span>
-                </div>
-                <span className="shrink-0 rounded-full bg-card px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{(awaiting ?? []).length}</span>
-              </div>
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Maak het klantaccount aan</p>
-            </div>
-            <div className="flex flex-1 flex-col gap-2 p-2.5">
-              {(awaiting ?? []).length === 0 && <p className="py-8 text-center text-xs text-muted-foreground/60">Niets te doen</p>}
-              {(awaiting ?? []).map((q) => (
-                <div key={q.id} className="space-y-2 rounded-lg border bg-card p-2.5 shadow-sm">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{q.prospect_company || "—"}</p>
-                    <p className="text-[11px] tabular-nums text-muted-foreground">{q.quote_number} · {euro((Number(q.total_hardware_cost) || 0) + (Number(q.total_installation_cost) || 0))}</p>
-                  </div>
-                  <Button size="sm" className="h-auto min-h-8 w-full whitespace-normal px-2 py-1 text-xs leading-tight" onClick={() => setCreateFor(q)}>
-                    <UserPlus className="mr-1.5 h-3.5 w-3.5 shrink-0" /> Klant account aanmaken
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-          )}
           {stages.map((s) => {
             const items = byStage[s.key];
+            // De Getekend-kolom toont voor alleen-beheer ook de getekende offertes zonder klantaccount (intake).
+            const intake = s.key === "getekend" ? awaitingForScope : [];
+            const count = items.length + intake.length;
+            const hint = s.key === "getekend" && scopeFilter === "alleen_beheer" ? "Maak het klantaccount aan" : s.hint;
             return (
               <div key={s.key} className="flex min-w-[210px] max-w-[300px] flex-1 flex-col rounded-xl border bg-muted/20">
                 <div className="border-b px-3 py-2.5">
@@ -243,12 +226,23 @@ export default function SalesOnboarding() {
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
                       <span className="truncate text-sm font-semibold">{s.label}</span>
                     </div>
-                    <span className="shrink-0 rounded-full bg-card px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{items.length}</span>
+                    <span className="shrink-0 rounded-full bg-card px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{count}</span>
                   </div>
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{s.hint}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{hint}</p>
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-2.5">
-                  {items.length === 0 && <p className="py-8 text-center text-xs text-muted-foreground/60">Geen klanten</p>}
+                  {intake.map((q) => (
+                    <div key={`await-${q.id}`} className="space-y-2 rounded-lg border bg-card p-2.5 shadow-sm">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{q.prospect_company || q.prospect_contact || "—"}</p>
+                        <p className="text-[11px] tabular-nums text-muted-foreground">{q.quote_number} · {euro((Number(q.total_hardware_cost) || 0) + (Number(q.total_installation_cost) || 0))}</p>
+                      </div>
+                      <Button size="sm" className="h-auto min-h-8 w-full whitespace-normal px-2 py-1 text-xs leading-tight" onClick={() => setCreateFor(q)}>
+                        <UserPlus className="mr-1.5 h-3.5 w-3.5 shrink-0" /> Klant account aanmaken
+                      </Button>
+                    </div>
+                  ))}
+                  {count === 0 && <p className="py-8 text-center text-xs text-muted-foreground/60">Geen klanten</p>}
                   {items.map((c) => (
                     <div key={c.id} className="space-y-2 rounded-lg border bg-card p-2.5 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
@@ -268,6 +262,7 @@ export default function SalesOnboarding() {
                       <NextAction
                         client={c} stage={s.key}
                         onLink={setLinkFor} onInvite={onInvite} onHandoff={setHandoffFor} onInvoice={setInvoiceFor}
+                        onCreate={(cl) => cl._quoteForClient && setCreateFor(cl._quoteForClient)}
                         inviting={invitingId === c.id} navigate={navigate}
                       />
                     </div>

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { linkLocationToClient } from "@/services/locations";
 import { type QuoteScope } from "@/lib/quoteScope";
+import type { QuoteForClient } from "@/components/sales/CreateClientFromQuoteDialog";
 
 // De onboarding-fase wordt AFGELEID uit de echte status (geen handmatig bijhouden).
 // Pijplijn: getekend → bij installateur → opgeleverd → locaties koppelen →
@@ -10,6 +11,7 @@ export type OnboardingStage =
   | "getekend"
   | "bij_installateur"
   | "opgeleverd"
+  | "klant_aanmaken"
   | "locaties_koppelen"
   | "klant_uitnodigen"
   | "gegevens"
@@ -19,6 +21,7 @@ export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: st
   { key: "getekend", label: "Getekend", color: "#6366f1", hint: "Doorsturen naar installateur" },
   { key: "bij_installateur", label: "Bij installateur", color: "#f59e0b", hint: "Wacht op oplevering" },
   { key: "opgeleverd", label: "Opgeleverd", color: "#06b6d4", hint: "Factureren" },
+  { key: "klant_aanmaken", label: "Klant account aanmaken", color: "#a855f7", hint: "Maak het beheer-klantaccount aan" },
   { key: "locaties_koppelen", label: "Locaties koppelen", color: "#8b5cf6", hint: "Laadlocatie koppelen" },
   { key: "klant_uitnodigen", label: "Klant uitnodigen", color: "#ec4899", hint: "Portaal-uitnodiging versturen" },
   { key: "gegevens", label: "Gegevens toevoegen", color: "#14b8a6", hint: "Wacht op gegevens van klant" },
@@ -28,9 +31,9 @@ export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: st
 // Welke fases relevant zijn per scope. Installatie+beheer = volledige pijplijn; alleen-installatie stopt na
 // opleveren/factureren (geen portaal/beheer); alleen-beheer slaat de installateur-fases over.
 export const STAGES_BY_SCOPE: Record<QuoteScope, OnboardingStage[]> = {
-  installatie_beheer: ["getekend", "bij_installateur", "opgeleverd", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
+  installatie_beheer: ["getekend", "bij_installateur", "opgeleverd", "klant_aanmaken", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
   alleen_installatie: ["getekend", "bij_installateur", "opgeleverd", "archief"],
-  alleen_beheer: ["locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
+  alleen_beheer: ["getekend", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
 };
 
 export type OnbOrder = {
@@ -77,8 +80,10 @@ export type OnboardingClient = {
   installation_orders: OnbOrder[] | null;
   locations: OnbLocation[] | null;
   client_invitations: OnbInvite[] | null;
-  // True voor het "order-only" pad (alleen-installatie zonder klantaccount): de kaart is geen echte client.
+  // True voor het "order-only" pad (installatie zonder klantaccount): de kaart is geen echte client.
   is_order_only?: boolean;
+  // Voor order-only inst+beheer: de offerte om ná oplevering het klantaccount mee aan te maken (en de order te koppelen).
+  _quoteForClient?: QuoteForClient;
 };
 
 const CLIENT_SELECT =
@@ -113,14 +118,18 @@ type RawOrderOnly = {
   site_postal: string | null; site_city: string | null; site_contact_name: string | null;
   site_contact_email: string | null; site_contact_phone: string | null; service_summary: string | null;
   notes: string | null; created_at: string;
-  quotes: { quote_number: string | null; prospect_company: string | null; prospect_contact: string | null; prospect_email: string | null } | null;
+  quotes: {
+    quote_number: string | null; prospect_company: string | null; prospect_contact: string | null; prospect_email: string | null;
+    company_id: string | null; person_id: string | null; with_management: boolean | null; with_installation: boolean | null;
+    charge_rate_per_kwh: number | null; energy_cost_per_kwh: number | null; calculation_snapshot: unknown; offer_details: unknown;
+  } | null;
   leads: { company_name: string | null; contact_name: string | null; contact_email: string | null; contact_phone: string | null; address_street: string | null; postal_code: string | null; city: string | null } | null;
 };
 
 const ORDER_ONLY_SELECT =
   "id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes, created_at, " +
-  "quotes(quote_number, prospect_company, prospect_contact, prospect_email), " +
+  "quotes(quote_number, prospect_company, prospect_contact, prospect_email, company_id, person_id, with_management, with_installation, charge_rate_per_kwh, energy_cost_per_kwh, calculation_snapshot, offer_details), " +
   "leads(company_name, contact_name, contact_email, contact_phone, address_street, postal_code, city)";
 
 function mapOrderToClient(o: RawOrderOnly): OnboardingClient {
@@ -140,11 +149,20 @@ function mapOrderToClient(o: RawOrderOnly): OnboardingClient {
     contact_email: lead?.contact_email ?? q?.prospect_email ?? null,
     contact_name: lead?.contact_name ?? q?.prospect_contact ?? null,
     contact_phone: lead?.contact_phone ?? null,
-    created_at: o.created_at, payment_onboarding_status: null, needs_installation: true, managed: false,
+    created_at: o.created_at, payment_onboarding_status: null,
+    // Scope uit de offerte: bepaalt of dit order-only item onder alleen-installatie of installatie+beheer valt.
+    needs_installation: q?.with_installation !== false, managed: q?.with_management === true,
     vat_status: null, kvk: null, btw_number: null,
     billing_address_street: lead?.address_street ?? null, billing_address_postal: lead?.postal_code ?? null,
     billing_address_city: lead?.city ?? null,
     installation_orders: [order], locations: [], client_invitations: [], is_order_only: true,
+    _quoteForClient: q ? {
+      id: o.quote_id ?? "", quote_number: q.quote_number, prospect_company: q.prospect_company,
+      prospect_contact: q.prospect_contact, prospect_email: q.prospect_email, company_id: q.company_id,
+      person_id: q.person_id, with_management: q.with_management, with_installation: q.with_installation,
+      charge_rate_per_kwh: q.charge_rate_per_kwh, energy_cost_per_kwh: q.energy_cost_per_kwh,
+      calculation_snapshot: q.calculation_snapshot, offer_details: q.offer_details,
+    } : undefined,
   };
 }
 
@@ -183,6 +201,15 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
   const hasLocation = (c.locations ?? []).length > 0;
   const managed = c.managed !== false;
   const needsInstall = c.needs_installation !== false;
+
+  // Order-only (clientloos): installateur-flow; bij beheer-scope wordt ná facturering eerst het klantaccount
+  // aangemaakt (klant_aanmaken), bij alleen-installatie is het daarna klaar (archief).
+  if (c.is_order_only) {
+    if (invoiced) return managed ? "klant_aanmaken" : "archief";
+    if (delivered) return "opgeleverd";
+    if (handedOff) return "bij_installateur";
+    return "getekend";
+  }
 
   // Alleen installatie (geen beheer): geen portaal/locaties — klaar zodra opgeleverd + gefactureerd.
   if (!managed) {
