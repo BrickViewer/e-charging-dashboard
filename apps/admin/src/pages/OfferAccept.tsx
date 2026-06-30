@@ -209,8 +209,8 @@ export default function OfferAccept() {
           <div className="space-y-6 p-5 sm:p-6">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Offerte {quote.quoteNumber}</p>
-              <h1 className="mt-1 text-xl font-bold leading-snug">Wij plaatsen uw laadpalen.</h1>
-              <p className="text-sm text-muted-foreground">Voor {quote.company || "uw organisatie"}</p>
+              <h1 className="mt-1 text-xl font-bold leading-snug">{quote.company ? "Wij plaatsen uw laadpalen." : "Wij regelen uw laadpunt."}</h1>
+              <p className="text-sm text-muted-foreground">Voor {quote.company || quote.contact || "u"}</p>
             </div>
 
             {quote.internalSignerName ? (
@@ -236,21 +236,29 @@ export default function OfferAccept() {
                 <Label htmlFor="signer">Naam ondertekenaar</Label>
                 <Input id="signer" value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="Voor- en achternaam" />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="signer-fn">Functie <span className="font-normal text-muted-foreground">(optioneel)</span></Label>
-                <Input id="signer-fn" value={signerFunction} onChange={(e) => setSignerFunction(e.target.value)} placeholder="Bijv. directeur, eigenaar" />
-              </div>
+              {quote.company && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="signer-fn">Functie <span className="font-normal text-muted-foreground">(optioneel)</span></Label>
+                  <Input id="signer-fn" value={signerFunction} onChange={(e) => setSignerFunction(e.target.value)} placeholder="Bijv. directeur, eigenaar" />
+                </div>
+              )}
 
               {/* Verplichte, niet-vooraangevinkte verklaringen — juridisch bindende ondertekening. */}
               <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Verklaringen</p>
                 <label className="flex items-start gap-2.5 text-sm leading-snug">
                   <Checkbox className="mt-0.5 shrink-0" checked={authorityChecked} onCheckedChange={(v) => setAuthorityChecked(v === true)} />
-                  <span>Ik ben bevoegd om namens {quote.company || "mijn organisatie"} deze offerte te aanvaarden en een bindende overeenkomst aan te gaan.</span>
+                  <span>{quote.company
+                    ? `Ik ben bevoegd om namens ${quote.company} deze offerte te aanvaarden en een bindende overeenkomst aan te gaan.`
+                    : "Ik aanvaard deze offerte persoonlijk en ga hiermee een bindende overeenkomst aan."}</span>
                 </label>
                 <div className="flex items-start gap-2.5 text-sm leading-snug">
                   <Checkbox className="mt-0.5 shrink-0" checked={termsChecked} onCheckedChange={(v) => setTermsChecked(v === true)} />
-                  <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a>, en met elektronisch ondertekenen.</span>
+                  {quote.company ? (
+                    <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a>, en met elektronisch ondertekenen.</span>
+                  ) : (
+                    <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/consumentenvoorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">consumentenvoorwaarden</a>, en met elektronisch ondertekenen. Ik heb een wettelijk herroepingsrecht van 14 dagen na ondertekening.</span>
+                  )}
                 </div>
               </div>
 

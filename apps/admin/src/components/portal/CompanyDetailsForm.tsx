@@ -590,7 +590,7 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
         <Card className="portal-card">
           <CardContent className="p-5 sm:p-6">
             <div className="mb-6">
-              <h1 className="text-lg font-semibold text-foreground">Contactpersoon bedrijf</h1>
+              <h1 className="text-lg font-semibold text-foreground">{companyForm.vatStatus === "private" ? "Contactpersoon" : "Contactpersoon bedrijf"}</h1>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -608,7 +608,7 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
         <Card className="portal-card">
           <CardContent className="p-5 sm:p-6">
             <div className="mb-6">
-              <h1 className="text-lg font-semibold text-foreground">Bedrijfsgegevens</h1>
+              <h1 className="text-lg font-semibold text-foreground">{companyForm.vatStatus === "private" ? "Uw gegevens" : "Bedrijfsgegevens"}</h1>
             </div>
 
             <div className="space-y-5">
@@ -659,14 +659,14 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="company-name" label="Bedrijfsnaam" value={companyForm.companyName} onChange={(value) => updateCompany("companyName", value)} error={companyErrors.companyName} required />
+                <Field id="company-name" label={companyForm.vatStatus === "private" ? "Naam" : "Bedrijfsnaam"} value={companyForm.companyName} onChange={(value) => updateCompany("companyName", value)} error={companyErrors.companyName} required />
                 <Field id="kvk" label="KvK-nummer" value={companyForm.kvk} onChange={(value) => updateCompany("kvk", value)} error={companyErrors.kvk} inputMode="numeric" required={companyForm.vatStatus !== "private"} />
                 <Field id="btw-number" label="BTW-nummer" value={companyForm.btwNumber} onChange={(value) => updateCompany("btwNumber", value)} error={companyErrors.btwNumber} placeholder="NL123456789B01" required={companyForm.vatStatus === "vat_liable"} />
                 <Field id="invoice-email" label="Factuurmail" type="email" value={companyForm.invoiceEmail} onChange={(value) => updateCompany("invoiceEmail", value)} error={companyErrors.invoiceEmail} required />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field id="billing-address-street" className="sm:col-span-3" label="Factuuradres" value={companyForm.billingAddressStreet} onChange={(value) => updateCompany("billingAddressStreet", value)} error={companyErrors.billingAddressStreet} placeholder="Straat en huisnummer" required />
+                <Field id="billing-address-street" className="sm:col-span-3" label={companyForm.vatStatus === "private" ? "Adres" : "Factuuradres"} value={companyForm.billingAddressStreet} onChange={(value) => updateCompany("billingAddressStreet", value)} error={companyErrors.billingAddressStreet} placeholder="Straat en huisnummer" required />
                 <Field id="billing-address-postal" label="Postcode" value={companyForm.billingAddressPostal} onChange={(value) => updateCompany("billingAddressPostal", value)} error={companyErrors.billingAddressPostal} required />
                 <Field id="billing-address-city" className="sm:col-span-2" label="Plaats" value={companyForm.billingAddressCity} onChange={(value) => updateCompany("billingAddressCity", value)} error={companyErrors.billingAddressCity} required />
               </div>
