@@ -272,7 +272,7 @@ export const DEFAULT_LEVERING_TEXT = LEVERING_INSTALLATIE.join("\n\n");
 // per offerte te overschrijven via offer_details.beheerIntroText (alinea's gescheiden door een lege regel).
 export function defaultBeheerIntro(o?: { poles?: number | null; addr1?: string | null; addr2?: string | null }): string {
   const p = o?.poles ?? 0;
-  const palen = p > 0 ? `${p} ${p === 1 ? "laadpaal" : "laadpalen"}` : "uw laadpalen";
+  const palen = p > 1 ? `uw ${p} laadpalen` : (p === 1 ? "uw laadpaal" : "uw laadpalen");
   const adres = [o?.addr1, o?.addr2].map((s) => (s ?? "").trim()).filter(Boolean).join(", ");
   const opAdres = adres ? ` op ${adres}` : "";
   return `Wij nemen ${palen}${opAdres} volledig in beheer. Uw palen staan er al en wij beheren ze maximaal voor u, zodat u volledig ontzorgd wordt volgens het E-Charging concept.\n\n`
