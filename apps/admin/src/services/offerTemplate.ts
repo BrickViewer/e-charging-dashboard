@@ -276,7 +276,7 @@ export function defaultBeheerIntro(o?: { poles?: number | null; addr1?: string |
   const adres = [o?.addr1, o?.addr2].map((s) => (s ?? "").trim()).filter(Boolean).join(", ");
   const opAdres = adres ? ` op ${adres}` : "";
   return `Wij nemen ${palen}${opAdres} volledig in beheer. Uw palen staan er al en wij beheren ze maximaal voor u, zodat u volledig ontzorgd wordt volgens het E-Charging concept.\n\n`
-    + "We koppelen uw laadpalen aan ons platform en uw eigen online dashboard. Op iedere paal plaatsen we een QR-code waarmee u en uw gebruikers een storing met één scan direct bij ons melden. Vanaf dat moment bewaken wij uw palen dag en nacht en verzorgen we de facturatie en uitbetaling.";
+    + "We koppelen uw laadpalen aan ons platform en uw eigen online dashboard. Hiervoor ontvangt u nadat wij deze palen hebben gekoppeld een uitnodiging per e-mail om een eigen account aan te maken. Op iedere paal plaatsen we een QR-code waarmee u en uw gebruikers een storing met één scan direct bij ons melden. Vanaf dat moment bewaken wij uw palen dag en nacht en verzorgen we de facturatie en uitbetaling.";
 }
 export const DEFAULT_BEHEER_INTRO = defaultBeheerIntro();
 
