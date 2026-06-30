@@ -63,17 +63,16 @@ export function FeedbackButton() {
 
   return (
     <>
-      <Button
+      <button
         type="button"
-        size="sm"
         onClick={openWithCapture}
         disabled={capturing}
-        className="fixed right-4 top-3 z-50 gap-1.5 rounded-full shadow-lg"
+        className="mb-3 flex w-full items-center gap-2.5 rounded-lg border border-foreground/10 px-3 py-2 text-xs font-medium uppercase tracking-wider text-foreground transition-colors hover:bg-foreground/[0.04] disabled:opacity-60"
         title="Feedback geven"
       >
-        {capturing ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />}
-        <span className="hidden sm:inline">Feedback</span>
-      </Button>
+        {capturing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquarePlus className="h-3.5 w-3.5" />}
+        {capturing ? "Bezig…" : "Feedback"}
+      </button>
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent className="sm:max-w-md">
