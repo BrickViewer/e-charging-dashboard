@@ -70,7 +70,7 @@ export function PersonFields({ personId }: { personId: string }) {
         <Field label="Achternaam"><Input value={t("last_name")} onChange={(e) => set("last_name")(e.target.value)} /></Field>
         <Field label="E-mail"><Input type="email" value={t("email")} onChange={(e) => set("email")(e.target.value)} /></Field>
         <Field label="Telefoon"><Input value={t("phone")} onChange={(e) => set("phone")(e.target.value)} /></Field>
-        <Field label="Functie"><Input value={t("role")} onChange={(e) => set("role")(e.target.value)} /></Field>
+        <Field label="Functie" className="sm:col-span-2"><Input value={t("role")} onChange={(e) => set("role")(e.target.value)} /></Field>
       </div>
       <AddressFields
         value={{ street: t("address_street"), houseNumber: t("house_number"), postalCode: t("postal_code"), city: t("city") }}
@@ -89,9 +89,9 @@ export function PersonFields({ personId }: { personId: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label className="text-xs">{label}</Label>
       {children}
     </div>

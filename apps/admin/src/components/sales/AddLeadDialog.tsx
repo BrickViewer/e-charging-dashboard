@@ -85,61 +85,53 @@ export function AddLeadDialog({
 
         <div className="ec-scroll flex-1 space-y-4 overflow-y-auto py-1 pr-1">
           {/* BEDRIJF */}
-          <div className="space-y-1.5">
-            <Label>Bedrijf</Label>
+          <div className="space-y-3 rounded-lg border p-3">
+            <p className="text-sm font-semibold text-foreground">Bedrijf</p>
             <CompanyPicker
               value={form.company_id || null}
               valueLabel={form.company_name || null}
               onChange={(id, c) => setForm((f) => ({ ...f, company_id: id ?? "", company_name: c?.name ?? "" }))}
             />
-            {form.company_id && (
-              <div className="rounded-lg border p-2.5"><CompanyFields companyId={form.company_id} /></div>
-            )}
+            {form.company_id && <CompanyFields companyId={form.company_id} />}
           </div>
 
           {/* CONTACTPERSOON */}
-          <div className="space-y-1.5">
-            <Label>Contactpersoon</Label>
+          <div className="space-y-3 rounded-lg border p-3">
+            <p className="text-sm font-semibold text-foreground">Contactpersoon</p>
             <PersonPicker
               value={form.person_id || null}
               valueLabel={form.person_name || null}
               companyId={form.company_id || null}
               onChange={(id, p) => setForm((f) => ({ ...f, person_id: id ?? "", person_name: p?.full_name ?? "" }))}
             />
-            {form.person_id && (
-              <div className="rounded-lg border p-2.5"><PersonFields personId={form.person_id} /></div>
-            )}
+            {form.person_id && <PersonFields personId={form.person_id} />}
             <p className="text-[11px] text-muted-foreground">Kies/maak een bedrijf en/of contactpersoon — minstens één. Geen bedrijf = particulier.</p>
           </div>
 
           {/* OBJECT (uitvoerlocatie) */}
-          <div className="space-y-1.5">
-            <Label>Object / locatie (optioneel)</Label>
+          <div className="space-y-3 rounded-lg border p-3">
+            <p className="text-sm font-semibold text-foreground">Object / locatie <span className="font-normal text-muted-foreground">(optioneel)</span></p>
             <ObjectPicker
               value={objectId || null}
               valueLabel={objectLabel || null}
               onChange={(id, label) => { setObjectId(id ?? ""); setObjectLabel(label ?? ""); }}
             />
-            {objectId && (
-              <div className="rounded-lg border p-2.5"><ObjectFields objectId={objectId} /></div>
-            )}
+            {objectId && <ObjectFields objectId={objectId} />}
             <p className="text-[11px] text-muted-foreground">De offerte gaat op naam van bedrijf + contactpersoon; het object is de uitvoerlocatie (mag een ander adres hebben).</p>
           </div>
 
           {/* FASE + NOTITIES */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Fase *</Label>
-              <Select value={stageId} onValueChange={setStageId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Fase *</Label>
+            <Select value={stageId} onValueChange={setStageId}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Notities</Label>
+            <Label className="text-xs">Notities</Label>
             <Textarea value={form.notes} onChange={(e) => set("notes")(e.target.value)} rows={3} />
           </div>
         </div>

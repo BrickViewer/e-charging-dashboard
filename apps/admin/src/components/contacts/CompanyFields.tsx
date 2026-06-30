@@ -66,7 +66,7 @@ export function CompanyFields({ companyId }: { companyId: string }) {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Bedrijfsnaam"><Input value={t("name")} onChange={(e) => set("name")(e.target.value)} /></Field>
+        <Field label="Bedrijfsnaam" className="sm:col-span-2"><Input value={t("name")} onChange={(e) => set("name")(e.target.value)} /></Field>
         <Field label="KvK"><Input value={t("kvk")} onChange={(e) => set("kvk")(e.target.value)} /></Field>
         <Field label="BTW-nummer"><Input value={t("btw_number")} onChange={(e) => set("btw_number")(e.target.value)} /></Field>
         <Field label="Sector"><Input value={t("sector")} onChange={(e) => set("sector")(e.target.value)} /></Field>
@@ -89,9 +89,9 @@ export function CompanyFields({ companyId }: { companyId: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label className="text-xs">{label}</Label>
       {children}
     </div>

@@ -15,7 +15,7 @@
 // (inert, kan geen code uitvoeren): img-src https: dekt de OSM-kaarttegels (AdminMspLocaties) +
 // Leaflet-marker-CDN; fonts.googleapis/gstatic voor de @import "Outfit"-webfont; style 'unsafe-inline'
 // voor inline style-attributen (offerte-template/charts/html2canvas). connect-src = Supabase (REST/realtime/
-// storage/functions) + Microsoft (MSAL/Graph). frame-src = MSAL silent-iframe.
+// storage/functions) + Microsoft (MSAL/Graph) + PDOK (postcode→adres-autofill). frame-src = MSAL silent-iframe.
 const CSP = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -26,7 +26,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' https://uuldldhmuanmjlyvnagt.supabase.co wss://uuldldhmuanmjlyvnagt.supabase.co https://login.microsoftonline.com https://graph.microsoft.com",
+  "connect-src 'self' https://uuldldhmuanmjlyvnagt.supabase.co wss://uuldldhmuanmjlyvnagt.supabase.co https://login.microsoftonline.com https://graph.microsoft.com https://api.pdok.nl",
   "frame-src https://login.microsoftonline.com",
 ].join("; ");
 
