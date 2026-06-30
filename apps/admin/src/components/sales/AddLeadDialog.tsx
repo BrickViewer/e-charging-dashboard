@@ -13,6 +13,8 @@ import { CompanyFields } from "@/components/contacts/CompanyFields";
 import { PersonFields } from "@/components/contacts/PersonFields";
 import { ObjectFields } from "@/components/contacts/ObjectFields";
 import { useUpdateProjectLocation } from "@/hooks/useProjectLocations";
+import { LeadTagPicker } from "@/components/sales/LeadTagPicker";
+import { useSetLeadTags } from "@/hooks/useLeadTags";
 
 const EMPTY = { company_id: "", company_name: "", person_id: "", person_name: "", notes: "" };
 
@@ -31,12 +33,14 @@ export function AddLeadDialog({
 }) {
   const createLead = useCreateLead();
   const linkObject = useUpdateProjectLocation();
+  const setLeadTags = useSetLeadTags();
   const fallbackStage = stages.find((s) => s.is_default)?.id ?? stages[0]?.id;
 
   const [form, setForm] = useState({ ...EMPTY });
   const [stageId, setStageId] = useState(defaultStageId ?? fallbackStage ?? "");
   const [objectId, setObjectId] = useState("");
   const [objectLabel, setObjectLabel] = useState("");
+  const [tagIds, setTagIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +48,7 @@ export function AddLeadDialog({
   }, [open, defaultStageId, fallbackStage]);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const reset = () => { setForm({ ...EMPTY }); setObjectId(""); setObjectLabel(""); };
+  const reset = () => { setForm({ ...EMPTY }); setObjectId(""); setObjectLabel(""); setTagIds([]); };
 
   const canSubmit = (!!form.company_id || !!form.person_id) && !!organizationId && !!stageId;
 
@@ -67,6 +71,9 @@ export function AddLeadDialog({
 
       // Object (uitvoerlocatie) optioneel aan de lead koppelen — laat eventuele bestaande bedrijf/persoon op het object staan.
       if (objectId) await linkObject.mutateAsync({ id: objectId, patch: { lead_id: lead.id } });
+
+      // Gekozen tags (intern) aan de nieuwe lead koppelen.
+      if (tagIds.length) await setLeadTags.mutateAsync({ leadId: lead.id, tagIds });
 
       toast.success("Lead toegevoegd");
       onOpenChange(false);
@@ -118,6 +125,12 @@ export function AddLeadDialog({
             />
             {objectId && <ObjectFields objectId={objectId} />}
             <p className="text-[11px] text-muted-foreground">De offerte gaat op naam van bedrijf + contactpersoon; het object is de uitvoerlocatie (mag een ander adres hebben).</p>
+          </div>
+
+          {/* TAGS (intern, niet zichtbaar voor de klant) */}
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="text-sm font-semibold text-foreground">Tags <span className="font-normal text-muted-foreground">(intern)</span></p>
+            <LeadTagPicker value={tagIds} onChange={setTagIds} organizationId={organizationId} />
           </div>
 
           {/* FASE + NOTITIES */}

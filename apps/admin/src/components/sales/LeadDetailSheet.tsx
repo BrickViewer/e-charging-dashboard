@@ -22,12 +22,14 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   Building2, CalendarClock, Euro, ExternalLink, FileText, MapPin, MessageSquare, MoreHorizontal,
-  Pencil, Plus, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
+  Pencil, Plus, Tag, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
 } from "lucide-react";
 import { useCreateQuoteFromLead, useLeadQuotes } from "@/hooks/useQuotes";
 import { ObjectSelectDialog } from "@/components/contacts/ObjectSelectDialog";
 import { ObjectCreateDialog } from "@/components/contacts/ObjectCreateDialog";
 import { useProjectLocationsByLead } from "@/hooks/useProjectLocations";
+import { LeadTagPicker } from "@/components/sales/LeadTagPicker";
+import { useSetLeadTags } from "@/hooks/useLeadTags";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessBeheer } from "@/lib/workspaces";
@@ -94,6 +96,7 @@ export function LeadDetailSheet({
   const deleteLead = useDeleteLead();
   const convert = useConvertLeadToClient();
   const createQuote = useCreateQuoteFromLead();
+  const setLeadTags = useSetLeadTags();
   const [objectDialogOpen, setObjectDialogOpen] = useState(false);
   const [objectCreateOpen, setObjectCreateOpen] = useState(false);
   const addTask = useAddTask();
@@ -116,6 +119,7 @@ export function LeadDetailSheet({
   const [newTaskDue, setNewTaskDue] = useState("");
   const [newNote, setNewNote] = useState("");
   const [apptEditing, setApptEditing] = useState(false);
+  const [tagIds, setTagIds] = useState<string[]>([]);
 
   const buildForm = (l: LeadWithTasks): Record<string, string | boolean | null> => {
     const cfg = (l.configuration as unknown as LeadConfig | null) ?? null;
@@ -157,6 +161,11 @@ export function LeadDetailSheet({
     setApptEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.id]);
+
+  // Tags synchroniseren met de lead (incl. na opslaan/refetch).
+  useEffect(() => {
+    if (lead) setTagIds((lead.lead_tag_links ?? []).map((l) => l.tag_id));
+  }, [lead]);
 
   // Centreer de huidige fase in de naam-rail (alleen horizontaal — raakt de sheet-scroll niet).
   const stageRailRef = useRef<HTMLDivElement>(null);
@@ -528,6 +537,15 @@ export function LeadDetailSheet({
                       <DetailRow label="Prioriteit" value={prio.label} />
                       <DetailRow label="Geschatte waarde" value={euro(lead.estimated_value)} />
                       <DetailRow label="Verwachte sluitdatum" value={lead.expected_close_date ? new Date(lead.expected_close_date).toLocaleDateString("nl-NL") : null} />
+                    </InfoCard>
+
+                    <InfoCard title="Tags" icon={Tag}>
+                      <p className="mb-1.5 text-[11px] text-muted-foreground">Alleen intern (niet zichtbaar voor de klant).</p>
+                      <LeadTagPicker
+                        value={tagIds}
+                        onChange={(ids) => { setTagIds(ids); if (lead) setLeadTags.mutate({ leadId: lead.id, tagIds: ids }); }}
+                        organizationId={lead.organization_id}
+                      />
                     </InfoCard>
 
                     {lead.notes && (

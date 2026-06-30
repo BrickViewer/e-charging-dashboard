@@ -24,7 +24,12 @@ export type LeadQuoteMini = {
   monthly_projection: { echargingNetPerYear?: number | null; echargingNetPerMonth?: number | null } | null;
   created_at: string;
 };
-export type LeadWithTasks = Lead & { lead_tasks: { id: string; done: boolean }[]; quotes?: LeadQuoteMini[] };
+export type LeadTagMini = { id: string; name: string; color: string };
+export type LeadWithTasks = Lead & {
+  lead_tasks: { id: string; done: boolean }[];
+  quotes?: LeadQuoteMini[];
+  lead_tag_links?: { tag_id: string; lead_tags: LeadTagMini | null }[];
+};
 export type TaskWithLead = LeadTask & { leads: { company_name: string | null } | null };
 
 // De relevante offerte van een lead: nieuwste verzonden (sent_at), anders nieuwste op created_at.
@@ -64,7 +69,7 @@ export function useLeads() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("leads")
-        .select("*, lead_tasks(id, done), quotes(id, status, sent_at, with_installation, with_management, num_charge_points, total_installation_cost, total_hardware_cost, monthly_projection, created_at)")
+        .select("*, lead_tasks(id, done), lead_tag_links(tag_id, lead_tags(id, name, color)), quotes(id, status, sent_at, with_installation, with_management, num_charge_points, total_installation_cost, total_hardware_cost, monthly_projection, created_at)")
         .order("position", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as LeadWithTasks[];

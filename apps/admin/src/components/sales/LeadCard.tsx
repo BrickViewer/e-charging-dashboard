@@ -3,6 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ListChecks, MapPin, Plug, Send, User } from "lucide-react";
 import { primaryQuote, type LeadWithTasks } from "@/hooks/useLeads";
 import { scopeFromFlags, SCOPE_SHORT, SCOPE_BADGE_CLASS } from "@/lib/quoteScope";
+import { tagTextColor } from "@/hooks/useLeadTags";
 
 const euro0 = (n: number | null | undefined) =>
   n == null ? null : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -53,6 +54,7 @@ export function LeadCard({
     ?? (pq?.monthly_projection?.echargingNetPerMonth != null ? pq.monthly_projection.echargingNetPerMonth * 12 : null);
   const showInst = inst > 0;
   const showMgmt = mgmtYear != null && mgmtYear > 0;
+  const tags = (lead.lead_tag_links ?? []).flatMap((l) => (l.lead_tags ? [l.lead_tags] : []));
   const style = overlay
     ? undefined
     : { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
@@ -94,6 +96,15 @@ export function LeadCard({
           </p>
         )}
       </div>
+      {tags.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {tags.map((t) => (
+            <span key={t.id} className="rounded px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: t.color, color: tagTextColor(t.color) }}>
+              {t.name}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {showInst && (
           <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary" title="Offerteprijs (installatie)">
