@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     const { data: order } = await sb
       .from("installation_orders")
       .select(
-        "*, clients(company_name, kvk, btw_number, contact_name, contact_email, contact_phone, billing_address_street, billing_address_postal, billing_address_city, country, client_number), companies(name, kvk, btw_number, address_street, postal_code, city), leads(company_name, kvk, contact_name, contact_email, contact_phone, contact_role, address_street, postal_code, city, estimated_charge_points, charger_type), quotes(quote_number, line_items, total_hardware_cost, total_installation_cost, with_management)",
+        "*, clients(company_name, kvk, btw_number, contact_name, contact_email, contact_phone, billing_address_street, billing_address_postal, billing_address_city, country, client_number), companies(name, kvk, btw_number, address_street, postal_code, city), leads(company_name, kvk, contact_name, contact_email, contact_phone, contact_role, address_street, postal_code, city, estimated_charge_points, charger_type), quotes(quote_number, line_items, total_hardware_cost, total_installation_cost, with_management, is_private)",
       )
       .eq("id", orderId)
       .maybeSingle();

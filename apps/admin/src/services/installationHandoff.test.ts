@@ -142,6 +142,13 @@ describe("buildHandoffPayload", () => {
       total: 0,
     });
     expect(p.totals).toEqual({ hardware_cost: 9500, installation_cost: 7500, with_management: true });
+    // Zonder is_private op de offerte = zakelijk.
+    expect(p.customer.organization_type).toBe("bedrijf");
+  });
+
+  it("geeft organization_type 'particulier' door bij een particuliere (is_private) offerte", () => {
+    const p = buildHandoffPayload({ ...base, quote: { ...base.quote, is_private: true } });
+    expect(p.customer.organization_type).toBe("particulier");
   });
 
   it("valt terug op company en lead als client-velden ontbreken", () => {

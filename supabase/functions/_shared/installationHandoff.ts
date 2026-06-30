@@ -97,7 +97,8 @@ export function buildHandoffPayload(input: any): any {
     callback_url: callbackUrl,
     customer: {
       name: customerName,
-      organization_type: "bedrijf",
+      // Particulier (B2C) vs bedrijf, afgeleid uit de offerte; de e-portal-spiegel ondersteunt beide.
+      organization_type: quote?.is_private ? "particulier" : "bedrijf",
       kvk_number: firstNonEmpty(client?.kvk, company?.kvk, lead?.kvk),
       vat_number: firstNonEmpty(client?.btw_number, company?.btw_number),
       email: firstNonEmpty(client?.contact_email, lead?.contact_email),
