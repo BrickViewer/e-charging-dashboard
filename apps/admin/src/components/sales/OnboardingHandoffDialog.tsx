@@ -116,13 +116,13 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
               <Input id="oh_cphone" value={form.site_contact_phone} onChange={(e) => setForm({ ...form, site_contact_phone: e.target.value })} disabled={sent} />
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="oh_summary">Service-samenvatting</Label>
-              <Input id="oh_summary" value={form.service_summary} onChange={(e) => setForm({ ...form, service_summary: e.target.value })} disabled={sent} placeholder="bijv. 10 laadpunten" />
+              <Label htmlFor="oh_notes">Opdrachtomschrijving</Label>
+              <Textarea id="oh_notes" rows={6} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} disabled={sent} placeholder="Wat moet er gebeuren — overgenomen uit de offerte" />
+              <p className="text-[11px] text-muted-foreground">Voorgevuld uit de offerte (Levering en installatie); wordt meegestuurd naar de installateur.</p>
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="oh_notes">Opdrachtomschrijving</Label>
-              <Textarea id="oh_notes" rows={5} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} disabled={sent} placeholder="Wat moet er gebeuren — overgenomen uit de offerte" />
-              <p className="text-[11px] text-muted-foreground">Voorgevuld uit de offerte; wordt meegestuurd naar de installateur.</p>
+              <Label htmlFor="oh_notities">Notities</Label>
+              <Textarea id="oh_notities" rows={3} value={form.service_summary} onChange={(e) => setForm({ ...form, service_summary: e.target.value })} disabled={sent} placeholder="Extra notities voor de installateur (optioneel)" />
             </div>
           </div>
         </div>
