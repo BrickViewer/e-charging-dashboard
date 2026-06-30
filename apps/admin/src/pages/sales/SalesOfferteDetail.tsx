@@ -79,6 +79,9 @@ export default function SalesOfferteDetail() {
   const [emailGreeting, setEmailGreeting] = useState("");
   // Aanpasbare body-tekst van de klant-offertemail (voorgevuld met de standaardtekst).
   const [emailMessage, setEmailMessage] = useState(DEFAULT_OFFER_EMAIL);
+  // Laatst automatisch ingevulde default-mailtekst — zo weten we of de operator 'm zelf heeft aangepast
+  // (dan niet meer auto-bijwerken bij scope/aantal-wijziging).
+  const lastDefaultRef = useRef("");
   // Ondertekening van de klant-mail (na "Met vriendelijke groet,"). Leeg = naam ondertekenaar.
   const [emailClosing, setEmailClosing] = useState("");
   // Ruwe invoertekst van numerieke od-velden, zodat je vrij kunt typen (komma, tussenstanden, 0,60).
@@ -125,7 +128,9 @@ export default function SalesOfferteDetail() {
       setOd({ ...odLoaded, aanhef: odLoaded.aanhef && String(odLoaded.aanhef).trim() ? odLoaded.aanhef : "Geachte heer/mevrouw," });
       setNumDraft({});
       setEmailGreeting(odLoaded.emailGreeting ?? "");
-      setEmailMessage(odLoaded.emailMessage ?? defaultOfferEmail({ withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points }));
+      const seededEmail = defaultOfferEmail({ withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points });
+      setEmailMessage(odLoaded.emailMessage ?? seededEmail);
+      lastDefaultRef.current = odLoaded.emailMessage ? "" : seededEmail;
       setEmailClosing(odLoaded.emailClosingName ?? "");
       setSignerUserId(quote.internal_signer_user_id ?? null);
       setCompanyId(quote.company_id ?? null);
@@ -434,7 +439,14 @@ export default function SalesOfferteDetail() {
               withInstallation={withInstallation}
               withManagement={withManagement}
               disabled={!isConcept}
-              onChange={({ withInstallation: wi, withManagement: wm }) => { setWithInstallation(wi); setWithManagement(wm); }}
+              onChange={({ withInstallation: wi, withManagement: wm }) => {
+                setWithInstallation(wi); setWithManagement(wm);
+                // Default-mailtekst meeveranderen met de scope, zolang de operator 'm niet zelf heeft aangepast.
+                if (emailMessage === lastDefaultRef.current) {
+                  const d = defaultOfferEmail({ withInstallation: wi, withManagement: wm, chargePoints: numOr(numChargePoints) });
+                  lastDefaultRef.current = d; setEmailMessage(d);
+                }
+              }}
             />
           </Section>
 
@@ -496,7 +508,7 @@ export default function SalesOfferteDetail() {
               <div className="space-y-1"><Label className="text-xs">Onze referentie</Label><Input value={odStr("onzeReferentie")} placeholder={quote.quote_number ?? ""} disabled={!isConcept} onChange={(e) => setStr("onzeReferentie", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Offertedatum</Label><Input type="date" value={dateVal("offerDate")} disabled={!isConcept} onChange={(e) => setDate("offerDate", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Locatie</Label><Input value={odStr("object")} placeholder={tpl?.defaultObjectTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("object", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Aantal laadpunten</Label><Input inputMode="numeric" value={numChargePoints} placeholder={quote.num_charge_points != null ? String(quote.num_charge_points) : ""} disabled={!isConcept} onChange={(e) => setNumChargePoints(e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Aantal laadpunten</Label><Input inputMode="numeric" value={numChargePoints} placeholder={quote.num_charge_points != null ? String(quote.num_charge_points) : ""} disabled={!isConcept} onChange={(e) => { setNumChargePoints(e.target.value); if (emailMessage === lastDefaultRef.current) { const d = defaultOfferEmail({ withInstallation, withManagement, chargePoints: numOr(e.target.value) }); lastDefaultRef.current = d; setEmailMessage(d); } }} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Betreft</Label><Input value={odStr("betreft")} placeholder={tpl?.defaultBetreftTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("betreft", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} placeholder="Geachte heer/mevrouw," disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Witruimte boven datum (px)</Label><Input inputMode="numeric" value={numVal("dateGapPx")} placeholder="96" disabled={!isConcept} onChange={(e) => setNum("dateGapPx", e.target.value)} /></div>
