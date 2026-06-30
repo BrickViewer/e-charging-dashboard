@@ -1,12 +1,13 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarClock, Clock, ListChecks, MapPin, User } from "lucide-react";
-import type { LeadWithTasks } from "@/hooks/useLeads";
+import { ListChecks, MapPin, Plug, Send, User } from "lucide-react";
+import { primaryQuote, type LeadWithTasks } from "@/hooks/useLeads";
+import { scopeFromFlags, SCOPE_SHORT, SCOPE_BADGE_CLASS } from "@/lib/quoteScope";
 
 const euro = (n: number | null | undefined) =>
   n == null
     ? null
-    : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+    : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 const PRIORITY_COLOR: Record<string, string> = {
   high: "bg-red-500",
@@ -54,6 +55,10 @@ export function LeadCard({
   const address = [lead.address_street, [lead.postal_code, lead.city].filter(Boolean).join(" ")]
     .filter(Boolean)
     .join(", ");
+  const pq = primaryQuote(lead);
+  const scope = pq ? scopeFromFlags(pq.with_installation !== false, pq.with_management !== false) : null;
+  const palen = pq?.num_charge_points ?? lead.estimated_charge_points ?? null;
+  const sentDate = pq?.sent_at ?? null;
   const style = overlay
     ? undefined
     : { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
@@ -95,18 +100,26 @@ export function LeadCard({
           </p>
         )}
       </div>
-      {(euro(lead.estimated_value) || lead.source) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {euro(lead.estimated_value) && (
-            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
-              {euro(lead.estimated_value)}
-            </span>
-          )}
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {SOURCE_LABEL[lead.source] ?? lead.source}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {euro(lead.estimated_value) && (
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+            {euro(lead.estimated_value)}
           </span>
-        </div>
-      )}
+        )}
+        {scope && (
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SCOPE_BADGE_CLASS[scope]}`}>
+            {SCOPE_SHORT[scope]}
+          </span>
+        )}
+        {palen != null && (
+          <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <Plug className="h-3 w-3" />{palen}
+          </span>
+        )}
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+          {SOURCE_LABEL[lead.source] ?? lead.source}
+        </span>
+      </div>
       <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="flex items-center gap-2">
           {openTasks > 0 && (
@@ -115,19 +128,12 @@ export function LeadCard({
               {openTasks}
             </span>
           )}
-          {lead.appointment_at ? (
-            <span className="flex items-center gap-1 font-medium text-primary">
-              <CalendarClock className="h-3 w-3" />
-              {new Date(lead.appointment_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
-              {" "}
-              {new Date(lead.appointment_at).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}
+          {sentDate && (
+            <span className="flex items-center gap-1" title="Offerte verzonden">
+              <Send className="h-3 w-3" />
+              Offerte {new Date(sentDate).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
             </span>
-          ) : lead.expected_close_date ? (
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {new Date(lead.expected_close_date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
-            </span>
-          ) : null}
+          )}
         </span>
         {ownerName && (
           <span

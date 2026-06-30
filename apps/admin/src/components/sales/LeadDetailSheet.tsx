@@ -61,7 +61,7 @@ const QUOTE_STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 const euro = (n: number | null | undefined) =>
-  n == null ? null : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  n == null ? null : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 function num(v: string): number | null {
   if (v.trim() === "") return null;
   const n = Number(v.replace(",", "."));

@@ -30,3 +30,21 @@ export function flagsFromScope(scope: QuoteScope): { withInstallation: boolean; 
     case "alleen_beheer": return { withInstallation: false, withManagement: true };
   }
 }
+
+// Compacte labels + badge-kleuren voor de lead-/onboarding-kaarten.
+export const SCOPE_SHORT: Record<QuoteScope, string> = {
+  installatie_beheer: "Inst. + beheer",
+  alleen_installatie: "Installatie",
+  alleen_beheer: "Beheer",
+};
+
+export const SCOPE_BADGE_CLASS: Record<QuoteScope, string> = {
+  installatie_beheer: "bg-indigo-100 text-indigo-700",
+  alleen_installatie: "bg-amber-100 text-amber-700",
+  alleen_beheer: "bg-emerald-100 text-emerald-700",
+};
+
+// Scope van een KLANT (onboarding) afgeleid uit needs_installation/managed (null = aan, conform de DB-default).
+export function clientScope(needsInstallation: boolean | null | undefined, managed: boolean | null | undefined): QuoteScope {
+  return scopeFromFlags(needsInstallation !== false, managed !== false);
+}

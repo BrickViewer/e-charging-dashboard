@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { linkLocationToClient } from "@/services/locations";
+import { type QuoteScope } from "@/lib/quoteScope";
 
 // De onboarding-fase wordt AFGELEID uit de echte status (geen handmatig bijhouden).
 // Pijplijn: getekend → bij installateur → opgeleverd → locaties koppelen →
@@ -23,6 +24,14 @@ export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: st
   { key: "gegevens", label: "Gegevens toevoegen", color: "#14b8a6", hint: "Wacht op gegevens van klant" },
   { key: "archief", label: "Archief", color: "#22c55e", hint: "Onboarding afgerond" },
 ];
+
+// Welke fases relevant zijn per scope. Installatie+beheer = volledige pijplijn; alleen-installatie stopt na
+// opleveren/factureren (geen portaal/beheer); alleen-beheer slaat de installateur-fases over.
+export const STAGES_BY_SCOPE: Record<QuoteScope, OnboardingStage[]> = {
+  installatie_beheer: ["getekend", "bij_installateur", "opgeleverd", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
+  alleen_installatie: ["getekend", "bij_installateur", "opgeleverd", "archief"],
+  alleen_beheer: ["locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
+};
 
 export type OnbOrder = {
   id: string;
@@ -109,12 +118,23 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
   const delivered = orders.some((o) => !!o.completed_at || o.status === "afgerond");
   const invoiced = orders.some((o) => !!o.invoiced_at);
   const hasLocation = (c.locations ?? []).length > 0;
+  const managed = c.managed !== false;
+  const needsInstall = c.needs_installation !== false;
 
+  // Alleen installatie (geen beheer): geen portaal/locaties — klaar zodra opgeleverd + gefactureerd.
+  if (!managed) {
+    if (invoiced) return "archief";
+    if (delivered) return "opgeleverd";
+    if (handedOff) return "bij_installateur";
+    return "getekend";
+  }
+
+  // Beheer-scopes (installatie+beheer of alleen-beheer):
   if (isDetailsComplete(c)) return "archief";
   if (c.portal_user_id) return "gegevens";        // uitnodiging geaccepteerd, gegevens nog niet compleet
   if (hasLocation) return "klant_uitnodigen";
   // Alleen-beheer (geen installatie): sla de installateur-stappen (bij installateur/opgeleverd/factureren) over.
-  if (c.needs_installation === false) return "locaties_koppelen";
+  if (!needsInstall) return "locaties_koppelen";
   if (invoiced) return "locaties_koppelen";
   if (delivered) return "opgeleverd";
   if (handedOff) return "bij_installateur";

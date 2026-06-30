@@ -9,15 +9,23 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ONBOARDING_STAGES, deriveStage, hasPendingInvite, primaryOrder,
+  ONBOARDING_STAGES, STAGES_BY_SCOPE, deriveStage, hasPendingInvite, primaryOrder,
   useOnboardingClients, useUnlinkedLocations, useLinkLocationToClient, useSendOnboardingInvite, useMarkInvoiced,
   type OnboardingClient, type OnboardingStage,
 } from "@/hooks/useOnboarding";
+import { clientScope, SCOPE_LABEL, SCOPE_SHORT, SCOPE_BADGE_CLASS, type QuoteScope } from "@/lib/quoteScope";
 import { OnboardingHandoffDialog } from "@/components/sales/OnboardingHandoffDialog";
 import { CreateClientFromQuoteDialog } from "@/components/sales/CreateClientFromQuoteDialog";
 import { useSignedQuotesAwaitingClient, type AwaitingClientQuote } from "@/hooks/useQuotes";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+
+const SCOPE_FILTERS: { key: "all" | QuoteScope; label: string }[] = [
+  { key: "all", label: "Alles" },
+  { key: "installatie_beheer", label: SCOPE_LABEL.installatie_beheer },
+  { key: "alleen_installatie", label: SCOPE_LABEL.alleen_installatie },
+  { key: "alleen_beheer", label: SCOPE_LABEL.alleen_beheer },
+];
 
 function NextAction({
   client, stage, onLink, onInvite, onHandoff, onMarkInvoiced, inviting, invoicing, navigate,
@@ -126,14 +134,20 @@ export default function SalesOnboarding() {
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [invoicingId, setInvoicingId] = useState<string | null>(null);
   const [showArchive, setShowArchive] = useState(false);
+  const [scopeFilter, setScopeFilter] = useState<"all" | QuoteScope>("all");
+
+  const filteredClients = useMemo(
+    () => (clients ?? []).filter((c) => scopeFilter === "all" || clientScope(c.needs_installation, c.managed) === scopeFilter),
+    [clients, scopeFilter],
+  );
 
   const byStage = useMemo(() => {
     const map: Record<OnboardingStage, OnboardingClient[]> = {
       getekend: [], bij_installateur: [], opgeleverd: [], locaties_koppelen: [], klant_uitnodigen: [], gegevens: [], archief: [],
     };
-    for (const c of clients ?? []) map[deriveStage(c)].push(c);
+    for (const c of filteredClients) map[deriveStage(c)].push(c);
     return map;
-  }, [clients]);
+  }, [filteredClients]);
 
   const onInvite = async (c: OnboardingClient) => {
     setInvitingId(c.id);
@@ -164,7 +178,8 @@ export default function SalesOnboarding() {
     }
   };
 
-  const stages = ONBOARDING_STAGES.filter((s) => showArchive || s.key !== "archief");
+  const visibleKeys = scopeFilter === "all" ? null : STAGES_BY_SCOPE[scopeFilter];
+  const stages = ONBOARDING_STAGES.filter((s) => (showArchive || s.key !== "archief") && (!visibleKeys || visibleKeys.includes(s.key)));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -180,6 +195,19 @@ export default function SalesOnboarding() {
         </Button>
       </div>
 
+      <div className="flex flex-wrap gap-1.5">
+        {SCOPE_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setScopeFilter(f.key)}
+            className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${scopeFilter === f.key ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:border-primary/40"}`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="flex gap-4">
           {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-96 w-72 flex-shrink-0 rounded-xl" />)}
@@ -187,7 +215,8 @@ export default function SalesOnboarding() {
       ) : (
         <div className="relative">
           <div className="flex gap-3 overflow-x-auto pb-2">
-          {/* Tussenstap: getekende offertes zonder klantaccount → review & aanmaken. */}
+          {/* Tussenstap: getekende offertes zonder klantaccount → review & aanmaken (alleen in het totaaloverzicht). */}
+          {scopeFilter === "all" && (
           <div className="flex min-w-[210px] max-w-[300px] flex-1 flex-col rounded-xl border bg-muted/20">
             <div className="border-b px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
@@ -214,6 +243,7 @@ export default function SalesOnboarding() {
               ))}
             </div>
           </div>
+          )}
           {stages.map((s) => {
             const items = byStage[s.key];
             return (
@@ -236,6 +266,9 @@ export default function SalesOnboarding() {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{c.company_name}</p>
                           {c.client_number != null && <p className="text-[11px] text-muted-foreground">Klant #{c.client_number}</p>}
+                          <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-medium ${SCOPE_BADGE_CLASS[clientScope(c.needs_installation, c.managed)]}`}>
+                            {SCOPE_SHORT[clientScope(c.needs_installation, c.managed)]}
+                          </span>
                         </div>
                         <button type="button" onClick={() => navigate(`/admin/klanten/${c.id}`)} aria-label="Open klant" className="shrink-0 text-muted-foreground hover:text-foreground">
                           <ArrowRight className="h-4 w-4" />

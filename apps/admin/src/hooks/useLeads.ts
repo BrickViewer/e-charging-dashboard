@@ -10,8 +10,29 @@ export type LeadTask = Database["public"]["Tables"]["lead_tasks"]["Row"];
 export type LeadActivity = Database["public"]["Tables"]["lead_activities"]["Row"];
 export type LeadStageTask = Database["public"]["Tables"]["lead_stage_tasks"]["Row"];
 
-export type LeadWithTasks = Lead & { lead_tasks: { id: string; done: boolean }[] };
+export type LeadQuoteMini = {
+  id: string;
+  status: string | null;
+  sent_at: string | null;
+  with_installation: boolean | null;
+  with_management: boolean | null;
+  num_charge_points: number | null;
+  total_installation_cost: number | null;
+  total_hardware_cost: number | null;
+  created_at: string;
+};
+export type LeadWithTasks = Lead & { lead_tasks: { id: string; done: boolean }[]; quotes?: LeadQuoteMini[] };
 export type TaskWithLead = LeadTask & { leads: { company_name: string | null } | null };
+
+// De relevante offerte van een lead: nieuwste verzonden (sent_at), anders nieuwste op created_at.
+export function primaryQuote(lead: LeadWithTasks): LeadQuoteMini | null {
+  const qs = lead.quotes ?? [];
+  if (!qs.length) return null;
+  const sent = qs.filter((q) => q.sent_at);
+  const pool = sent.length ? sent : qs;
+  const key = (q: LeadQuoteMini) => q.sent_at ?? q.created_at;
+  return [...pool].sort((a, b) => (key(b) > key(a) ? 1 : key(b) < key(a) ? -1 : 0))[0];
+}
 
 async function currentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
@@ -40,7 +61,7 @@ export function useLeads() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("leads")
-        .select("*, lead_tasks(id, done)")
+        .select("*, lead_tasks(id, done), quotes(id, status, sent_at, with_installation, with_management, num_charge_points, total_installation_cost, total_hardware_cost, created_at)")
         .order("position", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as LeadWithTasks[];
