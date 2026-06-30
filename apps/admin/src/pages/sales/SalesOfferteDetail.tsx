@@ -10,6 +10,7 @@ import { EmailBodyEditor } from "@/components/sales/EmailBodyEditor";
 import { toast } from "sonner";
 import { ArrowLeft, Building2, Eye, Loader2, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, lineItemsOf } from "@/hooks/useQuotes";
+import { useProjectLocation } from "@/hooks/useProjectLocations";
 import { useCompany, usePerson } from "@/hooks/useContacts";
 import { useLead } from "@/hooks/useLeads";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
@@ -57,6 +58,8 @@ export default function SalesOfferteDetail() {
   const { user } = useAuth();
   const adminsQ = useSignableAdmins();
   const quote = quoteQ.data;
+  // Gekoppeld object (project_location): bron voor het live adres (offerte-adresvelden leeg = volg object).
+  const object = useProjectLocation(quote?.project_location_id ?? undefined).data;
   const tpl = settingsQ.data?.offerTemplate;
   const admins = adminsQ.data ?? [];
   // Eén prijs i.p.v. losse offerteregels — calculatie gebeurt in Excel.
@@ -224,6 +227,9 @@ export default function SalesOfferteDetail() {
       // Concept (is_private null) → live afleiden uit het bedrijf; verstuurd → bevroren regime tonen.
       isPrivate: quote!.is_private ?? null,
       contactName: personName || null,
+      objectStreet: object?.address_street ?? null,
+      objectPostalCode: object?.postal_code ?? null,
+      objectCity: object?.city ?? null,
       numChargePoints: numOr(numChargePoints),
       totalInvestment: numOr(price),
       withManagement,
@@ -501,9 +507,9 @@ export default function SalesOfferteDetail() {
 
           <Section title="Briefkop & adres">
             <div className="grid grid-cols-2 gap-2">
-              <div className="col-span-2 space-y-1"><Label className="text-xs">Straat + nr</Label><Input value={odStr("addressStreet")} disabled={!isConcept} onChange={(e) => setStr("addressStreet", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Postcode</Label><Input value={odStr("addressPostalCode")} disabled={!isConcept} onChange={(e) => setStr("addressPostalCode", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Plaats</Label><Input value={odStr("addressCity")} disabled={!isConcept} onChange={(e) => setStr("addressCity", e.target.value)} /></div>
+              <div className="col-span-2 space-y-1"><Label className="text-xs">Straat + nr <span className="font-normal text-muted-foreground">(leeg = uit object)</span></Label><Input value={odStr("addressStreet")} placeholder={object?.address_street ?? ""} disabled={!isConcept} onChange={(e) => setStr("addressStreet", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Postcode</Label><Input value={odStr("addressPostalCode")} placeholder={object?.postal_code ?? ""} disabled={!isConcept} onChange={(e) => setStr("addressPostalCode", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Plaats</Label><Input value={odStr("addressCity")} placeholder={object?.city ?? ""} disabled={!isConcept} onChange={(e) => setStr("addressCity", e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">T.a.v.</Label><Input value={odStr("tav")} placeholder={quote.prospect_contact ?? ""} disabled={!isConcept} onChange={(e) => setStr("tav", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Onze referentie</Label><Input value={odStr("onzeReferentie")} placeholder={quote.quote_number ?? ""} disabled={!isConcept} onChange={(e) => setStr("onzeReferentie", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Offertedatum</Label><Input type="date" value={dateVal("offerDate")} disabled={!isConcept} onChange={(e) => setDate("offerDate", e.target.value)} /></div>
@@ -528,7 +534,7 @@ export default function SalesOfferteDetail() {
           ) : (
             <>
               <Section title="Toelichting beheer (pagina 1)" hint="Begeleidende tekst onder 'Wij maken van uw laadpalen een inkomstenbron' — alinea's scheiden met een lege regel. Leeg laten = standaardtekst.">
-                <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? defaultBeheerIntro({ poles: numOr(numChargePoints), addr1: odStr("addressStreet"), addr2: [odStr("addressPostalCode"), odStr("addressCity")].filter(Boolean).join(" ") })} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
+                <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? defaultBeheerIntro({ poles: numOr(numChargePoints), addr1: odStr("addressStreet") || object?.address_street || "", addr2: [odStr("addressPostalCode") || object?.postal_code, odStr("addressCity") || object?.city].filter(Boolean).join(" ") })} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
               </Section>
               <Section title="Eenmalige kosten" hint="De eenmalige activatie-/onboardingkost voor het beheer van de bestaande laadpalen.">
                 <div className="grid grid-cols-2 gap-2">

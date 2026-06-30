@@ -61,6 +61,11 @@ export interface OfferTemplateData {
   isPrivate?: boolean | null;
   contactName?: string | null;
   addressLine?: string | null; // legacy "straat, postcode plaats"
+  // Adres van het gekoppelde object (project_location) — fallback wanneer de offerte-adresvelden leeg zijn,
+  // zodat de offerte het object live volgt. Bij verzenden wordt het effectieve adres bevroren in offer_details.
+  objectStreet?: string | null;
+  objectPostalCode?: string | null;
+  objectCity?: string | null;
   numChargePoints?: number | null;
   totalInvestment: number | null;
   withManagement?: boolean;
@@ -171,8 +176,9 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   const tpl: OfferTemplateValues = data.offerTemplate ?? FALLBACK_TEMPLATE;
   const n = firstNum(data.numChargePoints) ?? 0;
 
-  let addr1 = firstStr(od.addressStreet);
-  let addr2 = firstStr([od.addressPostalCode, od.addressCity].filter(Boolean).join(" "));
+  // Adres: offerte-velden (override) winnen; leeg → live uit het gekoppelde object.
+  let addr1 = firstStr(od.addressStreet, data.objectStreet);
+  let addr2 = [firstStr(od.addressPostalCode, data.objectPostalCode), firstStr(od.addressCity, data.objectCity)].filter(Boolean).join(" ");
   if (!addr1 && !addr2 && data.addressLine) {
     const parts = data.addressLine.split(",").map((s) => s.trim());
     addr1 = parts[0] ?? "";

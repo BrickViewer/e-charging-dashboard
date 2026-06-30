@@ -117,9 +117,19 @@ Deno.serve(async (req) => {
     }
 
     // Bewaar het werkelijke verzendadres als bron-van-waarheid (bevestiging gaat hierheen).
-    // Freeze: leg het BTW-regime (particulier?) vast bij verzenden, zodat een verstuurde offerte
-    // nooit meer mee verandert met latere template-/code-wijzigingen (zie offerTemplate isPrivate-override).
-    await serviceClient.from("quotes").update({ status: "verstuurd", sent_at: new Date().toISOString(), prospect_email: recipient, is_private: !((quote.prospect_company ?? "").trim()) }).eq("id", quoteId);
+    // Freeze adres: leeg offerte-adres → neem het adres van het gekoppelde object over, zodat een verstuurde
+    // offerte niet meeverandert als het object later wijzigt.
+    const odSend = (quote.offer_details ?? {}) as Record<string, unknown>;
+    let frozenOd = odSend;
+    const hasOfferAddr = !!(odSend.addressStreet || odSend.addressPostalCode || odSend.addressCity);
+    if (!hasOfferAddr && quote.project_location_id) {
+      const { data: loc } = await serviceClient.from("project_locations")
+        .select("address_street, postal_code, city").eq("id", quote.project_location_id).maybeSingle();
+      if (loc) frozenOd = { ...odSend, addressStreet: loc.address_street ?? null, addressPostalCode: loc.postal_code ?? null, addressCity: loc.city ?? null };
+    }
+    // Freeze: leg het BTW-regime (particulier?) + het effectieve adres vast bij verzenden, zodat een verstuurde
+    // offerte nooit meer mee verandert met latere template-/code-/object-wijzigingen (zie isPrivate-override).
+    await serviceClient.from("quotes").update({ status: "verstuurd", sent_at: new Date().toISOString(), prospect_email: recipient, is_private: !((quote.prospect_company ?? "").trim()), offer_details: frozenOd }).eq("id", quoteId);
 
     // Lead naar fase "Offerte verstuurd".
     if (quote.lead_id) {

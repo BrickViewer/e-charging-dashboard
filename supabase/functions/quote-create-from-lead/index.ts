@@ -97,11 +97,9 @@ Deno.serve(async (req) => {
     // Offerte-sjabloon: adres uit de lead voorvullen. De overige velden vallen bij
     // het renderen terug op de org-standaarden (Configurator > Offerte-sjabloon),
     // zodat die centraal beheerbaar blijven.
-    const offerDetails: Record<string, unknown> = {
-      addressStreet: lead.address_street ?? null,
-      addressPostalCode: lead.postal_code ?? null,
-      addressCity: lead.city ?? null,
-    };
+    // Adres niet voorvullen: de offerte volgt live het gekoppelde object (per offerte te overschrijven;
+    // bij verzenden wordt het effectieve adres bevroren in offer_details).
+    const offerDetails: Record<string, unknown> = {};
 
     // Offertenummer = locatie-document-jaar (bv. 201-01-26), gelijk aan de SharePoint-dossiers.
     // Object (project_location) komt van de picker (project_location_id) of wordt afgeleid uit

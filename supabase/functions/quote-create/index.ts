@@ -71,11 +71,9 @@ Deno.serve(async (req) => {
     // 2 maanden geldig — consistent met de offerte-PDF en de ondertekenlink.
     const validUntil = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    const offerDetails: Record<string, unknown> = {
-      addressStreet: loc.address_street ?? null,
-      addressPostalCode: loc.postal_code ?? null,
-      addressCity: loc.city ?? null,
-    };
+    // Adres niet voorvullen: de offerte volgt live het gekoppelde object (per offerte te overschrijven;
+    // bij verzenden wordt het effectieve adres bevroren in offer_details).
+    const offerDetails: Record<string, unknown> = {};
 
     const lineItems = [{ description: "Levering & installatie laadpunten", qty: 1, unit_price: 0, total: 0 }];
 
