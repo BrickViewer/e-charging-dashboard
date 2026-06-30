@@ -125,17 +125,9 @@ const mStel = (val: number | null | undefined) => (val != null) ? stelFmt(val) :
 // BTW (alleen voor de offerte-WEERGAVE bij particulieren; de pricing-engine blijft netto).
 const VAT_RATE = 0.21;
 const incl = (n: number) => n * (1 + VAT_RATE);
-// 3-regel BTW-uitsplitsing (netto / 21% BTW / totaal incl.) voor particulier-offertes.
-const vatBlock = (net: number | null | undefined, label: string): string => {
-  const row = (l: string, v: string, bold = false) =>
-    `<div style="display:flex;justify-content:space-between${bold ? ";font-weight:700" : ""}"><div>${esc(l)}</div><div>${v}</div></div>`;
-  // Niet ingevuld → gele 'niet ingevuld'-markering behouden (interne controle vóór versturen).
-  if (net == null) return row(label, yel(money2(0))) + row("21% BTW", yel(money2(0))) + row("Totaal inclusief BTW", yel(money2(0)), true);
-  // Sluitend afronden: totaal = afgerond netto + afgeronde BTW (zodat de drie regels op de cent optellen).
-  const c = (x: number) => Math.round(x * 100) / 100;
-  const nettoR = c(net); const btwR = c(net * VAT_RATE);
-  return row(label, money2(nettoR)) + row("21% BTW", money2(btwR)) + row("Totaal inclusief BTW", money2(nettoR + btwR), true);
-};
+// Bedrag in de zakelijke offerte-stijl: schuingedrukt, onderstreept, met de label-tekst tussen haakjes erachter.
+const priceAmt = (amount: string, label: string) =>
+  `<div style="font-style:italic"><span style="text-decoration:underline">${amount}</span> ${label}</div>`;
 
 // --------------------------------------------------------------------------
 // Eén zichtbare tariefregel in het "afgesproken instellingen"-blok (volgorde = od.tariffOrder).
@@ -452,10 +444,24 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     m.leveringText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
       .forEach((para, i) => blocks.push(bP(esc(para).replace(/\n/g, "<br/>"), i === 0 ? 8 : 22)));
     // Investering + stelpost/Note als ÉÉN atomair blok (splitst nooit; Note blijft bij het bedrag).
+    // Particulier: zelfde stijl als zakelijk (schuin + onderstreept, label tussen haakjes), met de BTW-
+    // uitsplitsing eronder. Sluitend afgerond op hele euro's (netto + btw = totaal); geel bij niet ingevuld.
+    let priceHtml: string;
+    if (m.isPrivate) {
+      const net = m.totalInvestment;
+      const netR = net == null ? null : Math.round(net);
+      const btwR = net == null ? null : Math.round(net * VAT_RATE);
+      const totR = net == null ? null : (netR as number) + (btwR as number);
+      const fmt = (v: number | null) => v == null ? yel(invFmt(0)) : invFmt(v);
+      priceHtml =
+        `<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De prijs voor bovenstaande werkzaamheden bedraagt:</div>${priceAmt(fmt(netR), "(exclusief btw)")}</div>` +
+        `<div style="display:flex;justify-content:flex-end;margin-top:2px">${priceAmt(fmt(btwR), "(21% btw)")}</div>` +
+        `<div style="display:flex;justify-content:flex-end;margin-top:2px">${priceAmt(fmt(totR), "(totaalprijs inclusief btw)")}</div>`;
+    } else {
+      priceHtml = `<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div>${priceAmt(mInv(m.totalInvestment), "(totaal excl. BTW)")}</div>`;
+    }
     blocks.push(bRaw(
-      (m.isPrivate
-        ? `<div style="margin-bottom:6px">De prijs voor bovenstaande werkzaamheden bedraagt:</div>${vatBlock(m.totalInvestment, "Prijs")}`
-        : `<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic"><span style="text-decoration:underline">${mInv(m.totalInvestment)}</span> (totaal excl. BTW)</div></div>`) +
+      priceHtml +
       `<div style="font-style:italic;margin-top:30px">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`,
       24));
   } else if (m.withManagement) {
