@@ -1,4 +1,4 @@
-import { FormEvent, HTMLAttributes, useEffect, useState } from "react";
+import { FormEvent, HTMLAttributes, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
+import { usePostcodeLookup } from "@/hooks/usePostcodeLookup";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { isValidIban } from "@/lib/iban";
 import { cn } from "@/lib/utils";
@@ -334,6 +335,33 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
     setBankForm((current) => ({ ...current, [key]: value }));
     setBankErrors((current) => clearError(current, key));
   };
+
+  // Automatische adres-invulling (PDOK): postcode + huisnummer (uit het factuuradres) → plaats + straat.
+  const { lookup: lookupAddress } = usePostcodeLookup();
+  const lastAddrKey = useRef("");
+  useEffect(() => {
+    const pc = companyForm.billingAddressPostal.replace(/\s+/g, "").toUpperCase();
+    const huis = companyForm.billingAddressStreet.match(/\d+/)?.[0] ?? "";
+    if (!/^[1-9][0-9]{3}[A-Z]{2}$/.test(pc) || !huis) return;
+    const key = `${pc}|${huis}`;
+    if (key === lastAddrKey.current) return;
+    const tmr = setTimeout(async () => {
+      const r = await lookupAddress(companyForm.billingAddressPostal, huis);
+      if (!r) return;
+      lastAddrKey.current = key;
+      setCompanyForm((c) => {
+        const beforeNumber = c.billingAddressStreet.replace(/\d.*$/, "");
+        const hasStreetName = /[a-zA-Z]/.test(beforeNumber);
+        return {
+          ...c,
+          billingAddressCity: r.city || c.billingAddressCity,
+          billingAddressStreet: hasStreetName || !r.street ? c.billingAddressStreet : `${r.street} ${huis}`,
+        };
+      });
+    }, 500);
+    return () => clearTimeout(tmr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyForm.billingAddressPostal, companyForm.billingAddressStreet]);
 
   const updateLoginEmail = <K extends keyof LoginEmailFormState>(key: K, value: LoginEmailFormState[K]) => {
     setLoginEmailForm((current) => ({ ...current, [key]: value }));

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useCompany, useUpdateCompany } from "@/hooks/useContacts";
+import { AddressFields } from "@/components/contacts/AddressFields";
 
 // Herbruikbare bedrijfs-editor: schrijft direct naar het company-record (bron van waarheid),
 // zodat dezelfde gegevens 1:1 terugkomen in de Contacten-tab en — via de propagate-trigger —
@@ -24,6 +25,7 @@ export function CompanyFields({ companyId }: { companyId: string }) {
         website: company.website ?? "",
         sector: company.sector ?? "",
         address_street: company.address_street ?? "",
+        house_number: company.house_number ?? "",
         postal_code: company.postal_code ?? "",
         city: company.city ?? "",
         notes: company.notes ?? "",
@@ -49,6 +51,7 @@ export function CompanyFields({ companyId }: { companyId: string }) {
           website: t("website").trim() || null,
           sector: t("sector").trim() || null,
           address_street: t("address_street").trim() || null,
+          house_number: t("house_number").trim() || null,
           postal_code: t("postal_code").trim() || null,
           city: t("city").trim() || null,
           notes: t("notes").trim() || null,
@@ -68,10 +71,16 @@ export function CompanyFields({ companyId }: { companyId: string }) {
         <Field label="BTW-nummer"><Input value={t("btw_number")} onChange={(e) => set("btw_number")(e.target.value)} /></Field>
         <Field label="Sector"><Input value={t("sector")} onChange={(e) => set("sector")(e.target.value)} /></Field>
         <Field label="Website"><Input value={t("website")} onChange={(e) => set("website")(e.target.value)} /></Field>
-        <Field label="Straat"><Input value={t("address_street")} onChange={(e) => set("address_street")(e.target.value)} /></Field>
-        <Field label="Postcode"><Input value={t("postal_code")} onChange={(e) => set("postal_code")(e.target.value)} /></Field>
-        <Field label="Plaats"><Input value={t("city")} onChange={(e) => set("city")(e.target.value)} /></Field>
       </div>
+      <AddressFields
+        value={{ street: t("address_street"), houseNumber: t("house_number"), postalCode: t("postal_code"), city: t("city") }}
+        onChange={(p) => setForm((f) => ({ ...f,
+          ...(p.street !== undefined ? { address_street: p.street } : {}),
+          ...(p.houseNumber !== undefined ? { house_number: p.houseNumber } : {}),
+          ...(p.postalCode !== undefined ? { postal_code: p.postalCode } : {}),
+          ...(p.city !== undefined ? { city: p.city } : {}),
+        }))}
+      />
       <Field label="Notities"><Textarea rows={3} value={t("notes")} onChange={(e) => set("notes")(e.target.value)} /></Field>
       <div className="flex justify-end">
         <Button onClick={save} disabled={update.isPending}>{update.isPending ? "Opslaan…" : "Bedrijf opslaan"}</Button>

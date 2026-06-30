@@ -823,6 +823,7 @@ export type Database = {
           kvk: string | null
           managed: boolean
           monthly_platform_surcharge: number | null
+          needs_installation: boolean
           notes: string | null
           notice_period_months: number
           organization_id: string
@@ -869,6 +870,7 @@ export type Database = {
           kvk?: string | null
           managed?: boolean
           monthly_platform_surcharge?: number | null
+          needs_installation?: boolean
           notes?: string | null
           notice_period_months?: number
           organization_id: string
@@ -915,6 +917,7 @@ export type Database = {
           kvk?: string | null
           managed?: boolean
           monthly_platform_surcharge?: number | null
+          needs_installation?: boolean
           notes?: string | null
           notice_period_months?: number
           organization_id?: string
@@ -962,6 +965,7 @@ export type Database = {
           city: string | null
           created_at: string
           created_by: string | null
+          house_number: string | null
           id: string
           kvk: string | null
           name: string
@@ -979,6 +983,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           created_by?: string | null
+          house_number?: string | null
           id?: string
           kvk?: string | null
           name: string
@@ -996,6 +1001,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           created_by?: string | null
+          house_number?: string | null
           id?: string
           kvk?: string | null
           name?: string
@@ -1323,6 +1329,168 @@ export type Database = {
           },
         ]
       }
+      content_keywords: {
+        Row: {
+          audience: string | null
+          cluster: string | null
+          competition: number | null
+          cpc: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          intent: string
+          is_pillar: boolean
+          keyword_difficulty: number | null
+          last_seen_at: string
+          metrics_at: string | null
+          normalized_key: string
+          opportunity: number | null
+          organization_id: string
+          priority: number
+          query: string
+          search_volume: number | null
+          seed: string | null
+          serp_checked_at: string | null
+          serp_gap: number | null
+          serp_notes: string | null
+          source: string
+          status: string
+          times_seen: number
+          updated_at: string
+        }
+        Insert: {
+          audience?: string | null
+          cluster?: string | null
+          competition?: number | null
+          cpc?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          intent?: string
+          is_pillar?: boolean
+          keyword_difficulty?: number | null
+          last_seen_at?: string
+          metrics_at?: string | null
+          normalized_key: string
+          opportunity?: number | null
+          organization_id?: string
+          priority?: number
+          query: string
+          search_volume?: number | null
+          seed?: string | null
+          serp_checked_at?: string | null
+          serp_gap?: number | null
+          serp_notes?: string | null
+          source?: string
+          status?: string
+          times_seen?: number
+          updated_at?: string
+        }
+        Update: {
+          audience?: string | null
+          cluster?: string | null
+          competition?: number | null
+          cpc?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          intent?: string
+          is_pillar?: boolean
+          keyword_difficulty?: number | null
+          last_seen_at?: string
+          metrics_at?: string | null
+          normalized_key?: string
+          opportunity?: number | null
+          organization_id?: string
+          priority?: number
+          query?: string
+          search_volume?: number | null
+          seed?: string | null
+          serp_checked_at?: string | null
+          serp_gap?: number | null
+          serp_notes?: string | null
+          source?: string
+          status?: string
+          times_seen?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_keywords_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_recordings: {
+        Row: {
+          audio_path: string | null
+          blog_post_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          recorded_on: string | null
+          status: string
+          title: string
+          topic_id: string | null
+          transcript: string | null
+          updated_at: string
+        }
+        Insert: {
+          audio_path?: string | null
+          blog_post_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          recorded_on?: string | null
+          status?: string
+          title: string
+          topic_id?: string | null
+          transcript?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audio_path?: string | null
+          blog_post_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          recorded_on?: string | null
+          status?: string
+          title?: string
+          topic_id?: string | null
+          transcript?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_recordings_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_recordings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_recordings_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "content_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_seen_sources: {
         Row: {
           first_seen_at: string
@@ -1383,14 +1551,21 @@ export type Database = {
       content_topics: {
         Row: {
           aeo_score: number | null
+          agenda_at: string | null
           assigned_category: string | null
           assigned_category_slug: string | null
+          background: string | null
           blog_post_id: string | null
+          brief_generated_at: string | null
+          conversation_question: string | null
           created_at: string
           created_by: string | null
           dedup_of: string | null
+          discussed_at: string | null
           generated_by: string | null
           id: string
+          match_strength: number | null
+          matched_keyword_id: string | null
           novelty_key: string
           novelty_score: number | null
           organization_id: string
@@ -1400,25 +1575,35 @@ export type Database = {
           rejected_reason: string | null
           reviewer_notes: string | null
           scheduled_for: string | null
+          seo_opportunity: number | null
           seo_score: number | null
           source_name: string | null
+          source_published_at: string | null
           source_type: string
           source_url: string | null
           status: string
+          suggested_angle: string | null
           target_cluster: string | null
           target_keyword: string | null
           updated_at: string
         }
         Insert: {
           aeo_score?: number | null
+          agenda_at?: string | null
           assigned_category?: string | null
           assigned_category_slug?: string | null
+          background?: string | null
           blog_post_id?: string | null
+          brief_generated_at?: string | null
+          conversation_question?: string | null
           created_at?: string
           created_by?: string | null
           dedup_of?: string | null
+          discussed_at?: string | null
           generated_by?: string | null
           id?: string
+          match_strength?: number | null
+          matched_keyword_id?: string | null
           novelty_key: string
           novelty_score?: number | null
           organization_id?: string
@@ -1428,25 +1613,35 @@ export type Database = {
           rejected_reason?: string | null
           reviewer_notes?: string | null
           scheduled_for?: string | null
+          seo_opportunity?: number | null
           seo_score?: number | null
           source_name?: string | null
+          source_published_at?: string | null
           source_type: string
           source_url?: string | null
           status?: string
+          suggested_angle?: string | null
           target_cluster?: string | null
           target_keyword?: string | null
           updated_at?: string
         }
         Update: {
           aeo_score?: number | null
+          agenda_at?: string | null
           assigned_category?: string | null
           assigned_category_slug?: string | null
+          background?: string | null
           blog_post_id?: string | null
+          brief_generated_at?: string | null
+          conversation_question?: string | null
           created_at?: string
           created_by?: string | null
           dedup_of?: string | null
+          discussed_at?: string | null
           generated_by?: string | null
           id?: string
+          match_strength?: number | null
+          matched_keyword_id?: string | null
           novelty_key?: string
           novelty_score?: number | null
           organization_id?: string
@@ -1456,11 +1651,14 @@ export type Database = {
           rejected_reason?: string | null
           reviewer_notes?: string | null
           scheduled_for?: string | null
+          seo_opportunity?: number | null
           seo_score?: number | null
           source_name?: string | null
+          source_published_at?: string | null
           source_type?: string
           source_url?: string | null
           status?: string
+          suggested_angle?: string | null
           target_cluster?: string | null
           target_keyword?: string | null
           updated_at?: string
@@ -1478,6 +1676,13 @@ export type Database = {
             columns: ["dedup_of"]
             isOneToOne: false
             referencedRelation: "content_topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_topics_matched_keyword_id_fkey"
+            columns: ["matched_keyword_id"]
+            isOneToOne: false
+            referencedRelation: "content_keywords"
             referencedColumns: ["id"]
           },
           {
@@ -1978,7 +2183,7 @@ export type Database = {
           done: boolean
           due_date: string | null
           id: string
-          lead_id: string
+          lead_id: string | null
           organization_id: string
           position: number
           title: string
@@ -1991,7 +2196,7 @@ export type Database = {
           done?: boolean
           due_date?: string | null
           id?: string
-          lead_id: string
+          lead_id?: string | null
           organization_id: string
           position?: number
           title: string
@@ -2004,7 +2209,7 @@ export type Database = {
           done?: boolean
           due_date?: string | null
           id?: string
-          lead_id?: string
+          lead_id?: string | null
           organization_id?: string
           position?: number
           title?: string
@@ -2066,7 +2271,6 @@ export type Database = {
           position: number
           postal_code: string | null
           priority: string
-          quote_id: string | null
           sector: string | null
           source: string
           stage_id: string | null
@@ -2114,7 +2318,6 @@ export type Database = {
           position?: number
           postal_code?: string | null
           priority?: string
-          quote_id?: string | null
           sector?: string | null
           source?: string
           stage_id?: string | null
@@ -2162,7 +2365,6 @@ export type Database = {
           position?: number
           postal_code?: string | null
           priority?: string
-          quote_id?: string | null
           sector?: string | null
           source?: string
           stage_id?: string | null
@@ -2198,13 +2400,6 @@ export type Database = {
             columns: ["person_id"]
             isOneToOne: false
             referencedRelation: "persons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_quote_id_fkey"
-            columns: ["quote_id"]
-            isOneToOne: false
-            referencedRelation: "quotes"
             referencedColumns: ["id"]
           },
           {
@@ -2463,44 +2658,56 @@ export type Database = {
       }
       persons: {
         Row: {
+          address_street: string | null
+          city: string | null
           created_at: string
           created_by: string | null
           email: string | null
           first_name: string | null
           full_name: string | null
+          house_number: string | null
           id: string
           last_name: string | null
           notes: string | null
           organization_id: string
           phone: string | null
+          postal_code: string | null
           role: string | null
           updated_at: string
         }
         Insert: {
+          address_street?: string | null
+          city?: string | null
           created_at?: string
           created_by?: string | null
           email?: string | null
           first_name?: string | null
           full_name?: string | null
+          house_number?: string | null
           id?: string
           last_name?: string | null
           notes?: string | null
           organization_id: string
           phone?: string | null
+          postal_code?: string | null
           role?: string | null
           updated_at?: string
         }
         Update: {
+          address_street?: string | null
+          city?: string | null
           created_at?: string
           created_by?: string | null
           email?: string | null
           first_name?: string | null
           full_name?: string | null
+          house_number?: string | null
           id?: string
           last_name?: string | null
           notes?: string | null
           organization_id?: string
           phone?: string | null
+          postal_code?: string | null
           role?: string | null
           updated_at?: string
         }
@@ -2897,6 +3104,7 @@ export type Database = {
           total_installation_cost: number | null
           updated_at: string | null
           valid_until: string | null
+          with_installation: boolean
           with_management: boolean
         }
         Insert: {
@@ -2948,6 +3156,7 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
+          with_installation?: boolean
           with_management?: boolean
         }
         Update: {
@@ -2999,6 +3208,7 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
+          with_installation?: boolean
           with_management?: boolean
         }
         Relationships: [
@@ -3267,6 +3477,82 @@ export type Database = {
           vat_status_confirmed_at: string
         }[]
       }
+      content_apply_clusters: { Args: { p_clusters: Json }; Returns: number }
+      content_apply_keyword_metrics: { Args: { p_rows: Json }; Returns: number }
+      content_apply_serp_gap: {
+        Args: { p_gap: number; p_id: string; p_notes: string }
+        Returns: undefined
+      }
+      content_ingest_draft: {
+        Args: {
+          p_aeo_score?: number
+          p_author_name?: string
+          p_canonical_url?: string
+          p_category?: string
+          p_content: string
+          p_cover_image_url?: string
+          p_excerpt?: string
+          p_faq?: Json
+          p_generated_by?: string
+          p_internal_link_suggestions?: Json
+          p_meta_variants?: Json
+          p_quality_score?: number
+          p_seo_description?: string
+          p_seo_score?: number
+          p_seo_title?: string
+          p_slug?: string
+          p_tags?: string[]
+          p_title: string
+          p_topic_id: string
+        }
+        Returns: Json
+      }
+      content_ingest_keyword: {
+        Args: {
+          p_audience?: string
+          p_cluster?: string
+          p_intent?: string
+          p_query: string
+          p_seed?: string
+          p_source?: string
+        }
+        Returns: string
+      }
+      content_ingest_research: {
+        Args: {
+          p_question: string
+          p_source_url?: string
+          p_target_keyword?: string
+          p_toelichting?: string
+        }
+        Returns: string
+      }
+      content_ingest_source: {
+        Args: {
+          p_novelty_threshold?: number
+          p_published_at?: string
+          p_source_name: string
+          p_source_type: string
+          p_source_url: string
+          p_summary?: string
+          p_title: string
+        }
+        Returns: string
+      }
+      content_keyword_opportunity: {
+        Args: {
+          p_kd: number
+          p_priority: number
+          p_serp_gap: number
+          p_volume: number
+        }
+        Returns: number
+      }
+      content_match_topics_to_keywords: {
+        Args: { p_only_unmatched?: boolean; p_threshold?: number }
+        Returns: number
+      }
+      content_recluster_keywords: { Args: never; Returns: number }
       create_activity_log: {
         Args: {
           action: string

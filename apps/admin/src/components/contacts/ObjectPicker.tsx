@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Check, ChevronsUpDown, MapPin } from "lucide-react";
+import { Check, ChevronsUpDown, MapPin, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { useProjectLocationSearch, type ObjectSearchResult } from "@/hooks/useProjectLocations";
+import { useProjectLocationSearch, useCreateProjectLocation, type ObjectSearchResult } from "@/hooks/useProjectLocations";
 
 const fmt = (r: ObjectSearchResult) => `${r.location_number} · ${[r.address_street, r.city].filter(Boolean).join(", ") || r.display_name}`;
 
@@ -19,6 +20,22 @@ export function ObjectPicker({ value, valueLabel, onChange, placeholder = "Kies 
   const debounced = useDebouncedValue(query, 200);
   const search = useProjectLocationSearch(debounced);
   const results = search.data ?? [];
+  const createObj = useCreateProjectLocation();
+  const exact = results.some((r) => (r.display_name ?? "").toLowerCase() === query.trim().toLowerCase());
+
+  const handleCreate = async () => {
+    const name = query.trim();
+    if (!name) return;
+    try {
+      const created = await createObj.mutateAsync({ display_name: name, address_street: null, postal_code: null, city: null });
+      onChange(created.id, `${created.location_number} · ${created.display_name}`);
+      toast.success(`Object "${created.display_name}" aangemaakt`);
+      setOpen(false);
+      setQuery("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Aanmaken mislukt");
+    }
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -44,6 +61,13 @@ export function ObjectPicker({ value, valueLabel, onChange, placeholder = "Kies 
                     <span className="flex-1 truncate">{fmt(r)}</span>
                   </CommandItem>
                 ))}
+              </CommandGroup>
+            )}
+            {query.trim() && !exact && (
+              <CommandGroup>
+                <CommandItem value={`__create__${query}`} onSelect={handleCreate} disabled={createObj.isPending}>
+                  <Plus className="mr-2 h-4 w-4" /> Object "{query.trim()}" aanmaken
+                </CommandItem>
               </CommandGroup>
             )}
             {value && (

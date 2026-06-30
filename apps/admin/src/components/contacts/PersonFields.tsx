@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { usePerson, useUpdatePerson } from "@/hooks/useContacts";
+import { AddressFields } from "@/components/contacts/AddressFields";
 
 // Herbruikbare persoon-editor: schrijft direct naar het person-record (bron van waarheid),
 // 1:1 met de Contacten-tab en — via de propagate-trigger — de contact-cache op leads/clients.
@@ -23,6 +24,10 @@ export function PersonFields({ personId }: { personId: string }) {
         email: person.email ?? "",
         phone: person.phone ?? "",
         role: person.role ?? "",
+        address_street: person.address_street ?? "",
+        house_number: person.house_number ?? "",
+        postal_code: person.postal_code ?? "",
+        city: person.city ?? "",
         notes: person.notes ?? "",
       });
     }
@@ -45,6 +50,10 @@ export function PersonFields({ personId }: { personId: string }) {
           email: t("email").trim() || null,
           phone: t("phone").trim() || null,
           role: t("role").trim() || null,
+          address_street: t("address_street").trim() || null,
+          house_number: t("house_number").trim() || null,
+          postal_code: t("postal_code").trim() || null,
+          city: t("city").trim() || null,
           notes: t("notes").trim() || null,
         },
       });
@@ -63,6 +72,15 @@ export function PersonFields({ personId }: { personId: string }) {
         <Field label="Telefoon"><Input value={t("phone")} onChange={(e) => set("phone")(e.target.value)} /></Field>
         <Field label="Functie"><Input value={t("role")} onChange={(e) => set("role")(e.target.value)} /></Field>
       </div>
+      <AddressFields
+        value={{ street: t("address_street"), houseNumber: t("house_number"), postalCode: t("postal_code"), city: t("city") }}
+        onChange={(p) => setForm((f) => ({ ...f,
+          ...(p.street !== undefined ? { address_street: p.street } : {}),
+          ...(p.houseNumber !== undefined ? { house_number: p.houseNumber } : {}),
+          ...(p.postalCode !== undefined ? { postal_code: p.postalCode } : {}),
+          ...(p.city !== undefined ? { city: p.city } : {}),
+        }))}
+      />
       <Field label="Notities"><Textarea rows={3} value={t("notes")} onChange={(e) => set("notes")(e.target.value)} /></Field>
       <div className="flex justify-end">
         <Button onClick={save} disabled={update.isPending}>{update.isPending ? "Opslaan…" : "Persoon opslaan"}</Button>
