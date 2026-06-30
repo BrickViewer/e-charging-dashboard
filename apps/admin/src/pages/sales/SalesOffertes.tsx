@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useQuotes } from "@/hooks/useQuotes";
+import { scopeFromFlags, SCOPE_SHORT, SCOPE_BADGE_CLASS } from "@/lib/quoteScope";
 import { NewQuoteDialog } from "@/components/sales/NewQuoteDialog";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -68,6 +69,8 @@ export default function SalesOffertes() {
               <tr>
                 <th className="px-4 py-2.5 font-medium">Nummer</th>
                 <th className="px-4 py-2.5 font-medium">Bedrijf</th>
+                <th className="px-4 py-2.5 font-medium">Scope</th>
+                <th className="px-4 py-2.5 text-right font-medium">Laadpunten</th>
                 <th className="px-4 py-2.5 text-right font-medium">Bedrag</th>
                 <th className="px-4 py-2.5 font-medium">Geldig tot</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
@@ -77,6 +80,7 @@ export default function SalesOffertes() {
               {filtered.map((qt) => {
                 const total = (Number(qt.total_hardware_cost) || 0) + (Number(qt.total_installation_cost) || 0);
                 const st = STATUS[qt.status] ?? { label: qt.status, cls: "bg-muted text-muted-foreground" };
+                const scope = scopeFromFlags(qt.with_installation !== false, qt.with_management !== false);
                 return (
                   <tr key={qt.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => navigate(`/sales/offertes/${qt.id}`)}>
                     <td className="px-4 py-2.5 font-medium text-foreground tabular-nums">{qt.quote_number}</td>
@@ -84,6 +88,10 @@ export default function SalesOffertes() {
                       {qt.prospect_company || qt.prospect_contact || "—"}
                       {!(qt.prospect_company && qt.prospect_company.trim()) && qt.prospect_contact ? <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Particulier</span> : null}
                     </td>
+                    <td className="px-4 py-2.5">
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${SCOPE_BADGE_CLASS[scope]}`}>{SCOPE_SHORT[scope]}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{qt.num_charge_points ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{euro(total)}</td>
                     <td className="px-4 py-2.5 text-muted-foreground">{qt.valid_until || "—"}</td>
                     <td className="px-4 py-2.5">
@@ -95,7 +103,7 @@ export default function SalesOffertes() {
                   </tr>
                 );
               })}
-              {filtered.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Geen offertes.</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Geen offertes.</td></tr>}
             </tbody>
           </table>
         </div>

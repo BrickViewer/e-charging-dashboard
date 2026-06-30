@@ -16,10 +16,10 @@ export function useQuotes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quotes")
-        .select("id, quote_number, prospect_company, prospect_contact, company_id, status, total_hardware_cost, total_installation_cost, valid_until, created_at, lead_id, client_id, internal_signer_name, internal_signer_user_id")
+        .select("id, quote_number, prospect_company, prospect_contact, company_id, status, total_hardware_cost, total_installation_cost, valid_until, created_at, lead_id, client_id, internal_signer_name, internal_signer_user_id, num_charge_points, with_installation, with_management")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as Pick<Quote, "id" | "quote_number" | "prospect_company" | "prospect_contact" | "company_id" | "status" | "total_hardware_cost" | "total_installation_cost" | "valid_until" | "created_at" | "lead_id" | "client_id" | "internal_signer_name" | "internal_signer_user_id">[];
+      return (data ?? []) as Pick<Quote, "id" | "quote_number" | "prospect_company" | "prospect_contact" | "company_id" | "status" | "total_hardware_cost" | "total_installation_cost" | "valid_until" | "created_at" | "lead_id" | "client_id" | "internal_signer_name" | "internal_signer_user_id" | "num_charge_points" | "with_installation" | "with_management">[];
     },
   });
 }
