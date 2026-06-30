@@ -154,7 +154,16 @@ export function useSignedQuotesAwaitingClient() {
         .is("client_id", null)
         .order("signed_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as AwaitingClientQuote[];
+      const quotes = (data ?? []) as unknown as AwaitingClientQuote[];
+      if (quotes.length === 0) return quotes;
+      // Offertes die al een installatie-order hebben (o.a. het order-only pad voor alleen-installatie)
+      // horen niet meer in de "klant aanmaken"-intake.
+      const { data: ordered } = await supabase
+        .from("installation_orders")
+        .select("quote_id")
+        .in("quote_id", quotes.map((q) => q.id));
+      const withOrder = new Set((ordered ?? []).map((o) => o.quote_id as string));
+      return quotes.filter((q) => !withOrder.has(q.id));
     },
   });
 }

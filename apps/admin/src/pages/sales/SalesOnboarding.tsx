@@ -10,11 +10,12 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ONBOARDING_STAGES, STAGES_BY_SCOPE, deriveStage, hasPendingInvite, primaryOrder,
-  useOnboardingClients, useUnlinkedLocations, useLinkLocationToClient, useSendOnboardingInvite, useMarkInvoiced,
+  useOnboardingClients, useOnboardingOrders, useUnlinkedLocations, useLinkLocationToClient, useSendOnboardingInvite,
   type OnboardingClient, type OnboardingStage,
 } from "@/hooks/useOnboarding";
 import { clientScope, SCOPE_LABEL, SCOPE_SHORT, SCOPE_BADGE_CLASS, type QuoteScope } from "@/lib/quoteScope";
 import { OnboardingHandoffDialog } from "@/components/sales/OnboardingHandoffDialog";
+import { OnboardingInvoiceDialog } from "@/components/sales/OnboardingInvoiceDialog";
 import { CreateClientFromQuoteDialog } from "@/components/sales/CreateClientFromQuoteDialog";
 import { useSignedQuotesAwaitingClient, type AwaitingClientQuote } from "@/hooks/useQuotes";
 
@@ -28,16 +29,15 @@ const SCOPE_FILTERS: { key: "all" | QuoteScope; label: string }[] = [
 ];
 
 function NextAction({
-  client, stage, onLink, onInvite, onHandoff, onMarkInvoiced, inviting, invoicing, navigate,
+  client, stage, onLink, onInvite, onHandoff, onInvoice, inviting, navigate,
 }: {
   client: OnboardingClient;
   stage: OnboardingStage;
   onLink: (c: OnboardingClient) => void;
   onInvite: (c: OnboardingClient) => void;
   onHandoff: (c: OnboardingClient) => void;
-  onMarkInvoiced: (c: OnboardingClient) => void;
+  onInvoice: (c: OnboardingClient) => void;
   inviting: boolean;
-  invoicing: boolean;
   navigate: (to: string) => void;
 }) {
   const order = primaryOrder(client);
@@ -54,7 +54,7 @@ function NextAction({
         </div>
       );
     case "opgeleverd":
-      return <Button size="sm" className={btn} disabled={invoicing || !order} onClick={() => onMarkInvoiced(client)}><Receipt className={ico} /> Markeer gefactureerd</Button>;
+      return <Button size="sm" className={btn} disabled={!order} onClick={() => onInvoice(client)}><Receipt className={ico} /> Factureren</Button>;
     case "locaties_koppelen":
       return <Button size="sm" className={btn} onClick={() => onLink(client)}><Plug className={ico} /> Locaties koppelen</Button>;
     case "klant_uitnodigen":
@@ -66,6 +66,8 @@ function NextAction({
     case "gegevens":
       return <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-center text-[11px] leading-tight text-muted-foreground"><Clock className="h-3.5 w-3.5 shrink-0" /> Wacht op gegevens</div>;
     case "archief":
+      if (client.is_order_only)
+        return <div className="flex min-h-8 items-center justify-center rounded-md bg-muted/60 px-2 py-1 text-center text-[11px] leading-tight text-muted-foreground">Afgerond</div>;
       return <Button size="sm" variant="ghost" className={btn} onClick={() => navigate(`/admin/klanten/${client.id}`)}><ExternalLink className={ico} /> Bekijk klant</Button>;
   }
 }
@@ -125,20 +127,21 @@ function LinkLocationDialog({ client, onClose }: { client: OnboardingClient | nu
 export default function SalesOnboarding() {
   const navigate = useNavigate();
   const { data: clients, isLoading } = useOnboardingClients();
+  const { data: orders } = useOnboardingOrders();
   const { data: awaiting } = useSignedQuotesAwaitingClient();
   const sendInvite = useSendOnboardingInvite();
-  const markInvoiced = useMarkInvoiced();
   const [linkFor, setLinkFor] = useState<OnboardingClient | null>(null);
   const [handoffFor, setHandoffFor] = useState<OnboardingClient | null>(null);
+  const [invoiceFor, setInvoiceFor] = useState<OnboardingClient | null>(null);
   const [createFor, setCreateFor] = useState<AwaitingClientQuote | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
-  const [invoicingId, setInvoicingId] = useState<string | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [scopeFilter, setScopeFilter] = useState<"all" | QuoteScope>("all");
 
+  // Echte klanten + clientloze 'order-only' installatie-orders (alleen-installatie) in dezelfde pijplijn.
   const filteredClients = useMemo(
-    () => (clients ?? []).filter((c) => scopeFilter === "all" || clientScope(c.needs_installation, c.managed) === scopeFilter),
-    [clients, scopeFilter],
+    () => [...(clients ?? []), ...(orders ?? [])].filter((c) => scopeFilter === "all" || clientScope(c.needs_installation, c.managed) === scopeFilter),
+    [clients, orders, scopeFilter],
   );
 
   const byStage = useMemo(() => {
@@ -161,20 +164,6 @@ export default function SalesOnboarding() {
       toast.error(e instanceof Error ? e.message : "Versturen mislukt");
     } finally {
       setInvitingId(null);
-    }
-  };
-
-  const onMarkInvoiced = async (c: OnboardingClient) => {
-    const order = primaryOrder(c);
-    if (!order) return;
-    setInvoicingId(c.id);
-    try {
-      await markInvoiced.mutateAsync(order.id);
-      toast.success("Gemarkeerd als gefactureerd");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Markeren mislukt");
-    } finally {
-      setInvoicingId(null);
     }
   };
 
@@ -270,14 +259,16 @@ export default function SalesOnboarding() {
                             {SCOPE_SHORT[clientScope(c.needs_installation, c.managed)]}
                           </span>
                         </div>
-                        <button type="button" onClick={() => navigate(`/admin/klanten/${c.id}`)} aria-label="Open klant" className="shrink-0 text-muted-foreground hover:text-foreground">
-                          <ArrowRight className="h-4 w-4" />
-                        </button>
+                        {!c.is_order_only && (
+                          <button type="button" onClick={() => navigate(`/admin/klanten/${c.id}`)} aria-label="Open klant" className="shrink-0 text-muted-foreground hover:text-foreground">
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                       <NextAction
                         client={c} stage={s.key}
-                        onLink={setLinkFor} onInvite={onInvite} onHandoff={setHandoffFor} onMarkInvoiced={onMarkInvoiced}
-                        inviting={invitingId === c.id} invoicing={invoicingId === c.id} navigate={navigate}
+                        onLink={setLinkFor} onInvite={onInvite} onHandoff={setHandoffFor} onInvoice={setInvoiceFor}
+                        inviting={invitingId === c.id} navigate={navigate}
                       />
                     </div>
                   ))}
@@ -292,6 +283,7 @@ export default function SalesOnboarding() {
 
       <LinkLocationDialog client={linkFor} onClose={() => setLinkFor(null)} />
       <OnboardingHandoffDialog client={handoffFor} onClose={() => setHandoffFor(null)} />
+      <OnboardingInvoiceDialog client={invoiceFor} onClose={() => setInvoiceFor(null)} />
       <CreateClientFromQuoteDialog quote={createFor} open={!!createFor} onClose={() => setCreateFor(null)} onCreated={(id) => navigate(`/admin/klanten/${id}`)} />
     </div>
   );

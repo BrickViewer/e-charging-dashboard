@@ -16,7 +16,7 @@ export type OnboardingStage =
   | "archief";
 
 export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: string; hint: string }[] = [
-  { key: "getekend", label: "Klant aangemaakt", color: "#6366f1", hint: "Doorsturen naar installateur" },
+  { key: "getekend", label: "Getekend", color: "#6366f1", hint: "Doorsturen naar installateur" },
   { key: "bij_installateur", label: "Bij installateur", color: "#f59e0b", hint: "Wacht op oplevering" },
   { key: "opgeleverd", label: "Opgeleverd", color: "#06b6d4", hint: "Factureren" },
   { key: "locaties_koppelen", label: "Locaties koppelen", color: "#8b5cf6", hint: "Laadlocatie koppelen" },
@@ -35,6 +35,7 @@ export const STAGES_BY_SCOPE: Record<QuoteScope, OnboardingStage[]> = {
 
 export type OnbOrder = {
   id: string;
+  quote_id: string | null;
   status: string | null;
   egroup_order_id: string | null;
   egroup_order_number: string | null;
@@ -76,12 +77,14 @@ export type OnboardingClient = {
   installation_orders: OnbOrder[] | null;
   locations: OnbLocation[] | null;
   client_invitations: OnbInvite[] | null;
+  // True voor het "order-only" pad (alleen-installatie zonder klantaccount): de kaart is geen echte client.
+  is_order_only?: boolean;
 };
 
 const CLIENT_SELECT =
   "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, contact_phone, created_at, " +
   "payment_onboarding_status, needs_installation, managed, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
-  "installation_orders(id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
+  "installation_orders(id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes), " +
   "locations(id), client_invitations(id, status)";
 
@@ -96,6 +99,66 @@ export function useOnboardingClients() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as OnboardingClient[];
+    },
+  });
+}
+
+// --- Order-only pad (alleen-installatie zonder klantaccount) -------------------------------------
+// Clientloze installatie-orders (client_id is null) worden naar dezelfde OnboardingClient-vorm gemapt,
+// zodat deriveStage/primaryOrder/de kaart ongewijzigd werken. Scope = altijd alleen_installatie.
+type RawOrderOnly = {
+  id: string; quote_id: string | null; status: string | null; egroup_order_id: string | null;
+  egroup_order_number: string | null; external_status: string | null; completed_at: string | null;
+  invoiced_at: string | null; site_street: string | null; site_house_number: string | null;
+  site_postal: string | null; site_city: string | null; site_contact_name: string | null;
+  site_contact_email: string | null; site_contact_phone: string | null; service_summary: string | null;
+  notes: string | null; created_at: string;
+  quotes: { quote_number: string | null; prospect_company: string | null; prospect_contact: string | null; prospect_email: string | null } | null;
+  leads: { company_name: string | null; contact_name: string | null; contact_email: string | null; contact_phone: string | null; address_street: string | null; postal_code: string | null; city: string | null } | null;
+};
+
+const ORDER_ONLY_SELECT =
+  "id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
+  "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes, created_at, " +
+  "quotes(quote_number, prospect_company, prospect_contact, prospect_email), " +
+  "leads(company_name, contact_name, contact_email, contact_phone, address_street, postal_code, city)";
+
+function mapOrderToClient(o: RawOrderOnly): OnboardingClient {
+  const q = o.quotes;
+  const lead = o.leads;
+  const name = lead?.company_name || q?.prospect_company || q?.prospect_contact || lead?.contact_name || "Onbekend";
+  const order: OnbOrder = {
+    id: o.id, quote_id: o.quote_id, status: o.status, egroup_order_id: o.egroup_order_id,
+    egroup_order_number: o.egroup_order_number, external_status: o.external_status, completed_at: o.completed_at,
+    invoiced_at: o.invoiced_at, site_street: o.site_street, site_house_number: o.site_house_number,
+    site_postal: o.site_postal, site_city: o.site_city, site_contact_name: o.site_contact_name,
+    site_contact_email: o.site_contact_email, site_contact_phone: o.site_contact_phone,
+    service_summary: o.service_summary, notes: o.notes,
+  };
+  return {
+    id: o.id, company_name: name, client_number: null, status: o.status, portal_user_id: null,
+    contact_email: lead?.contact_email ?? q?.prospect_email ?? null,
+    contact_name: lead?.contact_name ?? q?.prospect_contact ?? null,
+    contact_phone: lead?.contact_phone ?? null,
+    created_at: o.created_at, payment_onboarding_status: null, needs_installation: true, managed: false,
+    vat_status: null, kvk: null, btw_number: null,
+    billing_address_street: lead?.address_street ?? null, billing_address_postal: lead?.postal_code ?? null,
+    billing_address_city: lead?.city ?? null,
+    installation_orders: [order], locations: [], client_invitations: [], is_order_only: true,
+  };
+}
+
+export function useOnboardingOrders() {
+  return useQuery({
+    queryKey: ["onboarding-orders"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("installation_orders")
+        .select(ORDER_ONLY_SELECT)
+        .is("client_id", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return ((data ?? []) as unknown as RawOrderOnly[]).map(mapOrderToClient);
     },
   });
 }

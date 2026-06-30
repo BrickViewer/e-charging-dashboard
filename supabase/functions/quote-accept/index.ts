@@ -227,9 +227,12 @@ Deno.serve(async (req) => {
     if (lead) {
       const { data: wonStage } = await sb.from("lead_stages").select("id")
         .eq("organization_id", org).eq("is_won", true).order("position", { ascending: true }).limit(1).maybeSingle();
-      const patch: Record<string, unknown> = { quote_id: quote.id };
-      if (wonStage?.id) patch.stage_id = wonStage.id;
-      await sb.from("leads").update(patch).eq("id", lead.id);
+      // Let op: 'leads' heeft GEEN kolom quote_id — die meenemen liet de hele update stil mislukken,
+      // waardoor de fase nooit naar Gewonnen sprong. Alleen stage_id zetten + de error checken.
+      if (wonStage?.id) {
+        const { error: leadErr } = await sb.from("leads").update({ stage_id: wonStage.id }).eq("id", lead.id);
+        if (leadErr) console.error("[quote-accept] lead → Gewonnen mislukt:", leadErr.message);
+      }
       await sb.from("lead_activities").insert({
         lead_id: lead.id, organization_id: org, type: "quote_accepted",
         description: `Offerte ${quote.quote_number} getekend door ${signerName} — klantaccount aanmaken in onboarding`,
