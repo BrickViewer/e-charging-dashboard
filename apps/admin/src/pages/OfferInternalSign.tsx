@@ -200,7 +200,6 @@ export default function OfferInternalSign() {
   const effectiveSig = drawnSig ?? storedSig;
   const showPad = redraw || !storedSig || drawnSig != null;
   const sigName = quote.internalSignerName || quote.signerProfileName || "—";
-  const sigFn = quote.internalSignerFunction || quote.signerProfileFunction || null;
   const emailGreeting = quote.offerDetails?.emailGreeting?.trim() || `Beste ${quote.contact || "klant"},`;
   const emailClosing = quote.offerDetails?.emailClosingName?.trim() || quote.internalSignerName || quote.signerProfileName || "Team E-Charging";
 
@@ -241,9 +240,7 @@ export default function OfferInternalSign() {
                   <div className="rounded-lg border bg-white p-3">
                     <SignaturePad onChange={setDrawnSig} />
                     <div className="mt-1 border-t pt-2 text-sm">
-                      <p className="font-semibold text-foreground">{sigName}</p>
-                      {sigFn ? <p className="text-xs text-muted-foreground">{sigFn}</p> : null}
-                      <p className="text-xs text-muted-foreground">E-Charging B.V.</p>
+                      <p className="font-semibold text-foreground">{sigName}</p>                      <p className="text-xs text-muted-foreground">E-Charging B.V.</p>
                     </div>
                   </div>
                   {storedSig ? (
@@ -260,9 +257,7 @@ export default function OfferInternalSign() {
                       <img src={storedSig as string} alt="Handtekening" className="max-h-16 max-w-full" />
                     </div>
                     <div className="mt-1 border-t pt-2 text-sm">
-                      <p className="font-semibold text-foreground">{sigName}</p>
-                      {sigFn ? <p className="text-xs text-muted-foreground">{sigFn}</p> : null}
-                      <p className="text-xs text-muted-foreground">E-Charging B.V.</p>
+                      <p className="font-semibold text-foreground">{sigName}</p>                      <p className="text-xs text-muted-foreground">E-Charging B.V.</p>
                     </div>
                   </div>
                   <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setRedraw(true)}>Opnieuw tekenen</button>
