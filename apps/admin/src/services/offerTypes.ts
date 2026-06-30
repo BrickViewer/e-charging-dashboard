@@ -87,8 +87,22 @@ export interface OfferDetails {
 
 // Standaard body-tekst van de offerte-e-mail aan de klant — voorvulling van het bewerkbare veld.
 // Platte tekst met markdown-vet (`**woord**`) en lege regel = nieuwe alinea (zie lib/emailBody.ts).
-// MOET gelijk blijven aan de fallback in supabase/functions/_shared/offer-email.ts (renderOfferEmail).
-export const DEFAULT_OFFER_EMAIL =
-  "Hierbij ontvangt u ons voorstel voor de levering, installatie en het doorlopende beheer van uw laadinfrastructuur.\n\n" +
-  "In de offerte leest u de volledige uitwerking: de hardware, de installatie, het doorlopende beheer en de tarieven. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.\n\n" +
-  "De volledige offerte vindt u als **PDF-bijlage** bij deze e-mail.";
+// Stemt af op de scope (installatie/beheer) en het aantal palen. MOET gelijk blijven aan de
+// fallback in supabase/functions/_shared/offer-email.ts (renderOfferEmail).
+export function defaultOfferEmail(o?: { withInstallation?: boolean | null; withManagement?: boolean | null; chargePoints?: number | null }): string {
+  const inst = o?.withInstallation ?? true;   // onbekend → aanname installatie+beheer (meest voorkomend)
+  const mgmt = o?.withManagement ?? true;
+  const palen = (o?.chargePoints ?? 1) >= 2 ? "laadpalen" : "laadpaal";
+  const subject = inst && mgmt ? `de levering, installatie en het beheer van uw ${palen}`
+    : inst ? `de levering en installatie van uw ${palen}`
+    : mgmt ? `het beheer van uw ${palen}`
+    : `uw ${palen}`;
+  const detail = inst && mgmt ? "de hardware, de installatie, het beheer en de tarieven"
+    : inst ? "de hardware, de installatie en de kosten"
+    : mgmt ? "het beheer, de tarieven en de maandafrekening"
+    : "de uitwerking en de kosten";
+  return `Hierbij ontvangt u ons voorstel voor ${subject}.\n\n`
+    + `In de offerte leest u de volledige uitwerking: ${detail}. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.\n\n`
+    + "De volledige offerte vindt u als **PDF-bijlage** bij deze e-mail.";
+}
+export const DEFAULT_OFFER_EMAIL = defaultOfferEmail();

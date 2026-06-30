@@ -25,7 +25,7 @@ import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { LeadPicker } from "@/components/contacts/LeadPicker";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT, DEFAULT_BEHEER_INTRO } from "@/services/offerTemplate";
-import { DEFAULT_OFFER_EMAIL, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
+import { DEFAULT_OFFER_EMAIL, defaultOfferEmail, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { supabase } from "@/integrations/supabase/client";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -124,7 +124,7 @@ export default function SalesOfferteDetail() {
       setOd(odLoaded);
       setNumDraft({});
       setEmailGreeting(odLoaded.emailGreeting ?? "");
-      setEmailMessage(odLoaded.emailMessage ?? DEFAULT_OFFER_EMAIL);
+      setEmailMessage(odLoaded.emailMessage ?? defaultOfferEmail({ withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points }));
       setEmailClosing(odLoaded.emailClosingName ?? "");
       setSignerUserId(quote.internal_signer_user_id ?? null);
       setCompanyId(quote.company_id ?? null);
@@ -215,6 +215,8 @@ export default function SalesOfferteDetail() {
       quoteNumber: quote!.quote_number ?? "",
       date: quote!.sent_at ?? null,
       company: companyName || "",
+      // Concept (is_private null) → live afleiden uit het bedrijf; verstuurd → bevroren regime tonen.
+      isPrivate: quote!.is_private ?? null,
       contactName: personName || null,
       numChargePoints: numOr(numChargePoints),
       totalInvestment: numOr(price),
@@ -416,7 +418,7 @@ export default function SalesOfferteDetail() {
             <div className="mb-3">
               <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                 {companyName || personName || "—"}
-                {!companyId ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Particulier</span> : null}
+                {!(companyName && companyName.trim()) ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Particulier</span> : null}
               </p>
               {companyId ? <p className="text-[11px] text-muted-foreground">{personName || ""}</p> : null}
               {company && (company.kvk || company.btw_number || company.website) ? (

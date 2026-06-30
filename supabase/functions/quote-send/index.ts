@@ -101,6 +101,7 @@ Deno.serve(async (req) => {
         supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
         contact: quote.prospect_contact, total, acceptUrl, validUntil: quote.valid_until,
         hasAttachment: !!pdfBase64, customMessage, signoffName, greeting,
+        withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points,
       });
       const res = await sendEmail({
         to: [recipient],
@@ -116,7 +117,9 @@ Deno.serve(async (req) => {
     }
 
     // Bewaar het werkelijke verzendadres als bron-van-waarheid (bevestiging gaat hierheen).
-    await serviceClient.from("quotes").update({ status: "verstuurd", sent_at: new Date().toISOString(), prospect_email: recipient }).eq("id", quoteId);
+    // Freeze: leg het BTW-regime (particulier?) vast bij verzenden, zodat een verstuurde offerte
+    // nooit meer mee verandert met latere template-/code-wijzigingen (zie offerTemplate isPrivate-override).
+    await serviceClient.from("quotes").update({ status: "verstuurd", sent_at: new Date().toISOString(), prospect_email: recipient, is_private: !((quote.prospect_company ?? "").trim()) }).eq("id", quoteId);
 
     // Lead naar fase "Offerte verstuurd".
     if (quote.lead_id) {

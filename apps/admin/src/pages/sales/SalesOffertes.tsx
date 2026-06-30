@@ -82,7 +82,7 @@ export default function SalesOffertes() {
                     <td className="px-4 py-2.5 font-medium text-foreground tabular-nums">{qt.quote_number}</td>
                     <td className="px-4 py-2.5 text-foreground">
                       {qt.prospect_company || qt.prospect_contact || "—"}
-                      {!qt.company_id && (qt.prospect_company || qt.prospect_contact) ? <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Particulier</span> : null}
+                      {!(qt.prospect_company && qt.prospect_company.trim()) && qt.prospect_contact ? <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Particulier</span> : null}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{euro(total)}</td>
                     <td className="px-4 py-2.5 text-muted-foreground">{qt.valid_until || "—"}</td>

@@ -57,6 +57,8 @@ export interface OfferTemplateData {
   quoteNumber: string;
   date?: string | null;
   company: string;
+  // Freeze-override: bij verzenden vastgelegd regime (quotes.is_private). Leeg → afleiden uit 'geen bedrijf'.
+  isPrivate?: boolean | null;
   contactName?: string | null;
   addressLine?: string | null; // legacy "straat, postcode plaats"
   numChargePoints?: number | null;
@@ -125,10 +127,14 @@ const VAT_RATE = 0.21;
 const incl = (n: number) => n * (1 + VAT_RATE);
 // 3-regel BTW-uitsplitsing (netto / 21% BTW / totaal incl.) voor particulier-offertes.
 const vatBlock = (net: number | null | undefined, label: string): string => {
-  const n = net ?? 0;
   const row = (l: string, v: string, bold = false) =>
     `<div style="display:flex;justify-content:space-between${bold ? ";font-weight:700" : ""}"><div>${esc(l)}</div><div>${v}</div></div>`;
-  return row(label, money2(n)) + row("21% BTW", money2(n * VAT_RATE)) + row("Totaal inclusief BTW", money2(incl(n)), true);
+  // Niet ingevuld → gele 'niet ingevuld'-markering behouden (interne controle vóór versturen).
+  if (net == null) return row(label, yel(money2(0))) + row("21% BTW", yel(money2(0))) + row("Totaal inclusief BTW", yel(money2(0)), true);
+  // Sluitend afronden: totaal = afgerond netto + afgeronde BTW (zodat de drie regels op de cent optellen).
+  const c = (x: number) => Math.round(x * 100) / 100;
+  const nettoR = c(net); const btwR = c(net * VAT_RATE);
+  return row(label, money2(nettoR)) + row("21% BTW", money2(btwR)) + row("Totaal inclusief BTW", money2(nettoR + btwR), true);
 };
 
 // --------------------------------------------------------------------------
@@ -198,8 +204,9 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     // Particulier (geen bedrijf): val terug op de contactnaam zodat cover/briefkop een naam tonen.
     company: firstStr(data.company, od.tav, data.contactName),
     hasCompany: !!firstStr(data.company),
-    // Particulier = geen bedrijf gekoppeld. Stuurt BTW-weergave, voorwaarden en toon.
-    isPrivate: !firstStr(data.company),
+    // Particulier = geen bedrijf gekoppeld. Bij verzonden offertes leidt de opgeslagen vlag (freeze),
+    // anders afleiden uit 'geen bedrijf'. Stuurt BTW-weergave, voorwaarden en toon.
+    isPrivate: data.isPrivate ?? !firstStr(data.company),
     contactName: firstStr(od.tav, data.contactName),
     addr1, addr2,
     dateLong: fmtDateLong(dateIso),
@@ -447,7 +454,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // Investering + stelpost/Note als ÉÉN atomair blok (splitst nooit; Note blijft bij het bedrag).
     blocks.push(bRaw(
       (m.isPrivate
-        ? `<div style="margin-bottom:6px">De investering voor bovenstaande werkzaamheden bedraagt:</div>${vatBlock(m.totalInvestment, "Investering")}`
+        ? `<div style="margin-bottom:6px">De prijs voor bovenstaande werkzaamheden bedraagt:</div>${vatBlock(m.totalInvestment, "Prijs")}`
         : `<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div><div style="font-style:italic"><span style="text-decoration:underline">${mInv(m.totalInvestment)}</span> (totaal excl. BTW)</div></div>`) +
       `<div style="font-style:italic;margin-top:30px">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`,
       24));
@@ -473,7 +480,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
       : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:", 10));
     BEHEER_POINTS.forEach(([t, b], i) => blocks.push(bRaw(
-      `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
+      `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(m.isPrivate && i === 4 ? "Wij verzorgen transactieverwerking, facturatie en uitbetaling. Elke maand ontvangt u een overzichtelijke maandafrekening en betalen wij uw opbrengst aan u uit." : b)}</div></div></div>`,
       i === 0 ? 14 : 22)));
     blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.isPrivate ? incl(m.serviceFeePerKwh) : m.serviceFeePerKwh)} per geladen kWh${m.isPrivate ? " (incl. BTW)" : ""}. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
     // De eenmalige activatie-/onboardingkosten tonen we alleen onder de voorwaarden (zie hieronder), niet hier.
@@ -509,7 +516,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
   }
   blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 19, HEAD));
-  blocks.push(bFb(m.isPrivate ? "Op deze overeenkomst zijn de consumentenvoorwaarden van E-Charging B.V. van toepassing." : "De Algemene voorwaarden E-Charging BV.", 8));
+  blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
   if (m.withInstallation) {
     blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.isPrivate ? incl(m.toeslagWerkuur) : m.toeslagWerkuur)} gehanteerd worden:`));
     blocks.push(bSub("50% Avonduren (17.00 &ndash; 23.00 uur)"));
@@ -523,7 +530,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(m.withInstallation
       ? bFb(`De activatiekosten bedragen ${mEur(m.isPrivate ? incl(m.activatiekostenPerSocket) : m.activatiekostenPerSocket)} per socket${m.isPrivate ? " (incl. BTW)" : ""}.`, 8)
       : bFb(m.isPrivate
-          ? `De eenmalige activatie- en onboardingkosten bedragen ${money2(incl(m.totalInvestment ?? 0))} (incl. BTW).`
+          ? `De eenmalige activatie- en onboardingkosten bedragen ${m.totalInvestment != null ? money2(incl(m.totalInvestment)) : yel(money2(0))} (incl. BTW).`
           : `De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
     blocks.push(bFb(m.withInstallation
       ? "De overeenkomst gaat in op de eerste dag van de kalendermaand volgend op de opleverdatum."

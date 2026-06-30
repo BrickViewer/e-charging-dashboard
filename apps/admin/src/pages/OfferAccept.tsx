@@ -19,6 +19,7 @@ const fmtNlDate = (iso?: string | null) => { if (!iso) return "—"; const d = n
 type QuoteSummary = {
   quoteNumber: string;
   company?: string | null;
+  isPrivate?: boolean | null;
   contact?: string | null;
   signerEmail?: string | null;
   addressLine?: string | null;
@@ -50,6 +51,7 @@ const toPdfData = (q: QuoteSummary): OfferPdfData => ({
   quoteNumber: q.quoteNumber,
   date: q.date ?? null,
   company: q.company ?? "",
+  isPrivate: q.isPrivate ?? null,
   contactName: q.contact ?? null,
   addressLine: q.addressLine ?? null,
   numChargePoints: q.numChargePoints ?? null,
@@ -169,7 +171,7 @@ export default function OfferAccept() {
             <Card><CardContent className="space-y-3 p-8 text-center">
               <CheckCircle className="mx-auto h-12 w-12 text-green-600" />
               <h1 className="text-xl font-bold">Bedankt — uw offerte is getekend</h1>
-              <p className="text-sm text-muted-foreground">Offerte {quote?.quoteNumber} is digitaal ondertekend. U ontvangt per e-mail een bevestiging met de getekende offerte. Wij nemen contact op voor de planning van de installatie.</p>
+              <p className="text-sm text-muted-foreground">Offerte {quote?.quoteNumber} is digitaal ondertekend. U ontvangt per e-mail een bevestiging met de getekende offerte. {quote?.withInstallation === false ? "Wij nemen binnenkort contact met u op om uw beheer in gebruik te nemen." : "Wij nemen contact op voor de planning van de installatie."}</p>
               <p className="text-xs text-muted-foreground">Uw digitale ondertekening is geregistreerd.</p>
             </CardContent></Card>
           ) : (
@@ -209,7 +211,7 @@ export default function OfferAccept() {
           <div className="space-y-6 p-5 sm:p-6">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Offerte {quote.quoteNumber}</p>
-              <h1 className="mt-1 text-xl font-bold leading-snug">{quote.company ? "Wij plaatsen uw laadpalen." : "Wij regelen uw laadpunt."}</h1>
+              <h1 className="mt-1 text-xl font-bold leading-snug">{(quote.withInstallation ? "Wij plaatsen uw " : quote.withManagement ? "Wij beheren uw " : "Uw ") + ((quote.numChargePoints ?? 1) >= 2 ? "laadpalen." : "laadpaal.")}</h1>
               <p className="text-sm text-muted-foreground">Voor {quote.company || quote.contact || "u"}</p>
             </div>
 
@@ -254,11 +256,7 @@ export default function OfferAccept() {
                 </label>
                 <div className="flex items-start gap-2.5 text-sm leading-snug">
                   <Checkbox className="mt-0.5 shrink-0" checked={termsChecked} onCheckedChange={(v) => setTermsChecked(v === true)} />
-                  {quote.company ? (
-                    <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a>, en met elektronisch ondertekenen.</span>
-                  ) : (
-                    <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/consumentenvoorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">consumentenvoorwaarden</a>, en met elektronisch ondertekenen. Ik heb een wettelijk herroepingsrecht van 14 dagen na ondertekening.</span>
-                  )}
+                  <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a>, en met elektronisch ondertekenen.{!quote.company ? " Ik heb een wettelijk herroepingsrecht van 14 dagen na ondertekening." : ""}</span>
                 </div>
               </div>
 

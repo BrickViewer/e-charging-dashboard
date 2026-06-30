@@ -9,7 +9,7 @@ import logoFull from "@/assets/logo-full-color.svg";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
-import { DEFAULT_OFFER_EMAIL, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
+import { defaultOfferEmail, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { OfferPreview } from "@/components/sales/OfferPreview";
 import { SignaturePad } from "@/components/SignaturePad";
 import { mdBoldToHtml } from "@/lib/emailBody";
@@ -276,7 +276,7 @@ export default function OfferInternalSign() {
               {quote.recipientEmail ? <p className="text-sm text-muted-foreground">Aan: <span className="font-medium text-foreground">{quote.recipientEmail}</span></p> : null}
               <div className="rounded-lg border bg-muted/30 p-3 text-sm leading-relaxed text-foreground [&_p]:mb-2 [&_strong]:font-bold">
                 <p className="font-medium">{emailGreeting}</p>
-                <div dangerouslySetInnerHTML={{ __html: mdBoldToHtml((quote.offerDetails?.emailMessage?.trim()) || DEFAULT_OFFER_EMAIL) }} />
+                <div dangerouslySetInnerHTML={{ __html: mdBoldToHtml((quote.offerDetails?.emailMessage?.trim()) || defaultOfferEmail({ withInstallation: quote.withInstallation, withManagement: quote.withManagement })) }} />
                 <p>Met vriendelijke groet,<br />{emailClosing}</p>
               </div>
               <p className="text-xs text-muted-foreground">De knop "Offerte bekijken en ondertekenen" en de geldigheid worden automatisch toegevoegd.</p>

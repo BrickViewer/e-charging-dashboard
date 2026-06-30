@@ -85,9 +85,20 @@ const stripBold = (s: string) => s.replace(/\*\*(.+?)\*\*/g, "$1");
 // 1) Verstuur-mail (offerte aanbieden). De PDF zit als bijlage wanneer hasAttachment.
 // De body-tekst is per offerte aanpasbaar (customMessage); aanhef, de knop, de geldigheid en de
 // ondertekening blijven automatisch. Bewust GEEN bedrag in de mailtekst.
-export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; contact?: string | null; total: number; acceptUrl: string; validUntil?: string | null; hasAttachment?: boolean; customMessage?: string | null; signoffName?: string | null; greeting?: string | null }): { html: string; text: string } {
+export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; contact?: string | null; total: number; acceptUrl: string; validUntil?: string | null; hasAttachment?: boolean; customMessage?: string | null; signoffName?: string | null; greeting?: string | null; withInstallation?: boolean | null; withManagement?: boolean | null; chargePoints?: number | null }): { html: string; text: string } {
   const vu = nlDate(o.validUntil);
   const bijlageZin = o.hasAttachment ? "De volledige offerte vindt u als <strong>PDF-bijlage</strong> bij deze e-mail." : "";
+  // Scope (installatie/beheer) + aantal palen bepalen de standaardtekst. MOET gelijk blijven aan
+  // defaultOfferEmail() in apps/admin/src/services/offerTypes.ts.
+  const inst = o.withInstallation ?? true;
+  const mgmt = o.withManagement ?? true;
+  const palen = (o.chargePoints ?? 1) >= 2 ? "laadpalen" : "laadpaal";
+  const subject = inst && mgmt ? `de levering, installatie en het beheer van uw ${palen}`
+    : inst ? `de levering en installatie van uw ${palen}`
+    : mgmt ? `het beheer van uw ${palen}` : `uw ${palen}`;
+  const detail = inst && mgmt ? "de hardware, de installatie, het beheer en de tarieven"
+    : inst ? "de hardware, de installatie en de kosten"
+    : mgmt ? "het beheer, de tarieven en de maandafrekening" : "de uitwerking en de kosten";
   // Ondertekening na "Met vriendelijke groet," — standaard de ondertekenaar, fallback "Team E-Charging".
   const signoff = (o.signoffName && o.signoffName.trim()) ? o.signoffName.trim() : "Team E-Charging";
   // Aanhef — override (per offerte) of automatisch "Beste {contact}," / "Geachte heer/mevrouw,".
@@ -97,11 +108,11 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
   const custom = o.customMessage && o.customMessage.trim() ? o.customMessage.trim() : "";
   const messageHtml = custom
     ? bodyParas(custom) // de PDF-bijlagezin staat nu in het bewerkbare bericht zelf (niet meer auto-aanplakken)
-    : p(`Hierbij ontvangt u ons voorstel voor ${o.company ? "de levering, installatie en het doorlopende beheer van uw laadinfrastructuur" : "uw laadpunt thuis"}. ${bijlageZin}`) +
-      p(`In de offerte leest u de volledige uitwerking: ${o.company ? "de hardware, de installatie, het doorlopende beheer en de tarieven" : "de laadpaal, de installatie en de kosten"}. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.`);
+    : p(`Hierbij ontvangt u ons voorstel voor ${subject}. ${bijlageZin}`) +
+      p(`In de offerte leest u de volledige uitwerking: ${detail}. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.`);
   const inner =
     eyebrow(`Offerte ${o.quoteNumber}`) +
-    h1(o.company ? `Voorstel voor ${o.company}` : "Uw persoonlijke laadvoorstel") +
+    h1(o.company ? `Voorstel voor ${o.company}` : `Voorstel voor uw ${palen}`) +
     greetingHtml +
     messageHtml +
     btn(o.acceptUrl, "Offerte bekijken en ondertekenen") +
@@ -109,9 +120,9 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
     `<p style="margin:22px 0 0;font-size:15px;line-height:1.65;color:#374151">Met vriendelijke groet,<br>${escHtml(signoff)}</p>`;
   const messageText = custom
     ? stripBold(custom)
-    : `Hierbij ontvangt u ons voorstel voor ${o.company ? "de levering, installatie en het doorlopende beheer van uw laadinfrastructuur" : "uw laadpunt thuis"}.${o.hasAttachment ? " De volledige offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
+    : `Hierbij ontvangt u ons voorstel voor ${subject}.${o.hasAttachment ? " De volledige offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
 
-In de offerte leest u de volledige uitwerking: ${o.company ? "de hardware, de installatie, het doorlopende beheer en de tarieven" : "de laadpaal, de installatie en de kosten"}.`;
+In de offerte leest u de volledige uitwerking: ${detail}.`;
   const text = `${greetingText}
 
 ${messageText}
@@ -126,20 +137,24 @@ Dwarsweg 8, 5301 KT Zaltbommel · 0418 684272 · info@e-charging.nl`;
 }
 
 // 2) Klant-bevestiging na ondertekenen (getekende PDF als bijlage).
-export function renderSignedConfirmation(o: { supabaseUrl: string; quoteNumber: string; signerName: string; total: number; hasAttachment?: boolean }): { html: string; text: string } {
+export function renderSignedConfirmation(o: { supabaseUrl: string; quoteNumber: string; signerName: string; total: number; hasAttachment?: boolean; withInstallation?: boolean | null }): { html: string; text: string } {
   const bijlage = o.hasAttachment ? " De getekende offerte vindt u als PDF-bijlage bij deze e-mail." : "";
+  // Scope-afstemming: geen "installatie inplannen" bij een enkel-beheer-offerte.
+  const followUp = o.withInstallation === false
+    ? "Wij nemen binnenkort contact met u op om uw beheer in gebruik te nemen."
+    : "Wij nemen binnenkort contact met u op om de installatie in te plannen.";
   const inner =
     eyebrow(`Offerte ${o.quoteNumber}`) +
     h1("Bedankt, uw offerte is ondertekend") +
     aanhef(o.signerName) +
     p(`Hartelijk dank voor uw akkoord op offerte <strong>${o.quoteNumber}</strong>.${bijlage}`) +
-    p("Wij nemen binnenkort contact met u op om de installatie in te plannen. Heeft u vragen? Mail ons gerust via info@e-charging.nl.") +
+    p(`${followUp} Heeft u vragen? Mail ons gerust via info@e-charging.nl.`) +
     greet;
   const text = `Beste ${o.signerName},
 
 Hartelijk dank voor uw akkoord op offerte ${o.quoteNumber}.${o.hasAttachment ? " De getekende offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
 
-Wij nemen binnenkort contact met u op om de installatie in te plannen. Heeft u vragen? Mail ons via info@e-charging.nl.
+${followUp} Heeft u vragen? Mail ons via info@e-charging.nl.
 
 Met vriendelijke groet,
 Team E-Charging`;

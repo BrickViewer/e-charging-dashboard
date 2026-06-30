@@ -3104,6 +3104,7 @@ export type Database = {
           total_installation_cost: number | null
           updated_at: string | null
           valid_until: string | null
+          is_private: boolean | null
           with_installation: boolean
           with_management: boolean
         }
@@ -3156,6 +3157,7 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
+          is_private?: boolean | null
           with_installation?: boolean
           with_management?: boolean
         }
@@ -3208,6 +3210,7 @@ export type Database = {
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
+          is_private?: boolean | null
           with_installation?: boolean
           with_management?: boolean
         }

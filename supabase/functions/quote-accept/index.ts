@@ -79,6 +79,8 @@ Deno.serve(async (req) => {
     const summary = {
       quoteNumber: quote.quote_number,
       company: quote.prospect_company,
+      // Bevroren BTW-regime (gezet bij verzenden); null bij oude/concept → afleiden uit 'geen bedrijf'.
+      isPrivate: quote.is_private ?? null,
       contact: quote.prospect_contact,
       // E-mailadres waaraan de offerte-link is verzonden — tonen we op het tekenscherm
       // (identificatie van de ondertekenaar) en leggen we vast in de audit-trail.
@@ -240,7 +242,7 @@ Deno.serve(async (req) => {
     const hasAttachment = !!attach;
     const recipient = (quote.prospect_email ?? lead?.contact_email) as string | null;
     if (recipient) {
-      const m = renderSignedConfirmation({ supabaseUrl, quoteNumber: quote.quote_number, signerName, total, hasAttachment });
+      const m = renderSignedConfirmation({ supabaseUrl, quoteNumber: quote.quote_number, signerName, total, hasAttachment, withInstallation: quote.with_installation !== false });
       await sendEmail({ to: recipient, subject: `E-Charging · Offerte ${quote.quote_number} ondertekend`, html: m.html, text: m.text, attachments: attach });
     }
     {
