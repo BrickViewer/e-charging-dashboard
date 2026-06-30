@@ -528,7 +528,6 @@ export function LeadDetailSheet({
                       <DetailRow label="Prioriteit" value={prio.label} />
                       <DetailRow label="Geschatte waarde" value={euro(lead.estimated_value)} />
                       <DetailRow label="Verwachte sluitdatum" value={lead.expected_close_date ? new Date(lead.expected_close_date).toLocaleDateString("nl-NL") : null} />
-                      <DetailRow label="Bron" value={lead.source} />
                     </InfoCard>
 
                     {lead.notes && (

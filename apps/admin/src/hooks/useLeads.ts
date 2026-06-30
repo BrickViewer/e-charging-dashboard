@@ -19,6 +19,9 @@ export type LeadQuoteMini = {
   num_charge_points: number | null;
   total_installation_cost: number | null;
   total_hardware_cost: number | null;
+  // Geschatte maand/jaar-opbrengst uit de calculatie (configurator/lead); echargingNetPerYear = wat beheer
+  // E-Charging per jaar oplevert. Leeg bij handmatige offertes zonder calculatie.
+  monthly_projection: { echargingNetPerYear?: number | null; echargingNetPerMonth?: number | null } | null;
   created_at: string;
 };
 export type LeadWithTasks = Lead & { lead_tasks: { id: string; done: boolean }[]; quotes?: LeadQuoteMini[] };
@@ -61,7 +64,7 @@ export function useLeads() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("leads")
-        .select("*, lead_tasks(id, done), quotes(id, status, sent_at, with_installation, with_management, num_charge_points, total_installation_cost, total_hardware_cost, created_at)")
+        .select("*, lead_tasks(id, done), quotes(id, status, sent_at, with_installation, with_management, num_charge_points, total_installation_cost, total_hardware_cost, monthly_projection, created_at)")
         .order("position", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as LeadWithTasks[];

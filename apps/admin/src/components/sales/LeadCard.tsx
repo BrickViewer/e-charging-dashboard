@@ -4,25 +4,13 @@ import { ListChecks, MapPin, Plug, Send, User } from "lucide-react";
 import { primaryQuote, type LeadWithTasks } from "@/hooks/useLeads";
 import { scopeFromFlags, SCOPE_SHORT, SCOPE_BADGE_CLASS } from "@/lib/quoteScope";
 
-const euro = (n: number | null | undefined) =>
-  n == null
-    ? null
-    : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+const euro0 = (n: number | null | undefined) =>
+  n == null ? null : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
 const PRIORITY_COLOR: Record<string, string> = {
   high: "bg-red-500",
   medium: "bg-amber-500",
   low: "bg-zinc-400",
-};
-
-const SOURCE_LABEL: Record<string, string> = {
-  manual: "Handmatig",
-  website: "Website",
-  contactformulier: "Contactformulier",
-  email: "E-mail",
-  configurator: "Configurator",
-  referral: "Referral",
-  campaign: "Campagne",
 };
 
 function initials(name: string) {
@@ -59,6 +47,12 @@ export function LeadCard({
   const scope = pq ? scopeFromFlags(pq.with_installation !== false, pq.with_management !== false) : null;
   const palen = pq?.num_charge_points ?? lead.estimated_charge_points ?? null;
   const sentDate = pq?.sent_at ?? null;
+  // Installatie = hard offertebedrag; beheer = geschatte jaaropbrengst voor E-Charging (uit de calculatie).
+  const inst = pq ? (pq.total_hardware_cost ?? 0) + (pq.total_installation_cost ?? 0) : 0;
+  const mgmtYear = pq?.monthly_projection?.echargingNetPerYear
+    ?? (pq?.monthly_projection?.echargingNetPerMonth != null ? pq.monthly_projection.echargingNetPerMonth * 12 : null);
+  const showInst = inst > 0;
+  const showMgmt = mgmtYear != null && mgmtYear > 0;
   const style = overlay
     ? undefined
     : { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
@@ -101,9 +95,19 @@ export function LeadCard({
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {euro(lead.estimated_value) && (
+        {showInst && (
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary" title="Offerteprijs (installatie)">
+            {euro0(inst)}
+          </span>
+        )}
+        {showMgmt && (
+          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700" title="Geschatte beheeropbrengst per jaar">
+            ≈ {euro0(mgmtYear)}/jr
+          </span>
+        )}
+        {!showInst && !showMgmt && euro0(lead.estimated_value) && (
           <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
-            {euro(lead.estimated_value)}
+            {euro0(lead.estimated_value)}
           </span>
         )}
         {scope && (
@@ -116,9 +120,6 @@ export function LeadCard({
             <Plug className="h-3 w-3" />{palen}
           </span>
         )}
-        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {SOURCE_LABEL[lead.source] ?? lead.source}
-        </span>
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="flex items-center gap-2">
