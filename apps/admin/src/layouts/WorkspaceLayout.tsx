@@ -215,9 +215,13 @@ export default function WorkspaceLayout() {
         ))}
       </nav>
 
+      {/* Feedback-knop boven de scheidingslijn (los van het gebruikersblok) */}
+      <div className="px-3">
+        <FeedbackButton />
+      </div>
+
       {/* Onderaan: ingelogde gebruiker (met subtiel tandwiel → Instellingen, alleen Beheer-toegang) */}
       <div className="px-3 py-4 border-t border-foreground/[0.06]">
-        <FeedbackButton />
         <div className="px-3 mb-3">
           <div className="flex items-center justify-between gap-2">
             <p className="min-w-0 truncate text-sm font-medium text-foreground">
