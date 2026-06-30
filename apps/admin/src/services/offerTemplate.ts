@@ -128,6 +128,13 @@ const incl = (n: number) => n * (1 + VAT_RATE);
 // Bedrag in de zakelijke offerte-stijl: schuingedrukt, onderstreept, met de label-tekst tussen haakjes erachter.
 const priceAmt = (amount: string, label: string) =>
   `<div style="font-style:italic"><span style="text-decoration:underline">${amount}</span> ${label}</div>`;
+// Aanhef-regel: begint de tekst al met een aanhefwoord (Geachte/Beste/…), dan verbatim tonen (WYSIWYG, geen
+// dubbel "Geachte"); anders het oude gedrag "Geachte {x}," zodat bestaande (deel)aanheffen identiek blijven.
+const aanhefLine = (raw: string | null | undefined): string => {
+  const g = (raw ?? "").trim();
+  if (!g) return "Geachte heer/mevrouw,";
+  return /^(geachte|beste|hallo|hoi|dag)\b/i.test(g) ? g : `Geachte ${g},`;
+};
 
 // --------------------------------------------------------------------------
 // Eén zichtbare tariefregel in het "afgesproken instellingen"-blok (volgorde = od.tariffOrder).
@@ -427,7 +434,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push(bRaw(`<div style="line-height:1.5">${recipient}</div>`, 14));
   blocks.push({ ...bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, m.dateGap), tag: "dateGap" });
   blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:20px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, 18));
-  blocks.push({ ...bRaw(`<div>Geachte ${esc(m.aanhef)},</div>`, m.aanhefGap), tag: "aanhefGap" });
+  blocks.push({ ...bRaw(`<div>${esc(aanhefLine(m.aanhef))}</div>`, m.aanhefGap), tag: "aanhefGap" });
   const introScope = m.withInstallation && m.withManagement
     ? "leveren, monteren, aansluiten en beheren van uw laadpalen"
     : m.withInstallation

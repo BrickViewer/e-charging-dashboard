@@ -121,7 +121,8 @@ export default function SalesOfferteDetail() {
       setIdleGrace(td.idleGraceMinutes != null ? String(td.idleGraceMinutes) : "");
       setNumChargePoints(quote.num_charge_points != null ? String(quote.num_charge_points) : "");
       const odLoaded = ((quote as unknown as { offer_details?: OfferDetails }).offer_details ?? {}) as OfferDetails;
-      setOd(odLoaded);
+      // Aanhef standaard de hele zin tonen (WYSIWYG, geen verborgen "Geachte"); bestaande aanhef blijft staan.
+      setOd({ ...odLoaded, aanhef: odLoaded.aanhef && String(odLoaded.aanhef).trim() ? odLoaded.aanhef : "Geachte heer/mevrouw," });
       setNumDraft({});
       setEmailGreeting(odLoaded.emailGreeting ?? "");
       setEmailMessage(odLoaded.emailMessage ?? defaultOfferEmail({ withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points }));
@@ -497,7 +498,7 @@ export default function SalesOfferteDetail() {
               <div className="col-span-2 space-y-1"><Label className="text-xs">Locatie</Label><Input value={odStr("object")} placeholder={tpl?.defaultObjectTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("object", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Aantal laadpunten</Label><Input inputMode="numeric" value={numChargePoints} placeholder={quote.num_charge_points != null ? String(quote.num_charge_points) : ""} disabled={!isConcept} onChange={(e) => setNumChargePoints(e.target.value)} /></div>
               <div className="col-span-2 space-y-1"><Label className="text-xs">Betreft</Label><Input value={odStr("betreft")} placeholder={tpl?.defaultBetreftTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("betreft", e.target.value)} /></div>
-              <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} placeholder={tpl?.defaultAanhef || ""} disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
+              <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} placeholder="Geachte heer/mevrouw," disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Witruimte boven datum (px)</Label><Input inputMode="numeric" value={numVal("dateGapPx")} placeholder="96" disabled={!isConcept} onChange={(e) => setNum("dateGapPx", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Witruimte boven aanhef (px)</Label><Input inputMode="numeric" value={numVal("aanhefGapPx")} placeholder="84" disabled={!isConcept} onChange={(e) => setNum("aanhefGapPx", e.target.value)} /></div>
               <p className="col-span-2 text-[10px] text-muted-foreground">Standaard 96 / 84 px. Bij lange teksten worden deze automatisch verkleind (tot min. 16 px) zodat het investeringsblok boven de voettekst blijft; een eigen waarde geldt als maximum.</p>

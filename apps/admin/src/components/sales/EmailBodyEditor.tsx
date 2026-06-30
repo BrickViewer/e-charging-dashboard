@@ -26,7 +26,7 @@ export function EmailBodyEditor({ value, onChange, disabled }: {
     onUpdate: ({ editor }) => onChange(htmlToMdBold(editor.getHTML())),
     editorProps: {
       attributes: {
-        class: "ec-scroll min-h-[9rem] max-h-[50vh] overflow-y-auto px-3 py-2 text-sm leading-relaxed focus:outline-none [&_strong]:font-bold",
+        class: "ec-scroll min-h-[9rem] max-h-[50vh] overflow-y-auto px-3 py-2 text-sm leading-relaxed focus:outline-none [&_strong]:font-bold [&_p+p]:mt-3",
       },
     },
   });
