@@ -252,11 +252,11 @@ export default function OfferAccept() {
                   <Checkbox className="mt-0.5 shrink-0" checked={authorityChecked} onCheckedChange={(v) => setAuthorityChecked(v === true)} />
                   <span>{quote.company
                     ? `Ik ben bevoegd om namens ${quote.company} deze offerte te aanvaarden en een bindende overeenkomst aan te gaan.`
-                    : "Ik aanvaard deze offerte persoonlijk en ga hiermee een bindende overeenkomst aan."}</span>
+                    : "Ik aanvaard deze offerte en ga hiermee een bindende overeenkomst aan."}</span>
                 </label>
                 <div className="flex items-start gap-2.5 text-sm leading-snug">
                   <Checkbox className="mt-0.5 shrink-0" checked={termsChecked} onCheckedChange={(v) => setTermsChecked(v === true)} />
-                  <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a>, en met elektronisch ondertekenen.{!quote.company ? " Ik heb een wettelijk herroepingsrecht van 14 dagen na ondertekening." : ""}</span>
+                  <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a>, en met elektronisch ondertekenen.</span>
                 </div>
               </div>
 
