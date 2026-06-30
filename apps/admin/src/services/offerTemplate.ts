@@ -183,6 +183,8 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   // Tariefregel-bedragen; welke regels + in welke volgorde komt verderop uit od.tariffOrder.
   const laadkosten = firstNum(data.chargeTariffPerKwh);
   const blokkeertarief = firstNum(data.idleFeePerMinute);
+  const idleGrace = firstNum(data.idleGraceMinutes);
+  const hasGrace = idleGrace != null && idleGrace > 0;
   const starttarief = firstNum(od.startFeePerSession, data.startFeePerSession);
   const uurtarief = firstNum(od.perHourFeePerHour, data.perHourFeePerHour);
   // key → regeldefinitie; welke + in welke volgorde komt uit od.tariffOrder (laatst aangezet bovenaan).
@@ -190,7 +192,11 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     laadkosten: { label: "Laadkosten", amount: laadkosten, unit: "per kWh" },
     laadkostenGasten: { label: "Laadkosten gasten", amount: firstNum(od.laadkostenGasten), unit: "per kWh" },
     laadkostenEigenGebruik: { label: "Laadkosten eigen gebruik", amount: firstNum(od.laadkostenEigenGebruik), unit: "per kWh" },
-    blokkeertarief: { label: "Blokkeertarief", amount: blokkeertarief, unit: "per minuut" },
+    blokkeertarief: {
+      label: hasGrace ? "Blokkeertarief + gratis minuten" : "Blokkeertarief",
+      amount: blokkeertarief,
+      unit: hasGrace ? `per minuut, na ${idleGrace} ${idleGrace === 1 ? "minuut" : "minuten"}` : "per minuut",
+    },
     starttarief: { label: "Starttarief", amount: starttarief, unit: "per keer" },
     uurtarief: { label: "Tarief per uur", amount: uurtarief, unit: "per uur" },
   };
