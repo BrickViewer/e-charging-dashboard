@@ -277,8 +277,6 @@ const BEHEER_INTRO: string[] = [
 export const DEFAULT_BEHEER_INTRO = BEHEER_INTRO.join("\n\n");
 
 const AANSPRAKELIJKHEID = "Iedere aansprakelijkheid van E-Charging B.V. is beperkt tot het bedrag dat in de desbetreffende gebeurtenis onder haar aansprakelijkheidsverzekering wordt uitbetaald.";
-// Consument: geen brede aansprakelijkheidsuitsluiting (kan onredelijk bezwarend zijn, BW 6:233) — wettelijke rechten blijven.
-const AANSPRAKELIJKHEID_CONSUMENT = "E-Charging B.V. is jegens u aansprakelijk overeenkomstig de wettelijke regels die voor consumenten gelden. Deze aanbieding beperkt uw wettelijke (consumenten)rechten niet.";
 const AANPAK = "Voor de realisatie en beheer van uw laadpalen stellen wij een contactpersoon aan die de schakel vormt tussen u als opdrachtgever en E-Charging. Deze heeft tot taak om de met u gemaakte afspraken op een correcte manier uit te voeren en de realisatie aan te sturen.";
 
 // ===========================================================================
@@ -500,7 +498,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
       : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:", 10));
     BEHEER_POINTS.forEach(([t, b], i) => blocks.push(bRaw(
-      `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(m.isPrivate && i === 4 ? "Wij verzorgen transactieverwerking, facturatie en uitbetaling. Elke maand ontvangt u een overzichtelijke maandafrekening en betalen wij uw opbrengst aan u uit." : b)}</div></div></div>`,
+      `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
       i === 0 ? 14 : 22)));
     blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
     // De eenmalige activatie-/onboardingkosten tonen we alleen onder de voorwaarden (zie hieronder), niet hier.
@@ -544,7 +542,6 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(bSub("125% Zon- en feestdagen (normale werkuren)"));
   }
   blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
-  if (m.isPrivate) blocks.push(bFb("Herroepingsrecht: als consument kunt u deze overeenkomst binnen 14 dagen na ondertekening zonder opgaaf van reden ontbinden. Geeft u aan dat wij binnen deze termijn al mogen starten met de uitvoering, dan vervalt het herroepingsrecht zodra de werkzaamheden volledig zijn uitgevoerd.", 8));
   if (m.withManagement) {
     blocks.push(bSec("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule", 19, HEAD));
     blocks.push(m.withInstallation
@@ -572,9 +569,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   const sigDate = signature?.date ? fmtDateShort(signature.date) : "";
   const dots = "………………….…………";
   blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", 0, HEAD), brk: true });
-  blocks.push(bFb(esc(m.isPrivate ? AANSPRAKELIJKHEID_CONSUMENT : AANSPRAKELIJKHEID), 9));
+  blocks.push(bFb(esc(AANSPRAKELIJKHEID), 9));
   if (m.withInstallation) blocks.push(bFb(`Betalingen levering en installatie: ${esc(m.betaalBijOpdracht)}% bij opdracht, ${esc(m.betaalBijStart)}% bij start werkzaamheden en ${esc(m.betaalNaWerk)}% na werkzaamheden.`));
-  if (m.withManagement) blocks.push(bFb(m.isPrivate ? "Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte maandafrekening." : "Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte self-billing factuur."));
+  if (m.withManagement) blocks.push(bFb("Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte self-billing factuur."));
   blocks.push(bFb("Betalingen binnen 14 dagen na factuurdatum."));
   blocks.push(bSec("Onze aanpak", 24, HEAD));
   blocks.push(bP(esc(AANPAK), 9));
