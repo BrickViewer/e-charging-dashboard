@@ -461,9 +461,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         `<div style="display:flex;justify-content:space-between;align-items:baseline">` +
         `<div>De prijs voor bovenstaande werkzaamheden bedraagt:</div>` +
         `<table style="border-collapse:collapse;font-style:italic;line-height:1.5"><tbody>` +
-        priceRow(fmt(netR), "(exclusief btw)") +
+        priceRow(fmt(netR), "(excl. btw)") +
         priceRow(fmt(btwR), "(21% btw)") +
-        priceRow(fmt(totR), "(totaalprijs inclusief btw)") +
+        priceRow(fmt(totR), "(totaalprijs incl. btw)") +
         `</tbody></table></div>`;
     } else {
       priceHtml = `<div style="display:flex;justify-content:space-between;align-items:baseline"><div>De investering voor bovenstaande werkzaamheden bedraagt:</div>${priceAmt(mInv(m.totalInvestment), "(totaal excl. BTW)")}</div>`;
