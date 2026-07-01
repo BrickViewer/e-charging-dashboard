@@ -267,7 +267,7 @@ export default function AdminClients() {
         <div className="relative max-w-sm flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Zoek op klantnummer, bedrijf, contact, e-mail…"
+            placeholder="Zoek op klantnummer, naam, contact, e-mail…"
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
             className="pl-9 portal-card"
@@ -294,7 +294,7 @@ export default function AdminClients() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left p-3 cockpit-section-label">Bedrijf</th>
+                  <th className="text-left p-3 cockpit-section-label">Klant</th>
                   <th className="text-left p-3 cockpit-section-label">Contact</th>
                   <th className="text-right p-3 cockpit-section-label">Locaties</th>
                   <th className="text-right p-3 cockpit-section-label">Laadpunten</th>

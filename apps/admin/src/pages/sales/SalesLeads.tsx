@@ -120,7 +120,7 @@ export default function SalesLeads() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Zoek op bedrijf, contact, plaats…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input className="pl-9" placeholder="Zoek op naam, contact, plaats…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={ownerFilter} onValueChange={setOwnerFilter}>
           <SelectTrigger className="w-full sm:w-[180px]"><SelectValue /></SelectTrigger>

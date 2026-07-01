@@ -51,7 +51,7 @@ export default function SalesOffertes() {
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-9" placeholder="Zoek op nummer of bedrijf…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input className="pl-9" placeholder="Zoek op nummer of naam…" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {quotes.isLoading ? (
@@ -68,7 +68,7 @@ export default function SalesOffertes() {
             <thead className="border-b bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 font-medium">Nummer</th>
-                <th className="px-4 py-2.5 font-medium">Bedrijf</th>
+                <th className="px-4 py-2.5 font-medium">Klant</th>
                 <th className="px-4 py-2.5 font-medium">Scope</th>
                 <th className="px-4 py-2.5 text-right font-medium">Laadpunten</th>
                 <th className="px-4 py-2.5 text-right font-medium">Bedrag</th>

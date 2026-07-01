@@ -995,7 +995,7 @@ export default function AdminClientDetail() {
           <>
             <p className="font-medium text-destructive">Dit kan niet via de UI worden teruggedraaid.</p>
             <p className="mt-1 text-muted-foreground">
-              Typ de bedrijfsnaam hieronder om zeker te weten dat u het juiste klantprofiel verwijdert.
+              Typ de naam hieronder om zeker te weten dat u het juiste klantprofiel verwijdert.
             </p>
           </>
         }
@@ -1063,7 +1063,7 @@ function ContactPersonCard({
 
   return (
     <Card className="portal-card">
-      <CardHeader><CardTitle className="text-base">Contactpersoon bedrijf</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base">Contactpersoon</CardTitle></CardHeader>
       <CardContent className="text-sm">
         {isEditing ? (
           <div className="space-y-3">
@@ -1114,7 +1114,7 @@ function BusinessDetailsCard({
 }) {
   return (
     <Card className="portal-card">
-      <CardHeader><CardTitle className="text-base">Bedrijfsgegevens</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base">Klantgegevens</CardTitle></CardHeader>
       <CardContent className="text-sm">
         {isEditing ? (
           <div className="space-y-3">
@@ -1131,7 +1131,7 @@ function BusinessDetailsCard({
                 <p className="mt-1 text-xs text-destructive">{errors.client_number}</p>
               )}
             </div>
-            <div><Label>Bedrijfsnaam</Label><Input value={ed.company_name ?? ""} onChange={e => setEd("company_name", e.target.value)} /></div>
+            <div><Label>Naam</Label><Input value={ed.company_name ?? ""} onChange={e => setEd("company_name", e.target.value)} /></div>
             <div><Label>KvK-nummer</Label><Input value={ed.kvk ?? ""} onChange={e => setEd("kvk", e.target.value)} /></div>
             <div><Label>BTW-nummer</Label><Input value={ed.btw_number ?? ""} onChange={e => setEd("btw_number", e.target.value)} /></div>
             <div><Label>Factuuradres</Label><Input value={ed.billing_address_street ?? ""} onChange={e => setEd("billing_address_street", e.target.value)} /></div>
@@ -1151,7 +1151,7 @@ function BusinessDetailsCard({
         ) : (
           <div className="space-y-0">
             <DetailRow label="Klantnummer" value={client.client_number ? `#${client.client_number}` : "Niet actief"} />
-            <DetailRow label="Bedrijfsnaam" value={client.company_name} />
+            <DetailRow label="Naam" value={client.company_name} />
             <DetailRow label="KvK-nummer" value={client.kvk} />
             <DetailRow label="BTW-nummer" value={client.btw_number} />
             <DetailRow label="Factuuradres" value={client.billing_address_street} />
