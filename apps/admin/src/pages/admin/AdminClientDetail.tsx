@@ -1366,6 +1366,19 @@ function OnboardingChecklistPanel({
       subtitle: client.client_number ? `Klantnummer #${client.client_number}` : "Klantnummer vrijgegeven",
     },
     {
+      label: "Locatie gekoppeld",
+      done: hasLocation,
+      subtitle: hasLocation
+        ? `${client.locations?.length ?? 0} locatie${client.locations?.length === 1 ? "" : "s"} gekoppeld`
+        : "Koppel een gesyncde e-Flux locatie",
+      action: !hasLocation ? (
+        <Button size="sm" variant="default" className="h-8 w-full text-xs" onClick={onLinkLocation}>
+          <MapPin className="mr-1.5 h-3.5 w-3.5" />
+          Locatie koppelen
+        </Button>
+      ) : null,
+    },
+    {
       label: "Uitnodiging verstuurd",
       done: hasSentInvite,
       subtitle: invitationSubtitle,
@@ -1377,22 +1390,27 @@ function OnboardingChecklistPanel({
             <Mail className="mr-1.5 h-3.5 w-3.5" /> E-mailadres toevoegen
           </Button>
         ) : (
-          <Button
-            size="sm"
-            variant={hasPendingInvite ? "outline" : "default"}
-            className="h-8 w-full text-xs"
-            onClick={() => onSendInvitation(Boolean(hasPendingInvite))}
-            disabled={sendingInvite}
-          >
-            {sendingInvite ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : hasPendingInvite ? (
-              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-            ) : (
-              <Mail className="mr-1.5 h-3.5 w-3.5" />
+          <div className="space-y-1.5">
+            {!hasLocation && !hasSentInvite && (
+              <p className="text-[11px] leading-tight text-amber-600">Koppel bij voorkeur eerst een locatie</p>
             )}
-            {hasPendingInvite ? "Opnieuw sturen" : "Uitnodiging sturen"}
-          </Button>
+            <Button
+              size="sm"
+              variant={hasPendingInvite || !hasLocation ? "outline" : "default"}
+              className="h-8 w-full text-xs"
+              onClick={() => onSendInvitation(Boolean(hasPendingInvite))}
+              disabled={sendingInvite}
+            >
+              {sendingInvite ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : hasPendingInvite ? (
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              ) : (
+                <Mail className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {hasPendingInvite ? "Opnieuw sturen" : "Uitnodiging sturen"}
+            </Button>
+          </div>
         )
       ) : null,
     },
@@ -1405,19 +1423,6 @@ function OnboardingChecklistPanel({
       label: "Gegevens compleet",
       done: detailsComplete,
       subtitle: detailsComplete ? "Contact-, factuur- en bankgegevens opgeslagen" : "Klant vult dit in via Mijn gegevens",
-    },
-    {
-      label: "Locatie gekoppeld",
-      done: hasLocation,
-      subtitle: hasLocation
-        ? `${client.locations?.length ?? 0} locatie${client.locations?.length === 1 ? "" : "s"} gekoppeld`
-        : "Koppel een gesyncde e-Flux locatie",
-      action: !hasLocation ? (
-        <Button size="sm" variant="outline" className="h-8 w-full text-xs" onClick={onLinkLocation}>
-          <MapPin className="mr-1.5 h-3.5 w-3.5" />
-          Locatie koppelen
-        </Button>
-      ) : null,
     },
   ];
 
