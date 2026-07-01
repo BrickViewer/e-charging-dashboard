@@ -216,7 +216,8 @@ export function useClientLocations(clientId?: string) {
       const { data, error } = await supabase
         .from("locations")
         .select(PORTAL_LOCATION_FIELDS)
-        .eq("client_id", clientId!);
+        .eq("client_id", clientId!)
+        .is("archived_at", null);
       if (error) throw error;
       return (data ?? []) as unknown as PortalLocation[];
     },

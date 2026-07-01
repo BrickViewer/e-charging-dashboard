@@ -91,7 +91,7 @@ const CLIENT_SELECT =
   "payment_onboarding_status, needs_installation, managed, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
   "installation_orders(id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes), " +
-  "locations(id), client_invitations(id, status)";
+  "locations(id, archived_at), client_invitations(id, status)";
 
 export function useOnboardingClients() {
   return useQuery({
@@ -103,7 +103,14 @@ export function useOnboardingClients() {
         .neq("status", "verwijderd")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as OnboardingClient[];
+      // Gearchiveerde (in e-Flux verwijderde) locaties niet meetellen voor de onboarding-fase.
+      const rows = (data ?? []) as unknown as Array<
+        OnboardingClient & { locations?: { id: string; archived_at?: string | null }[] }
+      >;
+      return rows.map((c) => ({
+        ...c,
+        locations: (c.locations ?? []).filter((l) => !l.archived_at),
+      })) as unknown as OnboardingClient[];
     },
   });
 }
@@ -252,6 +259,7 @@ export function useUnlinkedLocations(enabled = true) {
         .from("locations")
         .select("id, name, address, city, charge_points(id)")
         .is("client_id", null)
+        .is("archived_at", null)
         .order("name", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as UnlinkedLocation[];

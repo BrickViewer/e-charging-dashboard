@@ -21,7 +21,7 @@ export function useAllClients() {
         // ander locatie-/laadpunt-veld, breid dán deze select bewust uit (type claimt nog
         // de volledige rij). AdminFinancial heeft z'n eigen full-row useAllSettlements.
         .select(
-          "*, locations(id, charge_points(id, status)), client_invitations(id, status, invited_at, expires_at)",
+          "*, locations(id, archived_at, charge_points(id, status)), client_invitations(id, status, invited_at, expires_at)",
         );
       if (error) throw error;
       // Pak de meest recente invitation per klant (Supabase select geeft array)
@@ -33,7 +33,9 @@ export function useAllClients() {
             (a, b) =>
               new Date(b.invited_at).getTime() - new Date(a.invited_at).getTime(),
           )[0];
-        return { ...c, latest_invitation: latest ?? null };
+        // Gearchiveerde (in e-Flux verwijderde) locaties niet meetellen/tonen.
+        const locations = (c.locations ?? []).filter((l) => !l.archived_at);
+        return { ...c, locations, latest_invitation: latest ?? null };
       });
     },
   });
@@ -50,6 +52,8 @@ export function useClientById(id: string | undefined) {
         .eq("id", id!)
         .maybeSingle();
       if (error) throw error;
+      // Gearchiveerde (in e-Flux verwijderde) locaties niet tonen op de klantpagina.
+      if (data?.locations) data.locations = data.locations.filter((l) => !l.archived_at);
       return data;
     },
   });
@@ -235,6 +239,7 @@ export function useUnlinkedLocations() {
         .from("locations")
         .select("*")
         .is("client_id", null)
+        .is("archived_at", null)
         .order("name");
       if (error) throw error;
       return data;
@@ -250,6 +255,7 @@ export function useAllLocations() {
       const { data, error } = await supabase
         .from("locations")
         .select("*, charge_points(id, status, connectivity_state), clients(id, client_number, company_name, status)")
+        .is("archived_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;

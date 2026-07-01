@@ -184,6 +184,7 @@ export function useClientLocations(clientId: string | undefined) {
         .from("locations")
         .select("id, name, address, city, postal_code")
         .eq("client_id", clientId!)
+        .is("archived_at", null)
         .order("name", { ascending: true });
       if (error) throw error;
       return (data ?? []) as { id: string; name: string | null; address: string | null; city: string | null; postal_code: string | null }[];

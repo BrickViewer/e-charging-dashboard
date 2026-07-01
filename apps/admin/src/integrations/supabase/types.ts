@@ -2544,6 +2544,7 @@ export type Database = {
           longitude: number | null
           name: string | null
           parking_spots: number | null
+          archived_at: string | null
           postal_code: string | null
           property_type: string | null
           road_synced_at: string | null
