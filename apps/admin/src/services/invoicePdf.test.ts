@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSelfBillingInvoicePdf, InvoiceValidationError } from "./invoicePdf";
+import { buildSelfBillingInvoicePdf, InvoiceValidationError, isBetaalspecificatie } from "./invoicePdf";
 import type {
   SelfBillingClient,
   SelfBillingOrg,
@@ -103,5 +103,17 @@ describe("buildSelfBillingInvoicePdf", () => {
 
     expect(err).toBeInstanceOf(InvoiceValidationError);
     expect((err as InvoiceValidationError).issues.map((i) => i.field)).toContain("org_kvk");
+  });
+});
+
+describe("isBetaalspecificatie", () => {
+  it("particulier ('private') → betaalspecificatie (geen self-billing btw-factuur)", () => {
+    expect(isBetaalspecificatie("private")).toBe(true);
+  });
+  it("ondernemer/KOR/onbekend → factuur (self-billing)", () => {
+    expect(isBetaalspecificatie("vat_liable")).toBe(false);
+    expect(isBetaalspecificatie("kor")).toBe(false);
+    expect(isBetaalspecificatie(null)).toBe(false);
+    expect(isBetaalspecificatie(undefined)).toBe(false);
   });
 });

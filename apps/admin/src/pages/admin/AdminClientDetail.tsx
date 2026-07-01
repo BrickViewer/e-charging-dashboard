@@ -58,10 +58,15 @@ function hasCompleteClientProfile(
   client: ClientWithRelations,
   paymentDetails?: ClientPaymentDetails | null,
 ) {
+  // KvK/BTW zijn niet voor iedereen verplicht: particulier ('private') heeft geen van beide nodig,
+  // KOR heeft alleen KvK nodig, en BTW-nummer is alleen voor vat_liable. Gelijk aan isDetailsComplete().
+  const kvkRequired = client.vat_status === "vat_liable" || client.vat_status === "kor";
+  const btwRequired = client.vat_status === "vat_liable";
   const requiredClientFields = [
     client.company_name,
-    client.kvk,
-    client.btw_number,
+    client.vat_status,
+    ...(kvkRequired ? [client.kvk] : []),
+    ...(btwRequired ? [client.btw_number] : []),
     client.contact_name,
     client.contact_email,
     client.billing_address_street,

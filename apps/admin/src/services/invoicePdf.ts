@@ -201,6 +201,12 @@ async function rasterizeLogo(url: string): Promise<{ dataUrl: string; ratio: num
 
 /** Bouwt het PDF-document en geeft het terug (testbaar, geen download).
  *  Werpt InvoiceValidationError zolang verplichte gegevens ontbreken. */
+/** Een particulier (niet-ondernemer) krijgt geen self-billing btw-factuur maar een betaalspecificatie
+ *  (geen art. 35a-markering, 0% btw). Alle andere statussen (vat_liable/kor/onbekend) zijn een factuur. */
+export function isBetaalspecificatie(vatStatus: string | null | undefined): boolean {
+  return vatStatus === "private";
+}
+
 export async function buildSelfBillingInvoicePdf(
   settlement: SelfBillingSettlement,
   client: SelfBillingClient,
@@ -248,6 +254,10 @@ export async function buildSelfBillingInvoicePdf(
   const inclBtw = vat.inclVat;
   const hasVat = vat.vatRate > 0;
   const vatPct = (vat.vatRate * 100).toLocaleString("nl-NL", { maximumFractionDigits: 2 });
+  // Particulier (niet-ondernemer): geen btw-factuur/self-billing, maar een betaalspecificatie.
+  const isPrivate = isBetaalspecificatie(vatStatus);
+  const docTitle = isPrivate ? "Betaalspecificatie" : "Vergoedingsfactuur";
+  const docNrLabel = isPrivate ? "Betaalspecificatie" : "Factuur";
 
   // ── Logo (links) ─────────────────────────────────────────
   const logo = await rasterizeLogo(logoUrl);
@@ -266,15 +276,17 @@ export async function buildSelfBillingInvoicePdf(
   setFont("bold");
   doc.setFontSize(18);
   doc.setTextColor(...INK);
-  doc.text("Vergoedingsfactuur", R, 24, { align: "right" });
-  setFont("bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...BRAND_GREEN);
-  doc.text("SELFBILLING", R, 29.5, { align: "right" });
+  doc.text(docTitle, R, 24, { align: "right" });
+  if (!isPrivate) {
+    setFont("bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...BRAND_GREEN);
+    doc.text("SELFBILLING", R, 29.5, { align: "right" });
+  }
   setFont("normal");
   doc.setFontSize(9);
   doc.setTextColor(...MUTED);
-  doc.text(`Factuur #${invoiceNr}  ·  ${todayStr}`, R, 35, { align: "right" });
+  doc.text(`${docNrLabel} #${invoiceNr}  ·  ${todayStr}`, R, 35, { align: "right" });
 
   doc.setDrawColor(...HAIRLINE);
   doc.setLineWidth(0.2);
@@ -348,29 +360,39 @@ export async function buildSelfBillingInvoicePdf(
   setFont("bold");
   doc.setFontSize(9);
   doc.setTextColor(...BRAND_GREEN);
-  doc.text("Deze factuur wordt aan u uitbetaald. U hoeft niets te betalen.", L, cursor);
-  cursor += 4.5;
-  // Wettelijk verplichte letterlijke vermelding (Wet OB art. 35a lid 1 onder k).
-  setFont("bold");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...INK);
-  doc.text("Factuur uitgereikt door afnemer", L, cursor);
-  cursor += 4.2;
-  setFont("normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...MUTED);
   doc.text(
-    `Self-billing: opgesteld en uitgereikt door ${orgName} (afnemer) namens ${client.company_name || "de leverancier"}.`,
+    isPrivate
+      ? "Deze betaalspecificatie wordt aan u uitbetaald. U hoeft niets te betalen."
+      : "Deze factuur wordt aan u uitbetaald. U hoeft niets te betalen.",
     L, cursor,
   );
-  cursor += 9;
+  cursor += 4.5;
+  // Self-billing-markering (Wet OB art. 35a) geldt alleen voor een btw-ondernemer-leverancier. Een particulier
+  // (niet-ondernemer) reikt geen btw-factuur uit → betaalspecificatie zonder deze vermelding.
+  if (!isPrivate) {
+    setFont("bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...INK);
+    doc.text("Factuur uitgereikt door afnemer", L, cursor);
+    cursor += 4.2;
+    setFont("normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text(
+      `Self-billing: opgesteld en uitgereikt door ${orgName} (afnemer) namens ${client.company_name || "de leverancier"}.`,
+      L, cursor,
+    );
+    cursor += 9;
+  } else {
+    cursor += 4.5;
+  }
 
   // ── Meta-rij (geen vlak, alleen dunne regels) ────────────
   doc.setDrawColor(...HAIRLINE);
   doc.setLineWidth(0.2);
   doc.line(L, cursor, R, cursor);
   const meta: Array<[string, string]> = [
-    ["FACTUURNR", `#${invoiceNr}`],
+    [isPrivate ? "SPECIFICATIENR" : "FACTUURNR", `#${invoiceNr}`],
     ["DATUM", todayStr],
     ["PERIODE", `${fmtDate(settlement.period_start)} – ${fmtDate(settlement.period_end)}`],
     ["BETAALTERMIJN", "30 dagen"],
@@ -589,5 +611,6 @@ export async function generateSelfBillingInvoicePdf(
   const doc = await buildSelfBillingInvoicePdf(settlement, client, org, paymentDetails, sessionLines);
   const mm = String(settlement.month).padStart(2, "0");
   const safeName = (client.company_name || "klant").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-  doc.save(`vergoedingsfactuur-${safeName}-${settlement.year}-${mm}.pdf`);
+  const kind = isBetaalspecificatie(settlement.vat_status ?? client.vat_status) ? "betaalspecificatie" : "vergoedingsfactuur";
+  doc.save(`${kind}-${safeName}-${settlement.year}-${mm}.pdf`);
 }
