@@ -24,6 +24,8 @@ export default function AdminClientWizard() {
   const queryClient = useQueryClient();
   const { data: org } = useOrganization();
   const [saving, setSaving] = useState(false);
+  const [customerType, setCustomerType] = useState<"bedrijf" | "particulier">("bedrijf");
+  const isParticulier = customerType === "particulier";
 
   const [company, setCompany] = useState({
     company_id: "",
@@ -42,7 +44,9 @@ export default function AdminClientWizard() {
   const existingClient = useClientForCompany(company.company_id || undefined).data;
   const updateCompany = useUpdateCompany();
   const updatePerson = useUpdatePerson();
-  const canSubmit = !!company.company_id && !!company.person_id && !!company.contact_email.trim() && !existingClient;
+  const canSubmit = isParticulier
+    ? !!company.person_id && !!company.person_name.trim() && !!company.contact_email.trim()
+    : !!company.company_id && !!company.person_id && !!company.contact_email.trim() && !existingClient;
 
   const handleSave = async () => {
     if (!org) {
@@ -50,7 +54,7 @@ export default function AdminClientWizard() {
       return;
     }
     if (!canSubmit) {
-      toast.error("Kies een bedrijf en contactpersoon en vul een e-mail in");
+      toast.error(isParticulier ? "Vul een naam en e-mail in" : "Kies een bedrijf en contactpersoon en vul een e-mail in");
       return;
     }
     setSaving(true);
@@ -65,7 +69,7 @@ export default function AdminClientWizard() {
       }
       // KvK/BTW horen bij het bedrijf (bron van waarheid) → daarheen schrijven; de propagate-trigger
       // synct ze daarna naar de klant. Zo ontstaat geen client-only KvK die afwijkt van het bedrijf.
-      if (company.company_id && (company.kvk.trim() || company.btw_number.trim())) {
+      if (!isParticulier && company.company_id && (company.kvk.trim() || company.btw_number.trim())) {
         const companyPatch: { kvk?: string; btw_number?: string } = {};
         if (company.kvk.trim()) companyPatch.kvk = company.kvk.trim();
         if (company.btw_number.trim()) companyPatch.btw_number = company.btw_number.trim();
@@ -76,11 +80,13 @@ export default function AdminClientWizard() {
         .from("clients")
         .insert({
           organization_id: org.id,
-          company_id: company.company_id,
-          person_id: company.person_id,
-          company_name: company.company_name || "Onbekend bedrijf",
-          kvk: company.kvk || null,
-          btw_number: company.btw_number || null,
+          company_id: isParticulier ? null : company.company_id,
+          person_id: company.person_id || null,
+          // Particulier: naam = de persoonsnaam (geen bedrijf); btw-status 'private' (0%, betaalspecificatie).
+          company_name: isParticulier ? (company.person_name || "Particulier") : (company.company_name || "Onbekend bedrijf"),
+          vat_status: isParticulier ? "private" : null,
+          kvk: isParticulier ? null : (company.kvk || null),
+          btw_number: isParticulier ? null : (company.btw_number || null),
           billing_address_street: company.billing_street || null,
           billing_address_postal: company.billing_postal || null,
           billing_address_city: company.billing_city || null,
@@ -98,6 +104,12 @@ export default function AdminClientWizard() {
         .single();
 
       if (clientErr) throw clientErr;
+
+      // Particulier: btw-status meteen bevestigen (0%, betaalspecificatie) zodat de klant compleet-klaar is.
+      if (isParticulier && client?.id) {
+        const { error: vatErr } = await supabase.rpc("confirm_client_vat_status", { p_client_id: client.id, p_vat_status: "private" });
+        if (vatErr) console.error("[client-wizard] BTW-status bevestigen mislukt:", vatErr.message);
+      }
       if (!client?.id) {
         toast.warning("Klant aangemaakt maar ID niet ontvangen");
         navigate("/admin/klanten");
@@ -107,7 +119,7 @@ export default function AdminClientWizard() {
       await logActivity({
         client_id: client.id,
         action: "client_created",
-        description: `${client.client_number ? `Klant #${client.client_number}` : "Klant"} ${company.company_name} aangemaakt`,
+        description: `${client.client_number ? `Klant #${client.client_number}` : "Klant"} ${company.company_name || company.person_name} aangemaakt`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
@@ -139,51 +151,85 @@ export default function AdminClientWizard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div>
-              <Label>Bedrijf *</Label>
-              <CompanyPicker
-                value={company.company_id || null}
-                valueLabel={company.company_name || null}
-                onChange={(id, c) => setCompany((p) => ({ ...p, company_id: id ?? "", company_name: c?.name ?? "" }))}
-              />
+            {/* Klanttype: bedrijf of particulier */}
+            <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
+              <button
+                type="button"
+                onClick={() => setCustomerType("bedrijf")}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${!isParticulier ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-foreground/[0.05]"}`}
+              >
+                Bedrijf
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomerType("particulier")}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${isParticulier ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-foreground/[0.05]"}`}
+              >
+                Particulier
+              </button>
             </div>
-            {existingClient && (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
-                <span className="text-amber-900">
-                  Dit bedrijf heeft al een klantaccount{existingClient.client_number ? ` (#${existingClient.client_number})` : ""}.
-                </span>
-                <Button size="sm" variant="outline" onClick={() => navigate(`/admin/klanten/${existingClient.id}`)}>
-                  Open klant
-                </Button>
+
+            {isParticulier ? (
+              <div>
+                <Label>Naam *</Label>
+                <PersonPicker
+                  value={company.person_id || null}
+                  valueLabel={company.person_name || null}
+                  companyId={null}
+                  placeholder="Kies of typ de naam van de particulier…"
+                  onChange={(id, person) => setCompany((p) => ({ ...p, person_id: id ?? "", person_name: person?.full_name ?? "" }))}
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">Particulier (geen bedrijf) — 0% btw, ontvangt een betaalspecificatie.</p>
               </div>
+            ) : (
+              <>
+                <div>
+                  <Label>Bedrijf *</Label>
+                  <CompanyPicker
+                    value={company.company_id || null}
+                    valueLabel={company.company_name || null}
+                    onChange={(id, c) => setCompany((p) => ({ ...p, company_id: id ?? "", company_name: c?.name ?? "" }))}
+                  />
+                </div>
+                {existingClient && (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+                    <span className="text-amber-900">
+                      Dit bedrijf heeft al een klantaccount{existingClient.client_number ? ` (#${existingClient.client_number})` : ""}.
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/admin/klanten/${existingClient.id}`)}>
+                      Open klant
+                    </Button>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>KVK-nummer</Label>
+                    <Input
+                      value={company.kvk}
+                      onChange={(e) => setCompany((p) => ({ ...p, kvk: e.target.value }))}
+                      placeholder="12345678"
+                    />
+                  </div>
+                  <div>
+                    <Label>BTW-nummer</Label>
+                    <Input
+                      value={company.btw_number}
+                      onChange={(e) => setCompany((p) => ({ ...p, btw_number: e.target.value }))}
+                      placeholder="NL123456789B01"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Contactpersoon *</Label>
+                  <PersonPicker
+                    value={company.person_id || null}
+                    valueLabel={company.person_name || null}
+                    companyId={company.company_id || null}
+                    onChange={(id, person) => setCompany((p) => ({ ...p, person_id: id ?? "", person_name: person?.full_name ?? "" }))}
+                  />
+                </div>
+              </>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>KVK-nummer</Label>
-                <Input
-                  value={company.kvk}
-                  onChange={(e) => setCompany((p) => ({ ...p, kvk: e.target.value }))}
-                  placeholder="12345678"
-                />
-              </div>
-              <div>
-                <Label>BTW-nummer</Label>
-                <Input
-                  value={company.btw_number}
-                  onChange={(e) => setCompany((p) => ({ ...p, btw_number: e.target.value }))}
-                  placeholder="NL123456789B01"
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Contactpersoon *</Label>
-              <PersonPicker
-                value={company.person_id || null}
-                valueLabel={company.person_name || null}
-                companyId={company.company_id || null}
-                onChange={(id, person) => setCompany((p) => ({ ...p, person_id: id ?? "", person_name: person?.full_name ?? "" }))}
-              />
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>E-mail *</Label>
