@@ -95,7 +95,7 @@ export default function AdminClientWizard() {
           revenue_share_percentage: 75,
           ere_rate_per_kwh: 0.10,
           contract_start_date: todayISO(),
-          contract_duration_months: 36,
+          contract_duration_months: 12,
           auto_renew: true,
           notice_period_months: 3,
           status: "actief",

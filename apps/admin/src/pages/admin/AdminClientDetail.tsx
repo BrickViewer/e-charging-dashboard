@@ -250,7 +250,7 @@ export default function AdminClientDetail() {
       billing_address_postal: client.billing_address_postal || "",
       billing_address_city: client.billing_address_city || "",
       contract_start_date: client.contract_start_date || "",
-      contract_duration_months: client.contract_duration_months ?? 36,
+      contract_duration_months: client.contract_duration_months ?? 12,
       echarging_fee_per_kwh: client.echarging_fee_per_kwh ?? "",
       charge_rate_per_kwh: client.charge_rate_per_kwh ?? 0.45,
       energy_cost_per_kwh: client.energy_cost_per_kwh ?? 0.25,
@@ -287,7 +287,7 @@ export default function AdminClientDetail() {
         billing_address_postal: asText(editData.billing_address_postal) || null,
         billing_address_city: asText(editData.billing_address_city) || null,
         contract_start_date: asText(editData.contract_start_date) || null,
-        contract_duration_months: Number(editData.contract_duration_months) || 36,
+        contract_duration_months: Number(editData.contract_duration_months) || 12,
         echarging_fee_per_kwh:
           editData.echarging_fee_per_kwh === "" || editData.echarging_fee_per_kwh === null
             ? null
