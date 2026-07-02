@@ -50,14 +50,20 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
   const [managed, setManaged] = useState(true);
   const [needsInstall, setNeedsInstall] = useState(true);
   const [mode, setMode] = useState<"new" | "existing">("new");
+  const [customerType, setCustomerType] = useState<"bedrijf" | "particulier">("bedrijf");
+  const isParticulier = customerType === "particulier";
   const [targetClientId, setTargetClientId] = useState<string>("");
   const [clientSearch, setClientSearch] = useState("");
   const { data: allClients } = useAllClients();
 
-  // Reset de keuze zodra de dialog voor een (andere) offerte opent.
+  // Reset de keuze zodra de dialog voor een (andere) offerte opent. Klanttype defaultt op de aard van
+  // de offerte: geen bedrijf gekoppeld → particulier (te overrulen via de toggle).
   useEffect(() => {
-    if (open) { setMode("new"); setTargetClientId(""); setClientSearch(""); }
-  }, [open, quote?.id]);
+    if (open) {
+      setMode("new"); setTargetClientId(""); setClientSearch("");
+      setCustomerType(quote?.company_id ? "bedrijf" : "particulier");
+    }
+  }, [open, quote?.id, quote?.company_id]);
 
   const term = clientSearch.trim().toLowerCase();
   const clientOptions = ((allClients ?? []) as ClientWithRelations[])
@@ -105,13 +111,15 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
         onClose();
         return;
       }
-      if (!t("company_name").trim()) { toast.error("Bedrijfsnaam is verplicht"); return; }
+      if (!t("company_name").trim()) { toast.error(isParticulier ? "Naam is verplicht" : "Bedrijfsnaam is verplicht"); return; }
       const { clientId } = await create.mutateAsync({
         quoteId: quote.id,
         client: {
           company_name: t("company_name").trim(),
-          kvk: t("kvk").trim() || null,
-          btw_number: t("btw_number").trim() || null,
+          kvk: isParticulier ? null : (t("kvk").trim() || null),
+          btw_number: isParticulier ? null : (t("btw_number").trim() || null),
+          // Particulier → 0% btw / betaalspecificatie; de RPC koppelt dan géén bedrijf.
+          vat_status: isParticulier ? "private" : null,
           contact_name: t("contact_name").trim() || null,
           contact_email: t("contact_email").trim() || null,
           contact_phone: t("contact_phone").trim() || null,
@@ -192,13 +200,28 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
             </div>
           ) : (
           <>
+          {/* Klanttype: bedrijf of particulier (zelfde keuze als de handmatige klant-wizard) */}
+          <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
+            <button type="button" onClick={() => setCustomerType("bedrijf")}
+              className={cn("rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                !isParticulier ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-foreground/[0.05]")}>
+              Bedrijf
+            </button>
+            <button type="button" onClick={() => setCustomerType("particulier")}
+              className={cn("rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isParticulier ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-foreground/[0.05]")}>
+              Particulier
+            </button>
+          </div>
+
           <div>
-            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Bedrijf</p>
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{isParticulier ? "Particulier" : "Bedrijf"}</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className="col-span-2"><Field label="Bedrijfsnaam *"><Input value={t("company_name")} onChange={(e) => set("company_name")(e.target.value)} /></Field></div>
-              <Field label="KvK"><Input value={t("kvk")} onChange={(e) => set("kvk")(e.target.value)} /></Field>
-              <Field label="BTW-nummer"><Input value={t("btw_number")} onChange={(e) => set("btw_number")(e.target.value)} /></Field>
+              <div className="col-span-2"><Field label={isParticulier ? "Naam *" : "Bedrijfsnaam *"}><Input value={t("company_name")} onChange={(e) => set("company_name")(e.target.value)} /></Field></div>
+              {!isParticulier && <Field label="KvK"><Input value={t("kvk")} onChange={(e) => set("kvk")(e.target.value)} /></Field>}
+              {!isParticulier && <Field label="BTW-nummer"><Input value={t("btw_number")} onChange={(e) => set("btw_number")(e.target.value)} /></Field>}
             </div>
+            {isParticulier && <p className="mt-1.5 text-[11px] text-muted-foreground">Particulier (geen bedrijf) — 0% btw, ontvangt een betaalspecificatie.</p>}
           </div>
 
           <div>
