@@ -12,7 +12,10 @@ export interface SendEmailInput {
   subject: string;
   html: string;
   text: string;
-  from?: string;        // default `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`
+  from?: string;        // default `${RESEND_FROM_NAME} <${afzender}>`
+  // Afzender-identiteit: "info" (offertes/klantgerichte communicatie) of "noreply"
+  // (systematisch: uitnodigingen, notificaties). Default "noreply". Genegeerd als `from` gezet is.
+  sender?: "info" | "noreply";
   replyTo?: string;     // default "info@e-charging.nl"
   tags?: { name: string; value: string }[];
   attachments?: { filename: string; content: string }[];
@@ -20,8 +23,10 @@ export interface SendEmailInput {
 
 export function sendEmail(input: SendEmailInput): Promise<Response> {
   const key = Deno.env.get("RESEND_API_KEY");
-  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
+  const noreplyEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@e-charging.nl";
+  const infoEmail = Deno.env.get("RESEND_INFO_EMAIL") ?? "info@e-charging.nl";
   const fromName = Deno.env.get("RESEND_FROM_NAME") ?? "E-Charging";
+  const fromEmail = input.sender === "info" ? infoEmail : noreplyEmail;
   const body: Record<string, unknown> = {
     from: input.from ?? `${fromName} <${fromEmail}>`,
     to: Array.isArray(input.to) ? input.to : [input.to],

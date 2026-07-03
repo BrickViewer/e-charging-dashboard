@@ -125,6 +125,19 @@ export class GraphClient {
     return (data.value || []).map(mapItem);
   }
 
+  // Hernoem een drive-item (item-id blijft gelijk → links blijven werken; alleen naam/webUrl wijzigt).
+  async renameItem(driveId: string, itemId: string, newName: string): Promise<DriveItem> {
+    const data = await this.request<unknown>("PATCH", `/drives/${driveId}/items/${itemId}`, { body: { name: newName } });
+    return mapItem(data);
+  }
+
+  // Verse GET van een drive-item — de PATCH-response-webUrl is bij SPO soms niet navigeerbaar,
+  // dus na een rename halen we de canonieke webUrl hier op.
+  async getDriveItem(driveId: string, itemId: string): Promise<DriveItem> {
+    const data = await this.request<unknown>("GET", `/drives/${driveId}/items/${itemId}?$select=id,name,webUrl,size,file,folder,lastModifiedDateTime`);
+    return mapItem(data);
+  }
+
   // Verwijder een drive-item. 204/404 = success (verwijderd of al weg). Spiegelt de
   // voormalige inline object-delete-impl 1:1: directe DELETE, géén retry, zelfde
   // foutmelding. (Token komt uit de gedeelde, gecachte getToken.)

@@ -104,6 +104,12 @@ export async function updatePortalBankDetails(input: UpdatePortalBankDetailsInpu
   return payload.paymentDetails;
 }
 
+// Markeert de begeleide onboarding als afgerond voor de ingelogde portaalklant.
+export async function completePortalOnboarding() {
+  const { error } = await (supabase as unknown as PortalRpcClient).rpc("complete_portal_onboarding");
+  if (error) throw new Error(error.message);
+}
+
 export async function changePortalLoginEmail(currentEmail: string, currentPassword: string, newEmail: string) {
   const normalizedCurrentEmail = currentEmail.trim().toLowerCase();
   const normalizedNewEmail = newEmail.trim().toLowerCase();

@@ -1,6 +1,7 @@
 import { useClientProfile, useClientLocations } from "@/hooks/useClientData";
 import { useQuery } from "@tanstack/react-query";
 import { getPortalSessions } from "@/services/sessions";
+import { isActiveChargePoint } from "@/services/chargePoints";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { useDemoDatasetOptional } from "@/contexts/demoDatasetContextValue";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,7 +50,7 @@ export default function ClientSessions() {
 
   const allChargePoints = useMemo(() => {
     if (!locations) return [];
-    return locations.flatMap((l) => (l.charge_points || []).map((cp) => ({
+    return locations.flatMap((l) => (l.charge_points || []).filter(isActiveChargePoint).map((cp) => ({
       id: cp.id,
       name: cp.name || "Laadpunt",
       status: cp.status,

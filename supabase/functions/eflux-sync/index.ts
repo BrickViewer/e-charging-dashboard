@@ -393,6 +393,30 @@ async function syncEvsesAndLocations(
     }
   }
 
+  // 1.5d — Opruimen: laadpunten waarvan de controller niet meer in Road voorkomt (bv. paal
+  //         opnieuw geregistreerd onder een nieuw controller-id) markeren als archived. We
+  //         bereiken dit punt alleen na een geslaagde fetch (de zoek-loop gooit bij een echte
+  //         API-fout); de non-empty guard voorkomt vals-archiveren bij een lege respons.
+  //         Zelfde signaal als een in Road gearchiveerde EVSE (operational_status='archived'),
+  //         dus eflux-reconcile-locations pikt lege locaties vanzelf op. Zelfhelend: duikt een
+  //         controller weer op, dan zet de upsert 'm terug op live/is_disabled=false.
+  const liveControllerIds = allEvses.map((e) => e.id).filter(Boolean);
+  if (liveControllerIds.length > 0) {
+    const inList = `(${liveControllerIds.map((id) => `"${id}"`).join(",")})`;
+    const { data: archivedRows, error: archErr } = await supabase
+      .from("charge_points")
+      .update({ operational_status: "archived", is_disabled: true })
+      .not("eflux_evse_controller_id", "is", null)
+      .not("eflux_evse_controller_id", "in", inList)
+      .or("operational_status.is.null,operational_status.neq.archived")
+      .select("id");
+    if (archErr) {
+      console.error("archive vanished charge_points failed:", archErr.message);
+    } else if (archivedRows && archivedRows.length > 0) {
+      console.log(`Archived ${archivedRows.length} charge_point(s) no longer present in Road.`);
+    }
+  }
+
   await logSync(supabase, "locations", "success", locSummary.upserted);
   await logSync(supabase, "charge_points", "success", cpSummary.upserted);
 

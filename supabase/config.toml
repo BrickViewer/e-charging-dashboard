@@ -71,6 +71,9 @@ verify_jwt = false
 [functions.erase-client]
 verify_jwt = true
 
+[functions.ere-request-notify]
+verify_jwt = false
+
 [functions.installation-completion-webhook]
 verify_jwt = false
 

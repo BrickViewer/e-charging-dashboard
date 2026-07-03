@@ -184,7 +184,7 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
                 Beste ${contactName},
               </p>
               <p class="mobile-body-copy" style="margin:0 0 20px; color:#cbd5e1; font-size:16px; line-height:1.7;">
-                Voor ${companyName} is het E-Charging klantportaal voorbereid. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve kwartaalafrekeningen zodra E-Charging deze heeft goedgekeurd.
+                Voor ${companyName} is het E-Charging klantportaal voorbereid. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd.
               </p>
 
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:28px 0;">

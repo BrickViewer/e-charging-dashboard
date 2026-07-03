@@ -1,6 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
+// Een in e-Flux verwijderd/gearchiveerd laadpunt (operational_status='archived') is geen actief
+// laadpunt meer en moet nergens in de UI of in tellingen meedoen. eflux-sync zet dit signaal
+// bij zowel een in Road gearchiveerde EVSE als een uit Road verdwenen controller.
+export function isActiveChargePoint(cp: { operational_status?: string | null }): boolean {
+  return cp.operational_status !== "archived";
+}
+
 export async function getChargePoints() {
   return supabase
     .from("charge_points")
