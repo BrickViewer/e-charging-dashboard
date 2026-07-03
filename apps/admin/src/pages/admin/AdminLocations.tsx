@@ -4,8 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MapPin, Search, Plug, Wifi, RefreshCw, AlertCircle, ExternalLink, Loader2 } from "lucide-react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { triggerEfluxSync } from "@/services/locations";
@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
 import { KpiTile } from "@/components/admin/KpiTile";
+import { LocationDetailSheet } from "@/components/admin/location/LocationDetailSheet";
 import type { AdminLocation, EfluxSyncLog } from "@/types/db";
 
 // Een locatie telt als "gekoppeld" zolang de gekoppelde klant niet zacht verwijderd is.
@@ -28,11 +29,20 @@ export default function AdminLocations() {
   const { data: locations, isLoading, isError, refetch } = useAllLocations();
   const { data: syncLogs } = useLatestEfluxSync();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [linkFilter, setLinkFilter] = useState<LinkFilter>("all");
   const [syncing, setSyncing] = useState(false);
+  const [selLocationId, setSelLocationId] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(search, 300);
+
+  // Deep-link vanuit klantdetail e.d.: ?location=<id> opent de slide-over.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const lid = searchParams.get("location");
+    if (!lid) return;
+    setSelLocationId(lid);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const filtered = useMemo(() => {
     if (!locations) return [];
@@ -244,11 +254,11 @@ export default function AdminLocations() {
                         tabIndex={0}
                         aria-label={`Open locatie ${loc.name || loc.address || ""}`}
                         className="border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors group focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50"
-                        onClick={() => navigate(`/admin/locaties/${loc.id}`)}
+                        onClick={() => setSelLocationId(loc.id)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            navigate(`/admin/locaties/${loc.id}`);
+                            setSelLocationId(loc.id);
                           }
                         }}
                       >
@@ -337,6 +347,12 @@ export default function AdminLocations() {
           )}
         </CardContent>
       </Card>
+
+      <LocationDetailSheet
+        locationId={selLocationId}
+        open={!!selLocationId}
+        onOpenChange={(v) => !v && setSelLocationId(null)}
+      />
     </div>
   );
 }
