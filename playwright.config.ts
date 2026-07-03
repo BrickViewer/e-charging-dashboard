@@ -17,5 +17,15 @@ export default defineConfig({
     storageState: "apps/admin/e2e/.auth/state.json",
     trace: "retain-on-failure",
   },
+  // Start automatisch de admin-dev-server (poort 8080) voor lokale runs. In CI
+  // (reuseExistingServer=false) start Playwright altijd een verse server; lokaal
+  // hergebruiken we een al draaiende `npm run dev:admin`. De webServer start vóór
+  // globalSetup, zodat de login-flow in global-setup meteen een bereikbare app heeft.
+  webServer: {
+    command: "npm run dev:admin",
+    url: "http://localhost:8080",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });
