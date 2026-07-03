@@ -6,15 +6,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Search, SlidersHorizontal, Target, Euro, Trophy, ListChecks } from "lucide-react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { useOrganization } from "@/hooks/useAdminData";
+import { useOrganization, useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
 import { useLeads, useLeadStages, useTeamProfiles, type LeadWithTasks } from "@/hooks/useLeads";
+import { leadPipelineValue } from "@/lib/leadEstimate";
 import { KanbanBoard } from "@/components/sales/KanbanBoard";
 import { AddLeadDialog } from "@/components/sales/AddLeadDialog";
 import { LeadDetailSheet } from "@/components/sales/LeadDetailSheet";
 import { StageManagerDialog } from "@/components/sales/StageManagerDialog";
 
 const euro = (n: number) =>
-  new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 
 function Kpi({ icon: Icon, label, value }: { icon: typeof Target; label: string; value: string }) {
   return (
@@ -33,6 +34,7 @@ export default function SalesLeads() {
   const stagesQ = useLeadStages();
   const leadsQ = useLeads();
   const profilesQ = useTeamProfiles();
+  const avgQ = useAvgRevenuePerChargePoint();
 
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 250);
@@ -79,7 +81,7 @@ export default function SalesLeads() {
 
   // KPI's (op de volledige set, niet gefilterd)
   const openLeads = allLeads.filter((l) => l.status === "open");
-  const pipelineValue = openLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
+  const pipelineValue = openLeads.reduce((s, l) => s + leadPipelineValue(l, avgQ.data?.value), 0);
   const now = new Date();
   const wonThisMonth = allLeads.filter((l) => {
     if (!l.won_at) return false;
