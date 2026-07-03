@@ -30,9 +30,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { ClientDetailSheet } from "@/components/admin/client/ClientDetailSheet";
 import type { ClientWithRelations } from "@/types/db";
 
 const PAGE_SIZE = 20;
@@ -115,17 +114,7 @@ export default function AdminClients() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("zichtbaar");
   const [page, setPage] = useState(0);
-  const [selClientId, setSelClientId] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(search, 300);
-
-  // Deep-link vanuit andere pagina's: ?client=<id> opent de klant-slide-over.
-  const [searchParams, setSearchParams] = useSearchParams();
-  useEffect(() => {
-    const cid = searchParams.get("client");
-    if (!cid) return;
-    setSelClientId(cid);
-    setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams]);
 
   const filtered = useMemo(() => {
     return (clients || []).filter((c) => {
@@ -352,11 +341,11 @@ export default function AdminClients() {
                         className={`border-b border-border last:border-0 hover:bg-accent/40 focus-visible:bg-accent/60 focus-visible:outline-none cursor-pointer transition-colors group ${
                           isDeleted ? "opacity-60" : ""
                         }`}
-                        onClick={() => setSelClientId(c.id)}
+                        onClick={() => navigate(`/admin/klanten/${c.id}`)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            setSelClientId(c.id);
+                            navigate(`/admin/klanten/${c.id}`);
                           }
                         }}
                       >
@@ -479,12 +468,6 @@ export default function AdminClients() {
       </Card>
         </>
       )}
-
-      <ClientDetailSheet
-        clientId={selClientId}
-        open={!!selClientId}
-        onOpenChange={(v) => !v && setSelClientId(null)}
-      />
     </div>
   );
 }
