@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, Clock, CheckCircle2, Timer, Search, Zap, RotateCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KpiTile } from "@/components/admin/KpiTile";
+import { StoringDetailSheet } from "@/components/admin/storing/StoringDetailSheet";
 import { useFaults, useSuspectedChargePoints, type FaultRow } from "@/hooks/useFaults";
 import { FAULT_STATUS_LABELS, FAULT_REASON_LABELS, isOpenStatus, type FaultStatus } from "@/services/faults";
 
@@ -30,9 +31,18 @@ const rel = (d: string) => formatDistanceToNow(new Date(d), { addSuffix: true, l
 export default function AdminStoringen() {
   const faults = useFaults();
   const suspected = useSuspectedChargePoints();
-  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("open");
+  const [selFaultId, setSelFaultId] = useState<string | null>(null);
+
+  // Deep-link vanuit andere schermen: ?fault=<id> opent het storing-dossier als slide-over.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const fid = searchParams.get("fault");
+    if (!fid) return;
+    setSelFaultId(fid);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const rows = useMemo(() => faults.data ?? [], [faults.data]);
 
@@ -139,7 +149,7 @@ export default function AdminStoringen() {
             </thead>
             <tbody>
               {filtered.map((f: FaultRow) => {
-                const goToDetail = () => navigate(`/admin/storingen/${f.id}`);
+                const goToDetail = () => setSelFaultId(f.id);
                 return (
                 <tr
                   key={f.id}
@@ -199,6 +209,8 @@ export default function AdminStoringen() {
           </div>
         </div>
       )}
+
+      <StoringDetailSheet faultId={selFaultId} open={!!selFaultId} onOpenChange={(v) => !v && setSelFaultId(null)} />
     </div>
   );
 }
