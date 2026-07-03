@@ -671,20 +671,31 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
                 <Field id="billing-address-city" className="sm:col-span-2" label="Plaats" value={companyForm.billingAddressCity} onChange={(value) => updateCompany("billingAddressCity", value)} error={companyErrors.billingAddressCity} required />
               </div>
 
-              <div className="flex items-center justify-between gap-4 rounded-md border border-border/80 px-3 py-3">
-                <div className="space-y-1">
-                  <Label htmlFor="calculate-ere-enabled" className="text-sm text-foreground">
-                    Bereken mijn ERE's
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Tel €0,10 per geleverde kWh mee in het dashboard.
-                  </p>
+              <div className="space-y-2 rounded-md border border-border/80 px-3 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="calculate-ere-enabled" className="text-sm text-foreground">
+                      Bereken mijn ERE's
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Tel €0,10 per geleverde kWh mee in het dashboard.
+                    </p>
+                  </div>
+                  <Switch
+                    id="calculate-ere-enabled"
+                    checked={companyForm.calculateEreEnabled}
+                    onCheckedChange={(checked) => updateCompany("calculateEreEnabled", checked)}
+                  />
                 </div>
-                <Switch
-                  id="calculate-ere-enabled"
-                  checked={companyForm.calculateEreEnabled}
-                  onCheckedChange={(checked) => updateCompany("calculateEreEnabled", checked)}
-                />
+                {client.calculate_ere_enabled ? (
+                  <p className="text-xs text-[hsl(var(--status-amber))]">
+                    We hebben je ERE-aanvraag ontvangen en nemen binnenkort contact met je op om je ERE-certificaten aan te melden. De bedragen in je dashboard zijn een indicatie.
+                  </p>
+                ) : (
+                  <p className="text-xs text-[hsl(var(--status-amber))]">
+                    Aanmelden voor ERE-certificaten kan binnenkort. Zet je dit aan en sla je op, dan geef je aan dat je ERE's wilt en nemen we binnenkort contact met je op om ze aan te melden. De bedragen in je dashboard zijn een indicatie.
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end border-t border-border pt-5">
