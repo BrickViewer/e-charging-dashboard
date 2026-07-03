@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { usePerson, useUpdatePerson } from "@/hooks/useContacts";
 import { AddressFields } from "@/components/contacts/AddressFields";
+import { PhoneField } from "@/components/contacts/PhoneField";
 
 // Herbruikbare persoon-editor: schrijft direct naar het person-record (bron van waarheid),
 // 1:1 met de Contacten-tab en — via de propagate-trigger — de contact-cache op leads/clients.
@@ -69,7 +70,7 @@ export function PersonFields({ personId }: { personId: string }) {
         <Field label="Voornaam"><Input value={t("first_name")} onChange={(e) => set("first_name")(e.target.value)} /></Field>
         <Field label="Achternaam"><Input value={t("last_name")} onChange={(e) => set("last_name")(e.target.value)} /></Field>
         <Field label="E-mail"><Input type="email" value={t("email")} onChange={(e) => set("email")(e.target.value)} /></Field>
-        <Field label="Telefoon"><Input value={t("phone")} onChange={(e) => set("phone")(e.target.value)} /></Field>
+        <Field label="Telefoon"><PhoneField value={t("phone")} onChange={(v) => set("phone")(v ?? "")} /></Field>
         <Field label="Functie" className="sm:col-span-2"><Input value={t("role")} onChange={(e) => set("role")(e.target.value)} /></Field>
       </div>
       <AddressFields

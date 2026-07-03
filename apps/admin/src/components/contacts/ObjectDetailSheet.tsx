@@ -8,9 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { FileText, Trash2 } from "lucide-react";
+import { FileText, Trash2, X } from "lucide-react";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
-import { useProjectLocation, useQuotesForLocation, useUpdateProjectLocation, useDeleteProjectLocation } from "@/hooks/useProjectLocations";
+import { useProjectLocation, useQuotesForLocation, useUpdateProjectLocation, useDeleteProjectLocation, useLeadsForObject, useLinkLeadObject, useUnlinkLeadObject } from "@/hooks/useProjectLocations";
 import { CompanyPicker } from "@/components/contacts/CompanyPicker";
 import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { LeadPicker } from "@/components/contacts/LeadPicker";
@@ -21,8 +21,11 @@ type LinkRef = { id: string; label: string } | null;
 export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: string | null; open: boolean; onOpenChange: (v: boolean) => void }) {
   const locQ = useProjectLocation(open ? objectId ?? undefined : undefined);
   const quotesQ = useQuotesForLocation(open ? objectId ?? undefined : undefined);
+  const leadsQ = useLeadsForObject(open ? objectId ?? undefined : undefined);
   const update = useUpdateProjectLocation();
   const del = useDeleteProjectLocation();
+  const linkLead = useLinkLeadObject();
+  const unlinkLead = useUnlinkLeadObject();
   const loc = locQ.data;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteSp, setDeleteSp] = useState(true);
@@ -40,7 +43,6 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
   const [form, setForm] = useState<Record<string, string>>({});
   const [company, setCompany] = useState<LinkRef>(null);
   const [person, setPerson] = useState<LinkRef>(null);
-  const [lead, setLead] = useState<LinkRef>(null);
   useEffect(() => {
     if (loc) {
       setForm({
@@ -49,7 +51,6 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
       });
       setCompany(loc.company_id ? { id: loc.company_id, label: loc.companies?.name ?? "Bedrijf" } : null);
       setPerson(loc.person_id ? { id: loc.person_id, label: loc.persons?.full_name ?? "Persoon" } : null);
-      setLead(loc.lead_id ? { id: loc.lead_id, label: loc.leads?.company_name ?? "Lead" } : null);
     }
   }, [loc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -61,14 +62,26 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
     if (!loc) return;
     try {
       await update.mutateAsync({ id: loc.id, patch: {
-        display_name: t("display_name").trim() || loc.display_name,
+        // display_name is afgeleid (server-trigger uit adres + objectnummer) — niet meesturen.
         address_street: t("address_street").trim() || null, house_number: t("house_number").trim() || null,
         postal_code: t("postal_code").trim() || null, city: t("city").trim() || null,
         status: t("status").trim() || "actief", notes: t("notes").trim() || null,
-        company_id: company?.id ?? null, person_id: person?.id ?? null, lead_id: lead?.id ?? null,
+        company_id: company?.id ?? null, person_id: person?.id ?? null,
       } });
       toast.success("Object opgeslagen");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
+  };
+
+  // Leads koppelen/ontkoppelen (N:M) — direct, los van "Opslaan".
+  const addLead = async (leadId: string) => {
+    if (!loc) return;
+    try { await linkLead.mutateAsync({ leadId, objectId: loc.id }); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Koppelen mislukt"); }
+  };
+  const removeLead = async (leadId: string) => {
+    if (!loc) return;
+    try { await unlinkLead.mutateAsync({ leadId, objectId: loc.id }); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Ontkoppelen mislukt"); }
   };
 
   return (
@@ -91,7 +104,7 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
 
           <TabsContent value="gegevens" className="mt-4 space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Weergavenaam"><Input value={t("display_name")} onChange={(e) => set("display_name")(e.target.value)} /></Field>
+              <Field label="Objectnaam (automatisch)"><p className="flex h-9 items-center px-1 text-sm font-medium">{loc?.display_name ?? "—"}</p></Field>
               <Field label="Status">
                 <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={t("status")} onChange={(e) => set("status")(e.target.value)}>
                   <option value="actief">Actief</option>
@@ -107,7 +120,19 @@ export function ObjectDetailSheet({ objectId, open, onOpenChange }: { objectId: 
               <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Koppelingen</p>
               <Field label="Bedrijf"><CompanyPicker value={company?.id ?? null} valueLabel={company?.label ?? null} onChange={(id, c) => setCompany(id ? { id, label: c?.name ?? "" } : null)} /></Field>
               <Field label="Persoon"><PersonPicker value={person?.id ?? null} valueLabel={person?.label ?? null} onChange={(id, p) => setPerson(id ? { id, label: p?.full_name ?? "" } : null)} /></Field>
-              <Field label="Lead"><LeadPicker value={lead?.id ?? null} valueLabel={lead?.label ?? null} onChange={(id, label) => setLead(id ? { id, label: label ?? "" } : null)} /></Field>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Leads <span className="font-normal text-muted-foreground">(gedeeld dossier)</span></Label>
+                <div className="space-y-1">
+                  {(leadsQ.data ?? []).map((r) => (
+                    <div key={r.lead_id} className="flex items-center justify-between gap-2 rounded-md border bg-background px-2 py-1 text-sm">
+                      <span className="truncate">{r.leads?.company_name ?? "Lead"}</span>
+                      <button type="button" className="text-muted-foreground hover:text-red-600" onClick={() => removeLead(r.lead_id)} aria-label="Lead ontkoppelen"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ))}
+                  {(leadsQ.data ?? []).length === 0 && <p className="text-[11px] text-muted-foreground">Nog geen lead gekoppeld.</p>}
+                </div>
+                <LeadPicker value={null} valueLabel={null} onChange={(id) => { if (id) addLead(id); }} />
+              </div>
             </div>
             <Field label="Notities"><Textarea rows={3} value={t("notes")} onChange={(e) => set("notes")(e.target.value)} /></Field>
             <div className="flex items-center justify-between border-t pt-4">

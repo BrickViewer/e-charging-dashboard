@@ -15,11 +15,13 @@ export async function resolveProjectLocation(
   const city = (args.city ?? "").trim();
   const postal = (args.postal ?? "").trim();
 
-  // 0) Lead-first: heeft deze lead al een object, hergebruik dat (deterministisch, geen dubbel per lead).
+  // 0) Lead-first via junctie (N:M): heeft deze lead al een gekoppeld object, hergebruik dat.
   if (args.lead) {
-    const { data: leadObj } = await sb.from("project_locations")
-      .select("id, location_number").eq("lead_id", args.lead)
-      .order("location_number", { ascending: true }).limit(1).maybeSingle();
+    const { data: linked } = await sb.from("lead_project_locations")
+      .select("project_locations(id, location_number)")
+      .eq("lead_id", args.lead)
+      .order("created_at", { ascending: true }).limit(1);
+    const leadObj = Array.isArray(linked) ? linked[0]?.project_locations : null;
     if (leadObj) return { id: leadObj.id, location_number: Number(leadObj.location_number) };
   }
 

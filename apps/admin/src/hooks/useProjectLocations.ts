@@ -109,9 +109,18 @@ export function useProjectLocationsByLead(leadId: string | undefined) {
     queryKey: ["project-locations", "lead", leadId],
     enabled: !!leadId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("project_locations").select("*, quotes(count)").eq("lead_id", leadId!).order("location_number", { ascending: true });
+      // Objecten van een lead via de junctietabel (N:M lead<->object).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from("lead_project_locations")
+        .select("project_locations(*, quotes(count))")
+        .eq("lead_id", leadId!);
       if (error) throw error;
-      return (data ?? []) as unknown as ProjectLocationWithCounts[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[])
+        .map((r) => r.project_locations)
+        .filter(Boolean)
+        .sort((a: ProjectLocationWithCounts, b: ProjectLocationWithCounts) => a.location_number - b.location_number) as ProjectLocationWithCounts[];
     },
   });
 }
@@ -138,8 +147,16 @@ export function useProjectLocationSearch(query: string) {
 // Lead-first: heeft de lead al een object, geef dat terug (spiegelt resolveProjectLocation in de edge).
 export async function findMatchingLocation(opts: { org: string; company: string | null; street: string; postal: string; city: string; house?: string | null; lead?: string | null }): Promise<ProjectLocation | null> {
   if (opts.lead) {
-    const { data: leadObj } = await supabase.from("project_locations").select("*").eq("lead_id", opts.lead).order("location_number", { ascending: true }).limit(1).maybeSingle();
-    if (leadObj) return leadObj as ProjectLocation;
+    // Lead-first via junctie: het eerst-gekoppelde object van de lead.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: linked } = await (supabase as any)
+      .from("lead_project_locations")
+      .select("project_locations(*)")
+      .eq("lead_id", opts.lead)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const obj = Array.isArray(linked) && linked[0]?.project_locations;
+    if (obj) return obj as ProjectLocation;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (supabase.rpc as any)("find_matching_project_location", {
@@ -147,6 +164,84 @@ export async function findMatchingLocation(opts: { org: string; company: string 
   });
   const rows = (data ?? []) as ProjectLocation[];
   return rows[0] ?? null;
+}
+
+export type ObjectPostcodeSuggestion = {
+  id: string;
+  location_number: number;
+  display_name: string;
+  address_street: string | null;
+  house_number: string | null;
+  postal_code: string | null;
+  city: string | null;
+  lead_id: string | null;
+};
+
+export type ObjectLeadLink = { lead_id: string; created_at: string; leads: { id: string; company_name: string | null } | null };
+
+// Alle leads die aan een object gekoppeld zijn (N:M via de junctietabel).
+export function useLeadsForObject(objectId: string | undefined) {
+  return useQuery({
+    queryKey: ["project-locations", "leads-of-object", objectId],
+    enabled: !!objectId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from("lead_project_locations")
+        .select("lead_id, created_at, leads(id, company_name)")
+        .eq("project_location_id", objectId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ObjectLeadLink[];
+    },
+  });
+}
+
+// Koppel een lead aan een bestaand object (deel het object-dossier). Al gekoppeld = geen fout.
+export function useLinkLeadObject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ leadId, objectId }: { leadId: string; objectId: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from("lead_project_locations").insert({ lead_id: leadId, project_location_id: objectId });
+      if (error && (error as { code?: string }).code !== "23505") throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-locations"] }),
+  });
+}
+
+export function useUnlinkLeadObject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ leadId, objectId }: { leadId: string; objectId: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from("lead_project_locations").delete().eq("lead_id", leadId).eq("project_location_id", objectId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-locations"] }),
+  });
+}
+
+// Bestaande objecten op (het 4-cijferige deel van) een postcode binnen de org — voor de
+// subtiele "bestaat al"-suggestielijst in AddLeadDialog. RLS staat interne staf lezen toe.
+export function useObjectsByPostcode(orgId: string | undefined, postcode: string) {
+  const pc4 = (postcode || "").replace(/\s+/g, "").toUpperCase().slice(0, 4);
+  const enabled = !!orgId && /^[1-9][0-9]{3}$/.test(pc4);
+  return useQuery({
+    queryKey: ["project-locations", "by-postcode", orgId, pc4],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("project_locations")
+        .select("id, location_number, display_name, address_street, house_number, postal_code, city, lead_id")
+        .eq("organization_id", orgId!)
+        .ilike("normalized_postal", `${pc4}%`)
+        .order("house_number", { ascending: true })
+        .limit(12);
+      if (error) throw error;
+      return (data ?? []) as ObjectPostcodeSuggestion[];
+    },
+  });
 }
 
 export type NewProjectLocation = {

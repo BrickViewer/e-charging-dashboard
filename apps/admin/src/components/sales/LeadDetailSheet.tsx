@@ -21,13 +21,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
-  Building2, CalendarClock, Euro, ExternalLink, FileText, MapPin, MessageSquare, MoreHorizontal,
+  Building2, Euro, ExternalLink, FileText, MapPin, MessageSquare, MoreHorizontal,
   Pencil, Plus, Tag, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
 } from "lucide-react";
 import { useCreateQuoteFromLead, useLeadQuotes } from "@/hooks/useQuotes";
 import { ObjectSelectDialog } from "@/components/contacts/ObjectSelectDialog";
 import { ObjectCreateDialog } from "@/components/contacts/ObjectCreateDialog";
+import { ObjectDetailSheet } from "@/components/contacts/ObjectDetailSheet";
 import { useProjectLocationsByLead } from "@/hooks/useProjectLocations";
+import { formatObjectAddress } from "@/lib/objectLabel";
 import { LeadTagPicker } from "@/components/sales/LeadTagPicker";
 import { useSetLeadTags } from "@/hooks/useLeadTags";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +43,9 @@ import {
   useLeadTasks, useLeadActivities, useUpdateLead, useDeleteLead, useAddTask, useToggleTask,
   useDeleteTask, useUpdateTask, useConvertLeadToClient, type LeadStage, type LeadWithTasks,
 } from "@/hooks/useLeads";
+import { scopeFromFlags } from "@/lib/quoteScope";
+import { useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
+import { leadMgmtYearEstimate, leadQuoteValue } from "@/lib/leadEstimate";
 
 const LOCATION_TYPES: Record<string, string> = {
   workplace: "Werkplek", destination: "Bestemming", fleet: "Vloot/depot", public: "Publiek", other: "Anders",
@@ -48,11 +53,6 @@ const LOCATION_TYPES: Record<string, string> = {
 const ACTIVITY_LABEL: Record<string, string> = {
   created: "Aangemaakt", stage_change: "Fase gewijzigd", note: "Notitie", converted: "Geconverteerd",
   quote_sent: "Offerte verstuurd", quote_accepted: "Offerte geaccordeerd",
-};
-const PRIORITY: Record<string, { label: string; cls: string }> = {
-  high: { label: "Hoog", cls: "bg-red-100 text-red-700" },
-  medium: { label: "Gemiddeld", cls: "bg-amber-100 text-amber-700" },
-  low: { label: "Laag", cls: "bg-zinc-100 text-zinc-600" },
 };
 const QUOTE_STATUS: Record<string, { label: string; cls: string }> = {
   concept: { label: "Concept", cls: "bg-zinc-100 text-zinc-600" },
@@ -73,13 +73,6 @@ function initials(name: string | null | undefined) {
   if (!name) return "?";
   return name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 }
-// UTC-ISO → lokale "yyyy-MM-ddTHH:mm" voor <input type="datetime-local"> (lezen en schrijven symmetrisch lokaal).
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
-
 export function LeadDetailSheet({
   lead, open, onOpenChange, stages, profiles,
 }: {
@@ -107,6 +100,7 @@ export function LeadDetailSheet({
   const activities = useLeadActivities(open ? lead?.id : undefined);
   const quotes = useLeadQuotes(open ? lead?.id : undefined);
   const leadObjects = useProjectLocationsByLead(open ? lead?.id : undefined);
+  const { data: avgPerPaal } = useAvgRevenuePerChargePoint();
 
   const [form, setForm] = useState<Record<string, string | boolean | null>>({});
   const [dirty, setDirty] = useState(false);
@@ -118,7 +112,7 @@ export function LeadDetailSheet({
   const [newTaskAssignee, setNewTaskAssignee] = useState("none");
   const [newTaskDue, setNewTaskDue] = useState("");
   const [newNote, setNewNote] = useState("");
-  const [apptEditing, setApptEditing] = useState(false);
+  const [objectDetailId, setObjectDetailId] = useState<string | null>(null);
   const [tagIds, setTagIds] = useState<string[]>([]);
 
   const buildForm = (l: LeadWithTasks): Record<string, string | boolean | null> => {
@@ -132,11 +126,8 @@ export function LeadDetailSheet({
       estimated_kwh_per_month: l.estimated_kwh_per_month?.toString() ?? "",
       charger_type: l.charger_type ?? "", parking_spaces: l.parking_spaces?.toString() ?? "",
       owns_property: l.owns_property ?? false, has_solar: l.has_solar ?? false,
-      estimated_value: l.estimated_value?.toString() ?? "", expected_close_date: l.expected_close_date ?? "",
-      priority: l.priority ?? "medium", notes: l.notes ?? "",
+      notes: l.notes ?? "",
       message_subject: l.message_subject ?? "", message_body: l.message_body ?? "",
-      appointment_at: l.appointment_at ? toLocalInput(l.appointment_at) : "",
-      appointment_notes: l.appointment_notes ?? "",
       // Configuratie-instellingen (ook bewerkbaar zonder dat er al een configuratie is).
       cfg_charge_points: ci.hardware?.chargePoints?.toString() ?? "",
       cfg_sockets: ci.hardware?.socketsPerChargePoint?.toString() ?? "",
@@ -158,7 +149,6 @@ export function LeadDetailSheet({
 
   useEffect(() => {
     if (lead) { setForm(buildForm(lead)); setDirty(false); setIsEditing(false); }
-    setApptEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.id]);
 
@@ -191,7 +181,10 @@ export function LeadDetailSheet({
   const wonStage = stages.find((s) => s.is_won);
   const lostStage = stages.find((s) => s.is_lost);
   const hasConfiguration = !!lead.configuration;
-  const prio = PRIORITY[lead.priority] ?? PRIORITY.medium;
+  // Geschatte jaarlijkse beheeropbrengst = gem. service-fee-omzet per paal × aantal palen
+  // op de offerte, alleen wanneer beheer in scope zit (gedeelde helper, gelijk aan kaart + pijplijn).
+  const leadMgmtYear = leadMgmtYearEstimate(lead, avgPerPaal?.value);
+  const leadQuoteVal = leadQuoteValue(lead);
 
   const saveOverview = async () => {
     const intOf = (k: string) => { const n = num(text(k)); return n == null ? null : Math.round(n); };
@@ -224,11 +217,8 @@ export function LeadDetailSheet({
           charger_type: text("charger_type").trim() || null,
           parking_spaces: text("parking_spaces") ? Math.round(num(text("parking_spaces")) ?? 0) : null,
           owns_property: form.owns_property as boolean, has_solar: form.has_solar as boolean,
-          estimated_value: num(text("estimated_value")), expected_close_date: text("expected_close_date") || null,
-          priority: text("priority") || "medium", notes: text("notes").trim() || null,
+          notes: text("notes").trim() || null,
           message_subject: text("message_subject").trim() || null, message_body: text("message_body").trim() || null,
-          appointment_at: text("appointment_at") ? new Date(text("appointment_at")).toISOString() : null,
-          appointment_notes: text("appointment_notes").trim() || null,
           configuration: configuration as unknown as never,
           configuration_updated_at: configuration ? new Date().toISOString() : lead.configuration_updated_at,
         },
@@ -281,7 +271,8 @@ export function LeadDetailSheet({
     setNewNote(""); qc.invalidateQueries({ queryKey: ["lead-activities", lead.id] });
   };
 
-  const address = [lead.address_street, [lead.postal_code, lead.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  // Terugval-adres (lead-cache, incl. huisnummer) voor leads zonder gekoppeld object.
+  const leadAddress = (lead.address_street || lead.postal_code || lead.city) ? formatObjectAddress(lead) : null;
 
   return (
     <>
@@ -393,7 +384,6 @@ export function LeadDetailSheet({
 
             {/* Meta-regel */}
             <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
-              <span className={`rounded-full px-2 py-0.5 font-medium ${prio.cls}`}>{prio.label}</span>
               {lead.converted_client_id && <span className="rounded-full bg-green-100 px-2 py-0.5 font-medium text-green-700">Klant aangemaakt</span>}
               <div className="ml-auto">
                 <Select value={lead.owner_user_id ?? "none"} onValueChange={setOwner}>
@@ -414,10 +404,10 @@ export function LeadDetailSheet({
           <div className="space-y-5 px-6 py-5">
             {/* Samenvattingsstrip */}
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-              <Stat icon={Euro} label="Waarde" value={euro(lead.estimated_value) ?? "—"} />
+              <Stat icon={Euro} label="Offerte waarde" value={leadQuoteVal > 0 ? (euro(leadQuoteVal) ?? "—") : "—"} />
+              <Stat icon={Euro} label="Beheeropbrengst/jr" value={leadMgmtYear != null ? `≈ ${euro(leadMgmtYear)}` : "—"} />
               <Stat icon={Zap} label="Laadpunten" value={lead.estimated_charge_points?.toString() ?? "—"} />
               <Stat icon={Zap} label="kWh / mnd" value={lead.estimated_kwh_per_month ? Math.round(Number(lead.estimated_kwh_per_month)).toLocaleString("nl-NL") : "—"} />
-              <Stat icon={CalendarClock} label="Afspraak" value={lead.appointment_at ? new Date(lead.appointment_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "—"} />
             </div>
 
             <Tabs defaultValue="overview">
@@ -429,6 +419,23 @@ export function LeadDetailSheet({
 
               {/* OVERZICHT */}
               <TabsContent value="overview" className="mt-4 space-y-4">
+                {/* Uitvoerlocatie = het object = het uitvoeringsadres. Belangrijkste → bovenaan, zichtbaar in view én bewerken. */}
+                <InfoCard title="Uitvoerlocatie" icon={MapPin} action={<button className="text-xs font-medium text-primary hover:underline" onClick={() => setObjectCreateOpen(true)}>+ Object</button>}>
+                  <div className="space-y-1.5">
+                    {(leadObjects.data ?? []).map((o) => (
+                      <button key={o.id} onClick={() => setObjectDetailId(o.id)} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
+                        <span className="font-medium tabular-nums">{o.location_number}</span>
+                        <span className="truncate">{formatObjectAddress(o)}</span>
+                        {o.folder_web_url
+                          ? <a href={o.folder_web_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="ml-auto shrink-0 text-[11px] text-primary hover:underline">map</a>
+                          : <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">map volgt…</span>}
+                      </button>
+                    ))}
+                    {leadObjects.data?.length === 0 && (leadAddress
+                      ? <p className="rounded-lg border border-dashed p-2 text-sm text-muted-foreground">{leadAddress}<span className="ml-1.5 text-[11px]">(nog geen object — koppel via "+ Object")</span></p>
+                      : <p className="text-xs text-muted-foreground">Nog geen object/uitvoeradres gekoppeld.</p>)}
+                  </div>
+                </InfoCard>
                 {isEditing ? (
                   <EditForm lead={lead} form={form} set={set} text={text} updateLead={updateLead} onLaunchConfigurator={launchConfigurator} />
                 ) : (
@@ -465,7 +472,6 @@ export function LeadDetailSheet({
                     )}
 
                     <InfoCard title="Locatie & behoefte" icon={MapPin}>
-                      <DetailRow label="Adres" value={address || null} />
                       <DetailRow label="Type locatie" value={lead.location_type ? LOCATION_TYPES[lead.location_type] ?? lead.location_type : null} />
                       <DetailRow label="Laadpunten" value={lead.estimated_charge_points?.toString()} />
                       <DetailRow label="kWh / maand" value={lead.estimated_kwh_per_month ? Math.round(Number(lead.estimated_kwh_per_month)).toLocaleString("nl-NL") : null} />
@@ -473,25 +479,6 @@ export function LeadDetailSheet({
                       <DetailRow label="Parkeerplaatsen" value={lead.parking_spaces?.toString()} />
                       <DetailRow label="Eigenaar pand" value={lead.owns_property ? "Ja" : "Nee"} />
                       <DetailRow label="Zonnepanelen" value={lead.has_solar ? "Ja" : "Nee"} />
-                    </InfoCard>
-
-                    <InfoCard
-                      title="Afspraak (bezoek)"
-                      icon={CalendarClock}
-                      action={!apptEditing ? (
-                        <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setApptEditing(true)}>
-                          {lead.appointment_at ? "Wijzigen" : "Plan afspraak"}
-                        </button>
-                      ) : undefined}
-                    >
-                      {apptEditing ? (
-                        <AppointmentEditor key={lead.id} leadId={lead.id} initialAt={lead.appointment_at} initialNotes={lead.appointment_notes} updateLead={updateLead} onClose={() => setApptEditing(false)} />
-                      ) : lead.appointment_at ? (
-                        <>
-                          <DetailRow label="Datum & tijd" value={new Date(lead.appointment_at).toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" })} />
-                          {lead.appointment_notes && <p className="pt-2 text-sm text-foreground">{lead.appointment_notes}</p>}
-                        </>
-                      ) : <p className="py-1 text-sm text-muted-foreground">Nog geen afspraak gepland.</p>}
                     </InfoCard>
 
                     <ConfigCard
@@ -505,11 +492,15 @@ export function LeadDetailSheet({
                         {(quotes.data ?? []).map((q) => {
                           const st = QUOTE_STATUS[q.status] ?? { label: q.status, cls: "bg-muted text-muted-foreground" };
                           const total = (Number(q.total_hardware_cost) || 0) + (Number(q.total_installation_cost) || 0);
+                          // Bij 'alleen beheer' is dit bedrag de eenmalige activatie-/onboardingkost die we
+                          // aan de klant factureren — expliciet labelen zodat het in de flow meegaat.
+                          const beheerOnly = scopeFromFlags(q.with_installation !== false, q.with_management !== false) === "alleen_beheer";
                           return (
                             <button key={q.id} onClick={() => { onOpenChange(false); navigate(`/sales/offertes?quote=${q.id}`); }} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
                               <span className="font-medium tabular-nums">{q.quote_number}</span>
                               <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${st.cls}`}>{st.label}</span>
-                              <span className="ml-auto tabular-nums text-muted-foreground">{euro(total)}</span>
+                              {beheerOnly && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" title="Eenmalige activatiekosten, te factureren aan de klant">activatie</span>}
+                              <span className="ml-auto tabular-nums text-muted-foreground" title={beheerOnly ? "Eenmalige activatiekosten (te factureren aan de klant)" : undefined}>{euro(total)}</span>
                             </button>
                           );
                         })}
@@ -517,26 +508,10 @@ export function LeadDetailSheet({
                       </div>
                     </InfoCard>
 
-                    <InfoCard title="Object" icon={MapPin} action={<button className="text-xs font-medium text-primary hover:underline" onClick={() => setObjectCreateOpen(true)}>+ Object</button>}>
-                      <div className="space-y-1.5">
-                        {(leadObjects.data ?? []).map((o) => (
-                          <button key={o.id} onClick={() => { onOpenChange(false); navigate(`/sales/contacten?object=${o.id}`); }} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
-                            <span className="font-medium tabular-nums">{o.location_number}</span>
-                            <span className="truncate">{[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</span>
-                            {o.folder_web_url
-                              ? <a href={o.folder_web_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="ml-auto shrink-0 text-[11px] text-primary hover:underline">map</a>
-                              : <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">map volgt…</span>}
-                          </button>
-                        ))}
-                        {leadObjects.data?.length === 0 && <p className="text-xs text-muted-foreground">Nog geen object gekoppeld.</p>}
-                      </div>
-                    </InfoCard>
-
                     <InfoCard title="Sales" icon={Euro}>
                       <DetailRow label="Eigenaar" value={ownerName(lead.owner_user_id)} />
-                      <DetailRow label="Prioriteit" value={prio.label} />
-                      <DetailRow label="Geschatte waarde" value={euro(lead.estimated_value)} />
-                      <DetailRow label="Verwachte sluitdatum" value={lead.expected_close_date ? new Date(lead.expected_close_date).toLocaleDateString("nl-NL") : null} />
+                      <DetailRow label="Offerte waarde" value={leadQuoteVal > 0 ? euro(leadQuoteVal) : null} />
+                      <DetailRow label="Geschatte beheeropbrengst / jaar" value={leadMgmtYear != null ? `≈ ${euro(leadMgmtYear)}/jr` : null} />
                     </InfoCard>
 
                     <InfoCard title="Tags" icon={Tag}>
@@ -685,7 +660,7 @@ export function LeadDetailSheet({
       <ObjectSelectDialog
         open={objectDialogOpen}
         onClose={() => setObjectDialogOpen(false)}
-        lead={{ id: lead.id, organization_id: lead.organization_id, company_id: lead.company_id, company_name: lead.company_name, address_street: lead.address_street, postal_code: lead.postal_code, city: lead.city }}
+        lead={{ id: lead.id, organization_id: lead.organization_id, company_id: lead.company_id, company_name: lead.company_name, address_street: lead.address_street, house_number: lead.house_number, postal_code: lead.postal_code, city: lead.city }}
         onConfirm={confirmObject}
         pending={createQuote.isPending}
       />
@@ -696,7 +671,9 @@ export function LeadDetailSheet({
         defaultLead={{ id: lead.id, label: lead.company_name || "Lead" }}
         defaultCompany={lead.company_id ? { id: lead.company_id, label: lead.company_name || "Bedrijf" } : null}
         defaultPerson={lead.person_id ? { id: lead.person_id, label: lead.contact_name || "Contact" } : null}
+        defaultAddress={{ street: lead.address_street ?? "", houseNumber: lead.house_number ?? "", postalCode: lead.postal_code ?? "", city: lead.city ?? "" }}
       />
+      <ObjectDetailSheet objectId={objectDetailId} open={!!objectDetailId} onOpenChange={(v) => { if (!v) setObjectDetailId(null); }} />
     </>
   );
 }
@@ -798,53 +775,6 @@ function ConfigCard({ config, updatedAt, onEdit }: { config: LeadConfig | null; 
   );
 }
 
-// ---- Inline afspraak-editor (plannen/wijzigen zonder de volledige bewerkmodus) ----
-function AppointmentEditor({ leadId, initialAt, initialNotes, updateLead, onClose }: {
-  leadId: string;
-  initialAt: string | null;
-  initialNotes: string | null;
-  updateLead: ReturnType<typeof useUpdateLead>;
-  onClose: () => void;
-}) {
-  const [at, setAt] = useState(initialAt ? toLocalInput(initialAt) : "");
-  const [notes, setNotes] = useState(initialNotes ?? "");
-
-  const save = async () => {
-    try {
-      await updateLead.mutateAsync({ id: leadId, patch: { appointment_at: at ? new Date(at).toISOString() : null, appointment_notes: notes.trim() || null } });
-      toast.success("Afspraak opgeslagen");
-      onClose();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
-  };
-  const clear = async () => {
-    try {
-      await updateLead.mutateAsync({ id: leadId, patch: { appointment_at: null, appointment_notes: null } });
-      toast.success("Afspraak verwijderd");
-      onClose();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Verwijderen mislukt"); }
-  };
-
-  return (
-    <div className="space-y-3 pt-1">
-      <div className="space-y-1.5">
-        <Label className="text-xs">Datum &amp; tijd</Label>
-        <Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs">Opname / situatie-notities</Label>
-        <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Meterkast, aansluiting, bijzonderheden…" />
-      </div>
-      <div className="flex items-center gap-2 pt-0.5">
-        <Button size="sm" onClick={save} disabled={updateLead.isPending || !at}>{updateLead.isPending ? "Opslaan…" : "Opslaan"}</Button>
-        <Button size="sm" variant="ghost" onClick={onClose} disabled={updateLead.isPending}>Annuleren</Button>
-        {initialAt && (
-          <button type="button" className="ml-auto text-xs font-medium text-destructive hover:underline disabled:opacity-50" disabled={updateLead.isPending} onClick={clear}>Verwijderen</button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ---- Bewerk-formulier in kaart-stijl (zelfde InfoCards als de leesweergave) ----
 function ERow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -942,20 +872,6 @@ function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
             <ERow label="ERE-certificaten"><EToggle checked={!!form.cfg_ere} onChange={(c) => set("cfg_ere")(c)} /></ERow>
           </ConfigGroup>
         </div>
-      </InfoCard>
-
-      <InfoCard title="Afspraak (bezoek)" icon={CalendarClock}>
-        <ERow label="Datum & tijd"><Input type="datetime-local" className="h-8" value={text("appointment_at")} onChange={(e) => set("appointment_at")(e.target.value)} /></ERow>
-        <div className="pt-2">
-          <Label className="mb-1 block text-xs text-muted-foreground">Opname / situatie-notities</Label>
-          <Textarea rows={2} value={text("appointment_notes")} onChange={(e) => set("appointment_notes")(e.target.value)} placeholder="Meterkast, aansluiting, bijzonderheden…" />
-        </div>
-      </InfoCard>
-
-      <InfoCard title="Sales" icon={Euro}>
-        <ERow label="Geschatte waarde (€)"><EInput value={text("estimated_value")} onChange={set("estimated_value")} mode="decimal" /></ERow>
-        <ERow label="Verwachte sluitdatum"><Input type="date" className="h-8" value={text("expected_close_date")} onChange={(e) => set("expected_close_date")(e.target.value)} /></ERow>
-        <ERow label="Prioriteit"><ESelect value={text("priority")} onChange={set("priority")} options={[["low", "Laag"], ["medium", "Gemiddeld"], ["high", "Hoog"]]} /></ERow>
       </InfoCard>
 
       <InfoCard title="Notitie" icon={FileText}>

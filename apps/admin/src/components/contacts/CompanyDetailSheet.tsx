@@ -11,8 +11,10 @@ import { ExternalLink, MapPin, Plus, Star, Target, Trash2, X } from "lucide-reac
 import { PersonPicker } from "./PersonPicker";
 import { ObjectCreateDialog } from "./ObjectCreateDialog";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
+import { formatPhone } from "@/lib/phone";
 import { useLeadsForClient } from "@/hooks/useLeads";
 import { useProjectLocationsByCompany } from "@/hooks/useProjectLocations";
+import { formatObjectAddress } from "@/lib/objectLabel";
 import {
   useUpdateCompany,
   useDeleteCompany,
@@ -198,7 +200,7 @@ export function CompanyDetailSheet({
                   {cp.is_primary && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{cp.person.full_name || "(naamloos)"}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">{[cp.person.email, cp.person.phone].filter(Boolean).join(" · ")}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{[cp.person.email, cp.person.phone ? formatPhone(cp.person.phone) : null].filter(Boolean).join(" · ")}</p>
                   </div>
                   {!cp.is_primary && (
                     <button
@@ -237,7 +239,7 @@ export function CompanyDetailSheet({
               {(objecten.data ?? []).map((o) => (
                 <button key={o.id} onClick={() => navigate(`/sales/contacten?object=${o.id}`)} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
                   <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 truncate">{o.location_number} · {[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</span>
+                  <span className="flex-1 truncate">{o.location_number} · {formatObjectAddress(o)}</span>
                   <span className="text-[11px] text-muted-foreground">{o.quotes?.[0]?.count ?? 0} offertes</span>
                 </button>
               ))}

@@ -7,7 +7,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useProjectLocationSearch, useCreateProjectLocation, type ObjectSearchResult } from "@/hooks/useProjectLocations";
 
-const fmt = (r: ObjectSearchResult) => `${r.location_number} · ${[r.address_street, r.city].filter(Boolean).join(", ") || r.display_name}`;
+const fmt = (r: ObjectSearchResult) => r.display_name;
 
 export function ObjectPicker({ value, valueLabel, onChange, placeholder = "Kies een object…" }: {
   value: string | null;
@@ -28,7 +28,7 @@ export function ObjectPicker({ value, valueLabel, onChange, placeholder = "Kies 
     if (!name) return;
     try {
       const created = await createObj.mutateAsync({ display_name: name, address_street: null, postal_code: null, city: null });
-      onChange(created.id, `${created.location_number} · ${created.display_name}`);
+      onChange(created.id, created.display_name);
       toast.success(`Object "${created.display_name}" aangemaakt`);
       setOpen(false);
       setQuery("");

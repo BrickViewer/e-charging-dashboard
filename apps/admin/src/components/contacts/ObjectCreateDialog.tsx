@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { findMatchingLocation, useCreateProjectLocation, type ProjectLocation } from "@/hooks/useProjectLocations";
+import { AddressFields, type AddressValue } from "./AddressFields";
 import { CompanyPicker } from "./CompanyPicker";
 import { PersonPicker } from "./PersonPicker";
 import { LeadPicker } from "./LeadPicker";
 
 type Ref = { id: string; label: string } | null;
+const EMPTY_ADDR: AddressValue = { street: "", houseNumber: "", postalCode: "", city: "" };
 
 async function resolveOrgId(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -25,21 +26,18 @@ async function resolveOrgId(): Promise<string | null> {
 }
 
 // Handmatig een object (adres/pand) toevoegen, optioneel gekoppeld aan een bedrijf,
-// persoon en/of lead (of standalone). Waarschuwt als het adres al bij een object hoort.
-export function ObjectCreateDialog({ open, onClose, onCreated, defaultCompany = null, defaultPerson = null, defaultLead = null }: {
+// persoon en/of lead. De naam is afgeleid van het adres; waarschuwt als het adres al bestaat.
+export function ObjectCreateDialog({ open, onClose, onCreated, defaultCompany = null, defaultPerson = null, defaultLead = null, defaultAddress = null }: {
   open: boolean;
   onClose: () => void;
   onCreated: (objectId: string) => void;
   defaultCompany?: Ref;
   defaultPerson?: Ref;
   defaultLead?: Ref;
+  defaultAddress?: AddressValue | null;
 }) {
   const create = useCreateProjectLocation();
-  const [street, setStreet] = useState("");
-  const [house, setHouse] = useState("");
-  const [postal, setPostal] = useState("");
-  const [city, setCity] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [addr, setAddr] = useState<AddressValue>({ ...EMPTY_ADDR });
   const [company, setCompany] = useState<Ref>(defaultCompany);
   const [person, setPerson] = useState<Ref>(defaultPerson);
   const [lead, setLead] = useState<Ref>(defaultLead);
@@ -49,15 +47,15 @@ export function ObjectCreateDialog({ open, onClose, onCreated, defaultCompany = 
   // Reset/prefill bij openen.
   useEffect(() => {
     if (open) {
-      setStreet(""); setHouse(""); setPostal(""); setCity(""); setDisplayName("");
+      setAddr(defaultAddress ? { ...EMPTY_ADDR, ...defaultAddress } : { ...EMPTY_ADDR });
       setCompany(defaultCompany); setPerson(defaultPerson); setLead(defaultLead);
       setMatch(null);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dStreet = useDebouncedValue(street, 350);
-  const dPostal = useDebouncedValue(postal, 350);
-  const dCity = useDebouncedValue(city, 350);
+  const dStreet = useDebouncedValue(addr.street, 350);
+  const dPostal = useDebouncedValue(addr.postalCode, 350);
+  const dCity = useDebouncedValue(addr.city, 350);
 
   // Best-effort "bestaat dit adres al?"-check via dezelfde DB-functie als de offerteflow.
   useEffect(() => {
@@ -70,7 +68,7 @@ export function ObjectCreateDialog({ open, onClose, onCreated, defaultCompany = 
       try {
         const org = await resolveOrgId();
         if (!org) return;
-        const m = await findMatchingLocation({ org, company: company?.id ?? null, street: s, postal: p, city: c, house: house || null, lead: lead?.id ?? null });
+        const m = await findMatchingLocation({ org, company: company?.id ?? null, street: s, postal: p, city: c, house: addr.houseNumber || null, lead: lead?.id ?? null });
         if (!cancelled) setMatch(m);
       } catch { /* best-effort */ }
       finally { if (!cancelled) setChecking(false); }
@@ -78,16 +76,16 @@ export function ObjectCreateDialog({ open, onClose, onCreated, defaultCompany = 
     return () => { cancelled = true; };
   }, [open, dStreet, dPostal, dCity, company?.id, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const canSubmit = !create.isPending && Boolean(street.trim() || displayName.trim() || company || person);
+  const canSubmit = !create.isPending && Boolean(addr.street.trim() || addr.postalCode.trim() || company || person);
 
   const submit = async () => {
     try {
       const created = await create.mutateAsync({
-        display_name: displayName.trim() || undefined,
-        address_street: street.trim() || null,
-        postal_code: postal.trim() || null,
-        city: city.trim() || null,
-        house_number: house.trim() || null,
+        // display_name is afgeleid (server-trigger) — niet meesturen.
+        address_street: addr.street.trim() || null,
+        postal_code: addr.postalCode.trim() || null,
+        city: addr.city.trim() || null,
+        house_number: addr.houseNumber.trim() || null,
         company_id: company?.id ?? null,
         person_id: person?.id ?? null,
         lead_id: lead?.id ?? null,
@@ -105,19 +103,11 @@ export function ObjectCreateDialog({ open, onClose, onCreated, defaultCompany = 
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Object toevoegen</DialogTitle>
-          <DialogDescription>Een object is een adres/pand. Koppel het optioneel aan een bedrijf, persoon of lead — of laat leeg.</DialogDescription>
+          <DialogDescription>Een object is een adres/pand (de uitvoerlocatie). De naam wordt automatisch opgebouwd uit het adres + objectnummer.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="grid grid-cols-[1fr_5rem] gap-2">
-            <div className="space-y-1"><Label>Straat</Label><Input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="Straatnaam" /></div>
-            <div className="space-y-1"><Label>Nr.</Label><Input value={house} onChange={(e) => setHouse(e.target.value)} placeholder="12" /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1"><Label>Postcode</Label><Input value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="1234 AB" /></div>
-            <div className="space-y-1"><Label>Plaats</Label><Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Plaats" /></div>
-          </div>
-          <div className="space-y-1"><Label>Naam (optioneel)</Label><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Bijv. Hoofdvestiging" /></div>
+          <AddressFields value={addr} onChange={(p) => setAddr((a) => ({ ...a, ...p }))} />
 
           {checking ? (
             <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Adres controleren…</p>

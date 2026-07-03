@@ -36,7 +36,6 @@ Deno.serve(async (req) => {
       .eq("id", objectId).maybeSingle();
     if (locErr) throw locErr;
     if (!loc) return json({ status: "error", message: "Object niet gevonden" }, 404);
-    if (loc.folder_item_id) return json({ status: "ok", skipped: "exists", folder_web_url: loc.folder_web_url });
 
     // Org-config (doelmap). Niet ingesteld → niet blokkeren (object blijft bestaan).
     const { data: org } = await sb.from("organizations")
@@ -51,11 +50,26 @@ Deno.serve(async (req) => {
     if (!tenant || !clientId || !secret) return json({ status: "ok", skipped: "no_secrets" });
     const gc = new GraphClient(tenant, clientId, secret);
 
-    const addrLabel = [loc.address_street, loc.city].filter(Boolean).join(" ") || loc.display_name || "Onbekende locatie";
-    const folderName = sanitizeName(`${addrLabel} (${loc.location_number})`);
-    const d = await ensureDossierFolder(gc, driveId, rootItemId ?? await gc.getDriveRootItemId(driveId), folderName);
+    // Foldernaam = de canonieke objectnaam (mét komma: "Straat huisnr, Plaats (nr)").
+    // sanitizeName strudt alleen SPO-verboden tekens (" * : < > ? / \ |); de komma blijft.
+    const folderName = sanitizeName(loc.display_name || [loc.address_street, loc.city].filter(Boolean).join(", ") || `Object (${loc.location_number})`);
 
-    // folder-velden zetten; display_name van het object blijft staan (kan bewust door de gebruiker gekozen zijn).
+    if (loc.folder_item_id) {
+      // Map bestaat al → hernoemen naar de canonieke naam (item-id blijft gelijk, links blijven werken).
+      const renamed = await gc.renameItem(driveId, loc.folder_item_id, folderName);
+      // Graph's teruggegeven webUrl is bij SPO onbetrouwbaar (eventual consistency), dus construeer
+      // 'm deterministisch: vervang het laatste padsegment door de nieuwe (spatie→%20) naam.
+      const newWebUrl = loc.folder_web_url
+        ? loc.folder_web_url.replace(/\/[^/]*$/, "/" + folderName.replace(/ /g, "%20"))
+        : (renamed.webUrl ?? null);
+      if (newWebUrl && newWebUrl !== loc.folder_web_url) {
+        await sb.from("project_locations").update({ folder_web_url: newWebUrl }).eq("id", objectId);
+      }
+      return json({ status: "ok", renamed: true, folder_web_url: newWebUrl ?? loc.folder_web_url });
+    }
+
+    // Nieuw object → dossiermap + submappen.
+    const d = await ensureDossierFolder(gc, driveId, rootItemId ?? await gc.getDriveRootItemId(driveId), folderName);
     await sb.from("project_locations").update({
       folder_item_id: d.folderId, folder_web_url: d.webUrl, opdracht_item_id: d.opdrachtId,
       updated_at: new Date().toISOString(),

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { formatPhone } from "@/lib/phone";
 import {
   useCompanies,
   usePersons,
@@ -22,6 +23,7 @@ import { PersonDetailSheet } from "@/components/contacts/PersonDetailSheet";
 import { ObjectDetailSheet } from "@/components/contacts/ObjectDetailSheet";
 import { ObjectCreateDialog } from "@/components/contacts/ObjectCreateDialog";
 import { useProjectLocations } from "@/hooks/useProjectLocations";
+import { formatObjectAddress } from "@/lib/objectLabel";
 
 type Tab = "bedrijven" | "personen" | "objecten";
 
@@ -209,7 +211,7 @@ export default function SalesContacts() {
                 <tr key={p.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => setSelPerson(p)}>
                   <td className="px-4 py-2.5 font-medium text-foreground">{p.full_name || "(naamloos)"}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{p.email || "—"}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{p.phone || "—"}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{p.phone ? formatPhone(p.phone) : "—"}</td>
                   <td className="px-4 py-2.5 text-right text-muted-foreground">{p.company_persons?.[0]?.count ?? 0}</td>
                   <td className="px-4 py-2.5 text-right text-muted-foreground">{p.leads?.[0]?.count ?? 0}</td>
                 </tr>
@@ -236,7 +238,7 @@ export default function SalesContacts() {
               {filteredObjects.map((o) => (
                 <tr key={o.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => setSelObject(o.id)}>
                   <td className="px-4 py-2.5 font-medium tabular-nums text-foreground">{o.location_number}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{formatObjectAddress(o)}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{o.companies?.name || "—"}</td>
                   <td className="px-4 py-2.5 text-right text-muted-foreground">{o.quotes?.[0]?.count ?? 0}</td>
                   <td className="px-4 py-2.5 text-right">

@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { MapPin, Plus, Trash2, X } from "lucide-react";
 import { CompanyPicker } from "./CompanyPicker";
+import { PhoneField } from "./PhoneField";
 import { ObjectCreateDialog } from "./ObjectCreateDialog";
 import { useProjectLocationsByPerson } from "@/hooks/useProjectLocations";
+import { formatObjectAddress } from "@/lib/objectLabel";
 import {
   useUpdatePerson,
   useDeletePerson,
@@ -104,7 +106,7 @@ export function PersonDetailSheet({
               <Field label="Voornaam"><Input value={t("first_name")} onChange={(e) => set("first_name")(e.target.value)} /></Field>
               <Field label="Achternaam"><Input value={t("last_name")} onChange={(e) => set("last_name")(e.target.value)} /></Field>
               <Field label="E-mail"><Input type="email" value={t("email")} onChange={(e) => set("email")(e.target.value)} /></Field>
-              <Field label="Telefoon"><Input value={t("phone")} onChange={(e) => set("phone")(e.target.value)} /></Field>
+              <Field label="Telefoon"><PhoneField value={t("phone")} onChange={(v) => set("phone")(v ?? "")} /></Field>
               <Field label="Functie"><Input value={t("role")} onChange={(e) => set("role")(e.target.value)} /></Field>
             </div>
             <Field label="Notities"><Textarea rows={3} value={t("notes")} onChange={(e) => set("notes")(e.target.value)} /></Field>
@@ -158,7 +160,7 @@ export function PersonDetailSheet({
               {(objecten.data ?? []).map((o) => (
                 <button key={o.id} onClick={() => navigate(`/sales/contacten?object=${o.id}`)} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
                   <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 truncate">{o.location_number} · {[o.address_street, o.city].filter(Boolean).join(", ") || o.display_name}</span>
+                  <span className="flex-1 truncate">{o.location_number} · {formatObjectAddress(o)}</span>
                   <span className="text-[11px] text-muted-foreground">{o.quotes?.[0]?.count ?? 0} offertes</span>
                 </button>
               ))}
