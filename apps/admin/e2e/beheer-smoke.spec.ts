@@ -58,6 +58,20 @@ test.describe("Beheer — smoke", () => {
     await expect(table.or(empty).or(error).first()).toBeVisible({ timeout: 20000 });
   });
 
+  test("Klant-rij opent het detail-paneel in-place (slide-over sheet)", async ({ page }) => {
+    await page.goto("/admin/klanten");
+    await expect(page.getByRole("heading", { name: /^klanten$/i })).toBeVisible({ timeout: 20000 });
+
+    // Rij = role=button met aria-label "Open klant …". Zonder data niets te openen → skip.
+    const firstRow = page.getByRole("button", { name: /open klant/i }).first();
+    if ((await firstRow.count()) === 0) { test.skip(true, "Geen klanten om te openen"); return; }
+
+    await firstRow.click();
+    // De slide-over is een Radix dialog die in-place verschijnt (géén navigatie naar /klanten/:id).
+    await expect(page.getByRole("dialog").first()).toBeVisible({ timeout: 20000 });
+    await expect(page).toHaveURL(/\/admin\/klanten(\?|$)/);
+  });
+
   test("Storingen toont een determinate status (storingen, leeg of fout)", async ({ page }) => {
     await page.goto("/admin/storingen");
     await expect(page.getByRole("heading", { name: /^storingen$/i })).toBeVisible({ timeout: 20000 });
