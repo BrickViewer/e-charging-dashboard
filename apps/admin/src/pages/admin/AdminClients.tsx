@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { KpiTile } from "@/components/admin/KpiTile";
 import {
   Plus,
   Search,
@@ -25,13 +26,20 @@ import {
   Landmark,
   CheckCircle,
   ExternalLink,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import type { ClientWithRelations } from "@/types/db";
 
 const PAGE_SIZE = 20;
+
+// "Actief" = statuskolom 'actief', waarbij een lege/ontbrekende status óók als 'actief' telt —
+// net als de rij-badge (die `status || "actief"` toont). Deze ene regel wordt gedeeld door de
+// Actief-KPI, het Actief-filter én de badge, zodat ze nooit uiteenlopen.
+const isActiveClient = (c: ClientWithRelations) => (c.status || "actief") === "actief";
 
 function PortalStatus({ client }: { client: ClientWithRelations }) {
   if (client.portal_user_id) {
@@ -100,52 +108,8 @@ function PaymentStatus({ client }: { client: ClientWithRelations }) {
   );
 }
 
-function KpiTile({
-  label,
-  value,
-  subtitle,
-  icon,
-  accent,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  accent?: "primary" | "amber" | "blue" | "muted";
-}) {
-  const accentBg = {
-    primary: "bg-primary/10 border-primary/20 text-primary",
-    amber: "bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] text-[hsl(var(--status-amber))]",
-    blue: "bg-[hsl(var(--status-blue)/var(--status-tile-alpha))] border-[hsl(var(--status-blue)/var(--status-tile-border-alpha))] text-[hsl(var(--status-blue))]",
-    muted: "bg-muted/30 border-border text-muted-foreground",
-  }[accent ?? "muted"];
-
-  return (
-    <Card className="portal-card relative overflow-hidden">
-      <CardContent className="p-5">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${accentBg}`}
-          >
-            {icon}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="cockpit-section-label">{label}</p>
-            <p className="text-2xl font-semibold tabular-nums mt-1 leading-none">
-              {value}
-            </p>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground mt-1.5">{subtitle}</p>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function AdminClients() {
-  const { data: clients, isLoading } = useAllClients();
+  const { data: clients, isLoading, isError, refetch } = useAllClients();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("zichtbaar");
@@ -154,7 +118,7 @@ export default function AdminClients() {
 
   const filtered = useMemo(() => {
     return (clients || []).filter((c) => {
-      const q = debouncedSearch.toLowerCase();
+      const q = debouncedSearch.trim().toLowerCase();
       const isDeleted = c.status === "verwijderd";
       const clientNumber = c.client_number ? String(c.client_number) : "";
       const matchesSearch =
@@ -169,6 +133,8 @@ export default function AdminClients() {
           ? !isDeleted
           : statusFilter === "alle"
           ? true
+          : statusFilter === "actief"
+          ? isActiveClient(c)
           : c.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -176,14 +142,18 @@ export default function AdminClients() {
 
   const kpis = useMemo(() => {
     const list = (clients || []).filter((c) => c.status !== "verwijderd");
-    const active = list.filter((c) => c.status === "actief").length;
+    const active = list.filter(isActiveClient).length;
     const paymentReady = list.filter((c) => c.payment_onboarding_status === "saved").length;
     const pendingInvites = list.filter((c) => {
       const inv = c.latest_invitation;
       if (c.portal_user_id) return false;
       if (!inv) return false;
-      if (inv.status === "pending") return true;
-      return false;
+      // Alleen écht-open uitnodigingen: pending én nog niet verlopen. Een verlopen pending
+      // markeert de rij-indicator als "verlopen", dus die telt hier niet als open mee.
+      return (
+        inv.status === "pending" &&
+        new Date(inv.expires_at).getTime() >= Date.now()
+      );
     }).length;
     return {
       total: list.length,
@@ -194,7 +164,16 @@ export default function AdminClients() {
   }, [clients]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  // Klem de pagina-index als de gefilterde set onder de huidige pagina krimpt (bijv. na een
+  // filter/refetch), zodat we niet op een lege pagina blijven hangen.
+  const currentPage = Math.min(page, totalPages - 1);
+  useEffect(() => {
+    if (page !== currentPage) setPage(currentPage);
+  }, [page, currentPage]);
+  const paginated = filtered.slice(
+    currentPage * PAGE_SIZE,
+    (currentPage + 1) * PAGE_SIZE,
+  );
 
   const handleSearch = (v: string) => {
     setSearch(v);
@@ -222,6 +201,31 @@ export default function AdminClients() {
         </Link>
       </div>
 
+      {isError ? (
+        <Card className="border-destructive/25 bg-destructive/5">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
+              <div className="flex-1">
+                <p className="font-medium">Kon klanten niet laden</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  De klantgegevens konden niet worden opgehaald. Probeer het opnieuw.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => refetch()}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Opnieuw proberen
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiTile
@@ -331,10 +335,19 @@ export default function AdminClients() {
                     return (
                       <tr
                         key={c.id}
-                        className={`border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors group ${
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Open klant ${c.company_name}`}
+                        className={`border-b border-border last:border-0 hover:bg-accent/40 focus-visible:bg-accent/60 focus-visible:outline-none cursor-pointer transition-colors group ${
                           isDeleted ? "opacity-60" : ""
                         }`}
                         onClick={() => navigate(`/admin/klanten/${c.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/admin/klanten/${c.id}`);
+                          }
+                        }}
                       >
                         <td className="p-3">
                           <p className="font-medium text-foreground">
@@ -417,14 +430,14 @@ export default function AdminClients() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between p-3 border-t border-border">
               <span className="text-xs text-muted-foreground tracking-wide">
-                {filtered.length} klanten · pagina {page + 1} van {totalPages}
+                {filtered.length} klanten · pagina {currentPage + 1} van {totalPages}
               </span>
               <div className="flex gap-1.5">
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => p - 1)}
+                  disabled={currentPage === 0}
+                  onClick={() => setPage(currentPage - 1)}
                   className="portal-card"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -432,8 +445,8 @@ export default function AdminClients() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page >= totalPages - 1}
-                  onClick={() => setPage((p) => p + 1)}
+                  disabled={currentPage >= totalPages - 1}
+                  onClick={() => setPage(currentPage + 1)}
                   className="portal-card"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -443,6 +456,8 @@ export default function AdminClients() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   );
 }

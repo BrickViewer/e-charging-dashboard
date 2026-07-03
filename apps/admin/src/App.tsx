@@ -26,6 +26,8 @@ const ClientFinancial = lazy(() => import("./pages/portal/ClientFinancial"));
 const ClientProfilePage = lazy(() => import("./pages/portal/ClientProfilePage"));
 const ClientMessages = lazy(() => import("./pages/portal/ClientMessages"));
 const ClientLocationDetail = lazy(() => import("./pages/portal/ClientLocationDetail"));
+const OnboardingWizard = lazy(() => import("./pages/portal/OnboardingWizard"));
+const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
 const DemoLayout = lazy(() => import("./layouts/DemoLayout"));
 
 // Admin pages — lazy loaded
@@ -37,7 +39,6 @@ const AdminFinancial = lazy(() => import("./pages/admin/AdminFinancial"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
 const SalesOnboarding = lazy(() => import("./pages/sales/SalesOnboarding"));
 const AdminLocationDetail = lazy(() => import("./pages/admin/AdminLocationDetail"));
-const AdminMspLocaties = lazy(() => import("./pages/admin/AdminMspLocaties"));
 const AdminStoringen = lazy(() => import("./pages/admin/AdminStoringen"));
 const AdminStoringDetail = lazy(() => import("./pages/admin/AdminStoringDetail"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
@@ -137,17 +138,23 @@ const App = () => (
               <Route path="/offerte/:token" element={<OfferAccept />} />
               <Route path="/offerte/intern/:token" element={<OfferInternalSign />} />
 
+              {/* Onboarding-wizard: focus-scherm buiten de portaal-schil (geen cockpit/navigatie) */}
+              <Route path="/portal/welkom" element={
+                <RequireAuth allowedRoles={["client"]}>
+                  <OnboardingWizard />
+                </RequireAuth>
+              } />
+
               {/* Client Portal */}
               <Route path="/portal" element={
                 <RequireAuth allowedRoles={["client"]}>
                   <ClientLayout />
                 </RequireAuth>
               }>
-                <Route index element={<ClientDashboard />} />
+                <Route index element={<PortalHome />} />
                 <Route path="sessies" element={<ClientSessions />} />
                 <Route path="financieel" element={<ClientFinancial />} />
                 <Route path="gegevens" element={<ClientProfilePage />} />
-                <Route path="onboarding" element={<Navigate to="/portal/financieel" replace />} />
                 <Route path="berichten" element={<ClientMessages />} />
                 <Route path="locatie/:id" element={<ClientLocationDetail />} />
               </Route>
@@ -176,7 +183,6 @@ const App = () => (
                 <Route path="klanten/:id" element={<AdminClientDetail />} />
                 <Route path="locaties" element={<AdminLocations />} />
                 <Route path="locaties/:id" element={<AdminLocationDetail />} />
-                <Route path="msp-locaties" element={<AdminMspLocaties />} />
                 <Route path="storingen" element={<AdminStoringen />} />
                 <Route path="storingen/:id" element={<AdminStoringDetail />} />
                 {/* Installaties zijn naar het Sales-werkblad verhuisd; redirect voor oude bookmarks */}

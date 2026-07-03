@@ -5,8 +5,12 @@ import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/service
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
 import { FeeWaiverControl } from "@/components/admin/financial/FeeWaiverControl";
-import { formatEuro, formatNumber, settlementVat } from "@/services/calculations";
+import { formatEuro, formatNumber, settlementVat, settlementNetToTransfer, settlementNetExcl } from "@/services/calculations";
 import { monthFullLabel } from "@/lib/period";
+import { normalizePhone, formatPhone } from "@/lib/phone";
+import { PhoneField } from "@/components/contacts/PhoneField";
+import { AddressFields } from "@/components/contacts/AddressFields";
+import { KpiTile } from "@/components/admin/KpiTile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -23,7 +27,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/services/activityLog";
-import { deleteClientProfile } from "@/services/clients";
+import { deleteClientProfile, updateClient } from "@/services/clients";
 import {
   approveSettlement as approveSettlementRpc,
   unapproveSettlement as unapproveSettlementRpc,
@@ -32,13 +36,14 @@ import {
   markSettlementInvoiceSent as markSettlementInvoiceSentRpc,
   markSettlementInvoicePaid as markSettlementInvoicePaidRpc,
 } from "@/services/settlements";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientOrders, useUpdateOrder, useHandoffOrder, ORDER_STATUSES } from "@/hooks/useInstallations";
 import { useUpdateCompany, useUpdatePerson } from "@/hooks/useContacts";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import type {
   AdminActivity,
   ChargePoint,
@@ -48,9 +53,19 @@ import type {
   QuarterlySettlement,
 } from "@/types/db";
 
-// Klant-cashflow = uitbetaling aan klant (energie loopt niet meer via ons).
+// Bruto vergoeding = client_payout. Blijft de bron voor de teken-routing (positief =
+// uitbetalen, negatief = incasso), want de netto (na activatie) klemt op ≥ 0.
 const settlementCustomerCashflow = (settlement: QuarterlySettlement) =>
   Number(settlement.client_payout || 0);
+
+// Netto daadwerkelijk uitbetaald (excl-equivalent) = vergoeding − verrekende activatie,
+// via de gedeelde helper zodat het overeenkomt met de factuur "Netto over te boeken".
+const settlementNetPaid = (settlement: QuarterlySettlement) =>
+  settlementNetExcl({
+    clientPayout: Number(settlement.client_payout || 0),
+    activationCost: Number(settlement.activation_cost || 0),
+    vatRate: Number(settlement.vat_rate ?? 0.21),
+  });
 
 const settlementPeriodLabel = (s: { year: number; month: number }) => monthFullLabel(s.year, s.month);
 
@@ -82,17 +97,36 @@ function hasCompleteClientProfile(
   return hasCompanyFields && hasPaymentFields;
 }
 
+// Klant-rij-updates lopen via één react-query-mutatie (i.p.v. losse supabase.from(...).update-calls
+// verspreid door de component) zodat de caches consistent invalideren.
+function useUpdateClient(id: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: TablesUpdate<"clients">) => {
+      if (!id) throw new Error("Geen klant-id");
+      const { data, error } = await updateClient(id, patch);
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-client", id] });
+      qc.invalidateQueries({ queryKey: ["admin-clients"] });
+    },
+  });
+}
+
 export default function AdminClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const updateCompany = useUpdateCompany();
   const updatePerson = useUpdatePerson();
+  const updateClientMutation = useUpdateClient(id);
   const { role } = useAuth();
   const { data: clientData, isLoading } = useClientById(id);
-  const { data: settlements } = useClientSettlements(id);
-  const { data: activity } = useClientActivity(id);
-  const { data: invitation } = useClientInvitation(id);
+  const { data: settlements, isLoading: settlementsLoading, isError: settlementsError } = useClientSettlements(id);
+  const { data: activity, isLoading: activityLoading, isError: activityError } = useClientActivity(id);
+  const { data: invitation, isError: invitationError } = useClientInvitation(id);
   const { data: org } = useOrganization();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -128,7 +162,7 @@ export default function AdminClientDetail() {
       queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
     } catch (err) {
-      toast.error(err.message || "Goedkeuring mislukt");
+      toast.error(err instanceof Error ? err.message : "Goedkeuring mislukt");
     } finally {
       setApprovingId(null);
     }
@@ -146,7 +180,7 @@ export default function AdminClientDetail() {
       queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
     } catch (err) {
-      toast.error(err.message || "Terugdraaien mislukt");
+      toast.error(err instanceof Error ? err.message : "Terugdraaien mislukt");
     } finally {
       setApprovingId(null);
     }
@@ -224,9 +258,27 @@ export default function AdminClientDetail() {
       queryClient.invalidateQueries({ queryKey: ["admin-client-invitation", id] });
       queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
     } catch (err) {
-      toast.error(err.message || "Versturen mislukt");
+      toast.error(err instanceof Error ? err.message : "Versturen mislukt");
     } finally {
       setSendingInvite(false);
+    }
+  };
+
+  const handleActivateManagement = async () => {
+    if (!id) return;
+    if (!window.confirm("Beheer activeren? De klant krijgt dashboard-toegang en opbrengstdeling gaat lopen.")) return;
+    try {
+      await updateClientMutation.mutateAsync({ managed: true });
+      await logActivity({
+        client_id: id,
+        action: "client_updated",
+        description: "Beheer geactiveerd (dashboard + opbrengstdeling)",
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin-client-activity", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
+      toast.success("Beheer geactiveerd");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Beheer activeren mislukt");
     }
   };
 
@@ -234,7 +286,6 @@ export default function AdminClientDetail() {
     if (!clientData) return;
     const client = clientData as ClientWithRelations;
     const contactName = splitContactName(client.contact_name);
-    const contactPhone = splitDutchPhone(client.contact_phone);
     setEditErrors({});
     setEditData({
       client_number: client.client_number,
@@ -244,9 +295,11 @@ export default function AdminClientDetail() {
       contact_first_name: contactName.firstName,
       contact_last_name: contactName.lastName,
       contact_email: client.contact_email || "",
-      contact_country_code: contactPhone.countryCode,
-      contact_phone: contactPhone.phone,
+      contact_phone: client.contact_phone || "",
       billing_address_street: client.billing_address_street || "",
+      // clients heeft één billing-straat-kolom (straat + huisnummer); AddressFields splitst huisnummer los.
+      // Het bestaande adres blijft in `billing_address_street`; een nieuw PDOK-huisnummer landt hier.
+      billing_house: "",
       billing_address_postal: client.billing_address_postal || "",
       billing_address_city: client.billing_address_city || "",
       contract_start_date: client.contract_start_date || "",
@@ -274,16 +327,20 @@ export default function AdminClientDetail() {
     // editData is een Record<string, string | number | null>; tekstkolommen
     // verwachten string(| null). Coerce expliciet (runtime-no-op voor strings).
     const asText = (v: string | number | null | undefined): string => (v == null ? "" : String(v));
+    // Factuuradres: AddressFields levert straat + huisnummer los; combineer terug naar de ene billing-kolom.
+    const billingStreet = [asText(editData.billing_address_street).trim(), asText(editData.billing_house).trim()]
+      .filter(Boolean)
+      .join(" ");
     try {
-      const { error } = await supabase.from("clients").update({
+      await updateClientMutation.mutateAsync({
         client_number: nextClientNumber,
         company_name: asText(editData.company_name),
         kvk: asText(editData.kvk) || null,
         btw_number: asText(editData.btw_number) || null,
         contact_name: [editData.contact_first_name, editData.contact_last_name].filter(Boolean).join(" "),
         contact_email: asText(editData.contact_email),
-        contact_phone: editData.contact_phone ? `${editData.contact_country_code || "+31"}${editData.contact_phone}` : null,
-        billing_address_street: asText(editData.billing_address_street) || null,
+        contact_phone: normalizePhone(asText(editData.contact_phone)),
+        billing_address_street: billingStreet || null,
         billing_address_postal: asText(editData.billing_address_postal) || null,
         billing_address_city: asText(editData.billing_address_city) || null,
         contract_start_date: asText(editData.contract_start_date) || null,
@@ -297,8 +354,7 @@ export default function AdminClientDetail() {
         ere_rate_per_kwh: Number(editData.ere_rate_per_kwh) || 0.10,
         calculate_ere_enabled: editData.calculate_ere_enabled === "true",
         // BTW-status (en de legacy vat_liable) lopen via confirm_client_vat_status.
-      }).eq("id", id);
-      if (error) throw error;
+      });
 
       // Houd de gekoppelde contacten de bron van waarheid: naam → bedrijf,
       // contactgegevens → persoon, via de useContacts-mutaties (juiste cache-invalidatie
@@ -314,7 +370,7 @@ export default function AdminClientDetail() {
             first_name: asText(editData.contact_first_name) || null,
             last_name: asText(editData.contact_last_name) || null,
             email: asText(editData.contact_email) || null,
-            phone: editData.contact_phone ? `${editData.contact_country_code || "+31"}${editData.contact_phone}` : null,
+            phone: normalizePhone(asText(editData.contact_phone)),
           },
         });
       }
@@ -418,18 +474,19 @@ export default function AdminClientDetail() {
 
   // "Totaal omzet" = alle bruto excl BTW = volledig overzicht voor admin (incl. lopend)
   const totalRevenue = typedSettlements.reduce((s, set) => s + Number(set.gross_revenue || 0), 0);
+  // Teken-routing op bruto; de getoonde bedragen zijn NETTO (na activatie-verrekening).
   const openBankCashflow = typedSettlements
     .filter((set) => set.status === "approved" && settlementCustomerCashflow(set) >= 0)
-    .reduce((sum, set) => sum + settlementCustomerCashflow(set), 0);
+    .reduce((sum, set) => sum + settlementNetPaid(set), 0);
   const openInvoiceAmount = typedSettlements
     .filter((set) =>
       set.status === "invoice_sent" ||
       (set.status === "approved" && settlementCustomerCashflow(set) < 0),
     )
-    .reduce((sum, set) => sum + Math.abs(settlementCustomerCashflow(set)), 0);
-  // "Totaal uitbetaald" = alleen status='paid', volledige klant-cashflow.
+    .reduce((sum, set) => sum + Math.abs(settlementCustomerCashflow(set)), 0); // negatieve maand → geen activatie
+  // "Totaal uitbetaald" = alleen status='paid', netto (na activatie).
   const totalPaidOut = settlementsPaid.reduce(
-    (s, set) => s + settlementCustomerCashflow(set),
+    (s, set) => s + settlementNetPaid(set),
     0,
   );
   // Aantal formele afrekeningen (live/calculated tellen niet)
@@ -500,13 +557,7 @@ export default function AdminClientDetail() {
           )}
           {client.managed === false && (
             <button
-              onClick={async () => {
-                if (!id) return;
-                const { error } = await supabase.from("clients").update({ managed: true }).eq("id", id);
-                if (error) { toast.error(error.message); return; }
-                queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
-                toast.success("Beheer geactiveerd");
-              }}
+              onClick={handleActivateManagement}
               className="mt-1 block text-xs font-medium text-primary hover:underline"
             >
               Beheer activeren (dashboard + opbrengstdeling)
@@ -548,12 +599,12 @@ export default function AdminClientDetail() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <ClientKpi
+        <KpiTile
           label="Locaties"
           value={String((client.locations || []).length)}
           icon={<MapPin className="w-4 h-4" />}
         />
-        <ClientKpi
+        <KpiTile
           label="Laadpunten online"
           value={`${onlineCps} / ${allCPs.length}`}
           subtitle={
@@ -570,14 +621,14 @@ export default function AdminClientDetail() {
               : "amber"
           }
         />
-        <ClientKpi
+        <KpiTile
           label="Totaal kWh"
           value={fmtKwh(totalKwh)}
           subtitle="Totaal geladen"
           icon={<Zap className="w-4 h-4" />}
           accent="blue"
         />
-        <ClientKpi
+        <KpiTile
           label="Totaal uitbetaald"
           value={fmtEuro(totalPaidOut)}
           subtitle={`${afrekeningenCount} afrekening(en), waarvan ${settlementsPaid.length} uitbetaald`}
@@ -613,6 +664,9 @@ export default function AdminClientDetail() {
       )}
 
       {/* Invitatie + betaalgegevens */}
+      {!isErased && invitationError && (
+        <p className="text-xs text-destructive">De uitnodigingsstatus kon niet worden geladen.</p>
+      )}
       {!isErased && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <PortalAccountPanel
@@ -767,7 +821,18 @@ export default function AdminClientDetail() {
             </CardContent></Card>
           </div>
 
-          {typedSettlements.length === 0 && (
+          {settlementsLoading && (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">
+              <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+              Afrekeningen laden…
+            </CardContent></Card>
+          )}
+          {settlementsError && (
+            <Card className="border-destructive/25 bg-destructive/5"><CardContent className="py-12 text-center text-destructive">
+              Afrekeningen konden niet worden geladen. Ververs de pagina om het opnieuw te proberen.
+            </CardContent></Card>
+          )}
+          {!settlementsLoading && !settlementsError && typedSettlements.length === 0 && (
             <Card><CardContent className="py-12 text-center text-muted-foreground">
               Nog geen afrekeningen. Dit wordt automatisch berekend zodra er sessies binnenkomen.
             </CardContent></Card>
@@ -780,6 +845,11 @@ export default function AdminClientDetail() {
             const echargingRevenue = Number(s.echarging_revenue || 0);
             const clientPayout = Number(s.client_payout || 0);
             const vat = settlementVat({ clientPayout, vatRate: Number(s.vat_rate ?? 0.21) });
+            // Verrekende activatiekosten (altijd 21% output-BTW) + netto over te boeken — gedeelde bron.
+            const activationCost = Number(s.activation_cost || 0);
+            const activation = settlementVat({ clientPayout: activationCost, vatRate: 0.21 });
+            const hasActivation = activation.net > 0;
+            const netToTransfer = settlementNetToTransfer({ clientPayout, activationCost, vatRate: Number(s.vat_rate ?? 0.21) });
             const isLive = s.status === "live";
             const isCalculated = s.status === "calculated";
             const efluxReimbursed = Boolean(s.eflux_reimbursed_at);
@@ -832,7 +902,7 @@ export default function AdminClientDetail() {
                           Terugdraaien
                         </Button>
                       )}
-                      {!isLive && !isCalculated && (
+                      {!isLive && !isCalculated && clientPayout >= 0 && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -918,9 +988,15 @@ export default function AdminClientDetail() {
                         <span className="font-semibold text-foreground tabular-nums whitespace-nowrap">{formatEuro(vat.vatAmount)}</span>
                       </div>
                     )}
+                    {hasActivation && (
+                      <div className="flex justify-between gap-3">
+                        <span>Activatiekosten <span className="text-muted-foreground/70">(verrekend, incl. BTW)</span></span>
+                        <span className="font-semibold text-foreground tabular-nums whitespace-nowrap">- {formatEuro(activation.inclVat)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-3 border-t border-border/40 pt-1.5 text-foreground font-semibold">
-                      <span>Over te boeken <span className="text-muted-foreground/70 font-normal">(incl. BTW)</span></span>
-                      <span className="text-primary tabular-nums whitespace-nowrap">{formatEuro(vat.inclVat)}</span>
+                      <span>{hasActivation ? "Netto over te boeken" : "Over te boeken"} <span className="text-muted-foreground/70 font-normal">(incl. BTW)</span></span>
+                      <span className="text-primary tabular-nums whitespace-nowrap">{formatEuro(netToTransfer)}</span>
                     </div>
                     <div className="flex justify-between gap-3">
                       <span>Naar E-Charging <span className="text-muted-foreground/70">(service-fee)</span></span>
@@ -976,7 +1052,13 @@ export default function AdminClientDetail() {
                       <td className="p-3 text-muted-foreground">{a.description}</td>
                     </tr>
                   ))}
-                  {typedActivity.length === 0 && (
+                  {activityLoading && (
+                    <tr><td colSpan={3} className="p-8 text-center text-muted-foreground">Activiteit laden…</td></tr>
+                  )}
+                  {activityError && (
+                    <tr><td colSpan={3} className="p-8 text-center text-destructive">Activiteit kon niet worden geladen.</td></tr>
+                  )}
+                  {!activityLoading && !activityError && typedActivity.length === 0 && (
                     <tr><td colSpan={3} className="p-8 text-center text-muted-foreground">Geen activiteit</td></tr>
                   )}
                 </tbody>
@@ -1019,20 +1101,6 @@ function splitContactName(name?: string | null) {
   };
 }
 
-function splitDutchPhone(phone?: string | null) {
-  const compact = (phone ?? "").replace(/[^\d+]/g, "");
-  if (compact.startsWith("+31")) {
-    return { countryCode: "+31", phone: compact.slice(3).replace(/^0+/, "") };
-  }
-  if (compact.startsWith("0031")) {
-    return { countryCode: "+31", phone: compact.slice(4).replace(/^0+/, "") };
-  }
-  if (compact.startsWith("31") && compact.length > 9) {
-    return { countryCode: "+31", phone: compact.slice(2).replace(/^0+/, "") };
-  }
-  return { countryCode: "+31", phone: compact.replace(/^0+/, "") };
-}
-
 function displayValue(value?: string | number | null) {
   if (value === null || value === undefined || value === "") return "—";
   return String(value);
@@ -1059,7 +1127,6 @@ function ContactPersonCard({
   setEd: (field: string, value: string | number | null) => void;
 }) {
   const contactName = splitContactName(client.contact_name);
-  const phone = splitDutchPhone(client.contact_phone);
 
   return (
     <Card className="portal-card">
@@ -1072,26 +1139,14 @@ function ContactPersonCard({
               <div><Label>Achternaam</Label><Input value={ed.contact_last_name ?? ""} onChange={e => setEd("contact_last_name", e.target.value)} /></div>
             </div>
             <div><Label>E-mail</Label><Input type="email" value={ed.contact_email ?? ""} onChange={e => setEd("contact_email", e.target.value)} /></div>
-            <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)]">
-              <div>
-                <Label>Landcode</Label>
-                <Select value={String(ed.contact_country_code ?? "+31")} onValueChange={(value) => setEd("contact_country_code", value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="+31">🇳🇱 NL +31</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Telefoonnummer</Label><Input value={ed.contact_phone ?? ""} onChange={e => setEd("contact_phone", e.target.value)} /></div>
-            </div>
+            <div><Label>Telefoonnummer</Label><PhoneField value={String(ed.contact_phone ?? "")} onChange={(v) => setEd("contact_phone", v)} /></div>
           </div>
         ) : (
           <div className="space-y-0">
             <DetailRow label="Voornaam" value={contactName.firstName} />
             <DetailRow label="Achternaam" value={contactName.lastName} />
             <DetailRow label="E-mail" value={client.contact_email} />
-            <DetailRow label="Landcode" value="🇳🇱 NL +31" />
-            <DetailRow label="Telefoonnummer" value={phone.phone} />
+            <DetailRow label="Telefoonnummer" value={client.contact_phone ? formatPhone(client.contact_phone) : null} />
           </div>
         )}
       </CardContent>
@@ -1134,10 +1189,22 @@ function BusinessDetailsCard({
             <div><Label>Naam</Label><Input value={ed.company_name ?? ""} onChange={e => setEd("company_name", e.target.value)} /></div>
             <div><Label>KvK-nummer</Label><Input value={ed.kvk ?? ""} onChange={e => setEd("kvk", e.target.value)} /></div>
             <div><Label>BTW-nummer</Label><Input value={ed.btw_number ?? ""} onChange={e => setEd("btw_number", e.target.value)} /></div>
-            <div><Label>Factuuradres</Label><Input value={ed.billing_address_street ?? ""} onChange={e => setEd("billing_address_street", e.target.value)} /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>Postcode</Label><Input value={ed.billing_address_postal ?? ""} onChange={e => setEd("billing_address_postal", e.target.value)} /></div>
-              <div><Label>Plaats</Label><Input value={ed.billing_address_city ?? ""} onChange={e => setEd("billing_address_city", e.target.value)} /></div>
+            <div className="space-y-1.5">
+              <Label>Factuuradres</Label>
+              <AddressFields
+                value={{
+                  street: String(ed.billing_address_street ?? ""),
+                  houseNumber: String(ed.billing_house ?? ""),
+                  postalCode: String(ed.billing_address_postal ?? ""),
+                  city: String(ed.billing_address_city ?? ""),
+                }}
+                onChange={(patch) => {
+                  if (patch.street !== undefined) setEd("billing_address_street", patch.street);
+                  if (patch.houseNumber !== undefined) setEd("billing_house", patch.houseNumber);
+                  if (patch.postalCode !== undefined) setEd("billing_address_postal", patch.postalCode);
+                  if (patch.city !== undefined) setEd("billing_address_city", patch.city);
+                }}
+              />
             </div>
             <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
               <Label htmlFor="admin-calculate-ere">Bereken ERE's</Label>
@@ -1163,6 +1230,8 @@ function BusinessDetailsCard({
         {/* BTW-status loopt buiten de gewone edit-flow: host geeft op, admin
             bevestigt via een eigen RPC (vereist voor goedkeuren/factureren). */}
         <VatStatusBlock client={client} />
+        {/* ERE-interesse: klant vinkt in het portaal aan; team volgt op en markeert als geregeld. */}
+        <EreStatusBlock client={client} />
       </CardContent>
     </Card>
   );
@@ -1253,6 +1322,72 @@ function VatStatusBlock({ client }: { client: ClientWithRelations }) {
   );
 }
 
+// ERE-interesse: de klant geeft in het portaal aan ERE-certificaten te willen (aanmelden kan nog niet).
+// We tonen de openstaande aanvraag en laten een medewerker 'm als geregeld markeren (mark_ere_arranged).
+function EreStatusBlock({ client }: { client: ClientWithRelations }) {
+  const queryClient = useQueryClient();
+  const { id } = useParams<{ id: string }>();
+  const [arranging, setArranging] = useState(false);
+
+  const requested = Boolean(client.ere_requested_at);
+  const arranged = Boolean(client.ere_arranged_at);
+  const pending = requested && !arranged;
+
+  if (!requested && !arranged) return null; // niets aangevraagd → geen blok
+
+  const fmtDate = (v: string | null | undefined) =>
+    v ? new Date(v).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }) : "";
+
+  const markArranged = async () => {
+    setArranging(true);
+    try {
+      const rpcClient = supabase as unknown as {
+        rpc(name: "mark_ere_arranged", args: { p_client_id: string }): Promise<{ data: unknown; error: Error | null }>;
+      };
+      const { error } = await rpcClient.rpc("mark_ere_arranged", { p_client_id: client.id });
+      if (error) throw error;
+      toast.success("ERE-aanvraag gemarkeerd als geregeld");
+      queryClient.invalidateQueries({ queryKey: ["admin-client", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
+    } catch (err) {
+      toast.error((err as Error).message || "Markeren mislukt");
+    } finally {
+      setArranging(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border space-y-2">
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-medium">ERE-certificaten</p>
+        {pending && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-[hsl(var(--status-amber)/0.15)] text-[hsl(var(--status-amber))] border border-[hsl(var(--status-amber)/0.25)]">
+            Aangevraagd
+          </span>
+        )}
+        {arranged && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-primary/15 text-primary border border-primary/25">
+            Geregeld
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        {arranged
+          ? `De klant vroeg ERE aan; gemarkeerd als geregeld op ${fmtDate(client.ere_arranged_at)}.`
+          : `De klant gaf in het portaal aan ERE-certificaten te willen (aangevraagd op ${fmtDate(client.ere_requested_at)}). Neem contact op om ze aan te melden.`}
+      </p>
+      {pending && (
+        <div>
+          <Button size="sm" variant="outline" onClick={markArranged} disabled={arranging}>
+            {arranging ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
+            Markeer als geregeld
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InvoiceAndBankDetailsCard({
   client,
   paymentDetails,
@@ -1269,50 +1404,6 @@ function InvoiceAndBankDetailsCard({
           <DetailRow label="Naam rekeninghouder" value={paymentDetails?.payout_account_holder_name} />
           <DetailRow label="IBAN" value={paymentDetails?.payout_iban} />
           <DetailRow label="BIC" value={paymentDetails?.payout_bic} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ClientKpi({
-  label,
-  value,
-  subtitle,
-  icon,
-  accent,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  accent?: "primary" | "amber" | "blue" | "muted";
-}) {
-  const accentBg = {
-    primary: "bg-primary/10 border-primary/20 text-primary",
-    amber: "bg-amber-400/10 border-amber-400/20 text-amber-400",
-    blue: "bg-blue-400/10 border-blue-400/20 text-blue-400",
-    muted: "bg-muted/30 border-border text-muted-foreground",
-  }[accent ?? "muted"];
-
-  return (
-    <Card className="portal-card">
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3">
-          <div
-            className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${accentBg}`}
-          >
-            {icon}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="cockpit-section-label">{label}</p>
-            <p className="text-2xl font-semibold tabular-nums mt-1.5 leading-none">
-              {value}
-            </p>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground mt-1.5">{subtitle}</p>
-            )}
-          </div>
         </div>
       </CardContent>
     </Card>

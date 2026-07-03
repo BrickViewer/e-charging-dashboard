@@ -9,16 +9,23 @@ import { useNavigate } from "react-router-dom";
 import { MapPin, Search, Plug, Wifi, RefreshCw, AlertCircle, ExternalLink, Loader2 } from "lucide-react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { triggerEfluxSync } from "@/services/locations";
+import { isActiveChargePoint } from "@/services/chargePoints";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
+import { KpiTile } from "@/components/admin/KpiTile";
 import type { AdminLocation, EfluxSyncLog } from "@/types/db";
+
+// Een locatie telt als "gekoppeld" zolang de gekoppelde klant niet zacht verwijderd is.
+// Soft-deleted klanten (status='verwijderd') negeren we in de KPI's en filters.
+const isLinkedLocation = (loc: AdminLocation): boolean =>
+  !!loc.client_id && loc.clients?.status !== "verwijderd";
 
 type LinkFilter = "all" | "linked" | "unlinked";
 
 export default function AdminLocations() {
-  const { data: locations, isLoading } = useAllLocations();
+  const { data: locations, isLoading, isError, refetch } = useAllLocations();
   const { data: syncLogs } = useLatestEfluxSync();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -30,8 +37,8 @@ export default function AdminLocations() {
   const filtered = useMemo(() => {
     if (!locations) return [];
     return ((locations ?? []) as AdminLocation[]).filter((loc) => {
-      if (linkFilter === "linked" && !loc.client_id) return false;
-      if (linkFilter === "unlinked" && loc.client_id) return false;
+      if (linkFilter === "linked" && !isLinkedLocation(loc)) return false;
+      if (linkFilter === "unlinked" && isLinkedLocation(loc)) return false;
       if (debouncedSearch) {
         const q = debouncedSearch.toLowerCase();
         const haystack = [
@@ -50,8 +57,8 @@ export default function AdminLocations() {
     if (!locations) return { total: 0, linked: 0, unlinked: 0, totalCps: 0, online: 0 };
     const total = locations.length;
     const typedLocations = locations as AdminLocation[];
-    const unlinked = typedLocations.filter((l) => !l.client_id).length;
-    const allCps = typedLocations.flatMap((l) => l.charge_points || []);
+    const unlinked = typedLocations.filter((l) => !isLinkedLocation(l)).length;
+    const allCps = typedLocations.flatMap((l) => l.charge_points || []).filter(isActiveChargePoint);
     const online = allCps.filter((cp) => cp.status === "online" || cp.status === "in_use").length;
     return {
       total,
@@ -76,13 +83,17 @@ export default function AdminLocations() {
         );
         queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
         queryClient.invalidateQueries({ queryKey: ["admin-latest-sync"] });
+        // Een sync raakt ook laadpunten, klant-koppelingen en de ongekoppelde-lijst.
+        queryClient.invalidateQueries({ queryKey: ["admin-chargepoints"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
+        queryClient.invalidateQueries({ queryKey: ["unlinked-locations"] });
       } else if (res?.status === "not_configured") {
         toast.warning("e-Flux nog niet geconfigureerd. Vul API-key in via instellingen.");
       } else {
         toast.error(res?.message || "Sync mislukt");
       }
     } catch (err) {
-      toast.error(err.message || "Sync mislukt");
+      toast.error(err instanceof Error ? err.message : "Sync mislukt");
     } finally {
       setSyncing(false);
     }
@@ -120,12 +131,12 @@ export default function AdminLocations() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <LocKpi
+        <KpiTile
           label="Totaal locaties"
           value={String(kpis.total)}
           icon={<MapPin className="w-4 h-4" />}
         />
-        <LocKpi
+        <KpiTile
           label="Ongekoppeld"
           value={String(kpis.unlinked)}
           subtitle={
@@ -134,12 +145,12 @@ export default function AdminLocations() {
           icon={<AlertCircle className="w-4 h-4" />}
           accent={kpis.unlinked > 0 ? "amber" : "muted"}
         />
-        <LocKpi
+        <KpiTile
           label="Laadpunten"
           value={String(kpis.totalCps)}
           icon={<Plug className="w-4 h-4" />}
         />
-        <LocKpi
+        <KpiTile
           label="Online"
           value={`${kpis.online} / ${kpis.totalCps}`}
           subtitle={
@@ -171,6 +182,7 @@ export default function AdminLocations() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
+            aria-label="Zoek locaties op naam, adres of klant"
             placeholder="Zoek op naam, adres, klant…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -182,7 +194,24 @@ export default function AdminLocations() {
       {/* Tabel */}
       <Card className="portal-card">
         <CardContent className="p-0">
-          {isLoading ? (
+          {isError ? (
+            <div
+              role="alert"
+              className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 p-6 text-center"
+            >
+              <AlertCircle className="w-8 h-8 mx-auto mb-3 text-destructive" />
+              <p className="font-medium text-foreground mb-1">
+                Locaties konden niet worden geladen
+              </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Er ging iets mis bij het ophalen. Probeer het opnieuw.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Opnieuw proberen
+              </Button>
+            </div>
+          ) : isLoading ? (
             <div className="p-6 space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-12 w-full" />
@@ -203,7 +232,7 @@ export default function AdminLocations() {
                 </thead>
                 <tbody>
                   {filtered.map((loc) => {
-                    const cps = loc.charge_points || [];
+                    const cps = (loc.charge_points || []).filter(isActiveChargePoint);
                     const onlineCount = cps.filter(
                       (cp) =>
                         cp.status === "online" || cp.status === "in_use",
@@ -211,8 +240,17 @@ export default function AdminLocations() {
                     return (
                       <tr
                         key={loc.id}
-                        className="border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors group"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Open locatie ${loc.name || loc.address || ""}`}
+                        className="border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors group focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50"
                         onClick={() => navigate(`/admin/locaties/${loc.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/admin/locaties/${loc.id}`);
+                          }
+                        }}
                       >
                         <td className="p-3 font-medium">
                           {loc.name || loc.address || "—"}
@@ -245,7 +283,7 @@ export default function AdminLocations() {
                           )}
                         </td>
                         <td className="p-3">
-                          {loc.clients ? (
+                          {isLinkedLocation(loc) && loc.clients ? (
                             <span className="text-foreground text-sm">
                               {loc.clients.client_number && (
                                 <span className="mr-2 text-xs font-semibold tabular-nums text-primary">
@@ -300,48 +338,5 @@ export default function AdminLocations() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function LocKpi({
-  label,
-  value,
-  subtitle,
-  icon,
-  accent,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  accent?: "primary" | "amber" | "muted";
-}) {
-  const accentBg = {
-    primary: "bg-primary/10 border-primary/20 text-primary",
-    amber: "bg-amber-400/10 border-amber-400/20 text-amber-400",
-    muted: "bg-muted/30 border-border text-muted-foreground",
-  }[accent ?? "muted"];
-
-  return (
-    <Card className="portal-card">
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3">
-          <div
-            className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${accentBg}`}
-          >
-            {icon}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="cockpit-section-label">{label}</p>
-            <p className="text-2xl font-semibold tabular-nums mt-1.5 leading-none">
-              {value}
-            </p>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground mt-1.5">{subtitle}</p>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

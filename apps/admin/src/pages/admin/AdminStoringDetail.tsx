@@ -9,15 +9,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { ConnectivityIndicator } from "@/components/admin/ConnectivityIndicator";
+import { formatPhone, phoneHref } from "@/lib/phone";
 import { useFault, useBestContact, useAdvanceFault, useAddFaultNote, useResendFaultEmail } from "@/hooks/useFaults";
 import {
-  availableActions, resolveBestContact, isOpenStatus,
-  FAULT_STATUS_LABELS, FAULT_REASON_LABELS, type FaultAction,
+  availableActions, resolveBestContact, isOpenStatus, CLOSED_STATUSES,
+  FAULT_STATUS_LABELS, FAULT_REASON_LABELS, type FaultAction, type FaultStatus,
 } from "@/services/faults";
 
 const rel = (d: string | null) => (d ? formatDistanceToNow(new Date(d), { addSuffix: true, locale: nl }) : "onbekend");
 const idJoin = (...p: (string | number | null | undefined)[]) => p.filter((x) => x !== null && x !== undefined && String(x).trim() !== "").join(" / ") || "onbekend";
+
+// Menselijke labels voor tijdlijn-events zonder eigen notitie (i.p.v. de ruwe enum).
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  status_change: "Statuswijziging",
+  note: "Notitie",
+  email_sent: "Storingsmail verstuurd",
+};
+
+// Statusbadge consistent met de lijst (statusBadge in AdminStoringen): "vals alarm"
+// is neutraal/muted, niet groen-"opgelost".
+function statusBadgeClass(status: FaultStatus): string {
+  if (status === "opgelost" || status === "automatisch_hersteld") return "bg-green-600 hover:bg-green-600/90";
+  if (status === "vals_alarm") return "bg-muted text-muted-foreground";
+  if (isOpenStatus(status)) return "bg-destructive/15 text-destructive border border-destructive/30";
+  return "bg-muted";
+}
 
 export default function AdminStoringDetail() {
   const { id } = useParams();
@@ -32,6 +53,20 @@ export default function AdminStoringDetail() {
   const [note, setNote] = useState("");
 
   if (fault.isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
+  if (fault.isError) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" onClick={() => navigate("/admin/storingen")}><ArrowLeft className="w-4 h-4 mr-1.5" /> Terug</Button>
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-col items-start gap-3 p-6">
+            <div className="flex items-center gap-2 text-destructive"><AlertTriangle className="w-5 h-5" /> <span className="text-sm font-medium">Storing kon niet worden geladen</span></div>
+            <p className="text-sm text-muted-foreground">{fault.error instanceof Error ? fault.error.message : "Onbekende fout"}</p>
+            <Button variant="outline" size="sm" onClick={() => fault.refetch()}>Opnieuw proberen</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   if (!f) {
     return (
       <div className="space-y-4">
@@ -77,18 +112,18 @@ export default function AdminStoringDetail() {
       <div className="flex items-center justify-between gap-3">
         <Button variant="ghost" onClick={() => navigate("/admin/storingen")}><ArrowLeft className="w-4 h-4 mr-1.5" /> Storingen</Button>
         <div className="flex items-center gap-2">
-          <Badge className={open ? "bg-red-500/15 text-red-500 border border-red-500/30" : "bg-green-600"}>{FAULT_STATUS_LABELS[f.status]}</Badge>
+          <Badge className={statusBadgeClass(f.status)}>{FAULT_STATUS_LABELS[f.status]}</Badge>
           <Button variant="outline" size="sm" onClick={doResend} disabled={resend.isPending}><Send className="w-3.5 h-3.5 mr-1.5" /> Mail opnieuw</Button>
         </div>
       </div>
 
       <div>
         <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <AlertTriangle className="w-6 h-6 text-red-500" /> {cp?.name || "Laadpunt"}
+          <AlertTriangle className="w-6 h-6 text-destructive" /> {cp?.name || "Laadpunt"}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {cl?.company_name}{cl?.client_number ? ` · #${cl.client_number}` : ""} · gedetecteerd {rel(f.detected_at)}
-          {" · "}<span className="text-red-500">{FAULT_REASON_LABELS[f.fault_reason as keyof typeof FAULT_REASON_LABELS] ?? f.fault_reason}</span>
+          {" · "}<span className="text-destructive">{FAULT_REASON_LABELS[f.fault_reason as keyof typeof FAULT_REASON_LABELS] ?? f.fault_reason}</span>
         </p>
       </div>
 
@@ -122,7 +157,7 @@ export default function AdminStoringDetail() {
               <p className="cockpit-section-label mb-1">Bel deze contactpersoon</p>
               <p className="font-medium">{contact.name || "Geen contact bekend"}{contact.role ? <span className="text-muted-foreground font-normal"> · {contact.role}</span> : null}</p>
               <div className="flex flex-col gap-1.5 mt-2">
-                {contact.phone && <a href={`tel:${contact.phone}`} className="inline-flex items-center gap-2 text-primary hover:underline"><Phone className="w-4 h-4" /> {contact.phone}</a>}
+                {contact.phone && <a href={`tel:${phoneHref(contact.phone)}`} className="inline-flex items-center gap-2 text-primary hover:underline"><Phone className="w-4 h-4" /> {formatPhone(contact.phone)}</a>}
                 {contact.email && <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-2 text-primary hover:underline"><Mail className="w-4 h-4" /> {contact.email}</a>}
               </div>
             </div>
@@ -139,11 +174,30 @@ export default function AdminStoringDetail() {
                   {availableActions(f.status).map((a) => (
                     a.needsDate ? (
                       <div key={a.key} className="flex items-center gap-2">
-                        <Input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className="h-9" />
+                        <Input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} aria-label="Bezoekdatum" className="h-9" />
                         <Button size="sm" variant="outline" onClick={() => doAction(a)} disabled={advance.isPending}>{a.label}</Button>
                       </div>
+                    ) : CLOSED_STATUSES.includes(a.toStatus) ? (
+                      // Afsluitende acties (Opgelost / Vals alarm) vragen om bevestiging: onomkeerbaar.
+                      <AlertDialog key={a.key}>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant={a.toStatus === "opgelost" ? "default" : "outline"} disabled={advance.isPending} className="justify-start">{a.label}</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Storing afsluiten?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              "{a.label}" sluit deze storing af. Dit is niet met één klik terug te draaien.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => doAction(a)}>{a.label}</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     ) : (
-                      <Button key={a.key} size="sm" variant={a.toStatus === "opgelost" ? "default" : "outline"} onClick={() => doAction(a)} disabled={advance.isPending} className="justify-start">{a.label}</Button>
+                      <Button key={a.key} size="sm" variant="outline" onClick={() => doAction(a)} disabled={advance.isPending} className="justify-start">{a.label}</Button>
                     )
                   ))}
                 </div>
@@ -152,7 +206,7 @@ export default function AdminStoringDetail() {
               <p className="text-sm text-muted-foreground">Deze storing is afgehandeld{f.resolved_at ? ` (${rel(f.resolved_at)})` : ""}.</p>
             )}
             <div className="pt-2 border-t space-y-2">
-              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notitie toevoegen" className="h-9" onKeyDown={(e) => e.key === "Enter" && doNote()} />
+              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notitie toevoegen" aria-label="Notitie toevoegen" className="h-9" onKeyDown={(e) => e.key === "Enter" && doNote()} />
               <Button size="sm" variant="ghost" onClick={doNote} disabled={addNote.isPending || !note.trim()}>Notitie opslaan</Button>
             </div>
           </CardContent>
@@ -168,7 +222,7 @@ export default function AdminStoringDetail() {
               <li key={ev.id} className="flex gap-3 text-sm">
                 <span className="mt-1 w-2 h-2 rounded-full bg-primary flex-shrink-0" />
                 <div>
-                  <p>{ev.note || ev.event_type}</p>
+                  <p>{ev.note || EVENT_TYPE_LABELS[ev.event_type] || ev.event_type}</p>
                   <p className="text-xs text-muted-foreground">{format(new Date(ev.created_at), "d MMM yyyy HH:mm", { locale: nl })}</p>
                 </div>
               </li>

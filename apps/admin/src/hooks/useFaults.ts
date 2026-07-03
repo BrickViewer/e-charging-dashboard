@@ -3,9 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { ChargePointFault, ChargePointFaultEvent } from "@/types/db";
 import { isStaleHeartbeat, type FaultAction } from "@/services/faults";
+import { isActiveChargePoint } from "@/services/chargePoints";
 
 type CpRel = { name: string | null; eflux_evse_id: string | null; eflux_evse_controller_id: string | null; serial_number: string | null; brand: string | null; model: string | null; max_power: number | null; connectivity_state: string | null; operational_status: string | null; last_heartbeat_at: string | null };
-type LocRel = { name: string | null; address: string | null; city: string | null; postal_code: string | null };
+type LocRel = { name: string | null; address: string | null; city: string | null; postal_code: string | null; archived_at: string | null };
 type ClientRel = { company_name: string | null; client_number: number | null; contact_name: string | null; contact_phone: string | null; contact_email: string | null; company_id: string | null };
 
 export type FaultRow = ChargePointFault & {
@@ -17,7 +18,15 @@ export type FaultRow = ChargePointFault & {
 export type FaultDetail = FaultRow & { events: ChargePointFaultEvent[] };
 
 const LIST_SELECT =
-  "*, charge_points(name, eflux_evse_id, eflux_evse_controller_id, serial_number, brand, model, max_power, connectivity_state, operational_status, last_heartbeat_at), locations(name, address, city, postal_code), clients(company_name, client_number, contact_name, contact_phone, contact_email, company_id)";
+  "*, charge_points(name, eflux_evse_id, eflux_evse_controller_id, serial_number, brand, model, max_power, connectivity_state, operational_status, last_heartbeat_at), locations(name, address, city, postal_code, archived_at), clients(company_name, client_number, contact_name, contact_phone, contact_email, company_id)";
+
+// Storingen op in e-Flux verwijderde palen (operational_status='archived') of op een
+// gearchiveerde locatie zijn fantoomrijen — die filteren we net als de rest van de app weg.
+function isActiveFault(f: FaultRow): boolean {
+  if (f.charge_points && !isActiveChargePoint(f.charge_points)) return false;
+  if (f.locations?.archived_at) return false;
+  return true;
+}
 
 export function useFaults() {
   return useQuery({
@@ -28,7 +37,7 @@ export function useFaults() {
         .select(LIST_SELECT)
         .order("detected_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as FaultRow[];
+      return ((data ?? []) as unknown as FaultRow[]).filter(isActiveFault);
     },
   });
 }
@@ -78,20 +87,23 @@ export function useSuspectedChargePoints(graceMinutes = 60) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charge_points")
-        .select("id, name, status, connectivity_state, last_heartbeat_at, eflux_evse_id, locations(name, city, client_id, clients(company_name, client_number))")
+        .select("id, name, status, connectivity_state, operational_status, last_heartbeat_at, eflux_evse_id, locations(name, city, client_id, archived_at, clients(company_name, client_number))")
         .eq("status", "online");
       if (error) throw error;
-      return (data ?? []).filter((cp) =>
-        isStaleHeartbeat((cp as { last_heartbeat_at: string | null }).last_heartbeat_at, graceMinutes),
-      ) as unknown as SuspectedChargePoint[];
+      return ((data ?? []) as unknown as SuspectedChargePoint[]).filter((cp) =>
+        // In e-Flux verwijderde palen of gearchiveerde locaties zijn fantoomrijen.
+        isActiveChargePoint(cp) &&
+        !cp.locations?.archived_at &&
+        isStaleHeartbeat(cp.last_heartbeat_at, graceMinutes),
+      );
     },
   });
 }
 
 export type SuspectedChargePoint = {
   id: string; name: string | null; status: string | null; connectivity_state: string | null;
-  last_heartbeat_at: string | null; eflux_evse_id: string | null;
-  locations: { name: string | null; city: string | null; client_id: string | null; clients: { company_name: string | null; client_number: number | null } | null } | null;
+  operational_status: string | null; last_heartbeat_at: string | null; eflux_evse_id: string | null;
+  locations: { name: string | null; city: string | null; client_id: string | null; archived_at: string | null; clients: { company_name: string | null; client_number: number | null } | null } | null;
 };
 
 // Advance: zet de werkstroom-status + tijdstempel en log een tijdlijn-event.
@@ -105,15 +117,19 @@ export function useAdvanceFault() {
       if (action.needsDate && visitDate) patch.visit_date = visitDate;
       const { error } = await supabase.from("charge_point_faults").update(patch).eq("id", fault.id);
       if (error) throw error;
-      await supabase.from("charge_point_fault_events").insert({
+      const { error: eventError } = await supabase.from("charge_point_fault_events").insert({
         fault_id: fault.id,
         event_type: "status_change",
         from_status: fault.status,
         to_status: action.toStatus,
         note: action.needsDate && visitDate ? `${action.label} (${visitDate})` : action.label,
       });
+      // Statuswijziging is al gepersisteerd; een gefaalde tijdlijn-log niet stil slikken.
+      if (eventError) throw eventError;
     },
-    onSuccess: (_d, vars) => {
+    // onSettled zodat de lijst/detail ververst óók als het loggen van het event faalt
+    // (de statuswijziging zelf is dan wél doorgevoerd).
+    onSettled: (_d, _e, vars) => {
       qc.invalidateQueries({ queryKey: ["faults"] });
       qc.invalidateQueries({ queryKey: ["fault", vars.fault.id] });
     },
@@ -134,11 +150,14 @@ export function useAddFaultNote() {
 }
 
 export function useResendFaultEmail() {
+  const qc = useQueryClient();
   return useMutation({
+    // force: negeer de email_sent_at-dedup in de edge zodat "Mail opnieuw" echt opnieuw verstuurt.
     mutationFn: async (faultId: string) => {
-      const { data, error } = await supabase.functions.invoke("send-fault-notification", { body: { fault_ids: [faultId] } });
+      const { data, error } = await supabase.functions.invoke("send-fault-notification", { body: { fault_ids: [faultId], force: true } });
       if (error) throw error;
       return data as { status: string; message?: string };
     },
+    onSuccess: (_d, faultId) => qc.invalidateQueries({ queryKey: ["fault", faultId] }),
   });
 }

@@ -9,6 +9,7 @@ import type {
   RecentInvitation,
 } from "@/types/db";
 import { getCurrentMonth, monthShortLabel } from "@/lib/period";
+import { isActiveChargePoint } from "@/services/chargePoints";
 
 export function useAllClients() {
   return useQuery({
@@ -21,7 +22,7 @@ export function useAllClients() {
         // ander locatie-/laadpunt-veld, breid dán deze select bewust uit (type claimt nog
         // de volledige rij). AdminFinancial heeft z'n eigen full-row useAllSettlements.
         .select(
-          "*, locations(id, archived_at, charge_points(id, status)), client_invitations(id, status, invited_at, expires_at)",
+          "*, locations(id, archived_at, charge_points(id, status, operational_status)), client_invitations(id, status, invited_at, expires_at)",
         );
       if (error) throw error;
       // Pak de meest recente invitation per klant (Supabase select geeft array)
@@ -33,8 +34,11 @@ export function useAllClients() {
             (a, b) =>
               new Date(b.invited_at).getTime() - new Date(a.invited_at).getTime(),
           )[0];
-        // Gearchiveerde (in e-Flux verwijderde) locaties niet meetellen/tonen.
-        const locations = (c.locations ?? []).filter((l) => !l.archived_at);
+        // Gearchiveerde (in e-Flux verwijderde) locaties niet meetellen/tonen; en per
+        // locatie ook de in e-Flux verwijderde laadpunten (operational_status='archived') weglaten.
+        const locations = (c.locations ?? [])
+          .filter((l) => !l.archived_at)
+          .map((l) => ({ ...l, charge_points: (l.charge_points ?? []).filter(isActiveChargePoint) }));
         return { ...c, locations, latest_invitation: latest ?? null };
       });
     },
@@ -52,8 +56,13 @@ export function useClientById(id: string | undefined) {
         .eq("id", id!)
         .maybeSingle();
       if (error) throw error;
-      // Gearchiveerde (in e-Flux verwijderde) locaties niet tonen op de klantpagina.
-      if (data?.locations) data.locations = data.locations.filter((l) => !l.archived_at);
+      // Gearchiveerde (in e-Flux verwijderde) locaties niet tonen op de klantpagina; en per
+      // locatie ook de in e-Flux verwijderde laadpunten (operational_status='archived') weglaten.
+      if (data?.locations) {
+        data.locations = data.locations
+          .filter((l) => !l.archived_at)
+          .map((l) => ({ ...l, charge_points: (l.charge_points ?? []).filter(isActiveChargePoint) }));
+      }
       return data;
     },
   });
@@ -118,7 +127,8 @@ export function useAllChargePoints() {
         .from("charge_points")
         .select("*, locations(name, address, client_id, clients(client_number, company_name))");
       if (error) throw error;
-      return data;
+      // In e-Flux verwijderde laadpunten (operational_status='archived') niet tonen/tellen.
+      return (data ?? []).filter(isActiveChargePoint);
     },
   });
 }
@@ -144,7 +154,7 @@ export interface MonthlyFinancialRow {
   eflux_credit_incl: number; eflux_credit_excl: number; eflux_usage_incl: number; eflux_net_incl: number;
   sessions_reimb_excl: number; sessions_reimb_incl: number; sessions_kwh: number; sessions_count: number;
   recon_diff_incl: number; tie_out_ok: boolean;
-  gross_total: number; payout_total: number; fee_total: number; assigned_reimb: number; unassigned_reimb: number;
+  gross_total: number; payout_total: number; activation_total: number; fee_total: number; assigned_reimb: number; unassigned_reimb: number;
   cnt_live: number; cnt_calculated: number; cnt_approved: number; cnt_paid: number;
   cnt_invoice_sent: number; cnt_invoice_paid: number; cnt_charged_back: number;
   settlements_total: number; settlements_final: number;
@@ -254,7 +264,7 @@ export function useAllLocations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("locations")
-        .select("*, charge_points(id, status, connectivity_state), clients(id, client_number, company_name, status)")
+        .select("*, charge_points(id, status, connectivity_state, operational_status), clients(id, client_number, company_name, status)")
         .is("archived_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -471,4 +481,48 @@ export function useAdminKPIs(chartYear?: number) {
     availableYears,
   };
   }, [clients, chargePoints, kpi, curYear, curMonth, selectedYear]);
+}
+
+export type LeadEstimateMode = "computed" | "manual";
+export interface AvgRevenuePerChargePoint {
+  value: number | null;          // effectieve waarde die de leads-module gebruikt
+  source: "computed" | "manual" | "fallback" | "none";
+  computedValue: number | null;  // rauw berekend gemiddelde (mode-onafhankelijk), voor weergave
+  manualValue: number | null;    // ingestelde vaste waarde
+  mode: LeadEstimateMode;         // gekozen bron
+  months: number;
+  charge_points: number;
+}
+
+// Gemiddelde E-Charging service-fee-omzet per actieve laadpaal per jaar (server-side
+// geaggregeerd via avg_echarging_revenue_per_charge_point). De RPC lost de effectieve
+// waarde op basis van de gekozen modus (computed/manual) op; 'source' zegt welk getal het werd.
+export function useAvgRevenuePerChargePoint() {
+  return useQuery({
+    queryKey: ["admin-avg-revenue-per-cp"],
+    staleTime: 1000 * 60 * 30, // verandert traag; één gedeelde call voor alle lead-kaarten
+    queryFn: async (): Promise<AvgRevenuePerChargePoint> => {
+      const rpcClient = supabase as unknown as {
+        rpc(name: "avg_echarging_revenue_per_charge_point"): Promise<{
+          data: {
+            value: number | null; source: string; computed_value: number | null;
+            manual_value: number | null; mode: string; months: number; charge_points: number;
+          } | null;
+          error: Error | null;
+        }>;
+      };
+      const { data, error } = await rpcClient.rpc("avg_echarging_revenue_per_charge_point");
+      if (error) throw error;
+      const src = data?.source;
+      return {
+        value: data?.value != null ? Number(data.value) : null,
+        source: src === "computed" || src === "manual" || src === "fallback" ? src : "none",
+        computedValue: data?.computed_value != null ? Number(data.computed_value) : null,
+        manualValue: data?.manual_value != null ? Number(data.manual_value) : null,
+        mode: data?.mode === "manual" ? "manual" : "computed",
+        months: Number(data?.months ?? 0),
+        charge_points: Number(data?.charge_points ?? 0),
+      };
+    },
+  });
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +12,9 @@ import { toast } from "sonner";
 import { ArrowLeft, Building2, Mail } from "lucide-react";
 import { CompanyPicker } from "@/components/contacts/CompanyPicker";
 import { PersonPicker } from "@/components/contacts/PersonPicker";
-import { useClientForCompany, useUpdateCompany, useUpdatePerson } from "@/hooks/useContacts";
+import { PhoneField } from "@/components/contacts/PhoneField";
+import { AddressFields, type AddressValue } from "@/components/contacts/AddressFields";
+import { useClientForCompany, usePerson, useUpdateCompany, useUpdatePerson } from "@/hooks/useContacts";
 
 // Klant aanmaken: alleen de basis die nodig is om de klant uit te nodigen.
 // Tarieven en contractdefaults blijven technisch gevuld, maar staan niet in deze startflow.
@@ -36,14 +38,25 @@ export default function AdminClientWizard() {
     btw_number: "",
     contact_email: "",
     contact_phone: "",
-    billing_street: "",
-    billing_postal: "",
-    billing_city: "",
   });
+  const [billingAddr, setBillingAddr] = useState<AddressValue>({ street: "", houseNumber: "", postalCode: "", city: "" });
 
   const existingClient = useClientForCompany(company.company_id || undefined).data;
+  // De gekozen persoon is de bron van waarheid voor e-mail/telefoon: prefill de velden zodat de
+  // gebruiker ze niet blanco hoeft te hertypen (en we bij opslaan zien of er echt iets wijzigde).
+  const { data: selectedPerson } = usePerson(company.person_id || undefined);
   const updateCompany = useUpdateCompany();
   const updatePerson = useUpdatePerson();
+
+  useEffect(() => {
+    if (!selectedPerson) return;
+    setCompany((p) => ({
+      ...p,
+      contact_email: selectedPerson.email ?? "",
+      contact_phone: selectedPerson.phone ?? "",
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPerson?.id]);
   const canSubmit = isParticulier
     ? !!company.person_id && !!company.person_name.trim() && !!company.contact_email.trim()
     : !!company.company_id && !!company.person_id && !!company.contact_email.trim() && !existingClient;
@@ -61,11 +74,19 @@ export default function AdminClientWizard() {
     try {
       // E-mail/telefoon vastleggen op de persoon (bron van waarheid) via de mutatie (cache-invalidatie);
       // de sync-trigger vult daarna company_name/contact_* op de klant vanuit company_id/person_id.
-      if (company.person_id && (company.contact_email.trim() || company.contact_phone.trim())) {
+      // Alleen schrijven wat de gebruiker daadwerkelijk wijzigde t.o.v. de canonieke persoonsvelden —
+      // zo overschrijven we een bestaand e-mail/telefoon niet met een (ongewijzigde) prefill.
+      if (company.person_id) {
         const personPatch: { email?: string; phone?: string } = {};
-        if (company.contact_email.trim()) personPatch.email = company.contact_email.trim();
-        if (company.contact_phone.trim()) personPatch.phone = company.contact_phone.trim();
-        await updatePerson.mutateAsync({ id: company.person_id, patch: personPatch });
+        const origEmail = (selectedPerson?.email ?? "").trim();
+        const origPhone = (selectedPerson?.phone ?? "").trim();
+        const newEmail = company.contact_email.trim();
+        const newPhone = company.contact_phone.trim();
+        if (newEmail && newEmail !== origEmail) personPatch.email = newEmail;
+        if (newPhone && newPhone !== origPhone) personPatch.phone = newPhone;
+        if (Object.keys(personPatch).length > 0) {
+          await updatePerson.mutateAsync({ id: company.person_id, patch: personPatch });
+        }
       }
       // KvK/BTW horen bij het bedrijf (bron van waarheid) → daarheen schrijven; de propagate-trigger
       // synct ze daarna naar de klant. Zo ontstaat geen client-only KvK die afwijkt van het bedrijf.
@@ -75,6 +96,9 @@ export default function AdminClientWizard() {
         if (company.btw_number.trim()) companyPatch.btw_number = company.btw_number.trim();
         await updateCompany.mutateAsync({ id: company.company_id, patch: companyPatch });
       }
+
+      // Factuuradres: AddressFields levert straat + huisnummer los; clients heeft één billing-straat-kolom.
+      const billingStreet = [billingAddr.street.trim(), billingAddr.houseNumber.trim()].filter(Boolean).join(" ");
 
       const { data: client, error: clientErr } = await supabase
         .from("clients")
@@ -87,13 +111,11 @@ export default function AdminClientWizard() {
           vat_status: isParticulier ? "private" : null,
           kvk: isParticulier ? null : (company.kvk || null),
           btw_number: isParticulier ? null : (company.btw_number || null),
-          billing_address_street: company.billing_street || null,
-          billing_address_postal: company.billing_postal || null,
-          billing_address_city: company.billing_city || null,
-          charge_rate_per_kwh: 0.55,
-          energy_cost_per_kwh: 0.25,
-          revenue_share_percentage: 75,
-          ere_rate_per_kwh: 0.10,
+          billing_address_street: billingStreet || null,
+          billing_address_postal: billingAddr.postalCode.trim() || null,
+          billing_address_city: billingAddr.city.trim() || null,
+          // Tarieven/opbrengstdeling worden NIET meer op de klant hardcoded (afgeschaft) — de canonieke
+          // create_client_from_quote laat deze weg. Alleen de contractvelden die de canonieke shape zet.
           contract_start_date: todayISO(),
           contract_duration_months: 12,
           auto_renew: true,
@@ -108,7 +130,10 @@ export default function AdminClientWizard() {
       // Particulier: btw-status meteen bevestigen (0%, betaalspecificatie) zodat de klant compleet-klaar is.
       if (isParticulier && client?.id) {
         const { error: vatErr } = await supabase.rpc("confirm_client_vat_status", { p_client_id: client.id, p_vat_status: "private" });
-        if (vatErr) console.error("[client-wizard] BTW-status bevestigen mislukt:", vatErr.message);
+        if (vatErr) {
+          console.error("[client-wizard] BTW-status bevestigen mislukt:", vatErr.message);
+          toast.warning("Klant aangemaakt, maar de BTW-status kon niet automatisch worden bevestigd. Bevestig deze op de klantpagina.");
+        }
       }
       if (!client?.id) {
         toast.warning("Klant aangemaakt maar ID niet ontvangen");
@@ -122,11 +147,24 @@ export default function AdminClientWizard() {
         description: `${client.client_number ? `Klant #${client.client_number}` : "Klant"} ${company.company_name || company.person_name} aangemaakt`,
       });
 
+      // Alle afhankelijke caches verversen: klantoverzicht, het bedrijf→klant-lookup (voor de
+      // "heeft al een account"-waarschuwing) en de contactenlijsten die de picker voedt.
       queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["company-client", company.company_id] });
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
+      queryClient.invalidateQueries({ queryKey: ["persons"] });
       toast.success(client.client_number ? `Klant #${client.client_number} aangemaakt` : "Klant aangemaakt");
       navigate(`/admin/klanten/${client.id}`);
     } catch (err) {
-      toast.error("Fout bij opslaan: " + (err instanceof Error ? err.message : "Onbekende fout"));
+      // De DB dwingt "1 bedrijf = 1 klantaccount" af met een unieke index; vang de 23505 op met een
+      // duidelijke melding (de client-side check kan een gelijktijdig aangemaakt account missen).
+      const code = (err as { code?: string } | null)?.code;
+      if (code === "23505") {
+        toast.error("Dit bedrijf heeft al een klantaccount.");
+        if (company.company_id) queryClient.invalidateQueries({ queryKey: ["company-client", company.company_id] });
+      } else {
+        toast.error("Fout bij opslaan: " + (err instanceof Error ? err.message : "Onbekende fout"));
+      }
     } finally {
       setSaving(false);
     }
@@ -152,9 +190,11 @@ export default function AdminClientWizard() {
           </CardHeader>
           <CardContent className="space-y-3">
             {/* Klanttype: bedrijf of particulier */}
-            <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
+            <div role="radiogroup" aria-label="Klanttype" className="grid grid-cols-2 gap-2 rounded-lg border p-1">
               <button
                 type="button"
+                role="radio"
+                aria-checked={!isParticulier}
                 onClick={() => setCustomerType("bedrijf")}
                 className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${!isParticulier ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-foreground/[0.05]"}`}
               >
@@ -162,6 +202,8 @@ export default function AdminClientWizard() {
               </button>
               <button
                 type="button"
+                role="radio"
+                aria-checked={isParticulier}
                 onClick={() => setCustomerType("particulier")}
                 className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${isParticulier ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-foreground/[0.05]"}`}
               >
@@ -203,16 +245,18 @@ export default function AdminClientWizard() {
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>KVK-nummer</Label>
+                    <Label htmlFor="client-kvk">KVK-nummer</Label>
                     <Input
+                      id="client-kvk"
                       value={company.kvk}
                       onChange={(e) => setCompany((p) => ({ ...p, kvk: e.target.value }))}
                       placeholder="12345678"
                     />
                   </div>
                   <div>
-                    <Label>BTW-nummer</Label>
+                    <Label htmlFor="client-btw">BTW-nummer</Label>
                     <Input
+                      id="client-btw"
                       value={company.btw_number}
                       onChange={(e) => setCompany((p) => ({ ...p, btw_number: e.target.value }))}
                       placeholder="NL123456789B01"
@@ -232,18 +276,20 @@ export default function AdminClientWizard() {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>E-mail *</Label>
+                <Label htmlFor="client-email">E-mail *</Label>
                 <Input
+                  id="client-email"
                   type="email"
                   value={company.contact_email}
                   onChange={(e) => setCompany((p) => ({ ...p, contact_email: e.target.value }))}
                 />
               </div>
               <div>
-                <Label>Telefoon</Label>
-                <Input
+                <Label htmlFor="client-phone">Telefoon</Label>
+                <PhoneField
+                  id="client-phone"
                   value={company.contact_phone}
-                  onChange={(e) => setCompany((p) => ({ ...p, contact_phone: e.target.value }))}
+                  onChange={(v) => setCompany((p) => ({ ...p, contact_phone: v ?? "" }))}
                 />
               </div>
             </div>
@@ -251,24 +297,11 @@ export default function AdminClientWizard() {
               <Label className="text-xs text-muted-foreground uppercase tracking-wide">
                 Factuuradres
               </Label>
-              <div className="space-y-3 mt-2">
-                <Input
-                  value={company.billing_street}
-                  onChange={(e) => setCompany((p) => ({ ...p, billing_street: e.target.value }))}
-                  placeholder="Straat + huisnummer"
+              <div className="mt-2">
+                <AddressFields
+                  value={billingAddr}
+                  onChange={(patch) => setBillingAddr((a) => ({ ...a, ...patch }))}
                 />
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    value={company.billing_postal}
-                    onChange={(e) => setCompany((p) => ({ ...p, billing_postal: e.target.value }))}
-                    placeholder="Postcode"
-                  />
-                  <Input
-                    value={company.billing_city}
-                    onChange={(e) => setCompany((p) => ({ ...p, billing_city: e.target.value }))}
-                    placeholder="Plaats"
-                  />
-                </div>
               </div>
             </div>
           </CardContent>

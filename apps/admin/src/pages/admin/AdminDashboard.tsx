@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useAdminKPIs, useAllChargePoints } from "@/hooks/useAdminData";
+import { useAdminKPIs, useAllChargePoints, useAllClients } from "@/hooks/useAdminData";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, Plug, PlugZap } from "lucide-react";
+import { KpiTile } from "@/components/admin/KpiTile";
+import { Users, Plug, PlugZap, AlertTriangle } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -14,49 +15,27 @@ import {
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function KpiTile({
-  label,
-  value,
-  subtitle,
-  icon,
-  accent,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  accent?: "primary" | "amber" | "blue" | "red" | "muted";
-}) {
-  const accentBg = {
-    primary: "bg-primary/10 border-primary/20 text-primary",
-    amber: "bg-amber-400/10 border-amber-400/20 text-amber-400",
-    blue: "bg-blue-400/10 border-blue-400/20 text-blue-400",
-    red: "bg-destructive/10 border-destructive/20 text-destructive",
-    muted: "bg-muted/30 border-border text-muted-foreground",
-  }[accent ?? "muted"];
-
-  return (
-    <Card className="portal-card relative overflow-hidden">
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3">
-          <div className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${accentBg}`}>
-            {icon}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="cockpit-section-label">{label}</p>
-            <p className="text-2xl font-semibold tabular-nums mt-1.5 leading-none">{value}</p>
-            {subtitle && <p className="text-xs text-muted-foreground mt-1.5">{subtitle}</p>}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function AdminDashboard() {
   const [chartYear, setChartYear] = useState<number | undefined>(undefined);
   const kpis = useAdminKPIs(chartYear);
-  const { isLoading: loadingCps } = useAllChargePoints();
+  const { isLoading: loadingCps, isError: cpsError } = useAllChargePoints();
+  const { data: clients, isLoading: loadingClients, isError: clientsError } =
+    useAllClients();
+
+  // De KPI-strip hangt op twee losse queries: laadpunten (useAllChargePoints) én klanten
+  // (useAllClients). Faalt er één, dan tonen we een expliciete foutbanner i.p.v. stille
+  // nullen; het laadskelet gate't op béide, zodat "Actieve klanten" niet kort 0 flitst.
+  const hasError = cpsError || clientsError;
+  const loading = loadingCps || loadingClients;
+
+  // "Actieve klant" = klant met statuskolom 'actief' (lege/ontbrekende status telt óók als
+  // 'actief'), identiek aan de Klanten-pagina, zodat beide schermen hetzelfde getal tonen
+  // voor dezelfde metric. Totaal = alle niet-verwijderde klanten.
+  const visibleClients = (clients ?? []).filter((c) => c.status !== "verwijderd");
+  const activeClients = visibleClients.filter(
+    (c) => (c.status || "actief") === "actief",
+  ).length;
+  const totalClients = visibleClients.length;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -68,48 +47,67 @@ export default function AdminDashboard() {
       </div>
 
       {/* KPI-strip — actieve klanten, laadpunten online, laadpunten offline */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {loadingCps ? (
-          [...Array(3)].map((_, i) => (
-            <Card key={i} className="portal-card">
-              <CardContent className="p-5">
-                <Skeleton className="h-4 w-24 mb-3" />
-                <Skeleton className="h-8 w-16" />
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          <>
-            <KpiTile
-              label="Actieve klanten"
-              value={String(kpis.activeClients)}
-              subtitle={`van ${kpis.totalClients} totaal`}
-              icon={<Users className="w-4 h-4" />}
-              accent="primary"
-            />
-            <KpiTile
-              label="Laadpunten online"
-              value={String(kpis.onlineChargePoints)}
-              subtitle={`van ${kpis.linkedChargePoints} op klant-locaties`}
-              icon={<PlugZap className="w-4 h-4" />}
-              accent="primary"
-            />
-            <KpiTile
-              label="Laadpunten offline"
-              value={String(kpis.offlineChargePoints)}
-              subtitle={kpis.offlineChargePoints > 0 ? "Vereist aandacht" : "Alles online"}
-              icon={<Plug className="w-4 h-4" />}
-              accent={kpis.offlineChargePoints > 0 ? "red" : "muted"}
-            />
-          </>
-        )}
-      </div>
+      {hasError ? (
+        <Card className="border-destructive/25 bg-destructive/5">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
+              <div>
+                <p className="font-medium">Platformgegevens konden niet worden geladen</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  De laadpunt- of klantgegevens zijn niet opgehaald. Vernieuw de pagina om
+                  het opnieuw te proberen.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {loading ? (
+            [...Array(3)].map((_, i) => (
+              <Card key={i} className="bg-card">
+                <CardContent className="p-5">
+                  <Skeleton className="h-4 w-24 mb-3" />
+                  <Skeleton className="h-8 w-16" />
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <>
+              <KpiTile
+                label="Actieve klanten"
+                value={String(activeClients)}
+                subtitle={`van ${totalClients} totaal`}
+                icon={<Users className="w-4 h-4" />}
+                accent="primary"
+              />
+              <KpiTile
+                label="Laadpunten online"
+                value={String(kpis.onlineChargePoints)}
+                subtitle={`van ${kpis.linkedChargePoints} op klant-locaties`}
+                icon={<PlugZap className="w-4 h-4" />}
+                accent="primary"
+              />
+              <KpiTile
+                label="Laadpunten offline"
+                value={String(kpis.offlineChargePoints)}
+                subtitle={kpis.offlineChargePoints > 0 ? "Vereist aandacht" : "Alles online"}
+                icon={<Plug className="w-4 h-4" />}
+                accent={kpis.offlineChargePoints > 0 ? "red" : "muted"}
+              />
+            </>
+          )}
+        </div>
+      )}
 
       {/* E-Charging omzet per maand — 12 maanden */}
-      <Card className="portal-card">
+      <Card className="bg-card">
         <CardContent className="p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="cockpit-section-label">E-Charging omzet</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              E-Charging omzet
+            </p>
             <PeriodStepper
               label={`Kalenderjaar ${kpis.selectedChartYear}`}
               index={Math.max(0, kpis.availableYears.indexOf(kpis.selectedChartYear))}
@@ -118,6 +116,9 @@ export default function AdminDashboard() {
             />
           </div>
           <div className="h-[300px]">
+            {loading ? (
+              <Skeleton className="h-full w-full" />
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={kpis.monthlyData} barSize={22}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -150,6 +151,7 @@ export default function AdminDashboard() {
                 <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </CardContent>
       </Card>

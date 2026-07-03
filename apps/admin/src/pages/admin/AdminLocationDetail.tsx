@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isActiveChargePoint } from "@/services/chargePoints";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import {
   Dialog,
@@ -40,6 +41,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { ConnectivityIndicator } from "@/components/admin/ConnectivityIndicator";
+import { KpiTile } from "@/components/admin/KpiTile";
 import { linkLocationToClient, unlinkLocation, setLocationServiceFee } from "@/services/locations";
 import type { AdminLocationDetail, AdminSession, ClientWithRelations } from "@/types/db";
 import { cn } from "@/lib/utils";
@@ -71,8 +73,8 @@ export default function AdminLocationDetail() {
   const queryClient = useQueryClient();
 
   const { data: location, isLoading } = useLocationById(id);
-  const { data: sessions } = useLocationSessions(id);
-  const { data: clients } = useAllClients();
+  const { data: sessions, isLoading: sessionsLoading } = useLocationSessions(id);
+  const { data: clients, isLoading: clientsLoading } = useAllClients();
   const { data: tariff } = useLocationTariff(id);
   const [feeInput, setFeeInput] = useState("");
   const [savingFee, setSavingFee] = useState(false);
@@ -110,7 +112,7 @@ export default function AdminLocationDetail() {
   const locationDetail = location as AdminLocationDetail;
   const locationSessions = (sessions ?? []) as AdminSession[];
   const isLinked = !!locationDetail.client_id;
-  const cps = locationDetail.charge_points || [];
+  const cps = (locationDetail.charge_points || []).filter(isActiveChargePoint);
   const onlineCount = cps.filter(
     (cp) => cp.status === "online" || cp.status === "in_use",
   ).length;
@@ -165,7 +167,7 @@ export default function AdminLocationDetail() {
       queryClient.invalidateQueries({ queryKey: ["admin-client-settlements"] });
       onDone?.();
     } catch (err) {
-      toast.error(err.message || "Mislukt");
+      toast.error(err instanceof Error ? err.message : "Mislukt");
     } finally {
       setSubmitting(false);
     }
@@ -208,7 +210,7 @@ export default function AdminLocationDetail() {
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
       queryClient.invalidateQueries({ queryKey: ["admin-financial-overview"] });
     } catch (err) {
-      toast.error(err.message || "Opslaan mislukt");
+      toast.error(err instanceof Error ? err.message : "Opslaan mislukt");
     } finally {
       setSavingFee(false);
     }
@@ -237,7 +239,7 @@ export default function AdminLocationDetail() {
       queryClient.invalidateQueries({ queryKey: ["admin-client-settlements"] });
       setUnlinkDialogOpen(false);
     } catch (err) {
-      toast.error(err.message || "Ontkoppelen mislukt");
+      toast.error(err instanceof Error ? err.message : "Ontkoppelen mislukt");
     } finally {
       setSubmitting(false);
     }
@@ -361,42 +363,24 @@ export default function AdminLocationDetail() {
 
       {/* Tarieven (per locatie) */}
       {isLinked && (
-        <Card className="portal-card">
+        <Card className="bg-card">
           <CardContent className="space-y-4 p-5">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Tarieven · per locatie</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Onze service-fee bepaalt de marge in de maandafrekening van déze locatie (leeg = klant-/standaardtarief).
-                Bestuurders-tarieven komen uit de offerte en worden in e-Flux op de palen ingesteld.
+                De laadtarieven voor bestuurders beheer je in e-Flux op de palen.
               </p>
             </div>
             <div className="flex items-end gap-2">
               <div className="w-48">
-                <span className="text-xs text-muted-foreground">E-Charging service-fee (€/kWh)</span>
-                <Input inputMode="decimal" placeholder="leeg = standaard" value={feeInput}
+                <label htmlFor="service-fee" className="text-xs text-muted-foreground">E-Charging service-fee (€/kWh)</label>
+                <Input id="service-fee" inputMode="decimal" placeholder="leeg = standaard" value={feeInput}
                   onChange={(e) => setFeeInput(e.target.value)} />
               </div>
               <Button size="sm" onClick={saveFee} disabled={savingFee}>
                 {savingFee ? "Opslaan…" : "Opslaan"}
               </Button>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
-              <div>
-                <span className="text-xs text-muted-foreground">Laadtarief</span>
-                <p className="font-medium tabular-nums">{tariff?.charge_rate_per_kwh != null ? `€${Number(tariff.charge_rate_per_kwh).toFixed(2)}/kWh` : "—"}</p>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground">Stroomkosten</span>
-                <p className="font-medium tabular-nums">{tariff?.energy_cost_per_kwh != null ? `€${Number(tariff.energy_cost_per_kwh).toFixed(2)}/kWh` : "—"}</p>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground">Starttarief</span>
-                <p className="font-medium tabular-nums">{tariff?.start_tariff != null ? `€${Number(tariff.start_tariff).toFixed(2)}` : "—"}</p>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground">Blokkeertarief</span>
-                <p className="font-medium tabular-nums">{tariff?.idle_tariff_per_min != null ? `€${Number(tariff.idle_tariff_per_min).toFixed(2)}/min` : "—"}</p>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -404,47 +388,27 @@ export default function AdminLocationDetail() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Laadpunten
-            </p>
-            <p className="text-2xl font-semibold mt-1 tabular-nums">
-              {cps.length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Online
-            </p>
-            <p className="text-2xl font-semibold mt-1 tabular-nums text-primary">
-              {onlineCount}
-              <span className="text-base text-muted-foreground"> / {cps.length}</span>
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Sessies (laatste 50)
-            </p>
-            <p className="text-2xl font-semibold mt-1 tabular-nums">
-              {locationSessions.length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Type
-            </p>
-            <p className="text-base font-medium mt-2 capitalize">
-              {locationDetail.property_type || "—"}
-            </p>
-          </CardContent>
-        </Card>
+        <KpiTile
+          label="Laadpunten"
+          value={String(cps.length)}
+          icon={<Plug className="w-4 h-4" />}
+        />
+        <KpiTile
+          label="Online"
+          value={`${onlineCount} / ${cps.length}`}
+          icon={<Activity className="w-4 h-4" />}
+          accent="primary"
+        />
+        <KpiTile
+          label="Sessies (laatste 50)"
+          value={String(locationSessions.length)}
+          icon={<Zap className="w-4 h-4" />}
+        />
+        <KpiTile
+          label="Type"
+          value={locationDetail.property_type || "—"}
+          icon={<Building2 className="w-4 h-4" />}
+        />
       </div>
 
       {/* Tabs */}
@@ -584,7 +548,17 @@ export default function AdminLocationDetail() {
                         </td>
                       </tr>
                     ))}
-                    {(!sessions || sessions.length === 0) && (
+                    {sessionsLoading ? (
+                      <tr>
+                        <td colSpan={4} className="p-0">
+                          <div className="p-4 space-y-2">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                              <Skeleton key={i} className="h-10 w-full" />
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : locationSessions.length === 0 ? (
                       <tr>
                         <td
                           colSpan={4}
@@ -593,7 +567,7 @@ export default function AdminLocationDetail() {
                           Nog geen sessies geregistreerd op deze locatie.
                         </td>
                       </tr>
-                    )}
+                    ) : null}
                   </tbody>
                 </table>
               </div>
@@ -663,10 +637,12 @@ export default function AdminLocationDetail() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <label className="text-sm font-medium text-foreground">Klant</label>
+            <label htmlFor="client-picker-search" className="text-sm font-medium text-foreground">Klant</label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                id="client-picker-search"
+                aria-label="Zoek klant op naam, klantnummer of KvK"
                 autoFocus
                 value={clientSearch}
                 onChange={(event) => setClientSearch(event.target.value)}
@@ -675,7 +651,19 @@ export default function AdminLocationDetail() {
               />
             </div>
 
-            <div className="max-h-72 overflow-y-auto rounded-lg border border-border bg-background/50 p-1">
+            <div
+              role="listbox"
+              aria-label="Klanten"
+              className="max-h-72 overflow-y-auto rounded-lg border border-border bg-background/50 p-1"
+            >
+              {clientsLoading ? (
+                <div className="space-y-1 p-1">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <>
               {filteredClientList.map((client) => {
                 const isSelected = selectedClientId === client.id;
 
@@ -683,6 +671,8 @@ export default function AdminLocationDetail() {
                   <button
                     key={client.id}
                     type="button"
+                    role="option"
+                    aria-selected={isSelected}
                     onClick={() => setSelectedClientId(client.id)}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left transition-colors",
@@ -714,10 +704,12 @@ export default function AdminLocationDetail() {
 
               {filteredClientList.length === 0 && (
                 <div className="rounded-md px-3 py-6 text-center text-sm text-muted-foreground">
-                  {assignableClientList.length === 0
+                  {pickerClientList.length === 0
                     ? "Geen klanten beschikbaar om te koppelen."
                     : "Geen klanten gevonden."}
                 </div>
+              )}
+                </>
               )}
             </div>
           </div>

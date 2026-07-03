@@ -1,42 +1,17 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Clock, CheckCircle2, Timer, Search, Zap } from "lucide-react";
+import { AlertTriangle, Clock, CheckCircle2, Timer, Search, Zap, RotateCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { KpiTile } from "@/components/admin/KpiTile";
 import { useFaults, useSuspectedChargePoints, type FaultRow } from "@/hooks/useFaults";
 import { FAULT_STATUS_LABELS, FAULT_REASON_LABELS, isOpenStatus, type FaultStatus } from "@/services/faults";
-
-function KpiTile({ label, value, subtitle, icon, accent }: {
-  label: string; value: string; subtitle?: string; icon: React.ReactNode;
-  accent?: "primary" | "amber" | "blue" | "red" | "muted";
-}) {
-  const accentBg = {
-    primary: "bg-primary/10 border-primary/20 text-primary",
-    amber: "bg-[hsl(var(--status-amber)/var(--status-tile-alpha))] border-[hsl(var(--status-amber)/var(--status-tile-border-alpha))] text-[hsl(var(--status-amber))]",
-    blue: "bg-[hsl(var(--status-blue)/var(--status-tile-alpha))] border-[hsl(var(--status-blue)/var(--status-tile-border-alpha))] text-[hsl(var(--status-blue))]",
-    red: "bg-red-500/10 border-red-500/20 text-red-500",
-    muted: "bg-muted/30 border-border text-muted-foreground",
-  }[accent ?? "muted"];
-  return (
-    <Card className="portal-card relative overflow-hidden">
-      <CardContent className="p-5">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${accentBg}`}>{icon}</div>
-          <div className="min-w-0 flex-1">
-            <p className="cockpit-section-label">{label}</p>
-            <p className="text-2xl font-semibold tabular-nums mt-1 leading-none">{value}</p>
-            {subtitle && <p className="text-xs text-muted-foreground mt-1.5">{subtitle}</p>}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 function statusBadge(status: FaultStatus) {
   const open = isOpenStatus(status);
@@ -45,7 +20,7 @@ function statusBadge(status: FaultStatus) {
     : status === "vals_alarm"
       ? "bg-muted text-muted-foreground"
       : open
-        ? "bg-red-500/15 text-red-500 border border-red-500/30"
+        ? "bg-destructive/15 text-destructive border border-destructive/30"
         : "bg-muted";
   return <Badge className={cls}>{FAULT_STATUS_LABELS[status]}</Badge>;
 }
@@ -107,10 +82,10 @@ export default function AdminStoringen() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zoek klant, locatie of paal" className="pl-9" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zoek klant, locatie of paal" aria-label="Zoek storingen op klant, locatie of paal" className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[200px]" aria-label="Filter storingen op status"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="open">Actieve storingen</SelectItem>
             <SelectItem value="closed">Afgehandeld</SelectItem>
@@ -124,11 +99,31 @@ export default function AdminStoringen() {
 
       {faults.isLoading ? (
         <Skeleton className="h-72 w-full rounded-xl" />
+      ) : faults.isError || suspected.isError ? (
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
+            <AlertTriangle className="h-8 w-8 text-destructive" />
+            <div>
+              <p className="text-sm font-medium">Storingen konden niet worden geladen</p>
+              <p className="mt-1 text-sm text-muted-foreground">{(faults.error ?? suspected.error)?.message ?? "Onbekende fout"}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => { faults.refetch(); suspected.refetch(); }}>
+              <RotateCw className="mr-1.5 h-3.5 w-3.5" /> Opnieuw proberen
+            </Button>
+          </CardContent>
+        </Card>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed bg-card p-10 text-center">
-          <CheckCircle2 className="mx-auto h-8 w-8 text-green-600" />
-          <p className="mt-3 text-sm text-muted-foreground">Geen storingen in deze weergave. Alle laadpunten doen het.</p>
-        </div>
+        statusFilter === "open" && !search.trim() ? (
+          <div className="rounded-xl border border-dashed bg-card p-10 text-center">
+            <CheckCircle2 className="mx-auto h-8 w-8 text-green-600" />
+            <p className="mt-3 text-sm text-muted-foreground">Geen actieve storingen. Alle laadpunten doen het.</p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed bg-card p-10 text-center">
+            <Search className="mx-auto h-8 w-8 text-muted-foreground" />
+            <p className="mt-3 text-sm text-muted-foreground">Geen storingen in deze weergave.</p>
+          </div>
+        )
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
           <table className="w-full text-sm">
@@ -143,8 +138,17 @@ export default function AdminStoringen() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((f: FaultRow) => (
-                <tr key={f.id} className="border-b last:border-0 hover:bg-accent/40 cursor-pointer" onClick={() => navigate(`/admin/storingen/${f.id}`)}>
+              {filtered.map((f: FaultRow) => {
+                const goToDetail = () => navigate(`/admin/storingen/${f.id}`);
+                return (
+                <tr
+                  key={f.id}
+                  role="button"
+                  tabIndex={0}
+                  className="border-b last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none cursor-pointer"
+                  onClick={goToDetail}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToDetail(); } }}
+                >
                   <td className="px-4 py-2.5">
                     <span className="font-medium text-foreground">{f.clients?.company_name || "—"}</span>
                     {f.clients?.client_number && <span className="ml-1.5 text-[11px] text-muted-foreground">#{f.clients.client_number}</span>}
@@ -155,12 +159,13 @@ export default function AdminStoringen() {
                   </td>
                   <td className="px-4 py-2.5">{f.charge_points?.name || "—"}</td>
                   <td className="px-4 py-2.5">
-                    <Badge variant="outline" className="text-red-500 border-red-500/30">{FAULT_REASON_LABELS[f.fault_reason as keyof typeof FAULT_REASON_LABELS] ?? f.fault_reason}</Badge>
+                    <Badge variant="outline" className="text-destructive border-destructive/30">{FAULT_REASON_LABELS[f.fault_reason as keyof typeof FAULT_REASON_LABELS] ?? f.fault_reason}</Badge>
                   </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{rel(f.detected_at)}</td>
                   <td className="px-4 py-2.5">{statusBadge(f.status)}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

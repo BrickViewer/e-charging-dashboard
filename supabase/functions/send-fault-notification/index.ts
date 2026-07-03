@@ -36,6 +36,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const faultIds: string[] = Array.isArray(body.fault_ids) ? body.fault_ids.filter((x: unknown) => typeof x === "string") : [];
     const dryRun = body.dry_run === true;
+    // force = handmatige "Mail opnieuw": negeer de email_sent_at-dedup en verstuur sowieso opnieuw.
+    const force = body.force === true;
     if (faultIds.length === 0) return json({ status: "error", message: "fault_ids ontbreekt" }, 400);
 
     // Laad de storingen + relaties (actiekaart-data).
@@ -45,8 +47,11 @@ Deno.serve(async (req) => {
       .in("id", faultIds);
     if (error) throw error;
 
-    // Dedup: alleen storingen die nog geen mail kregen.
-    const pending = (faults ?? []).filter((f) => !(f as { email_sent_at?: string | null }).email_sent_at);
+    // Dedup: normaal alleen storingen die nog geen mail kregen. Met force (handmatig
+    // "Mail opnieuw") negeren we email_sent_at en versturen we sowieso opnieuw.
+    const pending = force
+      ? (faults ?? [])
+      : (faults ?? []).filter((f) => !(f as { email_sent_at?: string | null }).email_sent_at);
     if (pending.length === 0) return json({ status: "already_sent" });
 
     // Ontvanger uit de instellingen.
@@ -114,7 +119,7 @@ Deno.serve(async (req) => {
       const id = String((f as { id: string }).id);
       await sb.from("charge_point_fault_events").insert({
         fault_id: id, event_type: "email_sent",
-        note: `Storingsmail verstuurd naar ${recipient}`,
+        note: `Storingsmail ${force ? "opnieuw " : ""}verstuurd naar ${recipient}`,
       });
     }
 

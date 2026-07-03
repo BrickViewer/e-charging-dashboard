@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { Switch } from "@/components/ui/switch";
-import { useOrganization, useLatestEfluxSync, useCronStatus, useRecentInvitations } from "@/hooks/useAdminData";
+import { PhoneField } from "@/components/contacts/PhoneField";
+import { AddressFields, type AddressValue } from "@/components/contacts/AddressFields";
+import { useOrganization, useLatestEfluxSync, useCronStatus, useRecentInvitations, useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -41,6 +43,8 @@ interface ConnectionTestResult {
 
 export default function AdminSettings() {
   const { data: org, isLoading: orgLoading } = useOrganization();
+  const avgCp = useAvgRevenuePerChargePoint();
+  const fmtEur = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
   const { data: syncLogs } = useLatestEfluxSync();
   const { data: cronJobs, isLoading: cronLoading } = useCronStatus();
   const { data: recentInvites } = useRecentInvitations(1);
@@ -53,13 +57,18 @@ export default function AdminSettings() {
 
   const [company, setCompany] = useState({
     name: "", kvk: "", address: "", phone: "", email: "", logo_url: "", dashboard_url: "",
-    btw_number: "", iban: "", bic: "",
-    address_street: "", address_postal: "", address_city: "", country: "Nederland",
+    btw_number: "", iban: "", bic: "", country: "Nederland",
   });
+  // Adres via het gedeelde AddressFields-blok (postcode → straat/plaats-autofill).
+  // De organizations-tabel kent geen los huisnummer-veld; straat + huisnummer worden
+  // bij opslaan samengevoegd tot address_street en bij laden weer ingeladen.
+  const [companyAddr, setCompanyAddr] = useState<AddressValue>({ street: "", houseNumber: "", postalCode: "", city: "" });
   const [savingCompany, setSavingCompany] = useState(false);
 
   const [defaults, setDefaults] = useState({
     default_echarging_fee_per_kwh: "",
+    avg_annual_revenue_per_charge_point: "",
+    lead_estimate_source: "computed",
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
 
@@ -77,8 +86,13 @@ export default function AdminSettings() {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
 
+  // Deze reads (profielen, rollen, toegangsverzoeken) zijn admin/superadmin-only.
+  // Voor manager/viewer blokkeert RLS ze toch; draai ze dan niet eens (geen ruis/errors).
+  const canReadAdmin = role === "admin" || isSuperadmin;
+
   const { data: profiles, isLoading: profilesLoading } = useQuery({
     queryKey: ["admin-profiles"],
+    enabled: canReadAdmin,
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("*");
       if (error) throw error;
@@ -86,8 +100,9 @@ export default function AdminSettings() {
     },
   });
 
-  const { data: userRoles } = useQuery({
+  const { data: userRoles, isLoading: userRolesLoading } = useQuery({
     queryKey: ["admin-user-roles"],
+    enabled: canReadAdmin,
     queryFn: async () => {
       const { data, error } = await supabase.from("user_roles").select("*");
       if (error) throw error;
@@ -98,6 +113,7 @@ export default function AdminSettings() {
   // Openstaande toegangsverzoeken (e-groupers die inlogden maar nog geen rol hebben).
   const { data: pendingRequests } = useQuery({
     queryKey: ["access-requests"],
+    enabled: canReadAdmin,
     queryFn: async () => {
       const { data, error } = await supabase.from("access_requests")
         .select("*").eq("status", "pending").order("requested_at", { ascending: true });
@@ -120,11 +136,18 @@ export default function AdminSettings() {
       phone: org.phone || "", email: org.email || "", logo_url: org.logo_url || "",
       dashboard_url: org.dashboard_url || "http://localhost:8080",
       btw_number: org.btw_number || "", iban: org.iban || "", bic: org.bic || "",
-      address_street: org.address_street || "", address_postal: org.address_postal || "",
-      address_city: org.address_city || "", country: org.country || "Nederland",
+      country: org.country || "Nederland",
+    });
+    // Straat + huisnummer zitten gecombineerd in address_street; die gaat in het
+    // straatveld. Huisnummer blijft leeg tot de gebruiker het los invult.
+    setCompanyAddr({
+      street: org.address_street || "", houseNumber: "",
+      postalCode: org.address_postal || "", city: org.address_city || "",
     });
     setDefaults({
       default_echarging_fee_per_kwh: String(org.default_echarging_fee_per_kwh ?? "0.10"),
+      avg_annual_revenue_per_charge_point: org.avg_annual_revenue_per_charge_point != null ? String(org.avg_annual_revenue_per_charge_point) : "",
+      lead_estimate_source: org.lead_estimate_source === "manual" ? "manual" : "computed",
     });
     setStoringen({
       fault_notification_email: org.fault_notification_email || "info@e-charging.nl",
@@ -141,18 +164,22 @@ export default function AdminSettings() {
     if (!org) return;
     setSavingCompany(true);
     try {
+      // De organizations-tabel heeft geen los huisnummer-veld: straat + huisnummer
+      // samenvoegen tot address_street (bron voor de factuur).
+      const streetLine = [companyAddr.street.trim(), companyAddr.houseNumber.trim()]
+        .filter(Boolean).join(" ");
       // Legacy enkelvoudig adres meeschrijven (samengesteld) zolang oudere
       // consumenten dat veld nog lezen; de factuur gebruikt de gesplitste velden.
       const composedAddress = [
-        company.address_street,
-        [company.address_postal, company.address_city].filter(Boolean).join(" "),
+        streetLine,
+        [companyAddr.postalCode.trim(), companyAddr.city.trim()].filter(Boolean).join(" "),
       ].filter(Boolean).join(", ");
       const { error } = await supabase.from("organizations").update({
         name: company.name, kvk: company.kvk || null,
         address: composedAddress || company.address || null,
-        address_street: company.address_street || null,
-        address_postal: company.address_postal || null,
-        address_city: company.address_city || null,
+        address_street: streetLine || null,
+        address_postal: companyAddr.postalCode.trim() || null,
+        address_city: companyAddr.city.trim() || null,
         country: company.country || "Nederland",
         phone: company.phone || null, email: company.email || null, logo_url: company.logo_url || null,
         dashboard_url: company.dashboard_url || null,
@@ -162,7 +189,7 @@ export default function AdminSettings() {
       queryClient.invalidateQueries({ queryKey: ["admin-organization"] });
       toast.success("Bedrijfsgegevens opgeslagen");
     } catch (err) {
-      toast.error(err.message || "Fout bij opslaan");
+      toast.error(err instanceof Error ? err.message : "Fout bij opslaan");
     } finally {
       setSavingCompany(false);
     }
@@ -172,14 +199,23 @@ export default function AdminSettings() {
     if (!org) return;
     setSavingDefaults(true);
     try {
+      const avgRaw = defaults.avg_annual_revenue_per_charge_point.trim();
+      const avgParsed = avgRaw === "" ? NaN : parseFloat(avgRaw);
+      // Een expliciete 0-fee is geldig (bv. fee kwijtgescholden): alleen terugvallen
+      // op de standaard 0,10 bij een ongeldige/lege of negatieve invoer, niet bij 0.
+      const feeParsed = parseFloat(defaults.default_echarging_fee_per_kwh);
+      const fee = Number.isFinite(feeParsed) && feeParsed >= 0 ? feeParsed : 0.10;
       const { error } = await supabase.from("organizations").update({
-        default_echarging_fee_per_kwh: parseFloat(defaults.default_echarging_fee_per_kwh) || 0.10,
+        default_echarging_fee_per_kwh: fee,
+        avg_annual_revenue_per_charge_point: Number.isFinite(avgParsed) && avgParsed > 0 ? avgParsed : null,
+        lead_estimate_source: defaults.lead_estimate_source === "manual" ? "manual" : "computed",
       }).eq("id", org.id);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["admin-organization"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-avg-revenue-per-cp"] });
       toast.success("Standaardwaarden opgeslagen");
     } catch (err) {
-      toast.error(err.message || "Fout bij opslaan");
+      toast.error(err instanceof Error ? err.message : "Fout bij opslaan");
     } finally {
       setSavingDefaults(false);
     }
@@ -199,7 +235,7 @@ export default function AdminSettings() {
       queryClient.invalidateQueries({ queryKey: ["admin-organization"] });
       toast.success("Storingsinstellingen opgeslagen");
     } catch (err) {
-      toast.error((err as Error).message || "Fout bij opslaan");
+      toast.error(err instanceof Error ? err.message : "Fout bij opslaan");
     } finally {
       setSavingStoringen(false);
     }
@@ -228,7 +264,7 @@ export default function AdminSettings() {
       toast.success("API-sleutels opgeslagen");
       setTestResult(null);
     } catch (err) {
-      toast.error(err.message || "Fout bij opslaan");
+      toast.error(err instanceof Error ? err.message : "Fout bij opslaan");
     } finally {
       setSavingApi(false);
     }
@@ -245,7 +281,7 @@ export default function AdminSettings() {
         setTestResult(data);
       }
     } catch (err) {
-      setTestResult({ status: "error", message: err.message ?? "Onbekende fout" });
+      setTestResult({ status: "error", message: err instanceof Error ? err.message : "Onbekende fout" });
     } finally {
       setTestingConnection(false);
     }
@@ -295,6 +331,10 @@ export default function AdminSettings() {
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Mislukt"),
   });
+  // Alleen de rij die daadwerkelijk verwerkt wordt, mag spinnen/disablen — niet alle rijen.
+  const pendingRequestId = decisionMutation.isPending
+    ? (decisionMutation.variables as { requestId: string } | undefined)?.requestId ?? null
+    : null;
 
   const deleteMutation = useMutation({
     mutationFn: async (userId: string) => {
@@ -331,7 +371,12 @@ export default function AdminSettings() {
   const efluxConfigured = !!org?.eflux_provider_id && (!!lastEfluxSync || testResult?.status === "ok");
   const lastInvite = recentInvites?.[0];
 
-  const efluxLastFailed = syncLogs?.[0]?.status === "error";
+  // Alleen de nieuwste sessie-sync bepaalt of de e-Flux-koppeling faalde; een fout in
+  // een andere entiteit (bv. locatie-reconcile) mag de hero niet op "faalde" zetten.
+  const efluxLastFailed = (syncLogs ?? []).find((l: EfluxSyncLog) => l.entity_type === "cpo_sessions")?.status === "error";
+
+  // Bankgegevens-kaart weerspiegelt of onze eigen self-billing-gegevens (IBAN + BTW) gezet zijn.
+  const bankConfigured = !!org?.iban && !!org?.btw_number;
 
   if (orgLoading) {
     return (
@@ -376,9 +421,11 @@ export default function AdminSettings() {
         <IntegrationCard
           label="Bankgegevens"
           icon={<Landmark className="w-4 h-4" />}
-          status="ok"
-          summary="Via klantportaal"
-          detail="Klanten vullen factuur- en IBAN-gegevens zelf in"
+          status={bankConfigured ? "ok" : "warning"}
+          summary={bankConfigured ? "Ingesteld" : "Onvolledig"}
+          detail={bankConfigured
+            ? "IBAN en BTW-nummer voor self-billing ingesteld"
+            : "Vul IBAN en BTW-nummer in onder Bedrijf → Factuurgegevens"}
         />
         <IntegrationCard
           label="Resend e-mail"
@@ -436,25 +483,23 @@ export default function AdminSettings() {
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><Label>Bedrijfsnaam</Label><Input value={company.name} onChange={e => setCompany(p => ({ ...p, name: e.target.value }))} /></div>
+                <div><Label htmlFor="company-name">Bedrijfsnaam</Label><Input id="company-name" value={company.name} onChange={e => setCompany(p => ({ ...p, name: e.target.value }))} /></div>
                 <div>
-                  <Label>KVK-nummer</Label>
-                  <Input value={company.kvk} onChange={e => setCompany(p => ({ ...p, kvk: e.target.value }))} />
+                  <Label htmlFor="company-kvk">KVK-nummer</Label>
+                  <Input id="company-kvk" value={company.kvk} onChange={e => setCompany(p => ({ ...p, kvk: e.target.value }))} />
                   {(company.kvk === "12345678" || !company.kvk.trim()) && (
                     <p className="text-[11px] text-[hsl(var(--status-amber))] mt-1.5">
                       Placeholder/ontbrekend KVK-nummer — vul het echte nummer in; goedkeuren van afrekeningen is anders geblokkeerd.
                     </p>
                   )}
                 </div>
-                <div><Label>Straat + huisnummer</Label><Input value={company.address_street} onChange={e => setCompany(p => ({ ...p, address_street: e.target.value }))} placeholder="Stationsplein 1" /></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Postcode</Label><Input value={company.address_postal} onChange={e => setCompany(p => ({ ...p, address_postal: e.target.value }))} placeholder="5611 AB" /></div>
-                  <div><Label>Plaats</Label><Input value={company.address_city} onChange={e => setCompany(p => ({ ...p, address_city: e.target.value }))} placeholder="Eindhoven" /></div>
+                <div className="md:col-span-2">
+                  <AddressFields value={companyAddr} onChange={(patch) => setCompanyAddr((a) => ({ ...a, ...patch }))} />
                 </div>
-                <div><Label>Land</Label><Input value={company.country} onChange={e => setCompany(p => ({ ...p, country: e.target.value }))} /></div>
-                <div><Label>Telefoon</Label><Input value={company.phone} onChange={e => setCompany(p => ({ ...p, phone: e.target.value }))} /></div>
-                <div><Label>E-mail</Label><Input type="email" value={company.email} onChange={e => setCompany(p => ({ ...p, email: e.target.value }))} /></div>
-                <div><Label>Logo URL</Label><Input value={company.logo_url} onChange={e => setCompany(p => ({ ...p, logo_url: e.target.value }))} placeholder="https://..." /></div>
+                <div><Label htmlFor="company-country">Land</Label><Input id="company-country" value={company.country} onChange={e => setCompany(p => ({ ...p, country: e.target.value }))} /></div>
+                <div><Label htmlFor="company-phone">Telefoon</Label><PhoneField value={company.phone} onChange={v => setCompany(p => ({ ...p, phone: v ?? "" }))} /></div>
+                <div><Label htmlFor="company-email">E-mail</Label><Input id="company-email" type="email" value={company.email} onChange={e => setCompany(p => ({ ...p, email: e.target.value }))} /></div>
+                <div><Label htmlFor="company-logo">Logo URL</Label><Input id="company-logo" value={company.logo_url} onChange={e => setCompany(p => ({ ...p, logo_url: e.target.value }))} placeholder="https://..." /></div>
               </div>
               <div className="pt-4 border-t border-border space-y-3">
                 <div>
@@ -464,16 +509,17 @@ export default function AdminSettings() {
                   </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><Label>BTW-nummer</Label><Input value={company.btw_number} onChange={e => setCompany(p => ({ ...p, btw_number: e.target.value }))} placeholder="NL857756618B01" /></div>
-                  <div><Label>IBAN</Label><Input value={company.iban} onChange={e => setCompany(p => ({ ...p, iban: e.target.value }))} placeholder="NL00BANK0123456789" /></div>
-                  <div><Label>BIC</Label><Input value={company.bic} onChange={e => setCompany(p => ({ ...p, bic: e.target.value }))} placeholder="INGBNL2A" /></div>
+                  <div><Label htmlFor="company-btw">BTW-nummer</Label><Input id="company-btw" value={company.btw_number} onChange={e => setCompany(p => ({ ...p, btw_number: e.target.value }))} placeholder="NL857756618B01" /></div>
+                  <div><Label htmlFor="company-iban">IBAN</Label><Input id="company-iban" value={company.iban} onChange={e => setCompany(p => ({ ...p, iban: e.target.value }))} placeholder="NL00BANK0123456789" /></div>
+                  <div><Label htmlFor="company-bic">BIC</Label><Input id="company-bic" value={company.bic} onChange={e => setCompany(p => ({ ...p, bic: e.target.value }))} placeholder="INGBNL2A" /></div>
                 </div>
               </div>
               <div className="pt-4 border-t border-border">
-                <Label>
+                <Label htmlFor="company-dashboard-url">
                   Dashboard-URL <span className="text-xs text-muted-foreground font-normal">(voor invitatie-links in mails)</span>
                 </Label>
                 <Input
+                  id="company-dashboard-url"
                   value={company.dashboard_url}
                   onChange={e => setCompany(p => ({ ...p, dashboard_url: e.target.value }))}
                   placeholder="https://app.e-charging.nl"
@@ -503,12 +549,47 @@ export default function AdminSettings() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>E-Charging fee per kWh (€)</Label>
-                  <Input type="number" step="0.01" value={defaults.default_echarging_fee_per_kwh} onChange={e => setDefaults(p => ({ ...p, default_echarging_fee_per_kwh: e.target.value }))} />
-                  <p className="text-[11px] text-muted-foreground mt-1.5">Standaard 0,10. Per klant te overschrijven op de klantpagina.</p>
+                  <Label htmlFor="default-fee">E-Charging fee per kWh (€)</Label>
+                  <Input id="default-fee" type="number" step="0.01" min="0" value={defaults.default_echarging_fee_per_kwh} onChange={e => setDefaults(p => ({ ...p, default_echarging_fee_per_kwh: e.target.value }))} />
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Standaard 0,10; een expliciete 0 wordt gerespecteerd. Per klant te overschrijven op de klantpagina.</p>
                 </div>
                 <div className="text-xs text-muted-foreground self-center leading-relaxed rounded-md border border-border bg-muted/30 p-3">
                   <strong className="text-foreground">BTW</strong> is 21% en wordt per klant ingesteld (BTW-plichtig ja/nee) op de klantpagina. De ERE-laadbeloning is een indicatieve schatting in het klantportaal.
+                </div>
+              </div>
+              <div className="space-y-3 rounded-md border border-border p-4">
+                <div>
+                  <h3 className="text-sm font-semibold">Lead-schatting</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    De geschatte beheeropbrengst per jaar in de leads-module = dit bedrag per laadpaal maal het aantal palen op de offerte.
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
+                  Berekend gemiddelde (o.b.v. afrekeningen):{" "}
+                  <strong className="text-foreground">
+                    {avgCp.data?.computedValue != null ? `${fmtEur(avgCp.data.computedValue)} per paal/jaar` : "nog onvoldoende data"}
+                  </strong>
+                  {avgCp.data?.computedValue != null && (
+                    <span className="text-muted-foreground"> — o.b.v. {avgCp.data.months} maand(en), {avgCp.data.charge_points} palen</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Rekenen met</Label>
+                    <Select value={defaults.lead_estimate_source} onValueChange={v => setDefaults(p => ({ ...p, lead_estimate_source: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="computed">Berekend gemiddelde</SelectItem>
+                        <SelectItem value="manual">Vaste waarde</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">Bij 'Berekend gemiddelde' is de vaste waarde de terugval zolang er te weinig data is.</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="avg-revenue">Vaste waarde per paal/jaar (€)</Label>
+                    <Input id="avg-revenue" type="number" step="0.01" min="0" value={defaults.avg_annual_revenue_per_charge_point} onChange={e => setDefaults(p => ({ ...p, avg_annual_revenue_per_charge_point: e.target.value }))} placeholder="bijv. 180" />
+                    <p className="text-[11px] text-muted-foreground mt-1.5">Gebruikt bij modus 'Vaste waarde' en als terugval bij 'Berekend'. Leeg = geen schatting zonder data.</p>
+                  </div>
                 </div>
               </div>
               <Button onClick={handleSaveDefaults} disabled={savingDefaults}>
@@ -530,20 +611,20 @@ export default function AdminSettings() {
               </div>
               <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-4">
                 <div>
-                  <Label>Automatische storingsdetectie</Label>
+                  <Label htmlFor="fault-detection-switch">Automatische storingsdetectie</Label>
                   <p className="text-[11px] text-muted-foreground mt-1">Open automatisch een storing wanneer een paal van online naar offline gaat.</p>
                 </div>
-                <Switch checked={storingen.fault_detection_enabled} onCheckedChange={(v) => setStoringen(p => ({ ...p, fault_detection_enabled: v }))} />
+                <Switch id="fault-detection-switch" checked={storingen.fault_detection_enabled} onCheckedChange={(v) => setStoringen(p => ({ ...p, fault_detection_enabled: v }))} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Notificatie e-mail</Label>
-                  <Input type="email" value={storingen.fault_notification_email} onChange={e => setStoringen(p => ({ ...p, fault_notification_email: e.target.value }))} placeholder="info@e-charging.nl" />
+                  <Label htmlFor="fault-email">Notificatie e-mail</Label>
+                  <Input id="fault-email" type="email" value={storingen.fault_notification_email} onChange={e => setStoringen(p => ({ ...p, fault_notification_email: e.target.value }))} placeholder="info@e-charging.nl" />
                   <p className="text-[11px] text-muted-foreground mt-1.5">Naar dit adres gaat bij een storing een branded mail met directe link naar de storing.</p>
                 </div>
                 <div>
-                  <Label>Drempel "verdacht" (minuten zonder hartslag)</Label>
-                  <Input type="number" min="5" value={storingen.fault_heartbeat_grace_minutes} onChange={e => setStoringen(p => ({ ...p, fault_heartbeat_grace_minutes: e.target.value }))} />
+                  <Label htmlFor="fault-grace">Drempel "verdacht" (minuten zonder hartslag)</Label>
+                  <Input id="fault-grace" type="number" min="5" value={storingen.fault_heartbeat_grace_minutes} onChange={e => setStoringen(p => ({ ...p, fault_heartbeat_grace_minutes: e.target.value }))} />
                   <p className="text-[11px] text-muted-foreground mt-1.5">Palen die langer dan dit geen hartslag stuurden worden als "verdacht" gemarkeerd (geen mail).</p>
                 </div>
               </div>
@@ -585,11 +666,11 @@ export default function AdminSettings() {
                           </Select>
                         </td>
                         <td className="p-3 text-right space-x-2 whitespace-nowrap">
-                          <Button size="sm" disabled={decisionMutation.isPending}
+                          <Button size="sm" disabled={pendingRequestId === reqRow.id}
                             onClick={() => decisionMutation.mutate({ requestId: reqRow.id, action: "approve", role: requestRoles[reqRow.id] ?? "viewer" })}>
-                            {decisionMutation.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}Toekennen
+                            {pendingRequestId === reqRow.id && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}Toekennen
                           </Button>
-                          <Button size="sm" variant="ghost" disabled={decisionMutation.isPending}
+                          <Button size="sm" variant="ghost" disabled={pendingRequestId === reqRow.id}
                             onClick={() => decisionMutation.mutate({ requestId: reqRow.id, action: "deny" })}>
                             Weigeren
                           </Button>
@@ -623,7 +704,7 @@ export default function AdminSettings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {profilesLoading ? (
+                  {profilesLoading || userRolesLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
                       <tr key={i} className="border-b border-border">
                         <td className="p-3"><Skeleton className="h-4 w-32" /></td>
@@ -728,13 +809,13 @@ export default function AdminSettings() {
                   <p className="text-xs text-muted-foreground">Wijzig via Supabase Dashboard → Project Settings → Edge Functions → Secrets. Klik op "Test verbinding" hieronder om te verifiëren dat de secret werkt.</p>
                 </div>
                 <div>
-                  <Label>Road Provider ID / slug</Label>
-                  <Input value={apiKeys.eflux_provider_id} onChange={e => setApiKeys(p => ({ ...p, eflux_provider_id: e.target.value }))} placeholder="bijv. NLEFL" />
+                  <Label htmlFor="eflux-provider-id">Road Provider ID / slug</Label>
+                  <Input id="eflux-provider-id" value={apiKeys.eflux_provider_id} onChange={e => setApiKeys(p => ({ ...p, eflux_provider_id: e.target.value }))} placeholder="bijv. NLEFL" />
                   <p className="text-xs text-muted-foreground mt-1">Provider-header voor elke API-call (slug of ObjectId).</p>
                 </div>
                 <div>
-                  <Label>Master Account ID (optioneel)</Label>
-                  <Input value={apiKeys.eflux_master_account_id} onChange={e => setApiKeys(p => ({ ...p, eflux_master_account_id: e.target.value }))} placeholder="Account ObjectId van e-Charging zelf" />
+                  <Label htmlFor="eflux-master-account">Master Account ID (optioneel)</Label>
+                  <Input id="eflux-master-account" value={apiKeys.eflux_master_account_id} onChange={e => setApiKeys(p => ({ ...p, eflux_master_account_id: e.target.value }))} placeholder="Account ObjectId van e-Charging zelf" />
                   <p className="text-xs text-muted-foreground mt-1">Beperkt sync tot één account; leeg = alle accounts onder de Provider.</p>
                 </div>
               </div>

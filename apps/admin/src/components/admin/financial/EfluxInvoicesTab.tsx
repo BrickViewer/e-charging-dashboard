@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, Minus, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CheckCircle2, Minus, AlertTriangle, AlertCircle, RefreshCw } from "lucide-react";
 import { useEfluxInvoices } from "@/hooks/useAdminData";
 import { formatEuro } from "@/services/calculations";
 import { monthFullLabel } from "@/lib/period";
@@ -9,7 +10,7 @@ import { PeriodStepper } from "@/components/portal/PeriodStepper";
 
 // Tab 3 — ruwe eFlux-facturen (read-only). cpo-credit = vergoeding aan ons, cpo-usage = platformkosten.
 export function EfluxInvoicesTab() {
-  const { data, isLoading } = useEfluxInvoices();
+  const { data, isLoading, isError, refetch } = useEfluxInvoices();
 
   const years = useMemo(() => {
     const set = new Set<number>((data ?? []).map((r) => r.year ?? 0).filter(Boolean));
@@ -24,6 +25,26 @@ export function EfluxInvoicesTab() {
   );
 
   if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
+
+  // Laadfout — de eFlux-facturen konden niet geladen worden; bied een retry i.p.v.
+  // stilzwijgend de lege "geen facturen gevonden"-staat te tonen.
+  if (isError) {
+    return (
+      <div
+        role="alert"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3"
+      >
+        <div className="flex items-center gap-2 text-sm text-foreground">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 text-destructive" />
+          <span>De eFlux-facturen konden niet worden geladen. Controleer je verbinding en probeer opnieuw.</span>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => { void refetch(); }}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Opnieuw proberen
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

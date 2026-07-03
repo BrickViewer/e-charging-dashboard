@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Banknote, ArrowRight, Wallet, Landmark, Percent } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Banknote, ArrowRight, Wallet, Landmark, Percent, AlertCircle, RefreshCw } from "lucide-react";
 import { CashKpi } from "./CashKpi";
 import { ReconStatusIndicator } from "./ReconStatusIndicator";
 import { useMonthlyFinancialOverview } from "@/hooks/useAdminData";
@@ -12,7 +13,7 @@ import { PeriodStepper } from "@/components/portal/PeriodStepper";
 // Tab 1 — CFO-maandoverzicht: per maand de tie-out van wat we van eFlux ontvingen tegen wat we aan
 // klanten uitkeren + onze fee. Klik een maand om de afrekeningen van die maand te openen.
 export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: string) => void }) {
-  const { data, isLoading } = useMonthlyFinancialOverview();
+  const { data, isLoading, isError, refetch } = useMonthlyFinancialOverview();
 
   const years = useMemo(() => {
     const set = new Set<number>((data ?? []).map((r) => r.year));
@@ -34,13 +35,34 @@ export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: stri
           fee: a.fee + Number(r.fee_total || 0),
           usage: a.usage + Number(r.eflux_usage_incl || 0),
           net: a.net + Number(r.eflux_net_incl || 0),
+          activation: a.activation + Number(r.activation_total || 0),
         }),
-        { credit: 0, payout: 0, fee: 0, usage: 0, net: 0 },
+        { credit: 0, payout: 0, fee: 0, usage: 0, net: 0, activation: 0 },
       ),
     [rows],
   );
 
   if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
+
+  // Laadfout — het maandoverzicht kon niet geladen worden; bied een retry i.p.v.
+  // stilzwijgend een leeg maandoverzicht met €0-totalen te tonen.
+  if (isError) {
+    return (
+      <div
+        role="alert"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3"
+      >
+        <div className="flex items-center gap-2 text-sm text-foreground">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 text-destructive" />
+          <span>Het maandoverzicht kon niet worden geladen. Controleer je verbinding en probeer opnieuw.</span>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => { void refetch(); }}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Opnieuw proberen
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -112,6 +134,21 @@ export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: stri
           </div>
         </CardContent>
       </Card>
+
+      {/* Informatief — géén onderdeel van de tie-out. "Uit te keren" blijft bruto (dat is wat de
+          reconciliatie sluit); dit toont los welk deel als activatiekosten verrekend wordt en wat er
+          netto naar de klanten gaat. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-muted-foreground">
+        <span>
+          Activatie verrekend (excl. BTW):{" "}
+          <span className="tabular-nums text-foreground">{formatEuro(tot.activation)}</span>
+        </span>
+        <span>
+          Netto aan klanten:{" "}
+          <span className="tabular-nums text-foreground">{formatEuro(tot.payout - tot.activation)}</span>
+        </span>
+        <span className="italic text-muted-foreground/70">informatief · geen onderdeel van de tie-out</span>
+      </div>
 
       <p className="text-xs text-muted-foreground">
         "Onze sessie-omzet" = som van de eFlux-vergoeding per sessie (excl. BTW) × 1,21. Een ⚠️-verschil is

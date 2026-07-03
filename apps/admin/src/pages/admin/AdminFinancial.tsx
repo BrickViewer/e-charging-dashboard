@@ -20,7 +20,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { settlementVat } from "@/services/calculations";
+import { settlementVat, settlementNetToTransfer, settlementNetExcl } from "@/services/calculations";
 import { approveSettlement, unapproveSettlement, markSettlementEfluxReimbursed, markSettlementPaid, markSettlementInvoiceSent, markSettlementInvoicePaid } from "@/services/settlements";
 import type { AdminSettlement } from "@/types/db";
 import { getCurrentMonth, monthFullLabel, monthShortLabel } from "@/lib/period";
@@ -46,17 +46,26 @@ type PaymentPipelineSummary = {
 const fmt = (v: number) =>
   `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const periodLabel = monthFullLabel;
-// Klant-cashflow = netto uitbetaling aan klant (excl. BTW). Energie loopt niet meer via ons.
+// Bruto vergoeding = client_payout. Blijft de bron voor de teken-routing (positief =
+// uitbetalen, negatief = incasso); de netto (na activatie) klemt op ≥ 0.
 const customerCashflow = (settlement: AdminSettlement) => Number(settlement.client_payout || 0);
-// BTW-snapshot per afrekening → netto / BTW / incl. Incl = het bedrag dat E-Charging
-// daadwerkelijk overboekt (BTW-plichtige klant) of de klant betaalt (negatieve factuur).
-const vatInfo = (s: AdminSettlement) =>
-  settlementVat({ clientPayout: Number(s.client_payout || 0), vatRate: Number(s.vat_rate ?? 0.21) });
-const inclAmount = (s: AdminSettlement) => vatInfo(s).inclVat;          // incl. BTW (getekend)
+// Netto / BTW / incl NA verrekening van de activatiekosten (gedeelde bron, zoals de factuur).
+// Positieve maand → netto over te boeken (activatie verrekend); negatieve maand (incasso) →
+// de rauwe BTW-splitsing behouden (daar geldt geen activatie, en het bedrag moet negatief blijven).
+const vatInfo = (s: AdminSettlement) => {
+  const payout = Number(s.client_payout || 0);
+  const rate = Number(s.vat_rate ?? 0.21);
+  const activationCost = Number(s.activation_cost || 0);
+  if (payout < 0) return settlementVat({ clientPayout: payout, vatRate: rate });
+  const net = settlementNetExcl({ clientPayout: payout, activationCost, vatRate: rate });
+  const inclVat = settlementNetToTransfer({ clientPayout: payout, activationCost, vatRate: rate });
+  return { vatRate: rate, net, vatAmount: Math.round((inclVat - net) * 100) / 100, inclVat };
+};
+const inclAmount = (s: AdminSettlement) => vatInfo(s).inclVat;          // incl. BTW, netto over te boeken
 const inclAbs = (s: AdminSettlement) => Math.abs(inclAmount(s));
 
 function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
-  const { data: settlements, isLoading } = useAllSettlements();
+  const { data: settlements, isLoading, isError, refetch } = useAllSettlements();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>(initialPeriod);
@@ -104,7 +113,7 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
       }
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
     } catch (err) {
-      toast.error("Herberekenen mislukt: " + (err.message || "Onbekende fout"));
+      toast.error("Herberekenen mislukt: " + (err instanceof Error ? err.message : "Onbekende fout"));
     } finally {
       setRecomputing(false);
     }
@@ -193,6 +202,12 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
   const paginated = filtered.slice(page * perPage, (page + 1) * perPage);
   const totalPages = Math.ceil(filtered.length / perPage);
 
+  // De header-checkbox weerspiegelt uitsluitend de huidige pagina (selectie blijft
+  // wel over paginagrenzen heen bestaan). Zo klopt de aan/uit/indeterminate-staat.
+  const pageSelectedCount = paginated.reduce((n, s) => n + (selected.has(s.id) ? 1 : 0), 0);
+  const allPageSelected = paginated.length > 0 && pageSelectedCount === paginated.length;
+  const somePageSelected = pageSelectedCount > 0 && !allPageSelected;
+
   // Totalen over de hele (gefilterde) selectie — netto / BTW / incl voor de boekhouding.
   const filteredTotals = useMemo(
     () =>
@@ -226,7 +241,7 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
         gross: ms.reduce((a, s) => a + Number(s.gross_revenue || 0), 0),
         net: ms.reduce((a, s) => a + Number(s.client_payout || 0), 0),
         echarging: ms.reduce((a, s) => a + Number(s.echarging_revenue || 0), 0),
-        client: ms.reduce((a, s) => a + customerCashflow(s), 0),
+        client: ms.reduce((a, s) => a + settlementNetExcl({ clientPayout: Number(s.client_payout || 0), activationCost: Number(s.activation_cost || 0), vatRate: Number(s.vat_rate ?? 0.21) }), 0),
         kwh: ms.reduce((a, s) => a + Number(s.total_kwh || 0), 0),
         count: ms.length,
       });
@@ -250,9 +265,14 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
     const sumIncl = (xs: AdminSettlement[]) => xs.reduce((a, s) => a + inclAmount(s), 0);
     const sumInclAbs = (xs: AdminSettlement[]) => xs.reduce((a, s) => a + inclAbs(s), 0);
 
-    const processedThisMonth = processed.filter(
-      (s) => s.paid_at && new Date(s.paid_at) >= monthStart,
-    );
+    // 'Verwerkt deze maand' telt zowel bankbetalingen (paid) als voldane facturen
+    // (invoice_paid). Beide statusovergangen zetten paid_at; val defensief terug op
+    // updated_at zodat een verwerkte afrekening nooit stil uit de maandtelling valt.
+    const processedAt = (s: AdminSettlement) => s.paid_at ?? s.updated_at ?? null;
+    const processedThisMonth = processed.filter((s) => {
+      const at = processedAt(s);
+      return at && new Date(at) >= monthStart;
+    });
 
     return {
       calculated: { count: calculated.length, amount: sumIncl(calculated) },
@@ -290,11 +310,12 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
   };
 
   const toggleAll = () => {
-    if (selected.size === paginated.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(paginated.map((s) => s.id)));
-    }
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) paginated.forEach((s) => next.delete(s.id));
+      else paginated.forEach((s) => next.add(s.id));
+      return next;
+    });
   };
 
   const approveMutation = useMutation({
@@ -419,6 +440,24 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
         </Button>
         </div>
       </div>
+
+      {/* Laadfout — de afrekeningen konden niet geladen worden; bied een retry i.p.v.
+          stilzwijgend de lege "geen resultaten"-staat te tonen. */}
+      {isError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3"
+        >
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+            <span>De afrekeningen konden niet worden geladen. Controleer je verbinding en probeer opnieuw.</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => { void refetch(); }}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Opnieuw proberen
+          </Button>
+        </div>
+      )}
 
       {/* Hero KPI strip — cash flow */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -573,8 +612,9 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
                 <tr className="border-b border-border bg-muted/30">
                   <th className="p-3 w-10">
                     <Checkbox
-                      checked={paginated.length > 0 && selected.size === paginated.length}
+                      checked={allPageSelected ? true : somePageSelected ? "indeterminate" : false}
                       onCheckedChange={toggleAll}
+                      aria-label="Selecteer alle afrekeningen op deze pagina"
                     />
                   </th>
                   <th className="w-8 p-3" />
@@ -615,13 +655,24 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
                   paginated.map((s) => (
                     <Fragment key={s.id}>
                       <tr
-                        className="border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors"
+                        className="border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={expandedId === s.id}
+                        aria-label={`Details ${s.clients?.company_name ?? "afrekening"} ${periodLabel(s.year, s.month)} ${expandedId === s.id ? "inklappen" : "uitklappen"}`}
                         onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setExpandedId(expandedId === s.id ? null : s.id);
+                          }
+                        }}
                       >
                         <td className="p-3" onClick={e => e.stopPropagation()}>
                           <Checkbox
                             checked={selected.has(s.id)}
                             onCheckedChange={() => toggleSelect(s.id)}
+                            aria-label={`Selecteer afrekening ${s.clients?.company_name ?? ""} ${periodLabel(s.year, s.month)}`}
                           />
                         </td>
                         <td className="p-3">
