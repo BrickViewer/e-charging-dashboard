@@ -31,11 +31,11 @@ export function useLeadQuotes(leadId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quotes")
-        .select("id, quote_number, status, total_hardware_cost, total_installation_cost, with_management, created_at")
+        .select("id, quote_number, status, total_hardware_cost, total_installation_cost, with_management, with_installation, created_at")
         .eq("lead_id", leadId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as Pick<Quote, "id" | "quote_number" | "status" | "total_hardware_cost" | "total_installation_cost" | "with_management" | "created_at">[];
+      return (data ?? []) as Pick<Quote, "id" | "quote_number" | "status" | "total_hardware_cost" | "total_installation_cost" | "with_management" | "with_installation" | "created_at">[];
     },
   });
 }

@@ -3,9 +3,11 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { Plus } from "lucide-react";
 import { LeadCard } from "./LeadCard";
 import type { LeadStage, LeadWithTasks } from "@/hooks/useLeads";
+import { useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
+import { leadPipelineValue } from "@/lib/leadEstimate";
 
 const euro = (n: number) =>
-  new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 
 export function StageColumn({
   stage,
@@ -23,7 +25,9 @@ export function StageColumn({
   onCardClick: (l: LeadWithTasks) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `stage:${stage.id}` });
-  const total = leads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
+  const { data: avg } = useAvgRevenuePerChargePoint();
+  // Pijplijnwaarde per lead = eenmalige geschatte waarde + jaarschatting (eerste-jaar-totaal).
+  const total = leads.reduce((s, l) => s + leadPipelineValue(l, avg?.value), 0);
 
   return (
     <div className="flex min-w-[17rem] max-w-[24rem] flex-1 flex-col">

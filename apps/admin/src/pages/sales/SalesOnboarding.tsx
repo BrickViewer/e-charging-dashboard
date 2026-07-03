@@ -19,7 +19,7 @@ import { OnboardingInvoiceDialog } from "@/components/sales/OnboardingInvoiceDia
 import { CreateClientFromQuoteDialog, type QuoteForClient } from "@/components/sales/CreateClientFromQuoteDialog";
 import { useSignedQuotesAwaitingClient } from "@/hooks/useQuotes";
 
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 
 const SCOPE_FILTERS: { key: QuoteScope; label: string }[] = [
   { key: "installatie_beheer", label: SCOPE_LABEL.installatie_beheer },

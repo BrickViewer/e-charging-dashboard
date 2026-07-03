@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { PhoneField } from "@/components/contacts/PhoneField";
 import { useHandoffOrder, useUpdateOrderSite } from "@/hooks/useInstallations";
 import { primaryOrder, type OnboardingClient } from "@/hooks/useOnboarding";
 import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
@@ -113,7 +114,7 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="oh_cphone">Telefoon</Label>
-              <Input id="oh_cphone" value={form.site_contact_phone} onChange={(e) => setForm({ ...form, site_contact_phone: e.target.value })} disabled={sent} />
+              <PhoneField id="oh_cphone" value={form.site_contact_phone} onChange={(v) => setForm({ ...form, site_contact_phone: v ?? "" })} disabled={sent} />
             </div>
             <div className="col-span-2 space-y-1.5">
               <Label htmlFor="oh_notes">Opdrachtomschrijving</Label>

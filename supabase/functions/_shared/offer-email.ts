@@ -171,11 +171,11 @@ export function renderInternalSignedNotice(o: { supabaseUrl: string; quoteNumber
       <tr><td width="130" style="color:#6b7280">Getekend door</td><td style="font-weight:600;color:#111827">${o.signerName}</td></tr>
       <tr><td width="130" style="color:#6b7280">Investering</td><td style="font-weight:600;color:#111827">${eur0(o.total)} excl. BTW</td></tr>
     </table>` +
-    fine("Een klantaccount en installatie-order zijn automatisch aangemaakt. De getekende offerte zit als bijlage.");
+    fine("De getekende offerte zit als bijlage. Rond de klant af via 'Klant aanmaken' (onboarding).");
   const text = `${o.company || "Een klant"} heeft offerte ${o.quoteNumber} digitaal ondertekend.
 Getekend door: ${o.signerName}
 Investering: ${eur0(o.total)} excl. BTW
-Klantaccount + installatie-order automatisch aangemaakt. Getekende offerte als bijlage.`;
+Getekende offerte als bijlage. Rond de klant af via 'Klant aanmaken' (onboarding).`;
   return { html: shell(o.supabaseUrl, inner), text };
 }
 

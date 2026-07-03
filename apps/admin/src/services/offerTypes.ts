@@ -59,6 +59,8 @@ export interface OfferDetails {
   // Extra laadkosten-varianten (€/kWh, zelfde eenheid als laadkosten). null = niet ingevuld (geel).
   laadkostenGasten?: number | null;
   laadkostenEigenGebruik?: number | null;
+  // Laadtarief-modus: dynamisch (excl. tarief) i.p.v. een vast €/kWh-bedrag → offerte toont "Dynamisch (excl. tarief)".
+  chargeTariffDynamic?: boolean | null;
   // Tariefregels in de offerte: geordende lijst van zichtbare keys (in de lijst = zichtbaar; laatst
   // aangezette regel bovenaan). Afwezig = standaard (laadkosten/blokkeer/start + uurtarief bij >0; nieuwe uit).
   tariffOrder?: string[] | null;

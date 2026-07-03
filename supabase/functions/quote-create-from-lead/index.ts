@@ -112,10 +112,12 @@ Deno.serve(async (req) => {
         .select("id, location_number").eq("id", explicitLocationId).maybeSingle();
       if (chosen) {
         locId = chosen.id; locNumber = Number(chosen.location_number);
-        // Koppel het object aan deze lead/bedrijf als dat nog niet zo is.
+        // Zet primair bedrijf/lead alleen als het object nog vrij is; koppel de lead sowieso via de junctie (N:M).
         await serviceClient.from("project_locations")
           .update({ lead_id: lead.id, company_id: lead.company_id ?? null })
           .eq("id", chosen.id).is("lead_id", null);
+        await serviceClient.from("lead_project_locations")
+          .upsert({ lead_id: lead.id, project_location_id: chosen.id }, { onConflict: "lead_id,project_location_id", ignoreDuplicates: true });
       }
     }
     if (!locId) {

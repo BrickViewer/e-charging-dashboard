@@ -142,7 +142,7 @@ const aanhefLine = (raw: string | null | undefined): string => {
 
 // --------------------------------------------------------------------------
 // Eén zichtbare tariefregel in het "afgesproken instellingen"-blok (volgorde = od.tariffOrder).
-export interface TariffLine { label: string; amount: number | null; unit: string }
+export interface TariffLine { label: string; amount: number | null; unit: string; text?: string }
 
 interface ResolvedModel {
   company: string; hasCompany: boolean; isPrivate: boolean; contactName: string; addr1: string; addr2: string;
@@ -195,7 +195,9 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   const uurtarief = firstNum(od.perHourFeePerHour, data.perHourFeePerHour);
   // key → regeldefinitie; welke + in welke volgorde komt uit od.tariffOrder (laatst aangezet bovenaan).
   const tariffDefs: Record<string, TariffLine> = {
-    laadkosten: { label: "Laadkosten", amount: laadkosten, unit: "per kWh" },
+    laadkosten: od.chargeTariffDynamic
+      ? { label: "Laadkosten", amount: null, unit: "", text: "Dynamisch (excl. tarief)" }
+      : { label: "Laadkosten", amount: laadkosten, unit: "per kWh" },
     laadkostenGasten: { label: "Laadkosten gasten", amount: firstNum(od.laadkostenGasten), unit: "per kWh" },
     laadkostenEigenGebruik: { label: "Laadkosten eigen gebruik", amount: firstNum(od.laadkostenEigenGebruik), unit: "per kWh" },
     blokkeertarief: {
@@ -237,7 +239,8 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     eindgroepen: firstNum(od.eindgroepen, tpl.defaultEindgroepen) ?? tpl.defaultEindgroepen,
     eindgroepAmperage: firstNum(od.eindgroepAmperage, tpl.defaultEindgroepAmperage) ?? tpl.defaultEindgroepAmperage,
     leveringText: firstStr(od.leveringText, DEFAULT_LEVERING_TEXT),
-    beheerIntroText: firstStr(od.beheerIntroText, defaultBeheerIntro({ poles: n, addr1, addr2 })),
+    // Beheer-toelichting: volledig adres (straat + huisnummer via addr1), maar zonder postcode (alleen plaats).
+    beheerIntroText: firstStr(od.beheerIntroText, defaultBeheerIntro({ poles: n, addr1, addr2: firstStr(od.addressCity, data.objectCity) })),
     totalInvestment: firstNum(data.totalInvestment),
     stelpost: firstNum(od.stelpostGraafwerk, tpl.defaultStelpostGraafwerk),
     serviceFeePerKwh: firstNum(od.serviceFeePerKwh, tpl.serviceFeePerKwh) ?? tpl.serviceFeePerKwh,
@@ -506,7 +509,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     if (m.tariffLines.length) {
       blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 24));
       m.tariffLines.forEach((l, i) => blocks.push(bRaw(
-        `<div>${esc(l.label)}:</div><div>${mEur(l.amount)} ${esc(l.unit)}</div>`, i === 0 ? 10 : 8)));
+        `<div>${esc(l.label)}:</div><div>${l.text ? esc(l.text) : `${mEur(l.amount)} ${esc(l.unit)}`}</div>`, i === 0 ? 10 : 8)));
     }
   }
 
@@ -529,7 +532,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
         // 170px label-kolom past "Laadkosten eigen gebruik:" (was 95px voor de korte labels).
         const tariff = (lbl: string, val: string) => `<div style="display:flex"><div style="width:170px">${esc(lbl)}</div><div>${val}</div></div>`;
-        m.tariffLines.forEach((l) => blocks.push(bRaw(tariff(`${l.label}:`, `${mEur(l.amount)} ${l.unit}`), 4)));
+        m.tariffLines.forEach((l) => blocks.push(bRaw(tariff(`${l.label}:`, l.text ? esc(l.text) : `${mEur(l.amount)} ${l.unit}`), 4)));
       }
     }
   }

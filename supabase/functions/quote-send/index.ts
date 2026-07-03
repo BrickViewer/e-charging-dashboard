@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
         to: [recipient],
         subject: `E-Charging · Uw offerte ${quote.quote_number}`,
         html, text,
+        sender: "info", // offerte = klantgerichte communicatie → vanuit info@
         tags: [{ name: "type", value: "quote_offer" }],
         ...(pdfBase64 ? { attachments: [{ filename: `offerte-${quote.quote_number}.pdf`, content: pdfBase64 }] } : {}),
       });

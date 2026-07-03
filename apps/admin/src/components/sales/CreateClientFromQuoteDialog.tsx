@@ -5,7 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ScopeSelector } from "@/components/sales/ScopeSelector";
+import { PhoneField } from "@/components/contacts/PhoneField";
+import { AddressFields, type AddressValue } from "@/components/contacts/AddressFields";
 import { useCompany, usePerson } from "@/hooks/useContacts";
+import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useCreateClientFromQuote } from "@/hooks/useQuotes";
 import { useAllClients } from "@/hooks/useAdminData";
 import { cn } from "@/lib/utils";
@@ -30,6 +33,12 @@ export type QuoteForClient = {
 };
 
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
+const EMPTY_ADDR: AddressValue = { street: "", houseNumber: "", postalCode: "", city: "" };
+// Splits een gecombineerd "Straat 3D" in straat + huisnummer voor het gestructureerde AddressFields.
+const splitStreetHouse = (s: string): { street: string; house: string } => {
+  const m = (s ?? "").trim().match(/^(.*?)\s+(\d.*)$/);
+  return m ? { street: m[1].trim(), house: m[2].trim() } : { street: (s ?? "").trim(), house: "" };
+};
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1"><Label className="text-xs">{label}</Label>{children}</div>;
@@ -55,6 +64,8 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
   const [targetClientId, setTargetClientId] = useState<string>("");
   const [clientSearch, setClientSearch] = useState("");
   const { data: allClients } = useAllClients();
+  const { data: settings } = useConfiguratorSettings();
+  const [billing, setBilling] = useState<AddressValue>({ ...EMPTY_ADDR });
 
   // Reset de keuze zodra de dialog voor een (andere) offerte opent. Klanttype defaultt op de aard van
   // de offerte: geen bedrijf gekoppeld → particulier (te overrulen via de toggle).
@@ -87,12 +98,16 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
       contact_name: quote.prospect_contact ?? person.data?.full_name ?? "",
       contact_email: quote.prospect_email ?? person.data?.email ?? "",
       contact_phone: person.data?.phone ?? "",
-      billing_address_street: company.data?.address_street ?? od.addressStreet ?? "",
-      billing_address_postal: company.data?.postal_code ?? od.addressPostalCode ?? "",
-      billing_address_city: company.data?.city ?? od.addressCity ?? "",
-      contract_duration_months: contract.durationMonths != null ? String(contract.durationMonths) : "",
-      notice_period_months: contract.noticePeriodMonths != null ? String(contract.noticePeriodMonths) : "",
+      // Contract automatisch overnemen: afgesproken (snapshot) → org-standaard → 12/3.
+      contract_duration_months: String(contract.durationMonths ?? settings?.defaultContractDurationMonths ?? 12),
+      notice_period_months: String(contract.noticePeriodMonths ?? settings?.defaultNoticePeriodMonths ?? 3),
     });
+    // Factuuradres gestructureerd (los huisnummer/toevoeging): bedrijf-facturatieadres, anders het
+    // (bevroren) offerte-/object-adres gesplitst in straat + huisnummer.
+    const cd = company.data;
+    setBilling(cd?.address_street
+      ? { street: cd.address_street, houseNumber: cd.house_number ?? "", postalCode: cd.postal_code ?? "", city: cd.city ?? "" }
+      : (() => { const sh = splitStreetHouse(od.addressStreet ?? ""); return { street: sh.street, houseNumber: sh.house, postalCode: od.addressPostalCode ?? "", city: od.addressCity ?? "" }; })());
     setManaged(quote.with_management !== false);
     setNeedsInstall(quote.with_installation !== false);
   }, [open, quote?.id, company.data, person.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -120,12 +135,12 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
           btw_number: isParticulier ? null : (t("btw_number").trim() || null),
           // Particulier → 0% btw / betaalspecificatie; de RPC koppelt dan géén bedrijf.
           vat_status: isParticulier ? "private" : null,
-          contact_name: t("contact_name").trim() || null,
+          contact_name: (isParticulier ? t("company_name") : t("contact_name")).trim() || null,
           contact_email: t("contact_email").trim() || null,
           contact_phone: t("contact_phone").trim() || null,
-          billing_address_street: t("billing_address_street").trim() || null,
-          billing_address_postal: t("billing_address_postal").trim() || null,
-          billing_address_city: t("billing_address_city").trim() || null,
+          billing_address_street: [billing.street.trim(), billing.houseNumber.trim()].filter(Boolean).join(" ") || null,
+          billing_address_postal: billing.postalCode.trim() || null,
+          billing_address_city: billing.city.trim() || null,
           contract_duration_months: numOr(t("contract_duration_months")),
           notice_period_months: numOr(t("notice_period_months")),
           managed,
@@ -225,21 +240,17 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
           </div>
 
           <div>
-            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Contactpersoon</p>
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{isParticulier ? "Contactgegevens" : "Contactpersoon"}</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className="col-span-2"><Field label="Naam"><Input value={t("contact_name")} onChange={(e) => set("contact_name")(e.target.value)} /></Field></div>
+              {!isParticulier && <div className="col-span-2"><Field label="Naam"><Input value={t("contact_name")} onChange={(e) => set("contact_name")(e.target.value)} /></Field></div>}
               <Field label="E-mail"><Input type="email" value={t("contact_email")} onChange={(e) => set("contact_email")(e.target.value)} /></Field>
-              <Field label="Telefoon"><Input value={t("contact_phone")} onChange={(e) => set("contact_phone")(e.target.value)} /></Field>
+              <Field label="Telefoon"><PhoneField value={t("contact_phone")} onChange={(v) => set("contact_phone")(v ?? "")} /></Field>
             </div>
           </div>
 
           <div>
             <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Factuuradres</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="col-span-2"><Field label="Straat + nr"><Input value={t("billing_address_street")} onChange={(e) => set("billing_address_street")(e.target.value)} /></Field></div>
-              <Field label="Postcode"><Input value={t("billing_address_postal")} onChange={(e) => set("billing_address_postal")(e.target.value)} /></Field>
-              <Field label="Plaats"><Input value={t("billing_address_city")} onChange={(e) => set("billing_address_city")(e.target.value)} /></Field>
-            </div>
+            <AddressFields value={billing} onChange={(patch) => setBilling((b) => ({ ...b, ...patch }))} />
           </div>
 
           <div>

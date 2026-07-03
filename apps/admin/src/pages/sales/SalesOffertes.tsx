@@ -9,7 +9,7 @@ import { useQuotes } from "@/hooks/useQuotes";
 import { scopeFromFlags, SCOPE_SHORT, SCOPE_BADGE_CLASS } from "@/lib/quoteScope";
 import { NewQuoteDialog } from "@/components/sales/NewQuoteDialog";
 
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 const STATUS: Record<string, { label: string; cls: string }> = {
   concept: { label: "Concept", cls: "bg-zinc-100 text-zinc-600" },
   intern_ter_ondertekening: { label: "Ter ondertekening", cls: "bg-blue-100 text-blue-700" },

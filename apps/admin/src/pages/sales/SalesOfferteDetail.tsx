@@ -8,10 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { EmailBodyEditor } from "@/components/sales/EmailBodyEditor";
 import { toast } from "sonner";
-import { ArrowLeft, Building2, Eye, Loader2, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
+import { ArrowLeft, Building2, Eye, Loader2, MapPin, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, lineItemsOf } from "@/hooks/useQuotes";
 import { useProjectLocation } from "@/hooks/useProjectLocations";
-import { useCompany, usePerson } from "@/hooks/useContacts";
+import { formatObjectAddress } from "@/lib/objectLabel";
+import { useCompany, usePerson, splitName } from "@/hooks/useContacts";
 import { useLead } from "@/hooks/useLeads";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,12 +25,13 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { CompanyPicker } from "@/components/contacts/CompanyPicker";
 import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { LeadPicker } from "@/components/contacts/LeadPicker";
+import { ObjectPicker } from "@/components/contacts/ObjectPicker";
 import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT, defaultBeheerIntro } from "@/services/offerTemplate";
 import { DEFAULT_OFFER_EMAIL, defaultOfferEmail, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { supabase } from "@/integrations/supabase/client";
 
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
 const STATUS_LABEL: Record<string, string> = { concept: "Concept", intern_ter_ondertekening: "Ter ondertekening", verstuurd: "Verstuurd", getekend: "Getekend", verlopen: "Verlopen", afgewezen: "Afgewezen" };
 
@@ -58,8 +60,6 @@ export default function SalesOfferteDetail() {
   const { user } = useAuth();
   const adminsQ = useSignableAdmins();
   const quote = quoteQ.data;
-  // Gekoppeld object (project_location): bron voor het live adres (offerte-adresvelden leeg = volg object).
-  const object = useProjectLocation(quote?.project_location_id ?? undefined).data;
   const tpl = settingsQ.data?.offerTemplate;
   const admins = adminsQ.data ?? [];
   // Eén prijs i.p.v. losse offerteregels — calculatie gebeurt in Excel.
@@ -96,10 +96,17 @@ export default function SalesOfferteDetail() {
   const [personName, setPersonName] = useState("");
   const [leadId, setLeadId] = useState<string | null>(null);
   const [leadName, setLeadName] = useState("");
+  const [objectId, setObjectId] = useState<string | null>(null);
+  const [objectLabel, setObjectLabel] = useState("");
   // Display-/detailgegevens volgen de lokale ids (KvK via company, e-mail via person, lead-naam).
   const company = useCompany(companyId ?? undefined).data;
   const person = usePerson(personId ?? undefined).data;
   const lead = useLead(leadId ?? undefined).data;
+  // Gekoppeld object (project_location): bron voor het live briefkop-adres (incl. huisnummer/toevoeging).
+  const object = useProjectLocation(objectId ?? undefined).data;
+  const addrFromObject: Partial<OfferDetails> = object
+    ? { addressStreet: [object.address_street, object.house_number].filter(Boolean).join(" ") || null, addressPostalCode: object.postal_code ?? null, addressCity: object.city ?? null }
+    : {};
   useEffect(() => { if (lead) setLeadName(lead.company_name || lead.contact_name || ""); }, [lead]);
 
   // Levering & installatie-tekstveld groeit automatisch mee met de inhoud (geen vaste grote bak).
@@ -117,7 +124,10 @@ export default function SalesOfferteDetail() {
       const liSum = lineItemsOf(quote).reduce((s, i) => s + (Number(i.total) || 0), 0);
       const totalsSum = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
       const initial = liSum || totalsSum;
-      setPrice(initial ? String(initial) : "");
+      // Beheer-only: activatiekosten standaard 18,50 per paal (bewerkbaar) wanneer er nog geen totaal is.
+      const beheerOnly = quote.with_installation === false;
+      const activationTotal = 18.5 * (Number(quote.num_charge_points) || 0);
+      setPrice(initial ? String(initial) : (beheerOnly && activationTotal > 0 ? String(activationTotal) : ""));
       setEmail(quote.prospect_email ?? "");
       setWithManagement(quote.with_management !== false);
       setWithInstallation(quote.with_installation !== false);
@@ -127,8 +137,17 @@ export default function SalesOfferteDetail() {
       setIdleGrace(td.idleGraceMinutes != null ? String(td.idleGraceMinutes) : "");
       setNumChargePoints(quote.num_charge_points != null ? String(quote.num_charge_points) : "");
       const odLoaded = ((quote as unknown as { offer_details?: OfferDetails }).offer_details ?? {}) as OfferDetails;
-      // Aanhef standaard de hele zin tonen (WYSIWYG, geen verborgen "Geachte"); bestaande aanhef blijft staan.
-      setOd({ ...odLoaded, aanhef: odLoaded.aanhef && String(odLoaded.aanhef).trim() ? odLoaded.aanhef : "Geachte heer/mevrouw," });
+      // Voorgevulde defaults als echte (witte) waarden i.p.v. grijze placeholders — alleen als nog leeg.
+      const lastName = splitName(quote.prospect_contact ?? "").last_name;
+      const oTpl = settingsQ.data?.offerTemplate;
+      setOd({
+        ...odLoaded,
+        aanhef: odLoaded.aanhef && String(odLoaded.aanhef).trim() ? odLoaded.aanhef : `Geachte heer/mevrouw${lastName ? " " + lastName : ""},`,
+        tav: odLoaded.tav ?? (quote.prospect_contact || null),
+        onzeReferentie: odLoaded.onzeReferentie ?? (quote.quote_number || null),
+        betreft: odLoaded.betreft ?? (oTpl?.defaultBetreftTemplate || "Offerte laadinfrastructuur"),
+        activatiekostenPerSocket: odLoaded.activatiekostenPerSocket ?? (oTpl?.activatiekostenPerSocket || 18.5),
+      });
       setNumDraft({});
       setEmailGreeting(odLoaded.emailGreeting ?? "");
       const seededEmail = defaultOfferEmail({ withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points });
@@ -142,8 +161,19 @@ export default function SalesOfferteDetail() {
       setPersonName(quote.prospect_contact ?? "");
       setLeadId(quote.lead_id ?? null);
       setLeadName("");
+      setObjectId(quote.project_location_id ?? null);
+      setObjectLabel("");
     }
   }, [quote]);
+
+  // Locatie-briefkopregel standaard = object-adres zonder objectnummer ("Bleekstraat 3D, Eindhoven").
+  // Eenmalig per offerte, zodra het object geladen is en het veld nog leeg is.
+  const locSeedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!quote || !object || locSeedRef.current === quote.id) return;
+    locSeedRef.current = quote.id;
+    setOd((prev) => (prev.object != null && String(prev.object).trim() ? prev : { ...prev, object: formatObjectAddress(object) }));
+  }, [quote, object]);
 
   // Compacte setters voor de offerte-velden (overrides; leeg = standaard uit instellingen).
   const odStr = (k: keyof OfferDetails) => (od[k] == null ? "" : String(od[k]));
@@ -178,6 +208,7 @@ export default function SalesOfferteDetail() {
   ];
 
   const isConcept = quote?.status === "concept";
+  const dynamicCharge = od.chargeTariffDynamic === true;
   const grandTotal = numOr(price) ?? 0;
 
   const save = async () => {
@@ -203,11 +234,12 @@ export default function SalesOfferteDetail() {
           company_id: companyId,
           person_id: personId,
           lead_id: leadId,
+          project_location_id: objectId,
           with_management: withManagement,
           with_installation: withInstallation,
           charge_rate_per_kwh: withManagement ? numOr(chargeRate) : null,
           tariff_data: tariffData as unknown as never,
-          offer_details: { ...od, emailGreeting: emailGreeting.trim() || null, emailMessage: emailMessage.trim() || null, emailClosingName: emailClosing.trim() || null } as unknown as never,
+          offer_details: { ...od, ...(isConcept ? addrFromObject : {}), emailGreeting: emailGreeting.trim() || null, emailMessage: emailMessage.trim() || null, emailClosingName: emailClosing.trim() || null } as unknown as never,
           internal_signer_user_id: signerUserId,
         },
       });
@@ -227,7 +259,7 @@ export default function SalesOfferteDetail() {
       // Concept (is_private null) → live afleiden uit het bedrijf; verstuurd → bevroren regime tonen.
       isPrivate: quote!.is_private ?? null,
       contactName: personName || null,
-      objectStreet: object?.address_street ?? null,
+      objectStreet: object ? ([object.address_street, object.house_number].filter(Boolean).join(" ") || null) : null,
       objectPostalCode: object?.postal_code ?? null,
       objectCity: object?.city ?? null,
       numChargePoints: numOr(numChargePoints),
@@ -242,7 +274,7 @@ export default function SalesOfferteDetail() {
       perHourFeePerHour: td.perHourFeeEnabled ? numOr(String(td.perHourFeePerHour ?? "")) : null,
       idleGraceMinutes: numOr(idleGrace),
       validUntil: quote!.valid_until ?? null,
-      offerDetails: od,
+      offerDetails: isConcept ? { ...od, ...addrFromObject } : od,
       // zod's .default() maakt de velden optioneel in het infer-type; runtime is alles gevuld.
       offerTemplate: tpl as OfferTemplateValues | undefined,
     };
@@ -407,9 +439,6 @@ export default function SalesOfferteDetail() {
             <h1 className="text-2xl font-semibold">Offerte {quote.quote_number ?? ""}</h1>
             <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium">{STATUS_LABEL[quote.status ?? ""] ?? quote.status}</span>
           </div>
-          {quote.project_location_id ? (
-            <Link to={`/sales/objecten/${quote.project_location_id}`} className="text-xs text-primary hover:underline">Object / locatie bekijken →</Link>
-          ) : null}
         </div>
         <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setMobilePreview((v) => !v)}>
           <Eye className="mr-1.5 h-4 w-4" /> {mobilePreview ? "Verberg voorbeeld" : "Toon voorbeeld"}
@@ -471,6 +500,10 @@ export default function SalesOfferteDetail() {
                   <div className="flex items-center justify-between"><Label className="text-xs">Lead</Label>{leadId ? <Link to={`/sales/leads?lead=${leadId}`} className="text-[11px] text-primary hover:underline">bekijken →</Link> : null}</div>
                   <LeadPicker value={leadId} valueLabel={leadName || null} onChange={(id, label) => { setLeadId(id); setLeadName(id ? (label ?? leadName) : ""); }} />
                 </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between"><Label className="text-xs">Object</Label>{objectId ? <Link to={`/sales/objecten/${objectId}`} className="text-[11px] text-primary hover:underline">bekijken →</Link> : null}</div>
+                  <ObjectPicker value={objectId} valueLabel={objectLabel || object?.display_name || null} onChange={(id, label) => { setObjectId(id); setObjectLabel(id ? (label ?? objectLabel) : ""); }} />
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -501,22 +534,39 @@ export default function SalesOfferteDetail() {
                   </div>
                   {leadId ? <Link to={`/sales/leads?lead=${leadId}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
                 </div>
+                <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {objectId ? (
+                      <span className="truncate font-medium text-foreground">{object?.display_name || objectLabel || "…"}</span>
+                    ) : <span className="text-muted-foreground">Object — niet gekoppeld</span>}
+                  </div>
+                  {objectId ? <Link to={`/sales/objecten/${objectId}`} className="shrink-0 text-xs text-primary hover:underline">bekijken →</Link> : null}
+                </div>
               </div>
             )}
           </Section>
 
           <Section title="Briefkop & adres">
             <div className="grid grid-cols-2 gap-2">
-              <div className="col-span-2 space-y-1"><Label className="text-xs">Straat + nr <span className="font-normal text-muted-foreground">(leeg = uit object)</span></Label><Input value={odStr("addressStreet")} placeholder={object?.address_street ?? ""} disabled={!isConcept} onChange={(e) => setStr("addressStreet", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Postcode</Label><Input value={odStr("addressPostalCode")} placeholder={object?.postal_code ?? ""} disabled={!isConcept} onChange={(e) => setStr("addressPostalCode", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Plaats</Label><Input value={odStr("addressCity")} placeholder={object?.city ?? ""} disabled={!isConcept} onChange={(e) => setStr("addressCity", e.target.value)} /></div>
-              <div className="col-span-2 space-y-1"><Label className="text-xs">T.a.v.</Label><Input value={odStr("tav")} placeholder={quote.prospect_contact ?? ""} disabled={!isConcept} onChange={(e) => setStr("tav", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Onze referentie</Label><Input value={odStr("onzeReferentie")} placeholder={quote.quote_number ?? ""} disabled={!isConcept} onChange={(e) => setStr("onzeReferentie", e.target.value)} /></div>
+              <div className="col-span-2 space-y-1">
+                <div className="flex items-center justify-between"><Label className="text-xs">Adres <span className="font-normal text-muted-foreground">(uit object)</span></Label>{objectId ? <Link to={`/sales/objecten/${objectId}`} className="text-[11px] text-primary hover:underline">object bewerken →</Link> : null}</div>
+                {object ? (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                    <p>{[object.address_street, object.house_number].filter(Boolean).join(" ") || "—"}</p>
+                    <p className="text-muted-foreground">{[object.postal_code, object.city].filter(Boolean).join(" ")}</p>
+                  </div>
+                ) : (
+                  <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">Geen object gekoppeld — kies er een onder Koppelingen.</p>
+                )}
+              </div>
+              <div className="col-span-2 space-y-1"><Label className="text-xs">T.a.v.</Label><Input value={odStr("tav")} disabled={!isConcept} onChange={(e) => setStr("tav", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Onze referentie</Label><Input value={odStr("onzeReferentie")} disabled={!isConcept} onChange={(e) => setStr("onzeReferentie", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Offertedatum</Label><Input type="date" value={dateVal("offerDate")} disabled={!isConcept} onChange={(e) => setDate("offerDate", e.target.value)} /></div>
-              <div className="col-span-2 space-y-1"><Label className="text-xs">Locatie</Label><Input value={odStr("object")} placeholder={tpl?.defaultObjectTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("object", e.target.value)} /></div>
+              <div className="col-span-2 space-y-1"><Label className="text-xs">Locatie</Label><Input value={odStr("object")} disabled={!isConcept} onChange={(e) => setStr("object", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Aantal laadpunten</Label><Input inputMode="numeric" value={numChargePoints} placeholder={quote.num_charge_points != null ? String(quote.num_charge_points) : ""} disabled={!isConcept} onChange={(e) => { setNumChargePoints(e.target.value); if (emailMessage === lastDefaultRef.current) { const d = defaultOfferEmail({ withInstallation, withManagement, chargePoints: numOr(e.target.value) }); lastDefaultRef.current = d; setEmailMessage(d); } }} /></div>
-              <div className="col-span-2 space-y-1"><Label className="text-xs">Betreft</Label><Input value={odStr("betreft")} placeholder={tpl?.defaultBetreftTemplate || ""} disabled={!isConcept} onChange={(e) => setStr("betreft", e.target.value)} /></div>
-              <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} placeholder="Geachte heer/mevrouw," disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
+              <div className="col-span-2 space-y-1"><Label className="text-xs">Betreft</Label><Input value={odStr("betreft")} disabled={!isConcept} onChange={(e) => setStr("betreft", e.target.value)} /></div>
+              <div className="col-span-2 space-y-1"><Label className="text-xs">Aanhef</Label><Input value={odStr("aanhef")} disabled={!isConcept} onChange={(e) => setStr("aanhef", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Witruimte boven datum (px)</Label><Input inputMode="numeric" value={numVal("dateGapPx")} placeholder="96" disabled={!isConcept} onChange={(e) => setNum("dateGapPx", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Witruimte boven aanhef (px)</Label><Input inputMode="numeric" value={numVal("aanhefGapPx")} placeholder="84" disabled={!isConcept} onChange={(e) => setNum("aanhefGapPx", e.target.value)} /></div>
               <p className="col-span-2 text-[10px] text-muted-foreground">Standaard 96 / 84 px. Bij lange teksten worden deze automatisch verkleind (tot min. 16 px) zodat het investeringsblok boven de voettekst blijft; een eigen waarde geldt als maximum.</p>
@@ -534,7 +584,7 @@ export default function SalesOfferteDetail() {
           ) : (
             <>
               <Section title="Toelichting beheer (pagina 1)" hint="Begeleidende tekst onder 'Wij maken van uw laadpalen een inkomstenbron' — alinea's scheiden met een lege regel. Leeg laten = standaardtekst.">
-                <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? defaultBeheerIntro({ poles: numOr(numChargePoints), addr1: odStr("addressStreet") || object?.address_street || "", addr2: [odStr("addressPostalCode") || object?.postal_code, odStr("addressCity") || object?.city].filter(Boolean).join(" ") })} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
+                <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? defaultBeheerIntro({ poles: numOr(numChargePoints), addr1: [object?.address_street, object?.house_number].filter(Boolean).join(" ") || odStr("addressStreet"), addr2: object?.city || odStr("addressCity") })} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
               </Section>
               <Section title="Eenmalige kosten" hint="De eenmalige activatie-/onboardingkost voor het beheer van de bestaande laadpalen.">
                 <div className="grid grid-cols-2 gap-2">
@@ -547,7 +597,14 @@ export default function SalesOfferteDetail() {
           {withManagement && (
             <Section title="Tarieven & storingen">
               <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1"><Label className="text-xs">Laadtarief / kWh (€)</Label><Input inputMode="decimal" value={chargeRate} disabled={!isConcept} onChange={(e) => setChargeRate(e.target.value)} /></div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Laadtarief / kWh (€)</Label>
+                  <Input inputMode="decimal" value={dynamicCharge ? "" : chargeRate} placeholder={dynamicCharge ? "Dynamisch" : undefined} disabled={!isConcept || dynamicCharge} onChange={(e) => setChargeRate(e.target.value)} />
+                  <label className="mt-1 flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
+                    <span className="text-xs text-foreground">Dynamisch (excl. tarief)</span>
+                    <Switch checked={dynamicCharge} disabled={!isConcept} onCheckedChange={(v) => { setOd((o) => ({ ...o, chargeTariffDynamic: v ? true : null })); if (v) setChargeRate(""); }} />
+                  </label>
+                </div>
                 <div className="space-y-1"><Label className="text-xs">Blokkeertarief / min (€)</Label><Input inputMode="decimal" value={idleFee} disabled={!isConcept} onChange={(e) => setIdleFee(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Starttarief / keer (€)</Label><Input inputMode="decimal" value={numVal("startFeePerSession")} disabled={!isConcept} onChange={(e) => setNum("startFeePerSession", e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Laadkosten gasten / kWh (€)</Label><Input inputMode="decimal" value={numVal("laadkostenGasten")} disabled={!isConcept} onChange={(e) => setNum("laadkostenGasten", e.target.value)} /></div>
@@ -559,7 +616,7 @@ export default function SalesOfferteDetail() {
                 {withInstallation && (
                   <>
                     <div className="space-y-1"><Label className="text-xs">Toeslag werkuur (€)</Label><Input inputMode="decimal" value={numVal("toeslagWerkuur")} placeholder={String(tpl?.toeslagWerkuur ?? "")} disabled={!isConcept} onChange={(e) => setNum("toeslagWerkuur", e.target.value)} /></div>
-                    <div className="space-y-1"><Label className="text-xs">Activatiekosten / socket (€)</Label><Input inputMode="decimal" value={numVal("activatiekostenPerSocket")} placeholder={String(tpl?.activatiekostenPerSocket ?? "")} disabled={!isConcept} onChange={(e) => setNum("activatiekostenPerSocket", e.target.value)} /></div>
+                    <div className="space-y-1"><Label className="text-xs">Activatiekosten / socket (€)</Label><Input inputMode="decimal" value={numVal("activatiekostenPerSocket")} disabled={!isConcept} onChange={(e) => setNum("activatiekostenPerSocket", e.target.value)} /></div>
                   </>
                 )}
               </div>
