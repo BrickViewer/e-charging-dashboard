@@ -1,5 +1,5 @@
 import type { AdminSettlement } from "@/types/db";
-import { settlementVat } from "@/services/calculations";
+import { settlementVat, settlementNetToTransfer } from "@/services/calculations";
 import { FeeWaiverControl } from "@/components/admin/financial/FeeWaiverControl";
 
 const fmt = (v: number) => `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -11,6 +11,14 @@ export function SettlementDetailRow({ settlement }: { settlement: AdminSettlemen
   });
   const hasVat = vat.vatRate > 0;
   const vatPct = (vat.vatRate * 100).toLocaleString("nl-NL", { maximumFractionDigits: 2 });
+  // Verrekende activatiekosten — altijd E-Charging's 21% output-BTW (tegengestelde richting).
+  const activation = settlementVat({ clientPayout: Number(settlement.activation_cost || 0), vatRate: 0.21 });
+  const hasActivation = activation.net > 0;
+  const netToTransfer = settlementNetToTransfer({
+    clientPayout: Number(settlement.client_payout || 0),
+    activationCost: Number(settlement.activation_cost || 0),
+    vatRate: Number(settlement.vat_rate ?? 0.21),
+  });
   return (
     <tr>
       <td colSpan={10} className="p-0">
@@ -64,9 +72,21 @@ export function SettlementDetailRow({ settlement }: { settlement: AdminSettlemen
               <p className="font-medium">{fmt(vat.vatAmount)}</p>
             </div>
             <div>
-              <p className="text-muted-foreground mb-1">Incl. BTW (overboeken)</p>
-              <p className="font-semibold text-primary">{fmt(vat.inclVat)}</p>
+              <p className="text-muted-foreground mb-1">{hasActivation ? "Vergoeding incl. BTW" : "Incl. BTW (overboeken)"}</p>
+              <p className={hasActivation ? "font-medium" : "font-semibold text-primary"}>{fmt(vat.inclVat)}</p>
             </div>
+            {hasActivation && (
+              <>
+                <div>
+                  <p className="text-muted-foreground mb-1">Activatiekosten (verrekend, incl. BTW)</p>
+                  <p className="font-medium">− {fmt(activation.inclVat)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground mb-1">Netto over te boeken</p>
+                  <p className="font-semibold text-primary">{fmt(netToTransfer)}</p>
+                </div>
+              </>
+            )}
             <div>
               <p className="text-muted-foreground mb-1">Geschatte ERE-opbrengst</p>
               <p className="font-medium text-green-700 dark:text-green-400">~{fmt(Number(settlement.ere_estimate || 0))} <span className="text-xs text-muted-foreground font-normal">indicatief</span></p>

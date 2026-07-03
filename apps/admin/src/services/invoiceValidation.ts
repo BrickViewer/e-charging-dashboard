@@ -30,6 +30,7 @@ export interface InvoiceValidationInput {
     invoice_number?: string | null;
     vat_status?: string | null;
     vat_rate?: number | null;
+    client_payout?: number | null;
   };
   client: {
     company_name?: string | null;
@@ -130,6 +131,13 @@ export function validateSelfBillingInvoiceData(input: InvoiceValidationInput): I
   }
   if ((vs === "kor" || vs === "private") && rate > 0) {
     add("vat_rate", "BTW-tarief staat op de afrekening terwijl de leverancier geen BTW rekent", "afrekening");
+  }
+
+  // ── Negatieve afrekening (klant is E-Charging geld schuldig) hoort NIET op een
+  //    self-billing vergoedingsfactuur (die zou "wordt aan u uitbetaald" tonen bij een
+  //    negatief bedrag). Dit loopt via de aparte incassofactuur / "Factuur te sturen"-pad.
+  if (Number(settlement.client_payout ?? 0) < 0) {
+    add("client_payout", "Negatieve afrekening — verloopt via de aparte incassofactuur, niet via een vergoedingsfactuur", "afrekening");
   }
 
   return { ok: missing.length === 0, missing };

@@ -466,6 +466,8 @@ export function buildDemoDataset(params: DemoParams): DemoDataset {
     total_kwh: m.kwh,
     total_customer_cashflow: m.yield_,
     estimated_client_yield: m.yield_,
+    activation_cost: 0,
+    vat_rate: 0.21,
     co2_kg_avoided: round2(m.kwh * co2Rate),
     ere_estimate: ereOn ? round2(m.kwh * ereRate) : 0,
   }));
@@ -488,6 +490,7 @@ export function buildDemoDataset(params: DemoParams): DemoDataset {
       total_kwh: m.kwh,
       total_sessions: m.sessions,
       client_payout: m.yield_,
+      activation_cost: 0,
       vat_rate: 0.21,
       vat_status: "vat_liable",
       invoice_number: m.invoiceNumber,

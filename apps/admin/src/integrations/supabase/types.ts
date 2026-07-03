@@ -842,6 +842,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          activation_fee_total: number
           auto_renew: boolean
           billing_address: string | null
           billing_address_city: string | null
@@ -866,6 +867,9 @@ export type Database = {
           erased_at: string | null
           erased_by: string | null
           erasure_reason: string | null
+          ere_arranged_at: string | null
+          ere_arranged_by: string | null
+          ere_requested_at: string | null
           ere_rate_per_kwh: number | null
           id: string
           kvk: string | null
@@ -874,6 +878,7 @@ export type Database = {
           needs_installation: boolean
           notes: string | null
           notice_period_months: number
+          onboarding_completed_at: string | null
           organization_id: string
           payment_onboarding_status: string
           payment_onboarding_submitted_at: string | null
@@ -889,6 +894,7 @@ export type Database = {
           vat_status_confirmed_by: string | null
         }
         Insert: {
+          activation_fee_total?: number
           auto_renew?: boolean
           billing_address?: string | null
           billing_address_city?: string | null
@@ -913,6 +919,9 @@ export type Database = {
           erased_at?: string | null
           erased_by?: string | null
           erasure_reason?: string | null
+          ere_arranged_at?: string | null
+          ere_arranged_by?: string | null
+          ere_requested_at?: string | null
           ere_rate_per_kwh?: number | null
           id?: string
           kvk?: string | null
@@ -921,6 +930,7 @@ export type Database = {
           needs_installation?: boolean
           notes?: string | null
           notice_period_months?: number
+          onboarding_completed_at?: string | null
           organization_id: string
           payment_onboarding_status?: string
           payment_onboarding_submitted_at?: string | null
@@ -936,6 +946,7 @@ export type Database = {
           vat_status_confirmed_by?: string | null
         }
         Update: {
+          activation_fee_total?: number
           auto_renew?: boolean
           billing_address?: string | null
           billing_address_city?: string | null
@@ -960,6 +971,9 @@ export type Database = {
           erased_at?: string | null
           erased_by?: string | null
           erasure_reason?: string | null
+          ere_arranged_at?: string | null
+          ere_arranged_by?: string | null
+          ere_requested_at?: string | null
           ere_rate_per_kwh?: number | null
           id?: string
           kvk?: string | null
@@ -968,6 +982,7 @@ export type Database = {
           needs_installation?: boolean
           notes?: string | null
           notice_period_months?: number
+          onboarding_completed_at?: string | null
           organization_id?: string
           payment_onboarding_status?: string
           payment_onboarding_submitted_at?: string | null
@@ -2372,6 +2387,7 @@ export type Database = {
           expected_close_date: string | null
           grid_notes: string | null
           has_solar: boolean | null
+          house_number: string | null
           id: string
           kvk: string | null
           location_type: string | null
@@ -2419,6 +2435,7 @@ export type Database = {
           expected_close_date?: string | null
           grid_notes?: string | null
           has_solar?: boolean | null
+          house_number?: string | null
           id?: string
           kvk?: string | null
           location_type?: string | null
@@ -2466,6 +2483,7 @@ export type Database = {
           expected_close_date?: string | null
           grid_notes?: string | null
           has_solar?: boolean | null
+          house_number?: string | null
           id?: string
           kvk?: string | null
           location_type?: string | null
@@ -2641,7 +2659,9 @@ export type Database = {
           address_city: string | null
           address_postal: string | null
           address_street: string | null
+          avg_annual_revenue_per_charge_point: number | null
           bic: string | null
+          lead_estimate_source: string
           btw_number: string | null
           country: string
           created_at: string
@@ -2679,7 +2699,9 @@ export type Database = {
           address_city?: string | null
           address_postal?: string | null
           address_street?: string | null
+          avg_annual_revenue_per_charge_point?: number | null
           bic?: string | null
+          lead_estimate_source?: string
           btw_number?: string | null
           country?: string
           created_at?: string
@@ -2717,7 +2739,9 @@ export type Database = {
           address_city?: string | null
           address_postal?: string | null
           address_street?: string | null
+          avg_annual_revenue_per_charge_point?: number | null
           bic?: string | null
+          lead_estimate_source?: string
           btw_number?: string | null
           country?: string
           created_at?: string
@@ -3378,6 +3402,7 @@ export type Database = {
       }
       settlements: {
         Row: {
+          activation_cost: number
           client_id: string
           client_payout: number
           created_at: string
@@ -3403,6 +3428,7 @@ export type Database = {
           year: number
         }
         Insert: {
+          activation_cost?: number
           client_id: string
           client_payout?: number
           created_at?: string
@@ -3428,6 +3454,7 @@ export type Database = {
           year: number
         }
         Update: {
+          activation_cost?: number
           client_id?: string
           client_payout?: number
           created_at?: string

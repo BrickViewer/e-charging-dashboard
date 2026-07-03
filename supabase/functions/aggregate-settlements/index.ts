@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
-import { DEFAULT_ECHARGING_FEE_PER_KWH, computeSettlement } from "../_shared/settlement-math.ts";
+import { DEFAULT_ECHARGING_FEE_PER_KWH, computeSettlement, computeActivationCost } from "../_shared/settlement-math.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -120,6 +120,9 @@ Deno.serve(async (req: Request) => {
     } catch (e) {
       console.warn("settlement_gap_months threw:", (e as Error).message);
     }
+
+    // Oplopend verwerken: activatie-verrekening leest eerdere maanden, dus die moeten eerst.
+    months.sort((a, b) => a.year - b.year || a.month - b.month);
 
     for (const { year, month } of months) {
       const result = await aggregateMonth(supabase, year, month);
@@ -301,18 +304,36 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
   const clientFee = new Map<string, number>();
   const clientVatLiable = new Map<string, boolean>();
   const clientVatStatus = new Map<string, string | null>();
+  const clientActivationTotal = new Map<string, number>(); // eenmalige activatiekosten (excl BTW) te verrekenen
   const managedClients = new Set<string>();
   if (clientIds.length > 0) {
     const { data: clients } = await supabase
       .from("clients")
-      .select("id, echarging_fee_per_kwh, vat_liable, vat_status, managed")
+      .select("id, echarging_fee_per_kwh, vat_liable, vat_status, managed, activation_fee_total")
       .in("id", clientIds);
     for (const c of clients ?? []) {
       const override = c.echarging_fee_per_kwh;
       clientFee.set(c.id as string, override === null || override === undefined ? orgFeePerKwh : Number(override));
       clientVatLiable.set(c.id as string, c.vat_liable !== false); // legacy fallback
       clientVatStatus.set(c.id as string, (c.vat_status as string | null) ?? null);
+      clientActivationTotal.set(c.id as string, Number(c.activation_fee_total ?? 0));
       if (c.managed !== false) managedClients.add(c.id as string); // 'zonder beheer' → geen opbrengstdeling
+    }
+  }
+
+  // Activatiekosten worden verrekend met de eerste vergoedingsfactuur(en): som per klant het
+  // deel dat in EERDERE maanden al is ingehouden, zodat de rest doorschuift (en herruns
+  // idempotent blijven). client_payout blijft bruto; activation_cost is de aftrek.
+  const earlierActivation = new Map<string, number>();
+  if (clientIds.length > 0) {
+    const { data: prior } = await supabase
+      .from("settlements")
+      .select("client_id, activation_cost")
+      .in("client_id", clientIds)
+      .or(`year.lt.${year},and(year.eq.${year},month.lt.${month})`);
+    for (const p of prior ?? []) {
+      const cid = p.client_id as string;
+      earlierActivation.set(cid, (earlierActivation.get(cid) ?? 0) + Number(p.activation_cost ?? 0));
     }
   }
 
@@ -379,6 +400,17 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
     // Blended snapshot voor portal/weergave (exact = client_payout + echarging_revenue = gross).
     const blendedFee = a.total_kwh > 0 ? echargingRevenue / a.total_kwh : 0;
 
+    // Activatiekosten inhouden op de eerste afrekening(en) — pure, geteste formule (zie
+    // settlement-math.ts computeActivationCost + activation-netting.test.ts). Gecapt op de
+    // incl-BTW-grondslag zodat netto over te boeken ≥ 0 blijft, ook voor niet-BTW-klanten;
+    // rest schuift door naar de volgende maand. Idempotent over herruns.
+    const activationCost = computeActivationCost({
+      activationTotal: clientActivationTotal.get(a.client_id) ?? 0,
+      alreadyNetted: earlierActivation.get(a.client_id) ?? 0,
+      clientPayout,
+      vatRate,
+    });
+
     const newStatus = isMonthStillRunning ? "live" : "calculated";
 
     const row = {
@@ -393,6 +425,7 @@ async function aggregateMonth(supabase: SupabaseClient, year: number, month: num
       echarging_fee_per_kwh: feeWaived ? 0 : blendedFee, // blended snapshot (0 bij kwijtschelding)
       echarging_revenue: echargingRevenue,
       client_payout: clientPayout,
+      activation_cost: activationCost, // aftrek op de eerste vergoedingsfactuur (excl BTW)
       vat_rate: vatRate, // BTW-snapshot (0.21 BTW-plichtig, 0 anders)
       ere_estimate: 0, // informatief; portal toont eigen schatting via Laadbeloning
       status: newStatus,

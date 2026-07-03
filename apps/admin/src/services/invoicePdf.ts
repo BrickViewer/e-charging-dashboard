@@ -3,7 +3,7 @@ import autoTable from "jspdf-autotable";
 import logoUrl from "@/assets/logo-full-color.svg";
 import { OUTFIT_REGULAR_BASE64, OUTFIT_SEMIBOLD_BASE64 } from "@/assets/fonts/outfit";
 import { getSettlementSessions } from "@/services/sessions";
-import { settlementVat } from "@/services/calculations";
+import { settlementVat, settlementNetToTransfer } from "@/services/calculations";
 import { MONTH_LABELS_LONG } from "@/lib/period";
 import {
   effectiveVatStatus,
@@ -77,6 +77,9 @@ export interface SelfBillingSettlement {
   echarging_fee_per_kwh?: number | null;
   echarging_revenue?: number | null;
   client_payout: number | null;
+  // Eenmalige activatiekosten (excl BTW) verrekend op deze afrekening. Verschijnt als aparte
+  // "− activatiekosten"-regel MET eigen 21% BTW (E-Charging → klant, tegengestelde BTW-richting).
+  activation_cost?: number | null;
   vat_rate?: number | null;   // 0.21 (BTW-plichtig) of 0; default 0.21
   period_start: string;
   period_end: string;
@@ -254,6 +257,17 @@ export async function buildSelfBillingInvoicePdf(
   const inclBtw = vat.inclVat;
   const hasVat = vat.vatRate > 0;
   const vatPct = (vat.vatRate * 100).toLocaleString("nl-NL", { maximumFractionDigits: 2 });
+  // Activatiekosten (verrekend) — E-Charging levert onboarding aan de klant → ALTIJD 21% output-BTW,
+  // ongeacht de BTW-status van de klant (tegengestelde richting van de vergoeding). 0 → geen regel.
+  const activation = settlementVat({ clientPayout: Number(settlement.activation_cost || 0), vatRate: 0.21 });
+  const hasActivation = activation.net > 0;
+  // Netto over te boeken = vergoeding incl − activatie incl (gedeelde bron; geklemd ≥ 0).
+  const netToPay = settlementNetToTransfer({
+    clientPayout: Number(settlement.client_payout || 0),
+    activationCost: Number(settlement.activation_cost || 0),
+    vatRate: Number(settlement.vat_rate ?? 0.21),
+  });
+  const netFullyOffset = hasActivation && netToPay <= 0.005;
   // Particulier (niet-ondernemer): geen btw-factuur/self-billing, maar een betaalspecificatie.
   const isPrivate = isBetaalspecificatie(vatStatus);
   const docTitle = isPrivate ? "Betaalspecificatie" : "Vergoedingsfactuur";
@@ -361,12 +375,22 @@ export async function buildSelfBillingInvoicePdf(
   doc.setFontSize(9);
   doc.setTextColor(...BRAND_GREEN);
   doc.text(
-    isPrivate
+    netFullyOffset
+      ? "Uw vergoeding is volledig verrekend met de eenmalige activatiekosten."
+      : isPrivate
       ? "Deze betaalspecificatie wordt aan u uitbetaald. U hoeft niets te betalen."
       : "Deze factuur wordt aan u uitbetaald. U hoeft niets te betalen.",
     L, cursor,
   );
   cursor += 4.5;
+  // Activatiekosten worden op deze eerste afrekening verrekend — expliciet benoemen.
+  if (hasActivation && !netFullyOffset) {
+    setFont("normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text(`Uw eenmalige activatiekosten (incl. BTW) zijn hierop verrekend: ${euro(activation.inclVat)}.`, L, cursor);
+    cursor += 5;
+  }
   // Self-billing-markering (Wet OB art. 35a) geldt alleen voor een btw-ondernemer-leverancier. Een particulier
   // (niet-ondernemer) reikt geen btw-factuur uit → betaalspecificatie zonder deze vermelding.
   if (!isPrivate) {
@@ -435,21 +459,45 @@ export async function buildSelfBillingInvoicePdf(
   setFont("normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text(`${settlement.total_sessions ?? 0} sessies · ${nlNum(totalKwh, 2)} kWh`, L, cursor);
-  cursor += 12;
+  doc.text(`${settlement.total_sessions ?? 0} ${(settlement.total_sessions ?? 0) === 1 ? "sessie" : "sessies"} · ${nlNum(totalKwh, 2)} kWh`, L, cursor);
+  cursor += hasActivation ? 9 : 12;
+
+  // Activatiekosten (verrekend) — aparte regelitem met eigen 21% BTW (E-Charging → klant).
+  if (hasActivation) {
+    setFont("normal");
+    doc.setFontSize(10.5);
+    doc.setTextColor(...INK);
+    doc.text("Activatiekosten (verrekend)", L, cursor);
+    setFont("bold");
+    doc.text(`- ${euro(activation.net)}`, R, cursor, { align: "right" });
+    cursor += 4.5;
+    setFont("normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text("Eenmalige activatie- en onboardingkosten", L, cursor);
+    cursor += 12;
+  }
 
   // ── Btw-blok (rechts) — afhankelijk van de BTW-status van de leverancier ──
+  // Met een activatie-regel tonen we altijd de opbouw (vergoeding + activatie, elk eigen BTW)
+  // en sluiten af met "Netto over te boeken" = vergoeding incl − activatie incl.
   const labelX = 128;
-  if (hasVat) {
+  const totalRow = (label: string, value: string) => {
+    doc.text(label, labelX, cursor);
+    doc.text(value, R, cursor, { align: "right" });
+    cursor += 5.5;
+  };
+  if (hasVat || hasActivation) {
     setFont("normal");
     doc.setFontSize(9.5);
     doc.setTextColor(...INK);
-    doc.text("Subtotaal (excl. BTW)", labelX, cursor);
-    doc.text(euro(subtotal), R, cursor, { align: "right" });
-    cursor += 5.5;
-    doc.text(`BTW ${vatPct}%`, labelX, cursor);
-    doc.text(euro(btw), R, cursor, { align: "right" });
-    cursor += 3.5;
+    totalRow(hasActivation ? "Vergoeding (excl. BTW)" : "Subtotaal (excl. BTW)", euro(subtotal));
+    if (hasVat) totalRow(`BTW ${vatPct}%`, euro(btw));
+    if (hasActivation) {
+      totalRow("Activatiekosten (excl. BTW)", `- ${euro(activation.net)}`);
+      totalRow("BTW 21% (activatie)", `- ${euro(activation.vatAmount)}`);
+    }
+    cursor -= 2; // strak vóór de scheidingslijn (zoals de oude +3.5 i.p.v. +5.5)
   }
   doc.setDrawColor(...BRAND_GREEN);
   doc.setLineWidth(0.3);
@@ -458,8 +506,9 @@ export async function buildSelfBillingInvoicePdf(
   setFont("bold");
   doc.setFontSize(11);
   doc.setTextColor(...INK);
-  doc.text(hasVat ? "Totaal incl. BTW" : "Totaal", labelX, cursor);
-  doc.text(euro(inclBtw), R, cursor, { align: "right" });
+  const finalLabel = hasActivation ? "Netto over te boeken" : hasVat ? "Totaal incl. BTW" : "Totaal";
+  doc.text(finalLabel, labelX, cursor);
+  doc.text(euro(hasActivation ? netToPay : inclBtw), R, cursor, { align: "right" });
 
   // Vermelding van de BTW-behandeling bij een 0%-factuur (Wet OB: de reden moet
   // op de factuur staan). vat_liable-facturen hebben de reguliere splitsing.
@@ -468,12 +517,25 @@ export async function buildSelfBillingInvoicePdf(
     setFont("normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
-    const vatNote = vatStatus === "kor"
-      ? "Vrijgesteld van BTW op grond van de kleineondernemersregeling (KOR)."
-      : vatStatus === "private"
-      ? "BTW niet van toepassing (leverancier handelt als particulier)."
-      : "Geen BTW van toepassing.";
-    doc.text(vatNote, R, cursor, { align: "right" });
+    if (hasActivation) {
+      // 0%-vergoeding MET een 21%-activatieregel: scope de vrijstelling expliciet op de
+      // vergoeding en benoem de activatie-BTW apart, anders leest het als een tegenspraak.
+      const vergNote = vatStatus === "kor"
+        ? "Uw vergoeding is vrijgesteld van BTW (kleineondernemersregeling)."
+        : vatStatus === "private"
+        ? "Uw vergoeding is vrijgesteld van BTW (u handelt als particulier)."
+        : "Geen BTW van toepassing op uw vergoeding.";
+      doc.text(vergNote, R, cursor, { align: "right" });
+      cursor += 3.6;
+      doc.text("De activatiekosten zijn een dienst van E-Charging en bevatten 21% BTW.", R, cursor, { align: "right" });
+    } else {
+      const vatNote = vatStatus === "kor"
+        ? "Vrijgesteld van BTW op grond van de kleineondernemersregeling (KOR)."
+        : vatStatus === "private"
+        ? "BTW niet van toepassing (leverancier handelt als particulier)."
+        : "Geen BTW van toepassing.";
+      doc.text(vatNote, R, cursor, { align: "right" });
+    }
   }
 
   // ── Pagina 2+: transactiespecificatie (netto per sessie) ─
@@ -513,7 +575,7 @@ export async function buildSelfBillingInvoicePdf(
     setFont("normal");
     doc.setFontSize(9);
     doc.setTextColor(...MUTED);
-    doc.text(`Laadsessies ${periodLabel} — ${lines.length} sessies`, L, 28);
+    doc.text(`Laadsessies ${periodLabel} — ${lines.length} ${lines.length === 1 ? "sessie" : "sessies"}`, L, 28);
     doc.setFontSize(8);
     doc.text(`Onderstaande laadsessies vormen samen de vergoeding over ${periodLabel}.`, L, 33);
 

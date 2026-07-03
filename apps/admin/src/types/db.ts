@@ -43,7 +43,7 @@ export type LocationWithChargePoints = Location & {
 };
 
 export type AdminLocation = Location & {
-  charge_points?: Pick<ChargePoint, "id" | "status" | "connectivity_state">[];
+  charge_points?: Pick<ChargePoint, "id" | "status" | "connectivity_state" | "operational_status">[];
   clients?: Pick<Client, "id" | "client_number" | "company_name" | "status"> | null;
 };
 
@@ -86,6 +86,7 @@ export type PortalClient = Pick<
   | "country"
   | "vat_status"
   | "vat_status_confirmed_at"
+  | "onboarding_completed_at"
   | "contract_start_date"
   | "contract_duration_months"
   | "revenue_share_percentage"
@@ -177,6 +178,7 @@ export type PortalSettlement = Pick<
   | "total_kwh"
   | "total_sessions"
   | "client_payout"
+  | "activation_cost"
   | "vat_rate"
   | "vat_status"
   | "invoice_number"

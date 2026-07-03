@@ -8,6 +8,7 @@ import { CheckCircle, Clock, Euro, Calendar, Download, Truck } from "lucide-reac
 import { useState, useMemo, Fragment, type ReactNode } from "react";
 import type { PortalSettlement } from "@/types/db";
 import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
+import { settlementNetExcl } from "@/services/calculations";
 import { getPortalSessions, getAmsterdamMonthBounds } from "@/services/sessions";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { useDemoDatasetOptional } from "@/contexts/demoDatasetContextValue";
@@ -202,6 +203,10 @@ export default function ClientFinancial() {
                 {filtered.map((s, i) => {
                   const showYear = i === 0 || filtered[i - 1].year !== s.year;
                   const v = statusVisual(s);
+                  // Netto (excl-equivalent) dat overeenkomt met "Netto over te boeken" op de factuur —
+                  // klopt voor élke BTW-status (particulier/KOR incl. de 21% activatie-BTW).
+                  const payout = Number(s.client_payout || 0);
+                  const netExcl = settlementNetExcl({ clientPayout: payout, activationCost: Number(s.activation_cost || 0), vatRate: Number(s.vat_rate ?? 0.21) });
                   return (
                     <Fragment key={s.id}>
                       {showYear && (
@@ -227,18 +232,32 @@ export default function ClientFinancial() {
                             <p className="text-base font-semibold text-primary tabular-nums leading-tight">
                               {fmt(Number(s.client_payout || 0))}
                             </p>
-                            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">excl. btw</p>
+                            {Number(s.activation_cost || 0) > 0 ? (
+                              <>
+                                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">vergoeding · excl. btw</p>
+                                <p className="text-[11px] text-muted-foreground tabular-nums leading-tight mt-1">
+                                  − {fmt(payout - netExcl)} activatie
+                                </p>
+                                <p className="text-xs font-semibold text-foreground tabular-nums leading-tight mt-0.5">
+                                  {fmt(netExcl)} netto · excl. btw
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">excl. btw</p>
+                            )}
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-primary flex-shrink-0"
-                            onClick={() => { void handleDownloadInvoice(s); }}
-                            title="Download je vergoeding (PDF)"
-                            aria-label={`Download vergoeding ${periodLabel(s.year, s.month)} (PDF)`}
-                          >
-                            <Download className="w-4 h-4" />
-                          </Button>
+                          {payout >= 0 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-primary flex-shrink-0"
+                              onClick={() => { void handleDownloadInvoice(s); }}
+                              title="Download je vergoeding (PDF)"
+                              aria-label={`Download vergoeding ${periodLabel(s.year, s.month)} (PDF)`}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </Fragment>

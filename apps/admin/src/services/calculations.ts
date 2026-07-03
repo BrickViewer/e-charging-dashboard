@@ -58,6 +58,38 @@ export function settlementVat(input: SettlementVatInput): SettlementVatResult {
   return { vatRate, net, vatAmount, inclVat };
 }
 
+// ============================================================================
+// Activatiekosten verrekend op de vergoedingsfactuur. Activatie is E-Charging's
+// verkoop aan de klant → ALTIJD 21% output-BTW, tegengestelde richting van de
+// vergoeding. Eén bron van waarheid voor factuur (incl), admin-detail (incl) en
+// portaal (excl-equivalent), zodat alle drie exact hetzelfde bedrag tonen.
+// ============================================================================
+export interface SettlementNetInput {
+  clientPayout: number;   // bruto vergoeding (excl BTW)
+  activationCost: number; // verrekende activatie deze maand (excl BTW)
+  vatRate?: number;       // BTW-tarief van de VERGOEDING (0.21 / 0); default 0.21
+}
+
+// "Netto over te boeken" op de factuur = vergoeding incl − activatie incl.
+// Geklemd op 0 (de aggregator capt zo dat dit ≥ 0 is; centronding kan −€0,01 geven).
+export function settlementNetToTransfer(input: SettlementNetInput): number {
+  const rate = input.vatRate ?? DEFAULT_VAT_RATE;
+  const vergInclVat = settlementVat({ clientPayout: input.clientPayout, vatRate: rate }).inclVat;
+  const activInclVat = settlementVat({ clientPayout: input.activationCost || 0, vatRate: DEFAULT_VAT_RATE }).inclVat;
+  return Math.max(0, round2(vergInclVat - activInclVat));
+}
+
+// Excl-equivalent van het over te boeken bedrag, voor de excl-portaalweergave.
+// Zonder activatie == client_payout (excl). Met activatie == netto-incl / (1+vat_rate),
+// zodat portaal (excl) en factuur (incl) hetzelfde bedrag zijn in verschillende bases.
+// Voor een BTW-plichtige klant is dit exact client_payout − activation_cost (ongewijzigd);
+// voor particulier/KOR corrigeert het de anders overschatte netto.
+export function settlementNetExcl(input: SettlementNetInput): number {
+  if ((input.activationCost || 0) <= 0) return round2(input.clientPayout || 0);
+  const rate = input.vatRate ?? DEFAULT_VAT_RATE;
+  return round2(settlementNetToTransfer(input) / (1 + rate));
+}
+
 export function formatEuro(amount: number): string {
   return new Intl.NumberFormat('nl-NL', {
     style: 'currency',

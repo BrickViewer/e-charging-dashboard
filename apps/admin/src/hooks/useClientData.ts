@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { PortalClient, PortalLocation, PortalPaymentDetails, PortalSettlement } from "@/types/db";
 import { getPortalSessions } from "@/services/sessions";
+import { settlementNetExcl } from "@/services/calculations";
 import { MONTH_LABELS_SHORT, getCurrentMonth, prevMonth } from "@/lib/period";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { useDemoDatasetOptional } from "@/contexts/demoDatasetContextValue";
@@ -25,6 +26,7 @@ const PORTAL_CLIENT_FIELDS = [
   "country",
   "vat_status",
   "vat_status_confirmed_at",
+  "onboarding_completed_at",
   "contract_start_date",
   "contract_duration_months",
   "revenue_share_percentage",
@@ -39,6 +41,7 @@ const PORTAL_CHARGE_POINT_FIELDS = [
   "model",
   "type",
   "status",
+  "operational_status",
   "max_power",
   "num_connectors",
 ].join(", ");
@@ -72,6 +75,7 @@ const PORTAL_SETTLEMENT_FIELDS = [
   "total_kwh",
   "total_sessions",
   "client_payout",
+  "activation_cost",
   "vat_rate",
   "vat_status",
   "invoice_number",
@@ -279,6 +283,8 @@ export interface PortalDashboardKpiRow {
   total_kwh: number;
   total_customer_cashflow: number;
   estimated_client_yield: number;
+  activation_cost: number;   // verrekende activatiekosten (excl BTW); netto uitbetaald = payout − dit
+  vat_rate: number;          // BTW-tarief van de vergoeding (voor netto-berekening bij particulier/KOR)
   co2_kg_avoided: number;
   ere_estimate: number;
 }
@@ -407,10 +413,17 @@ export function useClientKPIs(
   const ttmPayout = ttmBasePayout + ttmEreClientEstimate;
 
   // Totaal uitbetaald = levenslang daadwerkelijk aan klant uitgekeerd (status 'paid'),
-  // ongeacht de geselecteerde periode. Puur client_payout (geen ERE, dat loopt via Laadbeloning).
+  // ongeacht de geselecteerde periode. NETTO (excl-equivalent) = vergoeding − verrekende activatie,
+  // via de gedeelde helper zodat het exact overeenkomt met "Netto over te boeken" op de factuur —
+  // ook bij particulier/KOR waar de activatie 21% BTW draagt (de "Uw vergoeding"-gauge blijft bruto).
+  // Geen ERE (dat loopt via Laadbeloning).
   const totalPaidOut = rows
     .filter((q) => q.status === "paid")
-    .reduce((s, q) => s + Number(q.estimated_client_yield || 0), 0);
+    .reduce((s, q) => s + settlementNetExcl({
+      clientPayout: Number(q.estimated_client_yield || 0),
+      activationCost: Number(q.activation_cost || 0),
+      vatRate: Number(q.vat_rate ?? 0.21),
+    }), 0);
 
   const pastSettlements = rows.filter(s => !(s.year === cur.year && s.month === cur.month));
   const avgEarnings = pastSettlements.length > 0
