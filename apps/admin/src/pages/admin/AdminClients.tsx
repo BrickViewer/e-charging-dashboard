@@ -356,19 +356,29 @@ export default function AdminClients() {
                                 #{c.client_number}
                               </span>
                             )}
-                            {c.company_name}
+                            {c.companies?.name ?? c.company_name}
                           </p>
-                          {c.kvk && (
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              KvK {c.kvk}
-                            </p>
-                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {(c.companies?.kvk ?? c.kvk) && (
+                              <span className="text-xs text-muted-foreground">KvK {c.companies?.kvk ?? c.kvk}</span>
+                            )}
+                            {c.company_id && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); navigate(`/sales/contacten?company=${c.company_id}`); }}
+                                className="text-xs text-primary/80 hover:text-primary hover:underline focus-visible:outline-none focus-visible:underline"
+                                title="Open bedrijfsdossier"
+                              >
+                                → Bedrijfsdossier
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3 text-muted-foreground">
-                          <div>{c.contact_name || "—"}</div>
-                          {c.contact_email && (
+                          <div>{c.persons?.full_name ?? c.contact_name ?? "—"}</div>
+                          {(c.persons?.email ?? c.contact_email) && (
                             <div className="text-xs text-muted-foreground/70 mt-0.5">
-                              {c.contact_email}
+                              {c.persons?.email ?? c.contact_email}
                             </div>
                           )}
                         </td>

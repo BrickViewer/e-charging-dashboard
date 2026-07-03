@@ -6,6 +6,8 @@ export type ChargePointFault = Tables<"charge_point_faults">;
 export type ChargePointFaultEvent = Tables<"charge_point_fault_events">;
 export type ChargingSession = Tables<"charging_sessions">;
 export type Client = Tables<"clients">;
+export type Company = Tables<"companies">;
+export type Person = Tables<"persons">;
 export type ClientPaymentDetails = Tables<"client_payment_details">;
 export type ClientInvitation = Tables<"client_invitations">;
 export type EfluxSyncLog = Tables<"eflux_sync_log">;
@@ -33,6 +35,8 @@ export type ClientInvitationSummary = Pick<
 >;
 
 export type ClientWithRelations = Client & {
+  companies?: Pick<Company, "id" | "name" | "kvk" | "city"> | null;
+  persons?: Pick<Person, "id" | "full_name" | "email"> | null;
   locations?: LocationWithChargePoints[];
   client_invitations?: ClientInvitationSummary[];
   latest_invitation?: ClientInvitationSummary | null;

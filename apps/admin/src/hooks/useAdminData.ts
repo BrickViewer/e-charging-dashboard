@@ -1,11 +1,12 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type {
   AdminChargePoint,
   ClientInvitationSummary,
   ClientWithRelations,
   CronJobStatus,
+  Organization,
   RecentInvitation,
 } from "@/types/db";
 import { getCurrentMonth, monthShortLabel } from "@/lib/period";
@@ -17,12 +18,12 @@ export function useAllClients() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        // Versmald: consumenten (AdminClients/useAdminKPIs/AdminLocationDetail) lezen van
-        // locaties enkel het bestaan + per laadpunt alleen id/status. Wil je elders een
-        // ander locatie-/laadpunt-veld, breid dán deze select bewust uit (type claimt nog
-        // de volledige rij). AdminFinancial heeft z'n eigen full-row useAllSettlements.
+        // Gekoppeld contact (companies/persons) meelezen zodat de lijst het canonieke
+        // bedrijf/persoon kan tonen + naar het Bedrijfsdossier kan deeplinken; de
+        // gedenormaliseerde clients.company_name/contact_* blijven de fallback (trigger-synced).
+        // Locaties versmald tot bestaan + per laadpunt id/status. AdminFinancial heeft z'n eigen full-row.
         .select(
-          "*, locations(id, archived_at, charge_points(id, status, operational_status)), client_invitations(id, status, invited_at, expires_at)",
+          "*, companies(id, name, kvk, city), persons(id, full_name, email), locations(id, archived_at, charge_points(id, status, operational_status)), client_invitations(id, status, invited_at, expires_at)",
         );
       if (error) throw error;
       // Pak de meest recente invitation per klant (Supabase select geeft array)
@@ -237,6 +238,57 @@ export function useOrganization() {
         .maybeSingle();
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+// Org-update mutation — vervangt de losse `supabase.from("organizations").update(...)`-calls
+// in AdminSettings (spiegelt useUpdateCompany/useUpdatePerson uit useContacts).
+export function useUpdateOrganization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; patch: Partial<Organization> }) => {
+      const { error } = await supabase.from("organizations").update(input.patch).eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-organization"] }); },
+  });
+}
+
+// Team- en toegangsbeheer (admin-only) — voorheen inline in AdminSettings. `enabled` gate
+// zodat manager/viewer deze admin-only reads niet afvuren.
+export function useTeamMembers(enabled = true) {
+  return useQuery({
+    queryKey: ["admin-profiles"],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useUserRoles(enabled = true) {
+  return useQuery({
+    queryKey: ["admin-user-roles"],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_roles").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useAccessRequests(enabled = true) {
+  return useQuery({
+    queryKey: ["admin-access-requests"],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("access_requests").select("*").eq("status", "pending");
+      if (error) throw error;
+      return data ?? [];
     },
   });
 }
