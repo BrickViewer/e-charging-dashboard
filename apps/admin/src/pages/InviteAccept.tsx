@@ -113,8 +113,8 @@ export default function InviteAccept() {
         return;
       }
 
-      toast.success("Welkom. Vul uw klantgegevens aan om het profiel compleet te maken.");
-      setTimeout(() => navigate(json.redirect || "/portal/gegevens?welkom=1"), 650);
+      toast.success("Welkom. We nemen je in een paar stappen mee door je gegevens.");
+      setTimeout(() => navigate("/portal/welkom"), 650);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Onbekende fout");
     } finally {
