@@ -128,6 +128,9 @@ verify_jwt = false
 [functions.quote-request-signoff]
 verify_jwt = true
 
+[functions.quote-revise]
+verify_jwt = true
+
 [functions.quote-send]
 verify_jwt = false
 

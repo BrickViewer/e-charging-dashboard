@@ -151,6 +151,34 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Revisie: het verzenden van een nieuwe versie vervangt de bron-offerte — status 'vervangen',
+    // ketting-verwijzing en intrekken van de oude ondertekenlink (klant ziet dan de bestaande
+    // copy "vervangen door een nieuwere"). Een al getekende bron blijft finaal.
+    if (quote.revision_of_quote_id) {
+      const { data: source, error: srcErr } = await serviceClient
+        .from("quotes").select("id, status, quote_number")
+        .eq("id", quote.revision_of_quote_id).maybeSingle();
+      if (srcErr) throw srcErr;
+      if (source && (source.status === "verstuurd" || source.status === "intern_ter_ondertekening")) {
+        const { error: supErr } = await serviceClient.from("quotes")
+          .update({ status: "vervangen", superseded_by_quote_id: quoteId }).eq("id", source.id);
+        if (supErr) throw supErr;
+        const { error: revErr } = await serviceClient.from("quote_acceptances")
+          .update({ status: "revoked" }).eq("quote_id", source.id).eq("status", "pending");
+        if (revErr) throw revErr;
+        await serviceClient.from("quote_internal_signings")
+          .update({ status: "revoked" }).eq("quote_id", source.id).eq("status", "pending");
+        if (quote.lead_id) {
+          await serviceClient.from("lead_activities").insert({
+            lead_id: quote.lead_id, organization_id: quote.organization_id, user_id: auth.userId ?? null,
+            type: "quote_superseded",
+            description: `Offerte ${source.quote_number} vervangen door ${quote.quote_number}`,
+            metadata: { quote_id: source.id, superseded_by: quoteId },
+          });
+        }
+      }
+    }
+
     return json({ status: "sent", to: recipient, acceptUrl });
   } catch (err) {
     return json({ status: "error", message: err instanceof Error ? err.message : "Versturen mislukt" }, 500);

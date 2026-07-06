@@ -17,6 +17,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   getekend: { label: "Getekend", cls: "bg-green-100 text-green-700" },
   verlopen: { label: "Verlopen", cls: "bg-zinc-100 text-zinc-500" },
   afgewezen: { label: "Afgewezen", cls: "bg-red-100 text-red-700" },
+  vervangen: { label: "Vervangen", cls: "bg-zinc-100 text-zinc-500" },
 };
 
 export default function SalesOffertes() {

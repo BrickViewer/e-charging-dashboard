@@ -12,10 +12,11 @@ export function estimateYearlyManagementRevenue(
   return palen * avgPerPaalPerYear;
 }
 
-// Spiegelt primaryQuote() uit useLeads (nieuwste verzonden, anders nieuwste aangemaakt).
+// Spiegelt primaryQuote() uit useLeads (nieuwste verzonden, anders nieuwste aangemaakt;
+// vervangen versies uit de revisie-flow tellen niet mee).
 // Hier lokaal gehouden zodat deze module puur blijft (geen supabase-import) en unit-testbaar is.
 function primaryQuoteOf(lead: LeadWithTasks): LeadQuoteMini | null {
-  const qs = lead.quotes ?? [];
+  const qs = (lead.quotes ?? []).filter((q) => q.status !== "vervangen");
   if (!qs.length) return null;
   const sent = qs.filter((q) => q.sent_at);
   const pool = sent.length ? sent : qs;

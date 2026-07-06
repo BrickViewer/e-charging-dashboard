@@ -4,6 +4,8 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type Quote = Database["public"]["Tables"]["quotes"]["Row"];
 export type QuoteUpdate = Database["public"]["Tables"]["quotes"]["Update"];
+// Revisie-ketting (migratie 20260706210000); nog niet in de gegenereerde types.
+export type QuoteRevisionFields = { revision_of_quote_id: string | null; superseded_by_quote_id: string | null };
 export type QuoteLineItem = { description: string; qty: number; unit_price: number; total: number };
 
 export function lineItemsOf(quote: Pick<Quote, "line_items">): QuoteLineItem[] {
@@ -31,11 +33,11 @@ export function useLeadQuotes(leadId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quotes")
-        .select("id, quote_number, status, total_hardware_cost, total_installation_cost, with_management, with_installation, created_at")
+        .select("id, quote_number, status, total_hardware_cost, total_installation_cost, with_management, with_installation, created_at, revision_of_quote_id, superseded_by_quote_id")
         .eq("lead_id", leadId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as Pick<Quote, "id" | "quote_number" | "status" | "total_hardware_cost" | "total_installation_cost" | "with_management" | "with_installation" | "created_at">[];
+      return (data ?? []) as unknown as (Pick<Quote, "id" | "quote_number" | "status" | "total_hardware_cost" | "total_installation_cost" | "with_management" | "with_installation" | "created_at"> & QuoteRevisionFields)[];
     },
   });
 }
@@ -120,6 +122,28 @@ export function useCreateQuoteStandalone() {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["project-locations"] });
       qc.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+}
+
+// Nieuwe versie (revisie) van een verstuurde offerte: concept-kopie met een nieuw nummer in
+// dezelfde object-reeks. De bron blijft geldig totdat de nieuwe versie wordt verstuurd —
+// quote-send zet hem dan op 'vervangen' en trekt de oude ondertekenlink in.
+export function useReviseQuote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (quoteId: string) => {
+      const { data, error } = await supabase.functions.invoke<{ quoteId: string; quoteNumber: string }>(
+        "quote-revise",
+        { body: { quote_id: quoteId } },
+      );
+      if (error) throw error;
+      if (!data?.quoteId) throw new Error("Nieuwe versie maken mislukt");
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["lead-quotes"] });
     },
   });
 }

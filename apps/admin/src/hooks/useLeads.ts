@@ -33,8 +33,9 @@ export type LeadWithTasks = Lead & {
 export type TaskWithLead = LeadTask & { leads: { company_name: string | null } | null };
 
 // De relevante offerte van een lead: nieuwste verzonden (sent_at), anders nieuwste op created_at.
+// Vervangen versies (revisie-flow) tellen niet mee — de actuele versie is de relevante offerte.
 export function primaryQuote(lead: LeadWithTasks): LeadQuoteMini | null {
-  const qs = lead.quotes ?? [];
+  const qs = (lead.quotes ?? []).filter((q) => q.status !== "vervangen");
   if (!qs.length) return null;
   const sent = qs.filter((q) => q.sent_at);
   const pool = sent.length ? sent : qs;

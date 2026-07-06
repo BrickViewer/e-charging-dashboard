@@ -8,8 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { EmailBodyEditor } from "@/components/sales/EmailBodyEditor";
 import { toast } from "sonner";
-import { ArrowLeft, Building2, Eye, Loader2, MapPin, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
-import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, lineItemsOf } from "@/hooks/useQuotes";
+import { ArrowLeft, Building2, Eye, FilePlus2, Loader2, MapPin, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
+import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, useReviseQuote, lineItemsOf, type QuoteRevisionFields } from "@/hooks/useQuotes";
 import { useProjectLocation } from "@/hooks/useProjectLocations";
 import { formatObjectAddress } from "@/lib/objectLabel";
 import { useCompany, usePerson, splitName } from "@/hooks/useContacts";
@@ -33,7 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
-const STATUS_LABEL: Record<string, string> = { concept: "Concept", intern_ter_ondertekening: "Ter ondertekening", verstuurd: "Verstuurd", getekend: "Getekend", verlopen: "Verlopen", afgewezen: "Afgewezen" };
+const STATUS_LABEL: Record<string, string> = { concept: "Concept", intern_ter_ondertekening: "Ter ondertekening", verstuurd: "Verstuurd", getekend: "Getekend", verlopen: "Verlopen", afgewezen: "Afgewezen", vervangen: "Vervangen" };
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -57,6 +57,7 @@ export default function SalesOfferteDetail() {
   const requestSignoff = useRequestSignoff();
   const internalSignLink = useInternalSignLink();
   const del = useDeleteQuote();
+  const revise = useReviseQuote();
   const { user } = useAuth();
   const adminsQ = useSignableAdmins();
   const quote = quoteQ.data;
@@ -392,6 +393,20 @@ export default function SalesOfferteDetail() {
     finally { setBusy(null); }
   };
 
+  // Nieuwe versie (revisie): concept-kopie met een nieuw nummer in dezelfde reeks. De huidige
+  // offerte blijft geldig totdat de nieuwe versie wordt verstuurd (dan → 'vervangen').
+  const doRevise = async () => {
+    if (busy || !quote) return;
+    if (!window.confirm(`Nieuwe versie maken van offerte ${quote.quote_number}?\n\nJe krijgt een concept-kopie met een nieuw nummer om aan te passen. Deze offerte blijft geldig en wordt pas vervangen (en de ondertekenlink ingetrokken) zodra je de nieuwe versie verstuurt.`)) return;
+    try {
+      setBusy("Nieuwe versie maken…");
+      const res = await revise.mutateAsync(quote.id);
+      toast.success(`Nieuwe versie ${res.quoteNumber} aangemaakt`);
+      navigate(`/sales/offertes?quote=${res.quoteId}`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Nieuwe versie maken mislukt"); }
+    finally { setBusy(null); }
+  };
+
   const doDelete = async () => {
     if (!quote) return;
     if (!window.confirm(`Offerte ${quote.quote_number} definitief verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
@@ -444,6 +459,18 @@ export default function SalesOfferteDetail() {
           <Eye className="mr-1.5 h-4 w-4" /> {mobilePreview ? "Verberg voorbeeld" : "Toon voorbeeld"}
         </Button>
       </div>
+
+      {/* Vervangen door een nieuwere versie (revisie-flow): alleen-lezen archiefexemplaar. */}
+      {quote.status === "vervangen" && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
+          <span>Deze offerte is vervangen door een nieuwere versie; de ondertekenlink is ingetrokken.</span>
+          {(quote as unknown as QuoteRevisionFields).superseded_by_quote_id && (
+            <button className="font-medium underline underline-offset-2" onClick={() => navigate(`/sales/offertes?quote=${(quote as unknown as QuoteRevisionFields).superseded_by_quote_id}`)}>
+              Bekijk de nieuwe versie
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Mobiel: voorbeeld als toggle */}
       {mobilePreview && (
@@ -729,9 +756,14 @@ export default function SalesOfferteDetail() {
                 )
               )}
               {quote.status === "verstuurd" && (
-                <Button onClick={resendToCustomer} disabled={!!busy}>
-                  {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} {busy ?? "Opnieuw versturen"}
-                </Button>
+                <>
+                  <Button variant="outline" onClick={doRevise} disabled={!!busy} title="Klant wil wijzigingen? Maak een concept-kopie met een nieuw nummer; deze versie wordt pas vervangen zodra je de nieuwe verstuurt.">
+                    <FilePlus2 className="mr-1.5 h-4 w-4" /> Nieuwe versie
+                  </Button>
+                  <Button onClick={resendToCustomer} disabled={!!busy}>
+                    {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} {busy ?? "Opnieuw versturen"}
+                  </Button>
+                </>
               )}
               {quote.status === "getekend" && !quote.client_id && (
                 <Button onClick={() => setCreateClientOpen(true)}><UserPlus className="mr-1.5 h-4 w-4" /> Klant account aanmaken</Button>

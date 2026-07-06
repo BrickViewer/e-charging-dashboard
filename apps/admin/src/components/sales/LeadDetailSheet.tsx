@@ -56,10 +56,12 @@ const ACTIVITY_LABEL: Record<string, string> = {
 };
 const QUOTE_STATUS: Record<string, { label: string; cls: string }> = {
   concept: { label: "Concept", cls: "bg-zinc-100 text-zinc-600" },
+  intern_ter_ondertekening: { label: "Ter ondertekening", cls: "bg-blue-100 text-blue-700" },
   verstuurd: { label: "Verstuurd", cls: "bg-amber-100 text-amber-700" },
   getekend: { label: "Getekend", cls: "bg-green-100 text-green-700" },
   verlopen: { label: "Verlopen", cls: "bg-zinc-100 text-zinc-500" },
   afgewezen: { label: "Afgewezen", cls: "bg-red-100 text-red-700" },
+  vervangen: { label: "Vervangen", cls: "bg-zinc-100 text-zinc-500" },
 };
 
 const euro = (n: number | null | undefined) =>
@@ -495,11 +497,17 @@ export function LeadDetailSheet({
                           // Bij 'alleen beheer' is dit bedrag de eenmalige activatie-/onboardingkost die we
                           // aan de klant factureren — expliciet labelen zodat het in de flow meegaat.
                           const beheerOnly = scopeFromFlags(q.with_installation !== false, q.with_management !== false) === "alleen_beheer";
+                          // Revisie-ketting: de nummers van vervanger/bron staan in dezelfde lijst.
+                          const byId = new Map((quotes.data ?? []).map((x) => [x.id, x.quote_number]));
+                          const supersededBy = q.superseded_by_quote_id ? byId.get(q.superseded_by_quote_id) : null;
+                          const revisionOf = q.revision_of_quote_id ? byId.get(q.revision_of_quote_id) : null;
                           return (
                             <button key={q.id} onClick={() => { onOpenChange(false); navigate(`/sales/offertes?quote=${q.id}`); }} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
                               <span className="font-medium tabular-nums">{q.quote_number}</span>
                               <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${st.cls}`}>{st.label}</span>
                               {beheerOnly && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" title="Eenmalige activatiekosten, te factureren aan de klant">activatie</span>}
+                              {supersededBy && <span className="text-[10px] text-muted-foreground" title="Deze versie is vervangen">→ {supersededBy}</span>}
+                              {!supersededBy && revisionOf && <span className="text-[10px] text-muted-foreground" title="Nieuwe versie van een eerdere offerte">revisie van {revisionOf}</span>}
                               <span className="ml-auto tabular-nums text-muted-foreground" title={beheerOnly ? "Eenmalige activatiekosten (te factureren aan de klant)" : undefined}>{euro(total)}</span>
                             </button>
                           );
