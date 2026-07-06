@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DOMPurify from "dompurify";
-import { ArrowLeft, ImagePlus, Loader2, Plus, Save, Send, Star, Trash2, X } from "lucide-react";
+import { ArrowLeft, ImagePlus, Loader2, Plus, Save, Send, Sparkles, Star, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,7 +18,8 @@ import {
 import { RichTextEditor } from "@/components/marketing/RichTextEditor";
 import { useBlogPost, useCreateBlogPost, useUpdateBlogPost, useDeleteBlogPost, uploadBlogImage, BLOG_STATUSES } from "@/hooks/useBlogPosts";
 import { slugify, readingMinutes } from "@/lib/slug";
-import { BLOG_CATEGORIES, categorySlug } from "@/lib/blogTaxonomy";
+import { useCategories } from "@/hooks/useCategories";
+import { iconByName } from "@/lib/blogIcon";
 
 type FaqItem = { question: string; answer: string };
 function imageDims(file: File): Promise<{ w: number; h: number }> {
@@ -43,10 +45,11 @@ export default function BlogEditor() {
   const [ready, setReady] = useState(!id);
   const [slugEdited, setSlugEdited] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
+  const catsQ = useCategories();
   const [form, setForm] = useState({
     title: "", slug: "", excerpt: "", content: "", cover_image_url: "",
     cover_image_alt: "", cover_image_width: null as number | null, cover_image_height: null as number | null,
-    category: "", tags: "", featured: false, seo_title: "", seo_description: "",
+    category_slugs: [] as string[], tags: "", featured: false, seo_title: "", seo_description: "",
     author_name: "", noindex: false, canonical_url: "", faq: [] as FaqItem[],
     status: "concept" as string, published_at: null as string | null,
   });
@@ -59,7 +62,10 @@ export default function BlogEditor() {
         title: p.title ?? "", slug: p.slug ?? "", excerpt: p.excerpt ?? "", content: p.content ?? "",
         cover_image_url: p.cover_image_url ?? "", cover_image_alt: p.cover_image_alt ?? "",
         cover_image_width: p.cover_image_width ?? null, cover_image_height: p.cover_image_height ?? null,
-        category: p.category ?? "", tags: (p.tags ?? []).join(", "), featured: p.featured ?? false,
+        category_slugs: Array.isArray((p as { category_slugs?: string[] }).category_slugs) && (p as { category_slugs?: string[] }).category_slugs!.length
+          ? (p as { category_slugs?: string[] }).category_slugs!
+          : (p.category_slug ? [p.category_slug] : []),
+        tags: (p.tags ?? []).join(", "), featured: p.featured ?? false,
         seo_title: p.seo_title ?? "", seo_description: p.seo_description ?? "",
         author_name: p.author_name ?? "", noindex: p.noindex ?? false, canonical_url: p.canonical_url ?? "",
         faq: Array.isArray(p.faq) ? (p.faq as FaqItem[]) : [],
@@ -81,6 +87,23 @@ export default function BlogEditor() {
     finally { setCoverUploading(false); }
   };
 
+  // Genereert een merk-titelkaart (1200x630) via de edge blog-cover en zet 'm als omslag. Vereist een
+  // opgeslagen blog (de edge werkt op een bestaand blog_post_id).
+  const [coverGenerating, setCoverGenerating] = useState(false);
+  const generateCover = async () => {
+    if (!id) { toast.error("Sla de blog eerst op om een merk-omslag te genereren."); return; }
+    setCoverGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("blog-cover", { body: { blog_post_id: id } });
+      if (error) throw error;
+      const r = data as { status: string; url?: string; width?: number; height?: number; message?: string };
+      if (r.status !== "ok" || !r.url) throw new Error(r.message || "Genereren mislukt");
+      setForm((f) => ({ ...f, cover_image_url: r.url!, cover_image_width: r.width ?? 1200, cover_image_height: r.height ?? 630, cover_image_alt: f.cover_image_alt || f.title }));
+      toast.success("Merk-omslag gegenereerd");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Genereren mislukt"); }
+    finally { setCoverGenerating(false); }
+  };
+
   const save = async (publish: boolean) => {
     if (!form.title.trim()) { toast.error("Titel is verplicht"); return; }
     const cleanContent = DOMPurify.sanitize(form.content || "");
@@ -94,8 +117,12 @@ export default function BlogEditor() {
       cover_image_alt: form.cover_image_alt.trim() || null,
       cover_image_width: form.cover_image_width,
       cover_image_height: form.cover_image_height,
-      category: form.category.trim() || null,
-      category_slug: categorySlug(form.category),
+      // Multi-categorie: de eerste is de primaire (vult category + category_slug voor backwards-compat + breadcrumb).
+      category_slugs: form.category_slugs,
+      category_slug: form.category_slugs[0] ?? null,
+      category: form.category_slugs[0]
+        ? ((catsQ.data ?? []).find((c) => c.slug === form.category_slugs[0])?.name ?? null)
+        : null,
       tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
       featured: form.featured,
       seo_title: form.seo_title.trim() || null,
@@ -176,6 +203,13 @@ export default function BlogEditor() {
               </button>
             )}
             <input ref={coverRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCover(f); e.target.value = ""; }} />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={generateCover} disabled={coverGenerating || !id}>
+                {coverGenerating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}
+                {form.cover_image_url ? "Vervang door merk-omslag" : "Genereer merk-omslag"}
+              </Button>
+              {!id && <span className="text-[11px] text-muted-foreground">Sla de blog eerst op om een merk-omslag te maken.</span>}
+            </div>
             {form.cover_image_url && (
               <Input className="mt-2" value={form.cover_image_alt} onChange={(e) => set("cover_image_alt", e.target.value)} placeholder="Alt-tekst van de omslag (toegankelijkheid + image-SEO)" />
             )}
@@ -198,15 +232,21 @@ export default function BlogEditor() {
             <p className="mt-1 text-[11px] text-muted-foreground">Leestijd ≈ {readingMinutes(form.content)} min</p>
           </div>
 
+          {/* Categorieën (multi-select; de eerste is de primaire) */}
+          <div className="space-y-2 rounded-xl border p-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Categorieën</Label>
+              <span className="text-[11px] text-muted-foreground">Kies er 1 of meer. De eerste is de primaire.</span>
+            </div>
+            <CategoryPicker
+              all={catsQ.data ?? []}
+              selected={form.category_slugs}
+              onChange={(next) => set("category_slugs", next)}
+            />
+          </div>
+
           {/* Meta */}
           <div className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Categorie</Label>
-              <Select value={form.category} onValueChange={(v) => set("category", v)}>
-                <SelectTrigger><SelectValue placeholder="Kies categorie…" /></SelectTrigger>
-                <SelectContent>{BLOG_CATEGORIES.map((c) => <SelectItem key={c.slug} value={c.label}>{c.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Tags (komma-gescheiden)</Label>
               <Input value={form.tags} onChange={(e) => set("tags", e.target.value)} placeholder="laadpalen, techniek" />
@@ -215,7 +255,7 @@ export default function BlogEditor() {
               <Label className="text-xs">Auteur</Label>
               <Input value={form.author_name} onChange={(e) => set("author_name", e.target.value)} placeholder="Naam auteur" />
             </div>
-            <label className="flex items-center gap-2 self-end pb-2 text-sm">
+            <label className="flex items-center gap-2 self-end pb-2 text-sm sm:col-span-2">
               <Switch checked={form.featured} onCheckedChange={(c) => set("featured", c)} />
               <span className="flex items-center gap-1"><Star className="h-3.5 w-3.5" /> Uitgelicht</span>
             </label>
@@ -290,6 +330,52 @@ export default function BlogEditor() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// Categorie-multi-select als toggle-chips. De volgorde van selectie bepaalt de primaire (eerste) categorie.
+// Toont actieve categorieën; een al-gekozen categorie die inmiddels verborgen is blijft zichtbaar zodat ze
+// niet stilzwijgend verdwijnt bij opslaan.
+function CategoryPicker({
+  all, selected, onChange,
+}: {
+  all: { slug: string; name: string; icon: string | null; is_active: boolean }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const active = all.filter((c) => c.is_active);
+  const extra = selected
+    .filter((s) => !active.some((c) => c.slug === s))
+    .map((s) => all.find((c) => c.slug === s) ?? { slug: s, name: s, icon: null, is_active: false });
+  const list = [...active, ...extra];
+  const toggle = (slug: string) =>
+    onChange(selected.includes(slug) ? selected.filter((s) => s !== slug) : [...selected, slug]);
+
+  if (list.length === 0) {
+    return <p className="text-xs text-muted-foreground">Nog geen categorieën. Maak ze aan onder Marketing → Categorieën.</p>;
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {list.map((c) => {
+        const idx = selected.indexOf(c.slug);
+        const isSel = idx >= 0;
+        const Icon = iconByName(c.icon);
+        return (
+          <button
+            key={c.slug}
+            type="button"
+            onClick={() => toggle(c.slug)}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+              isSel ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {c.name}
+            {idx === 0 && <span className="ml-0.5 rounded bg-primary px-1 text-[10px] font-semibold text-primary-foreground">primair</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }

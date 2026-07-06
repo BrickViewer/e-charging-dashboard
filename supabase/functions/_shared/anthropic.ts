@@ -48,7 +48,10 @@ export async function anthropicMessage(opts: {
       if (res.status === 429 || res.status >= 500) {
         lastErr = new Error(`Anthropic HTTP ${res.status}`);
       } else if (!res.ok) {
-        throw new Error(`Anthropic HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+        // Niet-herhaalbare 4xx (bv. ongeldig model of sleutel): meteen falen, niet retryen met backoff.
+        const err = new Error(`Anthropic HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+        (err as any).nonRetryable = true;
+        throw err;
       } else {
         const data = await res.json();
         const text = (data.content ?? [])
@@ -59,6 +62,8 @@ export async function anthropicMessage(opts: {
         return text;
       }
     } catch (e) {
+      // Permanente fouten (niet-herhaalbare 4xx) meteen doorgooien i.p.v. retryen.
+      if (e && (e as { nonRetryable?: boolean }).nonRetryable) throw e;
       lastErr = e;
     }
     await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));

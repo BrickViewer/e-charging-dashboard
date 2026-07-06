@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   Rocket,
   Sparkles,
+  BarChart3,
+  Tags,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/contexts/authContextValue";
@@ -71,6 +73,8 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
     items: [
       { to: "/marketing/content", icon: Sparkles, label: "Content" },
       { to: "/marketing/blogs", icon: Newspaper, label: "Blogs" },
+      { to: "/marketing/categorieen", icon: Tags, label: "Categorieën" },
+      { to: "/marketing/prestaties", icon: BarChart3, label: "Blogprestaties" },
     ],
   },
 };

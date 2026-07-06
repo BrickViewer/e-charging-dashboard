@@ -15,13 +15,18 @@ export function splitName(full: string | null | undefined): { first_name: string
   return { first_name: v.slice(0, i).trim(), last_name: v.slice(i + 1).trim() };
 }
 
+// opts.updateExisting=false → bij een bestaande match NIETS bijwerken (create-only). Gebruikt door het
+// PUBLIEKE contactformulier zodat een ongeauthenticeerde inzender nooit bestaande contactgegevens kan
+// overschrijven. Default (true) = huidig gedrag (last-write-wins), voor de geauthenticeerde/interne paden.
 export async function resolveOrCreateCompany(
   sb: ServiceClient,
   org: string,
   c: { name?: string | null; kvk?: string | null; website?: string | null; sector?: string | null; street?: string | null; postal?: string | null; city?: string | null },
+  opts?: { updateExisting?: boolean },
 ): Promise<string | null> {
   const name = (c.name ?? "").trim();
   if (!name) return null;
+  const updateExisting = opts?.updateExisting !== false;
   // Niet-lege attrs die we mogen schrijven/bijwerken (last-write-wins; companies = bron van waarheid).
   const attrs: Record<string, string> = {};
   if (c.kvk && c.kvk.trim()) attrs.kvk = c.kvk.trim();
@@ -35,8 +40,8 @@ export async function resolveOrCreateCompany(
     .from("companies").select("id")
     .eq("organization_id", org).eq("normalized_name", name.toLowerCase()).limit(1).maybeSingle();
   if (existing?.id) {
-    // Bestaand bedrijf: niet-lege meegegeven attrs bijwerken zodat het niet veroudert.
-    if (Object.keys(attrs).length > 0) {
+    // Bestaand bedrijf: niet-lege meegegeven attrs bijwerken zodat het niet veroudert (tenzij create-only).
+    if (updateExisting && Object.keys(attrs).length > 0) {
       await sb.from("companies").update(attrs).eq("id", existing.id);
     }
     return existing.id as string;
@@ -53,10 +58,12 @@ export async function resolveOrCreatePerson(
   sb: ServiceClient,
   org: string,
   p: { name?: string | null; email?: string | null; phone?: string | null; role?: string | null },
+  opts?: { updateExisting?: boolean },
 ): Promise<string | null> {
   const name = (p.name ?? "").trim();
   const email = (p.email ?? "").trim();
   if (!name && !email) return null;
+  const updateExisting = opts?.updateExisting !== false;
   // Niet-lege contact-attrs die we op een bestaande persoon mogen bijwerken (naam laten we
   // met rust om geen goede naam te degraderen bij een partiële intake-invoer).
   const attrs: Record<string, string> = {};
@@ -74,7 +81,8 @@ export async function resolveOrCreatePerson(
     if (byName?.id) existingId = byName.id as string;
   }
   if (existingId) {
-    if (Object.keys(attrs).length > 0) await sb.from("persons").update(attrs).eq("id", existingId);
+    // Create-only (publiek formulier): een bestaande persoon NOOIT bijwerken (geen telefoon-overschrijving).
+    if (updateExisting && Object.keys(attrs).length > 0) await sb.from("persons").update(attrs).eq("id", existingId);
     return existingId;
   }
   const { first_name, last_name } = splitName(name);
@@ -90,16 +98,25 @@ export async function resolveOrCreatePerson(
     const { data: dup } = await sb
       .from("persons").select("id").eq("organization_id", org).ilike("email", email).limit(1).maybeSingle();
     if (dup?.id) {
-      if (Object.keys(attrs).length > 0) await sb.from("persons").update(attrs).eq("id", dup.id);
+      if (updateExisting && Object.keys(attrs).length > 0) await sb.from("persons").update(attrs).eq("id", dup.id);
       return dup.id as string;
     }
   }
   throw error;
 }
 
-export async function linkPersonToCompany(sb: ServiceClient, companyId: string, personId: string, isPrimary = false) {
+// opts.ignoreOnConflict=true → alleen een NIEUWE koppeling invoegen; een bestaande koppeling niet aanraken
+// (dus geen is_primary omzetten). Gebruikt door het publieke contactformulier zodat een ongeauthenticeerde
+// inzender de primaire contactpersoon van een bestaand bedrijf niet kan kapen of degraderen.
+export async function linkPersonToCompany(
+  sb: ServiceClient,
+  companyId: string,
+  personId: string,
+  isPrimary = false,
+  opts?: { ignoreOnConflict?: boolean },
+) {
   await sb.from("company_persons").upsert(
     { company_id: companyId, person_id: personId, is_primary: isPrimary },
-    { onConflict: "company_id,person_id" },
+    { onConflict: "company_id,person_id", ignoreDuplicates: opts?.ignoreOnConflict === true },
   );
 }

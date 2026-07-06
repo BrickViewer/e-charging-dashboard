@@ -248,6 +248,12 @@ export type ContentEngineSettings = {
   last_metrics_at?: string;
   last_serp_gap_at?: string;
   last_cluster_at?: string;
+  // Autoblog (autonome blog-tak)
+  autoblog_enabled?: boolean;
+  autoblog_autopublish?: boolean;
+  autoblog_per_run?: number;
+  last_autoblog_at?: string;
+  autoblog_schedule?: { days: number[]; hour: number };
 };
 
 // ---- Zoekvragen van de doelgroep (content_keywords, Laag A) ----
@@ -352,6 +358,34 @@ export function useRunResearch() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["content-topics"] });
+      qc.invalidateQueries({ queryKey: ["content-settings"] });
+    },
+  });
+}
+
+// Autoblog (autonome blog-tak): laat de edge `content-autoblog` een blog genereren uit de best-scorende
+// onderwerpen. Met {force:true, publish:false} = altijd een concept ter review (testknop in de instellingen).
+export type AutoblogResult = {
+  status: string;
+  generated?: number;
+  published?: number;
+  concepts?: number;
+  errors?: number;
+  results?: { topic_id: string; blog_post_id?: string; slug?: string; review_state?: string; action: string; reason?: string }[];
+  message?: string;
+};
+
+export function useRunAutoblog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { force?: boolean; publish?: boolean; topic_id?: string; limit?: number } = {}) => {
+      const { data, error } = await supabase.functions.invoke("content-autoblog", { body });
+      if (error) throw new Error(error.message || "Autoblog mislukt");
+      return data as AutoblogResult | null;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["content-topics"] });
+      qc.invalidateQueries({ queryKey: ["blog-posts"] });
       qc.invalidateQueries({ queryKey: ["content-settings"] });
     },
   });

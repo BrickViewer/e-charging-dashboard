@@ -55,6 +55,8 @@ const SalesOfferteDetail = lazy(() => import("./pages/sales/SalesOfferteDetail")
 const MarketingBlogs = lazy(() => import("./pages/marketing/MarketingBlogs"));
 const BlogEditor = lazy(() => import("./pages/marketing/BlogEditor"));
 const ContentPipeline = lazy(() => import("./pages/marketing/ContentPipeline"));
+const BlogPerformance = lazy(() => import("./pages/marketing/BlogPerformance"));
+const MarketingCategories = lazy(() => import("./pages/marketing/MarketingCategories"));
 
 // refetchOnWindowFocus uit: terugkeren naar het tabblad mag geen achtergrond-
 // refetch (en dus geen geflikker / sluitende panelen) veroorzaken. Data blijft
@@ -222,6 +224,8 @@ const App = () => (
                 <Route path="blogs" element={<MarketingBlogs />} />
                 <Route path="blogs/nieuw" element={<BlogEditor />} />
                 <Route path="blogs/:id" element={<BlogEditor />} />
+                <Route path="categorieen" element={<MarketingCategories />} />
+                <Route path="prestaties" element={<BlogPerformance />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

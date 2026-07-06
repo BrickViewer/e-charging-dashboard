@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Newspaper, Plus, Search, Star } from "lucide-react";
+import { Newspaper, Plus, Search, Star, CalendarClock, PauseCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useBlogPosts, BLOG_STATUSES } from "@/hooks/useBlogPosts";
+import { useContentSettings } from "@/hooks/useContentPipeline";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   concept: { label: "Concept", cls: "bg-zinc-100 text-zinc-600" },
@@ -14,12 +15,31 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   gearchiveerd: { label: "Gearchiveerd", cls: "bg-zinc-100 text-zinc-400" },
 };
 
+// Eerstvolgende automatische-blog-moment (dagen 0=zo..6=za, uur lokaal) binnen de komende 2 weken.
+function nextAutoblogDate(days: number[], hour: number): Date | null {
+  const now = new Date();
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    d.setHours(hour, 0, 0, 0);
+    if (days.includes(d.getDay()) && d.getTime() > now.getTime()) return d;
+  }
+  return null;
+}
+const fmtNext = (d: Date) => d.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" });
+const fmtShort = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "nog niet");
+
 export default function MarketingBlogs() {
   const posts = useBlogPosts();
+  const settingsQ = useContentSettings();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const q = useDebouncedValue(search, 200).trim().toLowerCase();
+
+  const s = settingsQ.data?.settings;
+  const sched = s?.autoblog_schedule ?? { days: [1, 3, 5], hour: 8 };
+  const nextBlog = s?.autoblog_enabled ? nextAutoblogDate(sched.days ?? [1, 3, 5], sched.hour ?? 8) : null;
 
   const all = useMemo(() => posts.data ?? [], [posts.data]);
   const filtered = useMemo(
@@ -40,6 +60,24 @@ export default function MarketingBlogs() {
         </div>
         <Button onClick={() => navigate("/marketing/blogs/nieuw")}><Plus className="mr-1.5 h-4 w-4" /> Nieuwe blog</Button>
       </div>
+
+      {s && (s.autoblog_enabled && nextBlog ? (
+        <div className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 p-3.5">
+          <CalendarClock className="h-5 w-5 shrink-0 text-primary" />
+          <div className="text-sm">
+            <span className="text-muted-foreground">Volgende automatische blog: </span>
+            <span className="font-medium text-foreground">{fmtNext(nextBlog)}, rond {String(sched.hour ?? 8).padStart(2, "0")}:00</span>
+            <span className="text-muted-foreground"> · daarna elke ma/wo/vr · laatste run {fmtShort(s.last_autoblog_at)}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 rounded-xl border border-dashed bg-muted/30 p-3.5">
+          <PauseCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <div className="text-sm text-muted-foreground">
+            Automatische blogs staan uit. Zet ze aan onder Content, knop Instellingen, sectie Automatische blogs.
+          </div>
+        </div>
+      ))}
 
       <div className="flex flex-wrap gap-3">
         <div className="relative max-w-md flex-1">

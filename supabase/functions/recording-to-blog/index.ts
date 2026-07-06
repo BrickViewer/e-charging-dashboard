@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { getAnthropicKey, anthropicMessage, extractJson, DEFAULT_MODEL } from "../_shared/anthropic.ts";
+import { BLOG_SYSTEM, INTENT_NL, validateBlogJson } from "../_shared/blog.ts";
 
 // Opname-naar-blog (Laag D): smeedt de BRON (nieuws), de ZOEKVRAAG (waar de doelgroep op googelt), de
 // GESPREKSVRAAG en de VISIE (transcript van de opname) samen tot een publicatieklaar blog-CONCEPT, geschreven
@@ -18,41 +19,7 @@ const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 60) || "opname";
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-const INTENT_NL: Record<string, string> = {
-  informational: "informatief", commercial: "commercieel", transactional: "transactioneel", navigational: "navigatie",
-};
-
-const BLOG_SYSTEM = `Je bent de beste blogschrijver voor een Nederlands B2B-bedrijf in laadinfrastructuur voor elektrisch vervoer. Lezers zijn vastgoedeigenaren, VvE-besturen, en bedrijven of installateurs rond laadpalen. Je schrijft in het Nederlands.
-
-Je krijgt:
-- BRON: de samenvatting en url van een nieuwsartikel (de feiten).
-- ZOEKVRAAG: het zoekwoord met zoekdoel waarop de blog moet ranken.
-- GESPREKSVRAAG en VISIE: het opgenomen gesprek van het team. Dit is de unieke mening van het bedrijf en het belangrijkste onderscheidende element. Verwerk deze visie prominent; dit is de reden dat de blog origineel is en niet te kopieren.
-- INTERNE LINKS: bestaande blog-slugs waarnaar je mag verwijzen.
-- MERKCONTEXT: het bedrijf levert en beheert laadinfrastructuur voor zakelijke en vastgoedklanten.
-
-Schrijf een complete, publicatieklare blog die zowel voor Google (SEO) als voor AI-antwoordmachines (AEO/GEO) sterk is. Volg deze structuur:
-1. Een TL;DR-blok bovenaan: 2 tot 3 zinnen die direct antwoord geven op de zoekvraag.
-2. Een heldere definitiezin vroeg in de tekst die het kernbegrip definieert (citeerbaar voor AI).
-3. Body met logische H2-koppen rond de zoekvraag en de visie van het team. Verwerk de feiten uit de bron en de mening van het team duidelijk herkenbaar.
-4. Waar zinvol: een vergelijkingstabel (HTML <table>) die opties of scenario's afzet.
-5. Een FAQ met precies 5 vragen en antwoorden die echte zoekvragen van de doelgroep beantwoorden.
-6. E-E-A-T: toon ervaring en autoriteit; verwijs naar de bron waar je feiten gebruikt; wees concreet en eerlijk.
-
-Stijl:
-- Zakelijk, helder, behulpzaam. Geen marketingclichés, geen overdrijving.
-- Gebruik GEEN gedachtestreepjes (em-dashes) in de tekst.
-- Verzin geen feiten. Gebruik alleen wat in de bron en de visie staat; als iets onbekend is, schrijf het algemeen.
-- content is geldige HTML (<h2>, <p>, <ul>, <table>, enz.), geen markdown, geen <html>/<head>/<body>.
-- Verwijs alleen naar interne slugs die zijn aangeleverd; verzin geen slugs.
-
-Geef ook eerlijke kwaliteitsscores (0 tot 100):
-- seo_score: hoe goed dekt de tekst de zoekvraag, koppen, en zoekwoordgebruik.
-- aeo_score: hoe citeerbaar is de tekst voor AI (TL;DR, definitie, FAQ, directe antwoorden).
-- quality_score: algehele redactionele kwaliteit en originaliteit dankzij de visie.
-
-Antwoord UITSLUITEND met geldige JSON, exact dit schema, zonder extra tekst eromheen:
-{"title": string, "content": string, "excerpt": string, "seo_title": string, "seo_description": string, "tags": [string], "faq": [{"question": string, "answer": string}], "meta_variants": {"titles": [string], "descriptions": [string]}, "internal_link_suggestions": [{"anchor": string, "target_slug": string, "reason": string}], "seo_score": number, "aeo_score": number, "quality_score": number}`;
+// BLOG_SYSTEM, INTENT_NL en validateBlogJson zijn gedeeld met content-autoblog (zie ../_shared/blog.ts).
 
 // STUB - transcriptie. Bij een geplakt transcript een no-op. Audio-pad later (secret TRANSCRIPTION_API_KEY).
 async function transcribeRecording(input: { transcript?: string; audioPath?: string }): Promise<string> {
@@ -67,36 +34,6 @@ function stubDraft(transcript: string, title: string): { title: string; content:
   const content = `<p><em>Concept gegenereerd uit een opname; nog te redigeren en te optimaliseren voor SEO/GEO.</em></p>${body}`;
   const excerpt = (paras[0] ?? transcript).replace(/\s+/g, " ").slice(0, 180);
   return { title, content, excerpt };
-}
-
-const clampScore = (n: any): number | null => {
-  const v = Number(n);
-  return Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : null;
-};
-
-function validateBlogJson(p: any, validSlugs: Set<string>) {
-  if (!p || typeof p.title !== "string" || !p.title.trim() || typeof p.content !== "string" || !p.content.trim()) {
-    throw new Error("Onvolledige blog-JSON van Claude");
-  }
-  const links = Array.isArray(p.internal_link_suggestions)
-    ? p.internal_link_suggestions.filter((l: any) => l && typeof l.target_slug === "string" && validSlugs.has(l.target_slug)).slice(0, 8)
-    : [];
-  const mv = p.meta_variants && typeof p.meta_variants === "object" ? p.meta_variants : {};
-  const meta = {
-    titles: Array.isArray(mv.titles) ? mv.titles.filter((x: any) => typeof x === "string").slice(0, 3) : [],
-    descriptions: Array.isArray(mv.descriptions) ? mv.descriptions.filter((x: any) => typeof x === "string").slice(0, 3) : [],
-  };
-  const faq = Array.isArray(p.faq) ? p.faq.filter((f: any) => f && f.question && f.answer).slice(0, 8) : [];
-  const tags = Array.isArray(p.tags) ? p.tags.filter((x: any) => typeof x === "string").slice(0, 8) : [];
-  return {
-    title: p.title.trim(),
-    content: p.content,
-    excerpt: typeof p.excerpt === "string" ? p.excerpt.slice(0, 300) : null,
-    seo_title: typeof p.seo_title === "string" ? p.seo_title : null,
-    seo_description: typeof p.seo_description === "string" ? p.seo_description : null,
-    tags, faq, meta_variants: meta, internal_link_suggestions: links,
-    seo_score: clampScore(p.seo_score), aeo_score: clampScore(p.aeo_score), quality_score: clampScore(p.quality_score),
-  };
 }
 
 Deno.serve(async (req) => {

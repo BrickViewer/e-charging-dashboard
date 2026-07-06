@@ -14,6 +14,9 @@ verify_jwt = false
 [functions.assign-user-role]
 verify_jwt = true
 
+[functions.blog-cover]
+verify_jwt = false
+
 [functions.blog-public]
 verify_jwt = false
 
@@ -33,6 +36,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.contact-intake]
+verify_jwt = false
+
+[functions.content-autoblog]
 verify_jwt = false
 
 [functions.content-brief]

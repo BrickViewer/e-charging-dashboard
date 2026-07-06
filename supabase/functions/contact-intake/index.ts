@@ -31,6 +31,19 @@ function json(body: unknown, status: number, origin: string) {
 }
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
+// Vertrouwd client-IP voor rate-limiting. NIET x-forwarded-for[0] gebruiken: dat is de door de client
+// zelf ingestuurde (spoofbare) eerste hop → rate-limit-bypass. cf-connecting-ip wordt door Cloudflare
+// (voor Supabase) gezet en kan niet worden vervalst; x-real-ip is de gateway-waarde; als laatste terugval
+// de LAATSTE x-forwarded-for-entry (door de vertrouwde proxy toegevoegd; de client kan alleen links prependen).
+function clientIp(req: Request): string {
+  const cf = str(req.headers.get("cf-connecting-ip"));
+  if (cf) return cf;
+  const real = str(req.headers.get("x-real-ip"));
+  if (real) return real;
+  const xff = (req.headers.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return xff.length ? xff[xff.length - 1] : "";
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin") ?? "";
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(origin) });
@@ -52,7 +65,7 @@ Deno.serve(async (req) => {
     if (turnstileSecret) {
       const token = str(body.turnstile_token);
       if (!token) return json({ status: "error", message: "Verificatie ontbreekt" }, 400, origin);
-      const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim();
+      const ip = clientIp(req);
       const form = new FormData();
       form.append("secret", turnstileSecret);
       form.append("response", token);
@@ -69,8 +82,8 @@ Deno.serve(async (req) => {
     const email = str(body.email).slice(0, 200);
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ status: "error", message: "Ongeldig e-mailadres" }, 400, origin);
 
-    // 3. Rate-limiting per IP (gehasht voor privacy): max 10 / 10 min.
-    const ipRaw = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim();
+    // 3. Rate-limiting per IP (gehasht voor privacy): max 10 / 10 min. Vertrouwd IP (niet-spoofbaar).
+    const ipRaw = clientIp(req);
     const ipHash = ipRaw ? await sha256Hex(ipRaw) : null;
     if (ipHash) {
       const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -91,9 +104,12 @@ Deno.serve(async (req) => {
     const companyName = str(body.company).slice(0, 200);
     const subject = str(body.subject).slice(0, 200);
 
-    const companyId = companyName ? await resolveOrCreateCompany(sb, orgId, { name: companyName }) : null;
-    const personId = await resolveOrCreatePerson(sb, orgId, { name: name || null, email: email || null, phone: phone || null });
-    if (companyId && personId) await linkPersonToCompany(sb, companyId, personId, true);
+    // CREATE-ONLY: een ongeauthenticeerde inzending mag nooit bestaande contactgegevens overschrijven
+    // (geen telefoon-overschrijving) en nooit de primaire contactpersoon van een bestaand bedrijf kapen
+    // (is_primary=false + alleen een nieuwe koppeling invoegen).
+    const companyId = companyName ? await resolveOrCreateCompany(sb, orgId, { name: companyName }, { updateExisting: false }) : null;
+    const personId = await resolveOrCreatePerson(sb, orgId, { name: name || null, email: email || null, phone: phone || null }, { updateExisting: false });
+    if (companyId && personId) await linkPersonToCompany(sb, companyId, personId, false, { ignoreOnConflict: true });
 
     const { error } = await sb.from("leads").insert({
       organization_id: orgId,

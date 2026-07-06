@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { CheckCircle2, ExternalLink, Pencil, Rocket, Trash2, XCircle } from "lucide-react";
-import { BLOG_CATEGORIES, categorySlug } from "@/lib/blogTaxonomy";
+import { useActiveCategories } from "@/hooks/useCategories";
+import { slugify } from "@/lib/slug";
 import {
   useContentTopic, useUpdateTopic, useDeleteTopic, useContentKeywords, useGenerateBrief,
   TOPIC_STATUS_LABEL, SOURCE_LABEL, INTENT_LABEL,
@@ -23,6 +24,8 @@ export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | 
   const del = useDeleteTopic();
   const keywordsQ = useContentKeywords();
   const genBrief = useGenerateBrief();
+  const categoriesQ = useActiveCategories();
+  const categories = categoriesQ.data ?? [];
   const topic = topicQ.data;
 
   const [form, setForm] = useState<Record<string, string>>({});
@@ -51,7 +54,9 @@ export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | 
           raw_summary: t("raw_summary").trim() || null,
           target_keyword: t("target_keyword").trim() || null,
           assigned_category: t("assigned_category") || null,
-          assigned_category_slug: t("assigned_category") ? categorySlug(t("assigned_category")) : null,
+          assigned_category_slug: t("assigned_category")
+            ? (categories.find((c) => c.name === t("assigned_category"))?.slug ?? slugify(t("assigned_category")))
+            : null,
         },
       });
       toast.success("Onderwerp opgeslagen");
@@ -124,7 +129,7 @@ export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | 
                 <Field label="Categorie">
                   <Select value={t("assigned_category")} onValueChange={set("assigned_category")}>
                     <SelectTrigger><SelectValue placeholder="Kies…" /></SelectTrigger>
-                    <SelectContent>{BLOG_CATEGORIES.map((c) => <SelectItem key={c.slug} value={c.label}>{c.label}</SelectItem>)}</SelectContent>
+                    <SelectContent>{categories.map((c) => <SelectItem key={c.slug} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
               </div>

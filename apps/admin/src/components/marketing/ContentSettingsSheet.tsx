@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Plus, Play, Trash2, Search } from "lucide-react";
+import { Plus, Play, Trash2, Search, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useContentSettings, useUpdateContentSettings, useRunMetrics, useRunSerpGap, useRunClustering, type ContentEngineSettings } from "@/hooks/useContentPipeline";
+import { useContentSettings, useUpdateContentSettings, useRunMetrics, useRunSerpGap, useRunClustering, useRunAutoblog, type ContentEngineSettings } from "@/hooks/useContentPipeline";
 
 const fmtAt = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "nog niet");
 
@@ -19,11 +19,13 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
   const runMetrics = useRunMetrics();
   const runSerpGap = useRunSerpGap();
   const runCluster = useRunClustering();
+  const runAutoblog = useRunAutoblog();
   const row = settingsQ.data;
 
   const [s, setS] = useState<ContentEngineSettings>({});
   const [running, setRunning] = useState(false);
   const [kwRunning, setKwRunning] = useState(false);
+  const [autoblogRunning, setAutoblogRunning] = useState(false);
   useEffect(() => { if (row?.settings) setS(row.settings); }, [row?.settings]);
 
   if (!open) return null;
@@ -83,6 +85,26 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
     }
   };
 
+  // Testblog: eerst opslaan zodat de edge de actuele instellingen gebruikt, dan altijd als CONCEPT
+  // genereren (publish:false), ook als auto-publiceren aan zou staan. Zo kun je de kwaliteit beoordelen.
+  const runAutoblogTest = async () => {
+    setAutoblogRunning(true);
+    try {
+      if (row) await update.mutateAsync({ id: row.id, settings: s });
+      const r = await runAutoblog.mutateAsync({ force: true, publish: false });
+      if (r?.status === "no_key") { toast.message(r.message || "Claude-sleutel ontbreekt nog"); return; }
+      if (r?.status === "disabled") { toast.message("Autoblog staat uit; testknop draait toch (concept)."); return; }
+      if (!r || r.status !== "ok") { toast.error(r?.message || "Testblog mislukt"); return; }
+      if ((r.generated ?? 0) === 0) { toast.message(r.message || "Geen onderwerpen in de pool om over te schrijven."); return; }
+      const slug = r.results?.find((x) => x.slug)?.slug;
+      toast.success(`Testblog als concept klaar${slug ? `: ${slug}` : ""}. Vind hem terug bij de blogs ter review.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Testblog mislukt");
+    } finally {
+      setAutoblogRunning(false);
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="ec-scroll w-full overflow-y-auto sm:max-w-xl">
@@ -99,7 +121,24 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
                 checked={!!s.discovery_enabled} onChange={(v) => setField("discovery_enabled", v)} />
               <ToggleRow label="Generatie aan" desc="Laat de AI-routine concepten genereren uit goedgekeurde onderwerpen."
                 checked={!!s.generation_enabled} onChange={(v) => setField("generation_enabled", v)} />
-              <p className="text-[11px] text-muted-foreground">Concepten gaan nooit automatisch live — jij keurt elke blog goed.</p>
+              <p className="text-[11px] text-muted-foreground">Concepten uit de opname-machine gaan nooit automatisch live — jij keurt elke blog goed.</p>
+            </section>
+
+            {/* Automatische blogs (autonome tak) */}
+            <section className="space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Automatische blogs</p>
+              <p className="text-[11px] text-muted-foreground">De autonome tak pakt zelf de best-scorende onderwerpen, laat Claude met web-research een blog schrijven, en publiceert die alleen als hij door de kwaliteitspoort komt. Zakt-ie eronder, dan blijft het een concept ter review. Het ritme (ma/wo/vr) staat als aparte planning; hier zet je de motor aan.</p>
+              <ToggleRow label="Autoblog aan" desc="Laat de geplande runs automatisch blogs genereren uit de onderwerpen-pool."
+                checked={!!s.autoblog_enabled} onChange={(v) => setField("autoblog_enabled", v)} />
+              <ToggleRow label="Automatisch publiceren" desc="Publiceer direct als de blog door de kwaliteitspoort komt; anders blijft het een concept ter review."
+                checked={!!s.autoblog_autopublish} onChange={(v) => setField("autoblog_autopublish", v)} />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <NumField label="Blogs per run" value={s.autoblog_per_run} onChange={(v) => setField("autoblog_per_run", v)} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">Laatste autoblog-run: {fmtAt(s.last_autoblog_at)}.</p>
+              <Button variant="outline" size="sm" onClick={runAutoblogTest} disabled={autoblogRunning}>
+                <Sparkles className="mr-1.5 h-4 w-4" /> {autoblogRunning ? "Bezig..." : "Genereer nu 1 testblog (concept)"}
+              </Button>
             </section>
 
             {/* Filters */}
@@ -166,8 +205,8 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
 
             {/* Auteur (E-E-A-T) */}
             <section className="space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Auteur (E-E-A-T)</p>
-              <p className="text-[11px] text-muted-foreground">Een geverifieerde auteur (met LinkedIn via sameAs) versterkt je vindbaarheid in Google en AI-antwoorden. Dit komt in de schema-data van elke blog en in de schrijfstijl.</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Auteur van alle blogs (E-E-A-T)</p>
+              <p className="text-[11px] text-muted-foreground">Deze persoon staat als auteur op élke blog: zichtbaar op de pagina (naam, functie, bio, LinkedIn) én in de schema-data voor Google en AI-antwoorden. Een geverifieerde auteur met LinkedIn (via sameAs) versterkt je vindbaarheid. Laat je dit leeg, dan valt het terug op "E-Charging redactie".</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <Input value={author.name ?? ""} onChange={(e) => setAuthor({ name: e.target.value })} placeholder="Naam" />
                 <Input value={author.role ?? ""} onChange={(e) => setAuthor({ role: e.target.value })} placeholder="Functie, bijv. Specialist laadinfra" />
