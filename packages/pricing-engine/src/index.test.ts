@@ -31,17 +31,18 @@ describe("pricing engine", () => {
     // netto rendement = 116 (laden) − 50 (stroom) + 6 (start) + 72 (blokkeer).
     closeTo(result.netReturnPerChargePointMonth, 144);
 
-    // marge = 0,05 €/kWh × 200 kWh = 10; klant houdt 144 − 10 = 134 over.
-    closeTo(result.echargingMarginPerKwh, 0.05);
-    closeTo(result.echargingMarginPerChargePointMonth, 10);
-    closeTo(result.customerNetPerChargePointMonth, 134);
-    closeTo(result.echargingNetPerChargePointMonth, 10);
+    // marge = 0,10 €/kWh (productie-default sinds het fee-model van 2026-06) × 200 kWh = 20;
+    // klant houdt 144 − 20 = 124 over.
+    closeTo(result.echargingMarginPerKwh, 0.10);
+    closeTo(result.echargingMarginPerChargePointMonth, 20);
+    closeTo(result.customerNetPerChargePointMonth, 124);
+    closeTo(result.echargingNetPerChargePointMonth, 20);
 
-    closeTo(result.serviceFeePct, 10 / 144);
+    closeTo(result.serviceFeePct, 20 / 144);
 
     // totalen schalen met 10 laadpunten.
-    closeTo(result.totals.customerPerMonth, 1340);
-    closeTo(result.totals.echargingNetPerMonth, 100);
+    closeTo(result.totals.customerPerMonth, 1240);
+    closeTo(result.totals.echargingNetPerMonth, 200);
     closeTo(result.totals.netReturnPerMonth, 1440);
     expect(result.status).toBe("ok");
   });
