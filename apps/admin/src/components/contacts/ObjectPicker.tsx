@@ -9,11 +9,14 @@ import { useProjectLocationSearch, useCreateProjectLocation, type ObjectSearchRe
 
 const fmt = (r: ObjectSearchResult) => r.display_name;
 
-export function ObjectPicker({ value, valueLabel, onChange, placeholder = "Kies een object…" }: {
+export function ObjectPicker({ value, valueLabel, onChange, placeholder = "Kies een object…", allowCreate = true }: {
   value: string | null;
   valueLabel?: string | null;
   onChange: (id: string | null, label?: string) => void;
   placeholder?: string;
+  // Uitzetten waar alleen BESTAANDE objecten zijn toegestaan (bv. standalone-offerte:
+  // nieuwe klanten horen via de leads-flow binnen te komen, die het object aanmaakt).
+  allowCreate?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -63,7 +66,7 @@ export function ObjectPicker({ value, valueLabel, onChange, placeholder = "Kies 
                 ))}
               </CommandGroup>
             )}
-            {query.trim() && !exact && (
+            {allowCreate && query.trim() && !exact && (
               <CommandGroup>
                 <CommandItem value={`__create__${query}`} onSelect={handleCreate} disabled={createObj.isPending}>
                   <Plus className="mr-2 h-4 w-4" /> Object "{query.trim()}" aanmaken

@@ -246,7 +246,12 @@ export function useDeleteLead() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("leads").delete().eq("id", id);
-      if (error) throw error;
+      if (error) {
+        // FK restrict: een lead met offertes mag niet verdwijnen (de offerte zou uit de
+        // pipeline vallen). Koppel de offertes eerst aan een andere lead of verwijder ze.
+        if (error.code === "23503") throw new Error("Deze lead heeft gekoppelde offertes; verwijder of verplaats die eerst.");
+        throw error;
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
   });

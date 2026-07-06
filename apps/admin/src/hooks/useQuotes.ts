@@ -101,14 +101,16 @@ export function useCreateQuoteFromLead() {
   });
 }
 
-// Maakt een losse (standalone) offerte voor een object, los van een lead.
+// Maakt een losse (standalone) offerte voor een BESTAAND object. De server koppelt
+// ALTIJD een lead: de meegegeven, anders de oudste van het object, anders maakt hij er
+// automatisch één aan (leadCreated=true) — elke offerte hoort in de pipeline.
 export function useCreateQuoteStandalone() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ projectLocationId, companyId, personId }: { projectLocationId: string; companyId?: string | null; personId?: string | null }) => {
-      const { data, error } = await supabase.functions.invoke<{ quoteId: string; quoteNumber: string }>(
+    mutationFn: async ({ projectLocationId, companyId, personId, leadId }: { projectLocationId: string; companyId?: string | null; personId?: string | null; leadId?: string | null }) => {
+      const { data, error } = await supabase.functions.invoke<{ quoteId: string; quoteNumber: string; leadId: string; leadCreated: boolean }>(
         "quote-create",
-        { body: { project_location_id: projectLocationId, company_id: companyId ?? undefined, person_id: personId ?? undefined } },
+        { body: { project_location_id: projectLocationId, company_id: companyId ?? undefined, person_id: personId ?? undefined, lead_id: leadId ?? undefined } },
       );
       if (error) throw error;
       if (!data?.quoteId) throw new Error("Offerte aanmaken mislukt");
@@ -117,6 +119,7 @@ export function useCreateQuoteStandalone() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["project-locations"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 }
