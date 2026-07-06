@@ -63,17 +63,20 @@ Deno.serve(async (req) => {
         ? loc.folder_web_url.replace(/\/[^/]*$/, "/" + folderName.replace(/ /g, "%20"))
         : (renamed.webUrl ?? null);
       if (newWebUrl && newWebUrl !== loc.folder_web_url) {
-        await sb.from("project_locations").update({ folder_web_url: newWebUrl }).eq("id", objectId);
+        const { error: urlErr } = await sb.from("project_locations").update({ folder_web_url: newWebUrl }).eq("id", objectId);
+        if (urlErr) throw urlErr;
       }
       return json({ status: "ok", renamed: true, folder_web_url: newWebUrl ?? loc.folder_web_url });
     }
 
-    // Nieuw object → dossiermap + submappen.
+    // Nieuw object → dossiermap + submappen. De refs-write mag NIET stil falen: een genegeerde
+    // 42501 (schema-hardening) liet refs leeg achter → quote-sharepoint-off maakte dubbele dossiers.
     const d = await ensureDossierFolder(gc, driveId, rootItemId ?? await gc.getDriveRootItemId(driveId), folderName);
-    await sb.from("project_locations").update({
+    const { error: refErr } = await sb.from("project_locations").update({
       folder_item_id: d.folderId, folder_web_url: d.webUrl, opdracht_item_id: d.opdrachtId,
       updated_at: new Date().toISOString(),
     }).eq("id", objectId);
+    if (refErr) throw refErr;
 
     return json({ status: "ok", folder_item_id: d.folderId, folder_web_url: d.webUrl });
   } catch (err) {

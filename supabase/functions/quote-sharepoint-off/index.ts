@@ -62,9 +62,9 @@ Deno.serve(async (req) => {
 
     // project_location resolve / reuse (zelfde bedrijf+adres → 201-02) / create.
     let locId = quote.project_location_id as string | null;
-    let loc: { location_number: number; folder_item_id: string | null; opdracht_item_id: string | null; folder_web_url: string | null } | null = null;
+    let loc: { location_number: number; display_name: string | null; folder_item_id: string | null; opdracht_item_id: string | null; folder_web_url: string | null } | null = null;
     if (locId) {
-      const { data } = await sb.from("project_locations").select("location_number, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
+      const { data } = await sb.from("project_locations").select("location_number, display_name, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
       loc = data;
     }
     if (!loc) {
@@ -75,23 +75,29 @@ Deno.serve(async (req) => {
       });
       locId = resolved.id;
       const { data } = await sb.from("project_locations")
-        .select("location_number, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
+        .select("location_number, display_name, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
       loc = data;
-      await sb.from("quotes").update({ project_location_id: locId }).eq("id", quoteId);
+      const { error: linkErr } = await sb.from("quotes").update({ project_location_id: locId }).eq("id", quoteId);
+      if (linkErr) throw linkErr;
     }
     if (!loc) return json({ status: "error", message: "Locatie kon niet worden bepaald" }, 500);
     const locNumber = Number(loc.location_number);
 
-    // Dossiermap + 6 submappen onder de doelmap (idempotent: hergebruik folder_item_id).
+    // Dossiermap + submappen onder de doelmap (idempotent: hergebruik folder_item_id).
+    // Mapnaam = de CANONIEKE objectnaam (display_name, mét komma) zodat dit pad dezelfde map
+    // vindt/maakt als object-ensure-folder — een afwijkende naam gaf dubbele dossiers.
     let folderId = loc.folder_item_id;
     if (!folderId) {
-      const folderName = sanitizeName(`${addrLabel} (${locNumber})`);
+      const folderName = sanitizeName(loc.display_name || `${addrLabel} (${locNumber})`);
       const d = await ensureDossierFolder(gc, driveId, rootItemId ?? await gc.getDriveRootItemId(driveId), folderName);
       folderId = d.folderId;
-      await sb.from("project_locations").update({
-        display_name: folderName, folder_item_id: d.folderId, folder_web_url: d.webUrl,
+      // display_name blijft eigendom van de canonieke naam-trigger; alleen refs opslaan,
+      // en fouten NIET stil negeren (42501-regressie 2026-07-06).
+      const { error: refErr } = await sb.from("project_locations").update({
+        folder_item_id: d.folderId, folder_web_url: d.webUrl,
         opdracht_item_id: d.opdrachtId, updated_at: new Date().toISOString(),
       }).eq("id", locId);
+      if (refErr) throw refErr;
     }
 
     // Documentnummer (RPC, race-safe) — één keer.
@@ -100,14 +106,16 @@ Deno.serve(async (req) => {
       const { data: dn, error } = await sb.rpc("assign_document_number", { p_location_id: locId });
       if (error) throw error;
       docNum = Number(dn);
-      await sb.from("quotes").update({ document_number: docNum }).eq("id", quoteId);
+      const { error: dnErr } = await sb.from("quotes").update({ document_number: docNum }).eq("id", quoteId);
+      if (dnErr) throw dnErr;
     }
 
     // Upload de ongetekende OFF in de dossier-root. Bestandsnaam = offertenummer (201-01-26).
     const offNumber = quote.quote_number ?? `${locNumber}-${String(docNum).padStart(2, "0")}-${String(new Date().getFullYear()).slice(-2)}`;
     const offName = sanitizeName(`${offNumber} OFF ${addrLabel}`) + ".pdf";
     const off = await gc.uploadFile(driveId, folderId!, offName, base64ToBytes(offPdfBase64));
-    await sb.from("quotes").update({ off_item_id: off.id, off_web_url: off.webUrl }).eq("id", quoteId);
+    const { error: offErr } = await sb.from("quotes").update({ off_item_id: off.id, off_web_url: off.webUrl }).eq("id", quoteId);
+    if (offErr) throw offErr;
 
     return json({ status: "ok", folder_web_url: loc.folder_web_url, off_web_url: off.webUrl });
   } catch (err) {
