@@ -90,11 +90,11 @@ function encode(s: LeadViewState): URLSearchParams {
   if (s.valueMax != null) sp.set("vmax", String(s.valueMax));
   if (s.cpMin != null) sp.set("cpmin", String(s.cpMin));
   if (s.cpMax != null) sp.set("cpmax", String(s.cpMax));
-  if (s.dateFrom || s.dateTo) {
-    if (s.dateField !== "created_at") sp.set("df", s.dateField);
-    if (s.dateFrom) sp.set("dfrom", s.dateFrom);
-    if (s.dateTo) sp.set("dto", s.dateTo);
-  }
+  // df los van de datums bewaren, anders springt de veldkeuze terug naar 'Aangemaakt'
+  // zodra je het veld kiest vóór een datum invult.
+  if (s.dateField !== "created_at") sp.set("df", s.dateField);
+  if (s.dateFrom) sp.set("dfrom", s.dateFrom);
+  if (s.dateTo) sp.set("dto", s.dateTo);
   if (s.sort.field !== DEFAULT_LEAD_VIEW.sort.field || s.sort.dir !== DEFAULT_LEAD_VIEW.sort.dir)
     sp.set("sort", `${s.sort.field}:${s.sort.dir}`);
   if (s.page > 0) sp.set("page", String(s.page));

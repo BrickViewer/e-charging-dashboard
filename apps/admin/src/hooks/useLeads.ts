@@ -146,7 +146,7 @@ export function useLeadsList(params: { filters: LeadListFilters; sort: LeadSort;
       }
       if (filters.sources?.length) q = q.in("source", filters.sources);
       if (filters.priorities?.length) q = q.in("priority", filters.priorities);
-      if (filters.scopes?.length) q = q.in("scope", filters.scopes);
+      if (filters.scopes?.length) q = q.in("scope_effective", filters.scopes);
       if (filters.stageIds?.length) q = q.in("stage_id", filters.stageIds);
       if (filters.tagIds?.length) q = q.overlaps("tag_ids", filters.tagIds);
       if (filters.valueMin != null) q = q.gte("estimated_value", filters.valueMin);
@@ -154,7 +154,17 @@ export function useLeadsList(params: { filters: LeadListFilters; sort: LeadSort;
       if (filters.chargePointsMin != null) q = q.gte("estimated_charge_points", filters.chargePointsMin);
       if (filters.chargePointsMax != null) q = q.lte("estimated_charge_points", filters.chargePointsMax);
       if (filters.dateField && filters.dateFrom) q = q.gte(filters.dateField, filters.dateFrom);
-      if (filters.dateField && filters.dateTo) q = q.lte(filters.dateField, filters.dateTo);
+      if (filters.dateField && filters.dateTo) {
+        // expected_close_date is een 'date'; won_at/lost_at/created_at zijn timestamptz →
+        // exclusieve bovengrens (dateTo + 1 dag) zodat de hele laatste dag meetelt.
+        if (filters.dateField === "expected_close_date") {
+          q = q.lte(filters.dateField, filters.dateTo);
+        } else {
+          const dt = new Date(filters.dateTo + "T00:00:00Z");
+          dt.setUTCDate(dt.getUTCDate() + 1);
+          q = q.lt(filters.dateField, dt.toISOString().slice(0, 10));
+        }
+      }
       q = q.order(sort.field, { ascending: sort.dir === "asc", nullsFirst: false });
       if (sort.field !== "created_at") q = q.order("created_at", { ascending: false });
       const from = page * pageSize;
@@ -209,6 +219,24 @@ export function useLead(id: string | undefined) {
       const { data, error } = await supabase.from("leads").select("*").eq("id", id!).maybeSingle();
       if (error) throw error;
       return data as Lead | null;
+    },
+  });
+}
+
+// Enkele lead MÉT joins (voor de detailsheet als de lead niet in de open-board-set zit,
+// bv. gewonnen/verloren via de lijst of een deep-link) — zodat tags/taken/offertes kloppen.
+export function useLeadFull(id: string | undefined) {
+  return useQuery({
+    queryKey: ["lead-full", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*, lead_tasks(id, done), lead_tag_links(tag_id, lead_tags(id, name, color)), quotes(id, status, sent_at, with_installation, with_management, num_charge_points, total_installation_cost, total_hardware_cost, monthly_projection, created_at)")
+        .eq("id", id!)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as unknown as LeadWithTasks) ?? null;
     },
   });
 }

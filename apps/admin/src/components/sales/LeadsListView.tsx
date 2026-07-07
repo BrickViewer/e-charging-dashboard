@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,7 +14,7 @@ import { SCOPE_SHORT, SCOPE_BADGE_CLASS, type QuoteScope } from "@/lib/quoteScop
 import { MarkLostDialog } from "@/components/sales/MarkLostDialog";
 
 const euro0 = (n: number | null | undefined) =>
-  n == null ? "—" : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  n == null ? "—" : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const dateShort = (s: string | null) => (s ? new Date(s).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
 const LIFECYCLE_BADGE: Record<string, { label: string; cls: string }> = {
@@ -36,10 +36,10 @@ const SORTABLE: { field: string; label: string; className?: string }[] = [
   { field: "company_name", label: "Bedrijf / contact" },
   { field: "stage_id", label: "Fase" },
   { field: "owner_user_id", label: "Eigenaar" },
-  { field: "scope", label: "Scope" },
+  { field: "scope_effective", label: "Scope" },
   { field: "estimated_value", label: "Waarde", className: "text-right" },
   { field: "estimated_charge_points", label: "Palen", className: "text-right" },
-  { field: "expected_close_date", label: "Sluit" },
+  { field: "expected_close_date", label: "Verwacht sluiten" },
   { field: "lifecycle", label: "Status" },
   { field: "updated_at", label: "Leeftijd" },
 ];
@@ -81,6 +81,10 @@ export function LeadsListView({
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lostOpen, setLostOpen] = useState(false);
+  // Selectie legen zodra de zichtbare set verandert (pagina/segment/filters) — voorkomt
+  // dat bulkacties op niet-zichtbare/uitgefilterde leads werken.
+  const filtersKey = JSON.stringify(filters);
+  useEffect(() => { setSelected(new Set()); }, [page, segment, filtersKey]);
   const stageById = useMemo(() => new Map(stages.map((s) => [s.id, s])), [stages]);
   const reasonById = useMemo(() => new Map(reasons.map((r) => [r.id, r.label])), [reasons]);
   const wonStage = stages.find((s) => s.is_won);
@@ -118,7 +122,7 @@ export function LeadsListView({
         {SEGMENTS.map((s) => (
           <button
             key={s.key}
-            onClick={() => { onSegmentChange(s.key); onPageChange(0); clearSel(); }}
+            onClick={() => { onSegmentChange(s.key); clearSel(); }}
             className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
               segment === s.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
@@ -173,7 +177,7 @@ export function LeadsListView({
               rows.map((r) => {
                 const st = r.stage_id ? stageById.get(r.stage_id) : null;
                 const lc = LIFECYCLE_BADGE[r.lifecycle ?? "open"] ?? LIFECYCLE_BADGE.open;
-                const scope = r.scope as QuoteScope | null;
+                const scope = r.scope_effective as QuoteScope | null;
                 return (
                   <tr
                     key={r.id}

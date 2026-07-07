@@ -3677,6 +3677,7 @@ export type Database = {
           tag_ids: string[] | null
           updated_at: string | null
           website: string | null
+          scope_effective: string | null
           won_at: string | null
         }
         Relationships: []

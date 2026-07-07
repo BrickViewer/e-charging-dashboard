@@ -6,10 +6,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Plus, SlidersHorizontal, Target, Euro, Trophy, Percent, LayoutGrid, List, Bookmark, Star, Trash2 } from "lucide-react";
 import { useOrganization, useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
 import {
-  useOpenLeads, useLeadStages, useTeamProfiles, useLeadStats, useLostReasons, useLead,
+  useOpenLeads, useLeadStages, useTeamProfiles, useLeadStats, useLostReasons, useLeadFull, primaryQuote,
   type LeadWithTasks,
 } from "@/hooks/useLeads";
 import { useLeadTags } from "@/hooks/useLeadTags";
+import { scopeFromFlags } from "@/lib/quoteScope";
 import { useAuth } from "@/hooks/useAuth";
 import { leadPipelineValue } from "@/lib/leadEstimate";
 import { useLeadViewState, activeFilterCount, toListFilters, type LeadViewState } from "@/hooks/useLeadViewState";
@@ -37,12 +38,17 @@ function Kpi({ icon: Icon, label, value }: { icon: typeof Target; label: string;
 function boardFilter(leads: LeadWithTasks[], s: LeadViewState, uid: string | null) {
   const q = s.search.trim().toLowerCase();
   return leads.filter((l) => {
-    if (s.owner === "me") { if ((l.owner_user_id ?? "") !== (uid ?? "\0")) return false; }
+    if (s.owner === "me") { if (uid && l.owner_user_id !== uid) return false; }
     else if (s.owner === "none") { if (l.owner_user_id) return false; }
     else if (s.owner !== "all") { if (l.owner_user_id !== s.owner) return false; }
     if (s.sources.length && !s.sources.includes(l.source)) return false;
     if (s.priorities.length && !s.priorities.includes(l.priority)) return false;
-    if (s.scopes.length && !(l.scope && s.scopes.includes(l.scope))) return false;
+    if (s.scopes.length) {
+      // Scope net als op de kaart afleiden uit de offerte (val terug op de rauwe lead-scope).
+      const pq = primaryQuote(l);
+      const eff = pq ? scopeFromFlags(pq.with_installation !== false, pq.with_management !== false) : l.scope;
+      if (!(eff && s.scopes.includes(eff))) return false;
+    }
     if (s.tagIds.length) {
       const lt = (l.lead_tag_links ?? []).map((x) => x.tag_id);
       if (!s.tagIds.some((t) => lt.includes(t))) return false;
@@ -102,9 +108,8 @@ export default function SalesLeads() {
 
   // Geselecteerde lead: uit de open-set of los ophalen (bv. gewonnen/verloren via deep-link).
   const selFromOpen = selectedId ? openLeads.find((l) => l.id === selectedId) ?? null : null;
-  const selFetch = useLead(selFromOpen || !selectedId ? undefined : selectedId);
-  const selected: LeadWithTasks | null = selFromOpen
-    ?? (selFetch.data ? ({ ...selFetch.data, lead_tasks: [], quotes: [], lead_tag_links: [] } as LeadWithTasks) : null);
+  const selFetch = useLeadFull(selFromOpen || !selectedId ? undefined : selectedId);
+  const selected = useMemo<LeadWithTasks | null>(() => selFromOpen ?? selFetch.data ?? null, [selFromOpen, selFetch.data]);
 
   const boardLeads = useMemo(() => boardFilter(openLeads, state, uid), [openLeads, state, uid]);
   const dragDisabled = activeFilterCount(state) > 0;
