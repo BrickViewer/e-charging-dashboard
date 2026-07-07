@@ -43,7 +43,7 @@ import {
   useLeadTasks, useLeadActivities, useUpdateLead, useDeleteLead, useAddTask, useToggleTask,
   useDeleteTask, useUpdateTask, useConvertLeadToClient, type LeadStage, type LeadWithTasks,
 } from "@/hooks/useLeads";
-import { scopeFromFlags } from "@/lib/quoteScope";
+import { scopeFromFlags, SCOPES, SCOPE_LABEL } from "@/lib/quoteScope";
 import { useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
 import { leadMgmtYearEstimate, leadQuoteValue } from "@/lib/leadEstimate";
 
@@ -124,6 +124,7 @@ export function LeadDetailSheet({
       // kvk/website/sector/adres zijn bedrijfs-eigendom → bewerkt via de bedrijfstap (CompanyFields),
       // niet meer als lead-veld. De inline-cache op de lead volgt automatisch via de propagate-trigger.
       location_type: l.location_type ?? "",
+      scope: l.scope ?? "",
       estimated_charge_points: l.estimated_charge_points?.toString() ?? "",
       estimated_kwh_per_month: l.estimated_kwh_per_month?.toString() ?? "",
       charger_type: l.charger_type ?? "", parking_spaces: l.parking_spaces?.toString() ?? "",
@@ -214,6 +215,7 @@ export function LeadDetailSheet({
         id: lead.id,
         patch: {
           location_type: text("location_type") || null,
+          scope: text("scope") || null,
           estimated_charge_points: text("estimated_charge_points") ? Math.round(num(text("estimated_charge_points")) ?? 0) : null,
           estimated_kwh_per_month: num(text("estimated_kwh_per_month")),
           charger_type: text("charger_type").trim() || null,
@@ -486,6 +488,7 @@ export function LeadDetailSheet({
 
                     <InfoCard title="Locatie & behoefte" icon={MapPin}>
                       <DetailRow label="Type locatie" value={lead.location_type ? LOCATION_TYPES[lead.location_type] ?? lead.location_type : null} />
+                      <DetailRow label="Scope" value={lead.scope ? SCOPE_LABEL[lead.scope as keyof typeof SCOPE_LABEL] ?? lead.scope : null} />
                       <DetailRow label="Laadpunten" value={lead.estimated_charge_points?.toString()} />
                       <DetailRow label="kWh / maand" value={lead.estimated_kwh_per_month ? Math.round(Number(lead.estimated_kwh_per_month)).toLocaleString("nl-NL") : null} />
                       <DetailRow label="Type lader" value={lead.charger_type} />
@@ -852,6 +855,7 @@ function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
   onLaunchConfigurator: () => void;
 }) {
   const locOptions = Object.entries(LOCATION_TYPES) as [string, string][];
+  const scopeOptions = SCOPES.map((s) => [s, SCOPE_LABEL[s]] as [string, string]);
   return (
     <>
       <InfoCard title="Bedrijf" icon={Building2}>
@@ -882,6 +886,7 @@ function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
 
       <InfoCard title="Locatie & behoefte" icon={MapPin}>
         <ERow label="Type locatie"><ESelect value={text("location_type")} onChange={set("location_type")} options={locOptions} placeholder="Kies…" /></ERow>
+        <ERow label="Scope"><ESelect value={text("scope")} onChange={set("scope")} options={scopeOptions} placeholder="Kies…" /></ERow>
         <ERow label="Laadpunten"><EInput value={text("estimated_charge_points")} onChange={set("estimated_charge_points")} mode="numeric" /></ERow>
         <ERow label="kWh / maand"><EInput value={text("estimated_kwh_per_month")} onChange={set("estimated_kwh_per_month")} mode="decimal" /></ERow>
         <ERow label="Type lader"><EInput value={text("charger_type")} onChange={set("charger_type")} /></ERow>
