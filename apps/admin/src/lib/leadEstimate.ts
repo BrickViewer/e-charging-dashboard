@@ -13,10 +13,10 @@ export function estimateYearlyManagementRevenue(
 }
 
 // Spiegelt primaryQuote() uit useLeads (nieuwste verzonden, anders nieuwste aangemaakt;
-// vervangen versies uit de revisie-flow tellen niet mee).
+// vervangen én afgewezen offertes tellen niet mee — geen actieve voorstellen).
 // Hier lokaal gehouden zodat deze module puur blijft (geen supabase-import) en unit-testbaar is.
 function primaryQuoteOf(lead: LeadWithTasks): LeadQuoteMini | null {
-  const qs = (lead.quotes ?? []).filter((q) => q.status !== "vervangen");
+  const qs = (lead.quotes ?? []).filter((q) => q.status !== "vervangen" && q.status !== "afgewezen");
   if (!qs.length) return null;
   const sent = qs.filter((q) => q.sent_at);
   const pool = sent.length ? sent : qs;

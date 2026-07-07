@@ -159,9 +159,13 @@ Deno.serve(async (req) => {
         .from("quotes").select("id, status, quote_number")
         .eq("id", quote.revision_of_quote_id).maybeSingle();
       if (srcErr) throw srcErr;
-      if (source && (source.status === "verstuurd" || source.status === "intern_ter_ondertekening")) {
-        const { error: supErr } = await serviceClient.from("quotes")
-          .update({ status: "vervangen", superseded_by_quote_id: quoteId }).eq("id", source.id);
+      if (source && (source.status === "verstuurd" || source.status === "intern_ter_ondertekening" || source.status === "afgewezen")) {
+        // Een afgewezen bron behoudt status + afwijsreden (eerlijk archief); alleen de
+        // ketting wordt gelegd. Verstuurd/intern wordt écht 'vervangen'.
+        const patch = source.status === "afgewezen"
+          ? { superseded_by_quote_id: quoteId }
+          : { status: "vervangen", superseded_by_quote_id: quoteId };
+        const { error: supErr } = await serviceClient.from("quotes").update(patch).eq("id", source.id);
         if (supErr) throw supErr;
         const { error: revErr } = await serviceClient.from("quote_acceptances")
           .update({ status: "revoked" }).eq("quote_id", source.id).eq("status", "pending");

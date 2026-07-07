@@ -24,7 +24,7 @@ import {
   Building2, Euro, ExternalLink, FileText, MapPin, MessageSquare, MoreHorizontal,
   Pencil, Plus, Tag, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
 } from "lucide-react";
-import { useCreateQuoteFromLead, useLeadQuotes } from "@/hooks/useQuotes";
+import { useCreateQuoteFromLead, useLeadQuotes, rejectCategoryLabel } from "@/hooks/useQuotes";
 import { ObjectSelectDialog } from "@/components/contacts/ObjectSelectDialog";
 import { ObjectCreateDialog } from "@/components/contacts/ObjectCreateDialog";
 import { ObjectDetailSheet } from "@/components/contacts/ObjectDetailSheet";
@@ -501,10 +501,14 @@ export function LeadDetailSheet({
                           const byId = new Map((quotes.data ?? []).map((x) => [x.id, x.quote_number]));
                           const supersededBy = q.superseded_by_quote_id ? byId.get(q.superseded_by_quote_id) : null;
                           const revisionOf = q.revision_of_quote_id ? byId.get(q.revision_of_quote_id) : null;
+                          // Afwijsreden als tooltip op de (rode) badge.
+                          const rejectTip = q.status === "afgewezen"
+                            ? `Afgewezen — ${rejectCategoryLabel(q.rejected_reason_category)}${q.rejected_reason ? `: ${q.rejected_reason}` : ""}`
+                            : undefined;
                           return (
                             <button key={q.id} onClick={() => { onOpenChange(false); navigate(`/sales/offertes?quote=${q.id}`); }} className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40">
                               <span className="font-medium tabular-nums">{q.quote_number}</span>
-                              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${st.cls}`}>{st.label}</span>
+                              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${st.cls}`} title={rejectTip}>{st.label}</span>
                               {beheerOnly && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" title="Eenmalige activatiekosten, te factureren aan de klant">activatie</span>}
                               {supersededBy && <span className="text-[10px] text-muted-foreground" title="Deze versie is vervangen">→ {supersededBy}</span>}
                               {!supersededBy && revisionOf && <span className="text-[10px] text-muted-foreground" title="Nieuwe versie van een eerdere offerte">revisie van {revisionOf}</span>}

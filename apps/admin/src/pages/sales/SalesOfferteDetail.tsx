@@ -8,8 +8,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { EmailBodyEditor } from "@/components/sales/EmailBodyEditor";
 import { toast } from "sonner";
-import { ArrowLeft, Building2, Eye, FilePlus2, Loader2, MapPin, Send, Target, Trash2, PenLine, User, UserPlus } from "lucide-react";
-import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, useReviseQuote, lineItemsOf, type QuoteRevisionFields } from "@/hooks/useQuotes";
+import { ArrowLeft, Building2, Eye, FilePlus2, Loader2, MapPin, Send, Target, Trash2, PenLine, User, UserPlus, XCircle } from "lucide-react";
+import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, useReviseQuote, lineItemsOf, rejectCategoryLabel, type QuoteRevisionFields, type QuoteRejectFields } from "@/hooks/useQuotes";
+import { RejectQuoteDialog } from "@/components/sales/RejectQuoteDialog";
 import { useProjectLocation } from "@/hooks/useProjectLocations";
 import { formatObjectAddress } from "@/lib/objectLabel";
 import { useCompany, usePerson, splitName } from "@/hooks/useContacts";
@@ -78,6 +79,7 @@ export default function SalesOfferteDetail() {
   // Eén voortgangs-/busy-vlag over de héle verzendketen → geen dubbele verzending.
   const [busy, setBusy] = useState<string | null>(null);
   const [createClientOpen, setCreateClientOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [mobilePreview, setMobilePreview] = useState(false);
   // Aanhef van de klant-mail (eerste regel). Leeg = automatisch "Beste {contact},".
   const [emailGreeting, setEmailGreeting] = useState("");
@@ -460,6 +462,15 @@ export default function SalesOfferteDetail() {
         </Button>
       </div>
 
+      {/* Intern afgewezen: alleen-lezen, met de vastgelegde reden (voor analyse). */}
+      {quote.status === "afgewezen" && (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <span className="font-medium">Afgewezen — {rejectCategoryLabel((quote as unknown as QuoteRejectFields).rejected_reason_category)}</span>
+          {(quote as unknown as QuoteRejectFields).rejected_reason && <span>: {(quote as unknown as QuoteRejectFields).rejected_reason}</span>}
+          {(quote as unknown as QuoteRejectFields).rejected_at && <span className="text-red-500"> · {new Date((quote as unknown as QuoteRejectFields).rejected_at!).toLocaleDateString("nl-NL")}</span>}
+        </div>
+      )}
+
       {/* Vervangen door een nieuwere versie (revisie-flow): alleen-lezen archiefexemplaar. */}
       {quote.status === "vervangen" && (
         <div className="mt-3 flex items-center gap-2 rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
@@ -757,6 +768,9 @@ export default function SalesOfferteDetail() {
               )}
               {quote.status === "verstuurd" && (
                 <>
+                  <Button variant="outline" className="text-red-600 hover:text-red-700" onClick={() => setRejectOpen(true)} disabled={!!busy} title="Klant zegt nee tegen deze offerte? Leg intern de reden vast.">
+                    <XCircle className="mr-1.5 h-4 w-4" /> Afwijzen
+                  </Button>
                   <Button variant="outline" onClick={doRevise} disabled={!!busy} title="Klant wil wijzigingen? Maak een concept-kopie met een nieuw nummer; deze versie wordt pas vervangen zodra je de nieuwe verstuurt.">
                     <FilePlus2 className="mr-1.5 h-4 w-4" /> Nieuwe versie
                   </Button>
@@ -764,6 +778,11 @@ export default function SalesOfferteDetail() {
                     {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} {busy ?? "Opnieuw versturen"}
                   </Button>
                 </>
+              )}
+              {quote.status === "afgewezen" && (
+                <Button variant="outline" onClick={doRevise} disabled={!!busy} title="Toch een nieuw voorstel? Maak een concept-kopie met een nieuw nummer.">
+                  <FilePlus2 className="mr-1.5 h-4 w-4" /> Nieuwe versie
+                </Button>
               )}
               {quote.status === "getekend" && !quote.client_id && (
                 <Button onClick={() => setCreateClientOpen(true)}><UserPlus className="mr-1.5 h-4 w-4" /> Klant account aanmaken</Button>
@@ -786,6 +805,7 @@ export default function SalesOfferteDetail() {
       </div>
 
       <CreateClientFromQuoteDialog quote={quote} open={createClientOpen} onClose={() => setCreateClientOpen(false)} onCreated={() => navigate("/sales/offertes")} />
+      <RejectQuoteDialog quoteId={quote.id} quoteNumber={quote.quote_number ?? ""} open={rejectOpen} onClose={() => setRejectOpen(false)} onRejected={() => quoteQ.refetch()} />
     </div>
   );
 }

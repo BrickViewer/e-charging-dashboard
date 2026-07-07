@@ -125,6 +125,9 @@ verify_jwt = true
 [functions.quote-opd-sync]
 verify_jwt = false
 
+[functions.quote-reject]
+verify_jwt = true
+
 [functions.quote-request-signoff]
 verify_jwt = true
 

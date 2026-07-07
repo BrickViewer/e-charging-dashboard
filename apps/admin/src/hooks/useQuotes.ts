@@ -6,6 +6,19 @@ export type Quote = Database["public"]["Tables"]["quotes"]["Row"];
 export type QuoteUpdate = Database["public"]["Tables"]["quotes"]["Update"];
 // Revisie-ketting (migratie 20260706210000); nog niet in de gegenereerde types.
 export type QuoteRevisionFields = { revision_of_quote_id: string | null; superseded_by_quote_id: string | null };
+// Afwijs-velden (migratie 20260707090000); nog niet in de gegenereerde types.
+export type QuoteRejectFields = { rejected_at: string | null; rejected_reason_category: string | null; rejected_reason: string | null };
+
+// Afwijsreden-categorieën (spiegelt de CHECK-constraint + de edge quote-reject).
+export const REJECT_CATEGORIES: { value: string; label: string }[] = [
+  { value: "prijs", label: "Prijs te hoog" },
+  { value: "concurrent", label: "Gekozen voor concurrent" },
+  { value: "geen_behoefte", label: "Geen behoefte meer" },
+  { value: "timing", label: "Verkeerde timing" },
+  { value: "anders", label: "Anders" },
+];
+export const rejectCategoryLabel = (v: string | null | undefined) =>
+  REJECT_CATEGORIES.find((c) => c.value === v)?.label ?? v ?? "";
 export type QuoteLineItem = { description: string; qty: number; unit_price: number; total: number };
 
 export function lineItemsOf(quote: Pick<Quote, "line_items">): QuoteLineItem[] {
@@ -33,11 +46,11 @@ export function useLeadQuotes(leadId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quotes")
-        .select("id, quote_number, status, total_hardware_cost, total_installation_cost, with_management, with_installation, created_at, revision_of_quote_id, superseded_by_quote_id")
+        .select("id, quote_number, status, total_hardware_cost, total_installation_cost, with_management, with_installation, created_at, revision_of_quote_id, superseded_by_quote_id, rejected_at, rejected_reason_category, rejected_reason")
         .eq("lead_id", leadId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as (Pick<Quote, "id" | "quote_number" | "status" | "total_hardware_cost" | "total_installation_cost" | "with_management" | "with_installation" | "created_at"> & QuoteRevisionFields)[];
+      return (data ?? []) as unknown as (Pick<Quote, "id" | "quote_number" | "status" | "total_hardware_cost" | "total_installation_cost" | "with_management" | "with_installation" | "created_at"> & QuoteRevisionFields & QuoteRejectFields)[];
     },
   });
 }
@@ -144,6 +157,29 @@ export function useReviseQuote() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["lead-quotes"] });
+    },
+  });
+}
+
+// Offerte intern afwijzen mét gestructureerde reden (categorie + optionele toelichting) — status
+// 'afgewezen'. Optioneel de lead ook op Verloren zetten. Trekt de ondertekenlink in.
+export function useRejectQuote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ quoteId, reasonCategory, reason, markLeadLost }: { quoteId: string; reasonCategory: string; reason?: string | null; markLeadLost?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke<{ status: string; leadMarkedLost: boolean }>(
+        "quote-reject",
+        { body: { quote_id: quoteId, reason_category: reasonCategory, reason: reason ?? undefined, mark_lead_lost: markLeadLost === true } },
+      );
+      if (error) throw error;
+      if (data?.status !== "ok") throw new Error("Afwijzen mislukt");
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["quote"] });
+      qc.invalidateQueries({ queryKey: ["lead-quotes"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 }

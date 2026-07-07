@@ -39,8 +39,10 @@ Deno.serve(async (req) => {
     const { data: source, error: srcErr } = await sb.from("quotes").select("*").eq("id", quoteId).maybeSingle();
     if (srcErr) throw srcErr;
     if (!source) return json({ status: "error", message: "Offerte niet gevonden" }, 404);
-    if (source.status !== "verstuurd") {
-      return json({ status: "error", message: "Alleen een verstuurde offerte kan een nieuwe versie krijgen" }, 409);
+    // Ook een afgewezen offerte mag een nieuwe versie krijgen (bv. afgewezen op prijs →
+    // scherper voorstel); de afgewezen bron behoudt dan zijn status + reden (archief).
+    if (source.status !== "verstuurd" && source.status !== "afgewezen") {
+      return json({ status: "error", message: "Alleen een verstuurde of afgewezen offerte kan een nieuwe versie krijgen" }, 409);
     }
     if (!source.project_location_id) {
       return json({ status: "error", message: "Offerte heeft geen object (nodig voor het offertenummer)" }, 409);
