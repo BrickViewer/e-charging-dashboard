@@ -588,6 +588,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     ? `<img src="${signature.echargingSignatureDataUrl}" alt="" style="max-height:64px;max-width:90%;display:block" />`
     : "";
   const ecName = (signature?.echargingSignerName || m.signerName || "").trim();
+  const ecFunc = (signature?.echargingSignerFunction || m.signerFunction || "").trim();
   const sigDate = signature?.date ? fmtDateShort(signature.date) : "";
   const dots = "………………….…………";
   blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", 0, HEAD), brk: true });
@@ -598,7 +599,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push(bSec("Onze aanpak", 24, HEAD));
   blocks.push(bP(esc(AANPAK), 9));
   blocks.push(bRaw(`<div style="text-align:center"><div>Heeft u nog vragen of opmerkingen naar aanleiding van deze aanbieding?</div><div style="margin-top:4px">Neem dan gerust contact met ons op.</div></div>`, 40));
-  blocks.push(bRaw(`<div style="display:flex;gap:40px"><div style="flex:1"><div>Met vriendelijke groet,</div><div style="height:72px;display:flex;align-items:flex-end">${ecSigImg}</div><div style="font-weight:600">${esc(ecName) || "Naam ondertekenaar"}</div><div style="margin-top:2px">E-Charging B.V.</div></div><div style="flex:1"><div>Voor akkoord getekend,</div><div style="height:72px;display:flex;align-items:flex-end">${sigImg}</div><div>Dhr./Mevr: ${esc(signature?.signerName) || dots}</div><div style="margin-top:6px">d.d. ${esc(sigDate) || dots}</div></div></div>`, 44));
+  blocks.push(bRaw(`<div style="display:flex;gap:40px"><div style="flex:1"><div>Met vriendelijke groet,</div><div style="height:72px;display:flex;align-items:flex-end">${ecSigImg}</div><div style="font-weight:600">${esc(ecName) || "Naam ondertekenaar"}</div>${ecFunc ? `<div style="margin-top:1px">${esc(ecFunc)}</div>` : ""}<div style="margin-top:2px">E-Charging B.V.</div></div><div style="flex:1"><div>Voor akkoord getekend,</div><div style="height:72px;display:flex;align-items:flex-end">${sigImg}</div><div>Dhr./Mevr: ${esc(signature?.signerName) || dots}</div><div style="margin-top:6px">d.d. ${esc(sigDate) || dots}</div></div></div>`, 44));
 
   return blocks;
 }

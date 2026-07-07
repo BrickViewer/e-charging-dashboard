@@ -27,7 +27,7 @@ import { CompanyPicker } from "@/components/contacts/CompanyPicker";
 import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { LeadPicker } from "@/components/contacts/LeadPicker";
 import { ObjectPicker } from "@/components/contacts/ObjectPicker";
-import { offerPdfBlob, offerPdfBase64, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
+import { offerPdfBlob, offerPdfBase64, echargingSignature, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT, defaultBeheerIntro } from "@/services/offerTemplate";
 import { DEFAULT_OFFER_EMAIL, defaultOfferEmail, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { supabase } from "@/integrations/supabase/client";
@@ -157,7 +157,10 @@ export default function SalesOfferteDetail() {
       setEmailMessage(odLoaded.emailMessage ?? seededEmail);
       lastDefaultRef.current = odLoaded.emailMessage ? "" : seededEmail;
       setEmailClosing(odLoaded.emailClosingName ?? "");
-      setSignerUserId(quote.internal_signer_user_id ?? null);
+      // Default de interne ondertekenaar op de ingelogde gebruiker, zodat de preview meteen een
+      // echte ondertekenaar (naam + handtekening) toont i.p.v. de settings-default. Te wijzigen
+      // via de dropdown; een reeds gekozen ondertekenaar op de quote wint.
+      setSignerUserId(quote.internal_signer_user_id ?? user?.id ?? null);
       setCompanyId(quote.company_id ?? null);
       setCompanyName(quote.prospect_company ?? "");
       setPersonId(quote.person_id ?? null);
@@ -286,7 +289,8 @@ export default function SalesOfferteDetail() {
   const doPreview = async () => {
     if (!quote) return;
     try {
-      window.open(URL.createObjectURL(await offerPdfBlob(pdfData())), "_blank");
+      // Gelijk aan de live preview: toon de gekozen ondertekenaar (naam + handtekening).
+      window.open(URL.createObjectURL(await offerPdfBlob(pdfData(), previewSignature)), "_blank");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Preview mislukt"); }
   };
 
@@ -347,7 +351,12 @@ export default function SalesOfferteDetail() {
       setBusy("Opslaan…");
       await save();
       setBusy("Document voorbereiden…");
-      const offPdfBase64 = await offerPdfBase64(pdfData());
+      // OFF mét de handtekening van de toegewezen ondertekenaar (naam + handtekening indien
+      // opgeslagen) → de SharePoint-OFF is consistent met de preview en de snapshot die
+      // quote-request-signoff wegschrijft. Geen default "Willi-Jan Jonkers" meer.
+      const offPdfBase64 = await offerPdfBase64(pdfData(), echargingSignature({
+        name: selectedAdmin.fullName, func: selectedAdmin.signerTitle, signatureDataUrl: selectedAdmin.signatureDataUrl,
+      }));
       setBusy("Versturen…");
       await requestSignoff.mutateAsync({ quoteId: quote.id });
       toast.success(`Ter ondertekening gestuurd naar ${selectedAdmin.fullName}`);
@@ -437,13 +446,13 @@ export default function SalesOfferteDetail() {
     );
   }
 
-  // In concept: toon de geselecteerde interne ondertekenaar (naam + functie + handtekening) live in de
-  // preview; verzonden/getekend gebruikt de snapshot uit de quote.
+  // In concept: toon de gekozen interne ondertekenaar (naam + functie + handtekening) live in de
+  // preview — naam altijd, handtekening indien opgeslagen. Valt terug op de ingelogde gebruiker
+  // wanneer er nog niets gekozen is. Verzonden/getekend gebruikt de snapshot uit de quote.
+  const effectiveSigner = selectedAdmin ?? selfAdmin;
   const previewSignature: OfferSignature | undefined = isConcept
-    ? (selectedAdmin?.signatureDataUrl
-        ? { echargingSignatureDataUrl: selectedAdmin.signatureDataUrl, echargingSignerName: selectedAdmin.fullName, echargingSignerFunction: selectedAdmin.signerTitle }
-        : undefined)
-    : echargingFromQuote();
+    ? echargingSignature({ name: effectiveSigner?.fullName, func: effectiveSigner?.signerTitle, signatureDataUrl: effectiveSigner?.signatureDataUrl })
+    : echargingSignature({ name: quote?.internal_signer_name, func: quote?.internal_signer_function, signatureDataUrl: quote?.internal_signature_data_url });
 
   return (
     <div className="animate-fade-in">

@@ -27,6 +27,20 @@ export interface OfferSignature {
   echargingSignerFunction?: string | null;
 }
 
+// Bouwt het E-Charging-handtekeningblok voor preview én PDF uit de gekozen ondertekenaar.
+// De NAAM (+ functie) gaat ALTIJD mee; de handtekening-afbeelding alleen als die er is — zo
+// toont een ondertekenaar zonder opgeslagen handtekening tóch zijn naam i.p.v. de settings-
+// default. Levert undefined alleen als er geen naam is (dan valt de template terug op de default).
+export function echargingSignature(input: { name?: string | null; func?: string | null; signatureDataUrl?: string | null }): OfferSignature | undefined {
+  const name = (input.name ?? "").trim();
+  if (!name) return undefined;
+  return {
+    echargingSignerName: name,
+    echargingSignerFunction: input.func ?? null,
+    echargingSignatureDataUrl: input.signatureDataUrl ?? null,
+  };
+}
+
 const COVER_URL = "/offer-cover.jpg";
 
 // Outfit als webfont registreren (zodat html2canvas de tekst in Outfit rendert).
