@@ -32,6 +32,30 @@ export type LeadWithTasks = Lead & {
 };
 export type TaskWithLead = LeadTask & { leads: { company_name: string | null } | null };
 
+// Lijst-view: server-side afgeleide levenscyclus + facturatie-status (leads_list_v).
+export type LeadListRow = Database["public"]["Views"]["leads_list_v"]["Row"];
+export type LeadLifecycle = "open" | "won_active" | "invoiced" | "lost";
+export type LeadLostReason = Database["public"]["Tables"]["lead_lost_reasons"]["Row"];
+
+export type LeadListFilters = {
+  segment?: LeadLifecycle | "all";
+  search?: string;
+  owner?: string | "me" | "none" | "all";
+  sources?: string[];
+  tagIds?: string[];
+  priorities?: string[];
+  scopes?: string[];
+  stageIds?: string[];
+  valueMin?: number | null;
+  valueMax?: number | null;
+  chargePointsMin?: number | null;
+  chargePointsMax?: number | null;
+  dateField?: "created_at" | "expected_close_date" | "won_at" | "lost_at";
+  dateFrom?: string | null;
+  dateTo?: string | null;
+};
+export type LeadSort = { field: string; dir: "asc" | "desc" };
+
 // De relevante offerte van een lead: nieuwste verzonden (sent_at), anders nieuwste op created_at.
 // Vervangen én afgewezen offertes tellen niet mee — dat zijn geen actieve voorstellen.
 export function primaryQuote(lead: LeadWithTasks): LeadQuoteMini | null {
@@ -64,16 +88,115 @@ export function useLeadStages() {
   });
 }
 
-export function useLeads() {
+// Board: alleen OPEN leads (begrensd + snel). Zelfde joins die de kaarten nodig hebben.
+// Sleutel onder de ["leads"]-prefix zodat bestaande invalidaties dit ook verversen.
+export function useOpenLeads() {
   return useQuery({
-    queryKey: ["leads"],
+    queryKey: ["leads", "open"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("leads")
         .select("*, lead_tasks(id, done), lead_tag_links(tag_id, lead_tags(id, name, color)), quotes(id, status, sent_at, with_installation, with_management, num_charge_points, total_installation_cost, total_hardware_cost, monthly_projection, created_at)")
+        .eq("status", "open")
         .order("position", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as LeadWithTasks[];
+    },
+  });
+}
+
+// Lichte leadlijst voor dropdowns (bv. taken koppelen) — geen joins.
+export function useLeadOptions() {
+  return useQuery({
+    queryKey: ["lead-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("id, company_name")
+        .order("company_name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as { id: string; company_name: string }[];
+    },
+  });
+}
+
+// Lijstweergave: server-side gefilterd/gesorteerd/gepagineerd op de leads_list_v-view.
+// Sleutel onder de ["leads"]-prefix → bestaande lead-invalidaties verversen ook de lijst.
+export function useLeadsList(params: { filters: LeadListFilters; sort: LeadSort; page: number; pageSize: number }) {
+  const { filters, sort, page, pageSize } = params;
+  return useQuery({
+    queryKey: ["leads", "list", filters, sort, page, pageSize],
+    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      let q = supabase.from("leads_list_v").select("*", { count: "exact" });
+      const seg = filters.segment ?? "all";
+      if (seg !== "all") q = q.eq("lifecycle", seg);
+      const search = (filters.search ?? "").trim();
+      if (search) {
+        const s = search.replace(/[%,()]/g, " ");
+        q = q.or(`company_name.ilike.%${s}%,contact_name.ilike.%${s}%,city.ilike.%${s}%,contact_email.ilike.%${s}%`);
+      }
+      const owner = filters.owner ?? "all";
+      if (owner !== "all") {
+        if (owner === "none") q = q.is("owner_user_id", null);
+        else if (owner === "me") {
+          const uid = await currentUserId();
+          q = uid ? q.eq("owner_user_id", uid) : q.is("owner_user_id", null);
+        } else q = q.eq("owner_user_id", owner);
+      }
+      if (filters.sources?.length) q = q.in("source", filters.sources);
+      if (filters.priorities?.length) q = q.in("priority", filters.priorities);
+      if (filters.scopes?.length) q = q.in("scope", filters.scopes);
+      if (filters.stageIds?.length) q = q.in("stage_id", filters.stageIds);
+      if (filters.tagIds?.length) q = q.overlaps("tag_ids", filters.tagIds);
+      if (filters.valueMin != null) q = q.gte("estimated_value", filters.valueMin);
+      if (filters.valueMax != null) q = q.lte("estimated_value", filters.valueMax);
+      if (filters.chargePointsMin != null) q = q.gte("estimated_charge_points", filters.chargePointsMin);
+      if (filters.chargePointsMax != null) q = q.lte("estimated_charge_points", filters.chargePointsMax);
+      if (filters.dateField && filters.dateFrom) q = q.gte(filters.dateField, filters.dateFrom);
+      if (filters.dateField && filters.dateTo) q = q.lte(filters.dateField, filters.dateTo);
+      q = q.order(sort.field, { ascending: sort.dir === "asc", nullsFirst: false });
+      if (sort.field !== "created_at") q = q.order("created_at", { ascending: false });
+      const from = page * pageSize;
+      q = q.range(from, from + pageSize - 1);
+      const { data, error, count } = await q;
+      if (error) throw error;
+      return { rows: (data ?? []) as LeadListRow[], total: count ?? 0 };
+    },
+  });
+}
+
+// Org-beheerbare verlies-redenen (voor de verplichte keuze + het beheerscherm).
+export function useLostReasons() {
+  return useQuery({
+    queryKey: ["lead-lost-reasons"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("lead_lost_reasons")
+        .select("*")
+        .order("position", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as LeadLostReason[];
+    },
+  });
+}
+
+// KPI's over de hele leadset (won/lost tellen niet in de open-board-query mee).
+export function useLeadStats() {
+  return useQuery({
+    queryKey: ["leads", "stats"],
+    queryFn: async () => {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const cnt = async (b: PromiseLike<{ count: number | null }>) => (await b).count ?? 0;
+      const base = () => supabase.from("leads").select("id", { count: "exact", head: true });
+      const [wonThisMonth, wonTotal, lostTotal] = await Promise.all([
+        cnt(base().eq("status", "won").gte("won_at", monthStart)),
+        cnt(base().eq("status", "won")),
+        cnt(base().eq("status", "lost")),
+      ]);
+      const closed = wonTotal + lostTotal;
+      return { wonThisMonth, wonTotal, lostTotal, winRate: closed > 0 ? Math.round((wonTotal / closed) * 100) : null };
     },
   });
 }
@@ -269,10 +392,10 @@ export function useReorderLeads() {
       if (error) throw error;
     },
     onMutate: async (updates) => {
-      await qc.cancelQueries({ queryKey: ["leads"] });
-      const prev = qc.getQueryData<LeadWithTasks[]>(["leads"]);
+      await qc.cancelQueries({ queryKey: ["leads", "open"] });
+      const prev = qc.getQueryData<LeadWithTasks[]>(["leads", "open"]);
       const map = new Map(updates.map((u) => [u.id, u]));
-      qc.setQueryData<LeadWithTasks[]>(["leads"], (old) =>
+      qc.setQueryData<LeadWithTasks[]>(["leads", "open"], (old) =>
         (old ?? []).map((l) =>
           map.has(l.id) ? { ...l, stage_id: map.get(l.id)!.stage_id, position: map.get(l.id)!.position } : l,
         ),
@@ -280,7 +403,7 @@ export function useReorderLeads() {
       return { prev };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["leads"], ctx.prev);
+      if (ctx?.prev) qc.setQueryData(["leads", "open"], ctx.prev);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["leads"] }),
   });
@@ -340,7 +463,7 @@ export function useToggleTask() {
     },
     // Optimistisch afvinken in de lead-takenlijst + embedded board-taken (voorkomt KPI-flikker).
     onMutate: async ({ id, done, leadId }) => {
-      const prevLeads = qc.getQueryData<LeadWithTasks[]>(["leads"]);
+      const prevLeads = qc.getQueryData<LeadWithTasks[]>(["leads", "open"]);
       let prevTasks: LeadTask[] | undefined;
       if (leadId) {
         await qc.cancelQueries({ queryKey: ["lead-tasks", leadId] });
@@ -349,14 +472,14 @@ export function useToggleTask() {
           (old ?? []).map((t) => (t.id === id ? { ...t, done } : t)),
         );
       }
-      qc.setQueryData<LeadWithTasks[]>(["leads"], (old) =>
+      qc.setQueryData<LeadWithTasks[]>(["leads", "open"], (old) =>
         (old ?? []).map((l) => ({ ...l, lead_tasks: (l.lead_tasks ?? []).map((t) => (t.id === id ? { ...t, done } : t)) })),
       );
       return { prevTasks, prevLeads, leadId };
     },
     onError: (_e, _v, ctx) => {
       if (ctx?.leadId && ctx.prevTasks) qc.setQueryData(["lead-tasks", ctx.leadId], ctx.prevTasks);
-      if (ctx?.prevLeads) qc.setQueryData(["leads"], ctx.prevLeads);
+      if (ctx?.prevLeads) qc.setQueryData(["leads", "open"], ctx.prevLeads);
     },
     onSettled: (_d, _e, { leadId }) => {
       if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
@@ -474,4 +597,52 @@ export function useStageTaskMutations() {
     onSuccess: invalidate,
   });
   return { add, remove };
+}
+
+// Bulk-patch voor lijst-bulkacties (eigenaar wijzigen, markeer gewonnen/verloren, ...).
+// Bij markeer-verloren moet lost_reason_id in de patch zitten (DB-guard dwingt dit af).
+export function useBulkPatchLeads() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, patch }: { ids: string[]; patch: LeadUpdate }) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("leads").update(patch).in("id", ids);
+      if (error) {
+        if (error.code === "P0001") throw new Error(error.message);
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["all-tasks"] });
+    },
+  });
+}
+
+// Beheer van de org-verlies-redenen (instellingen / fasenbeheer).
+export function useLostReasonMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["lead-lost-reasons"] });
+  const add = useMutation({
+    mutationFn: async (input: Database["public"]["Tables"]["lead_lost_reasons"]["Insert"]) => {
+      const { error } = await supabase.from("lead_lost_reasons").insert(input);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+  const update = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Database["public"]["Tables"]["lead_lost_reasons"]["Update"] }) => {
+      const { error } = await supabase.from("lead_lost_reasons").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("lead_lost_reasons").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+  return { add, update, remove };
 }

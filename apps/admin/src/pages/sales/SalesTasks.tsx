@@ -10,7 +10,7 @@ import { ListChecks, Plus, AlertTriangle, CheckCircle2, Building2, Trash2 } from
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useAdminData";
 import {
-  useAllTasks, useAddTask, useToggleTask, useDeleteTask, useUpdateTask, useTeamProfiles, useLeads,
+  useAllTasks, useAddTask, useToggleTask, useDeleteTask, useUpdateTask, useTeamProfiles, useLeadOptions,
   type TaskWithLead,
 } from "@/hooks/useLeads";
 
@@ -50,7 +50,7 @@ export default function SalesTasks() {
   const org = useOrganization();
   const tasksQ = useAllTasks();
   const profilesQ = useTeamProfiles();
-  const leadsQ = useLeads();
+  const leadsQ = useLeadOptions();
 
   const addTask = useAddTask();
   const toggleTask = useToggleTask();

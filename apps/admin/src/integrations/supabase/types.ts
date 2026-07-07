@@ -2151,6 +2151,41 @@ export type Database = {
           },
         ]
       }
+      lead_lost_reasons: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          organization_id: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          organization_id: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          organization_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_lost_reasons_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_stage_tasks: {
         Row: {
           created_at: string
@@ -2204,6 +2239,7 @@ export type Database = {
           name: string
           organization_id: string
           position: number
+          rotting_days: number | null
         }
         Insert: {
           color?: string
@@ -2215,6 +2251,7 @@ export type Database = {
           name: string
           organization_id: string
           position?: number
+          rotting_days?: number | null
         }
         Update: {
           color?: string
@@ -2226,6 +2263,7 @@ export type Database = {
           name?: string
           organization_id?: string
           position?: number
+          rotting_days?: number | null
         }
         Relationships: [
           {
@@ -2391,7 +2429,9 @@ export type Database = {
           id: string
           kvk: string | null
           location_type: string | null
+          lost_at: string | null
           lost_reason: string | null
+          lost_reason_id: string | null
           message_body: string | null
           message_subject: string | null
           notes: string | null
@@ -2440,7 +2480,9 @@ export type Database = {
           id?: string
           kvk?: string | null
           location_type?: string | null
+          lost_at?: string | null
           lost_reason?: string | null
+          lost_reason_id?: string | null
           message_body?: string | null
           message_subject?: string | null
           notes?: string | null
@@ -2489,7 +2531,9 @@ export type Database = {
           id?: string
           kvk?: string | null
           location_type?: string | null
+          lost_at?: string | null
           lost_reason?: string | null
+          lost_reason_id?: string | null
           message_body?: string | null
           message_subject?: string | null
           notes?: string | null
@@ -3578,7 +3622,65 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      leads_list_v: {
+        Row: {
+          address_street: string | null
+          appointment_at: string | null
+          appointment_notes: string | null
+          charger_type: string | null
+          city: string | null
+          company_id: string | null
+          company_name: string | null
+          configuration: Json | null
+          configuration_updated_at: string | null
+          configurator_session_id: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          contact_role: string | null
+          converted_client_id: string | null
+          created_at: string | null
+          created_by: string | null
+          estimated_charge_points: number | null
+          estimated_kwh_per_month: number | null
+          estimated_value: number | null
+          expected_close_date: string | null
+          grid_notes: string | null
+          has_open_order: boolean | null
+          has_solar: boolean | null
+          house_number: string | null
+          id: string | null
+          is_invoiced: boolean | null
+          kvk: string | null
+          last_activity_at: string | null
+          lifecycle: string | null
+          location_type: string | null
+          lost_at: string | null
+          lost_reason: string | null
+          lost_reason_id: string | null
+          message_body: string | null
+          message_subject: string | null
+          notes: string | null
+          organization_id: string | null
+          owner_user_id: string | null
+          owns_property: boolean | null
+          parking_spaces: number | null
+          person_id: string | null
+          position: number | null
+          postal_code: string | null
+          priority: string | null
+          scope: string | null
+          sector: string | null
+          source: string | null
+          stage_id: string | null
+          status: string | null
+          tag_ids: string[] | null
+          updated_at: string | null
+          website: string | null
+          won_at: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       accept_client_invitation: {

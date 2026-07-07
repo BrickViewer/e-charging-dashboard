@@ -22,6 +22,8 @@ import {
   useMoveStage,
   useStageTasks,
   useStageTaskMutations,
+  useLostReasons,
+  useLostReasonMutations,
   type LeadStage,
 } from "@/hooks/useLeads";
 
@@ -87,8 +89,59 @@ export function StageManagerDialog({
             <Plus className="mr-2 h-4 w-4" /> Fase toevoegen
           </Button>
         </div>
+
+        <div className="mt-6 border-t pt-4">
+          <LostReasonsManager organizationId={organizationId} />
+        </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function LostReasonsManager({ organizationId }: { organizationId: string | undefined }) {
+  const reasonsQ = useLostReasons();
+  const { add, update, remove } = useLostReasonMutations();
+  const [newLabel, setNewLabel] = useState("");
+  const reasons = reasonsQ.data ?? [];
+  const addReason = () => {
+    if (!organizationId || !newLabel.trim()) return;
+    add.mutate({ organization_id: organizationId, label: newLabel.trim(), position: reasons.length });
+    setNewLabel("");
+  };
+  return (
+    <div>
+      <p className="text-sm font-semibold">Verlies-redenen</p>
+      <p className="mb-2 mt-0.5 text-[11px] text-muted-foreground">Verplichte keuze bij "Markeer verloren"; voedt de "Verloren per reden"-rapportage. Inactief zetten bewaart de historie maar verbergt de reden bij nieuwe keuzes.</p>
+      <div className="space-y-1.5">
+        {reasons.map((r) => (
+          <ReasonRow
+            key={r.id}
+            label={r.label}
+            active={r.is_active}
+            onRename={(label) => update.mutate({ id: r.id, patch: { label } })}
+            onToggle={(v) => update.mutate({ id: r.id, patch: { is_active: v } })}
+            onDelete={() => remove.mutate(r.id)}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addReason(); }} placeholder="Nieuwe reden…" className="h-8 text-sm" />
+        <Button size="sm" variant="outline" onClick={addReason} disabled={!organizationId || !newLabel.trim()}>Toevoegen</Button>
+      </div>
+    </div>
+  );
+}
+
+function ReasonRow({ label, active, onRename, onToggle, onDelete }: {
+  label: string; active: boolean; onRename: (l: string) => void; onToggle: (v: boolean) => void; onDelete: () => void;
+}) {
+  const [val, setVal] = useState(label);
+  return (
+    <div className="flex items-center gap-2">
+      <Input value={val} onChange={(e) => setVal(e.target.value)} onBlur={() => val.trim() && val.trim() !== label && onRename(val.trim())} className="h-8 flex-1 text-sm" />
+      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Actief"><Checkbox checked={active} onCheckedChange={(c) => onToggle(!!c)} /> Actief</label>
+      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={onDelete}><Trash2 className="h-4 w-4" /></Button>
+    </div>
   );
 }
 

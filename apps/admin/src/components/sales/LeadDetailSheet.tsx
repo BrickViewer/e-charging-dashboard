@@ -31,6 +31,7 @@ import { ObjectDetailSheet } from "@/components/contacts/ObjectDetailSheet";
 import { useProjectLocationsByLead } from "@/hooks/useProjectLocations";
 import { formatObjectAddress } from "@/lib/objectLabel";
 import { LeadTagPicker } from "@/components/sales/LeadTagPicker";
+import { MarkLostDialog } from "@/components/sales/MarkLostDialog";
 import { useSetLeadTags } from "@/hooks/useLeadTags";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -108,6 +109,7 @@ export function LeadDetailSheet({
   const [dirty, setDirty] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [lostDialogStage, setLostDialogStage] = useState<string | null>(null);
   const [confirmConvert, setConfirmConvert] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [newTask, setNewTask] = useState("");
@@ -234,6 +236,12 @@ export function LeadDetailSheet({
 
   const cancelEdit = () => { setForm(buildForm(lead)); setDirty(false); setIsEditing(false); };
   const moveToStage = (stageId: string) => updateLead.mutate({ id: lead.id, patch: { stage_id: stageId } });
+  // Naar een 'Verloren'-fase mag alleen met een reden (DB-guard) → open de dialog i.p.v. direct verplaatsen.
+  const requestMoveToStage = (stageId: string) => {
+    const target = stages.find((s) => s.id === stageId);
+    if (target?.is_lost) { setLostDialogStage(stageId); return; }
+    moveToStage(stageId);
+  };
   const setOwner = (id: string) => updateLead.mutate({ id: lead.id, patch: { owner_user_id: id === "none" ? null : id } });
 
   const handleOpenChange = (next: boolean) => {
@@ -322,7 +330,7 @@ export function LeadDetailSheet({
                         {lead.converted_client_id && canBeheer && <DropdownMenuItem onClick={() => navigate(`/admin/klanten/${lead.converted_client_id}`)}><ExternalLink className="mr-2 h-4 w-4" />Bekijk klant</DropdownMenuItem>}
                         <DropdownMenuSeparator />
                         {wonStage && <DropdownMenuItem onClick={() => moveToStage(wonStage.id)}><Trophy className="mr-2 h-4 w-4 text-green-600" />Markeer gewonnen</DropdownMenuItem>}
-                        {lostStage && <DropdownMenuItem onClick={() => moveToStage(lostStage.id)}><XCircle className="mr-2 h-4 w-4 text-red-600" />Markeer verloren</DropdownMenuItem>}
+                        {lostStage && <DropdownMenuItem onClick={() => requestMoveToStage(lostStage.id)}><XCircle className="mr-2 h-4 w-4 text-red-600" />Markeer verloren</DropdownMenuItem>}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => setConfirmDelete(true)} className="text-red-600"><Trash2 className="mr-2 h-4 w-4" />Verwijderen</DropdownMenuItem>
                       </DropdownMenuContent>
@@ -358,7 +366,7 @@ export function LeadDetailSheet({
                         <button
                           key={s.id}
                           type="button"
-                          onClick={() => moveToStage(s.id)}
+                          onClick={() => requestMoveToStage(s.id)}
                           aria-current={isCurrent ? "step" : undefined}
                           title={`Verplaats naar ${s.name}`}
                           className="h-1.5 flex-1 rounded-full transition-[background,box-shadow,opacity] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
@@ -379,7 +387,7 @@ export function LeadDetailSheet({
                           {i > 0 && <span className="text-muted-foreground/40" aria-hidden>›</span>}
                           <button
                             type="button"
-                            onClick={() => moveToStage(s.id)}
+                            onClick={() => requestMoveToStage(s.id)}
                             title={`Verplaats naar ${s.name}`}
                             aria-current={isCurrent ? "step" : undefined}
                             className={`whitespace-nowrap rounded px-1 py-0.5 text-xs leading-none transition-colors hover:text-foreground ${
@@ -639,6 +647,13 @@ export function LeadDetailSheet({
           </div>
         </SheetContent>
       </Sheet>
+
+      <MarkLostDialog
+        open={!!lostDialogStage}
+        onOpenChange={(v) => !v && setLostDialogStage(null)}
+        leadIds={[lead.id]}
+        lostStageId={lostDialogStage}
+      />
 
       {/* Bevestigingsdialogen */}
       <AlertDialog open={confirmConvert} onOpenChange={setConfirmConvert}>
