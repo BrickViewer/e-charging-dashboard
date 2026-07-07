@@ -38,7 +38,7 @@ export type BankErrors = Partial<Record<keyof BankFormState, string>>;
 // ERE-copy op één plek zodat formulier en wizard niet uit elkaar lopen.
 export const ERE_HELP = "Tel €0,10 per geleverde kWh mee in het dashboard.";
 export const ERE_OPTIN_DISCLAIMER =
-  "ERE-certificaten aanvragen kan binnenkort. Zet u deze optie aan, dan geeft u aan dat u ERE's wilt ontvangen en nemen wij contact met u op om ze aan te melden. Tot die tijd zijn de ERE-bedragen in uw dashboard een indicatie.";
+  "ERE-certificaten aanvragen kan binnenkort. Zet u deze optie aan, dan geeft u aan dat u ERE's wilt ontvangen en nemen wij contact met u op om ze aan te melden. De ERE-bedragen in uw dashboard zijn een indicatie.";
 export const ERE_RECEIVED_NOTICE =
   "Wij hebben uw ERE-aanvraag ontvangen en nemen binnenkort contact met u op om uw ERE-certificaten aan te melden. De ERE-bedragen in uw dashboard zijn een indicatie.";
 

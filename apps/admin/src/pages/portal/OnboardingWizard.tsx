@@ -391,7 +391,7 @@ export default function OnboardingWizard() {
                 <li>E-Charging controleert uw gegevens en bevestigt uw BTW-status.</li>
                 <li>We koppelen uw laadpunten aan uw klantnummer.</li>
                 <li>U ziet uw sessies, geleverde kWh en de maandelijkse afrekening in het portaal.</li>
-                {companyForm.calculateEreEnabled && <li>Uw ERE-aanvraag zetten we door zodat we contact met u kunnen opnemen.</li>}
+                {companyForm.calculateEreEnabled && <li>We nemen contact met u op om uw ERE-certificaten aan te melden.</li>}
               </ul>
             </div>
           </div>
