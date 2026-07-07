@@ -38,17 +38,24 @@ export type BankErrors = Partial<Record<keyof BankFormState, string>>;
 // ERE-copy op één plek zodat formulier en wizard niet uit elkaar lopen.
 export const ERE_HELP = "Tel €0,10 per geleverde kWh mee in het dashboard.";
 export const ERE_OPTIN_DISCLAIMER =
-  "Aanmelden voor ERE-certificaten kan binnenkort. Zet je dit aan en sla je op, dan geef je aan dat je ERE's wilt en nemen we binnenkort contact met je op om ze aan te melden. De bedragen in je dashboard zijn een indicatie.";
+  "ERE-certificaten aanvragen kan binnenkort. Zet u deze optie aan, dan geeft u aan dat u ERE's wilt ontvangen en nemen wij contact met u op om ze aan te melden. Tot die tijd zijn de ERE-bedragen in uw dashboard een indicatie.";
 export const ERE_RECEIVED_NOTICE =
-  "We hebben je ERE-aanvraag ontvangen en nemen binnenkort contact met je op om je ERE-certificaten aan te melden. De bedragen in je dashboard zijn een indicatie.";
+  "Wij hebben uw ERE-aanvraag ontvangen en nemen binnenkort contact met u op om uw ERE-certificaten aan te melden. De ERE-bedragen in uw dashboard zijn een indicatie.";
 
 // Uitleg bij de bedrijfsnaam/naam: die verschijnt op de factuur/betaalspecificatie en is een
 // ander begrip dan de contactpersoon of de rekeninghouder. Op één plek zodat wizard en
 // "Mijn gegevens" niet uit elkaar lopen.
 export function invoiceNameHelp(isPrivate: boolean): string {
   return isPrivate
-    ? "Deze naam komt op je betaalspecificatie te staan."
+    ? "Deze naam komt op uw betaalspecificatie te staan."
     : "Deze naam komt op de factuur en betaalspecificatie te staan — dit is niet per se de contactpersoon of de rekeninghouder.";
+}
+
+// Uitleg bij "Naam rekeninghouder": particulier heeft geen bedrijfsnaam, bedrijf wel.
+export function accountHolderHelp(isPrivate: boolean): string {
+  return isPrivate
+    ? "Meestal uw eigen naam; pas dit aan als de rekening op een andere naam staat."
+    : "Meestal uw bedrijfsnaam; pas dit aan als de rekening op een andere naam staat.";
 }
 
 export const COMPANY_REQUIRED_FIELDS: Array<keyof CompanyFormState> = [

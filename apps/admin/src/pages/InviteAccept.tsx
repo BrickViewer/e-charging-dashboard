@@ -117,7 +117,7 @@ export default function InviteAccept() {
         return;
       }
 
-      toast.success("Welkom. We nemen je in een paar stappen mee door je gegevens.");
+      toast.success("Welkom. We nemen u in een paar stappen mee door uw gegevens.");
       setTimeout(() => navigate("/portal/welkom"), 650);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Onbekende fout");

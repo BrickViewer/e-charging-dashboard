@@ -15,8 +15,8 @@ import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { isValidIban } from "@/lib/iban";
 import { evaluatePassword } from "@/lib/passwordStrength";
 import { PasswordStrengthMeter, usePasswordStrength } from "@/components/PasswordStrengthMeter";
-// Gedeelde copy-constante (bewuste uitzondering op de duplicatie om copy-drift te voorkomen).
-import { invoiceNameHelp } from "@/lib/portalProfile";
+// Gedeelde copy-constanten (bewuste uitzondering op de duplicatie om copy-drift te voorkomen).
+import { accountHolderHelp, ERE_OPTIN_DISCLAIMER, ERE_RECEIVED_NOTICE, invoiceNameHelp } from "@/lib/portalProfile";
 import { cn } from "@/lib/utils";
 import {
   changePortalLoginEmail,
@@ -715,13 +715,9 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
                   />
                 </div>
                 {client.calculate_ere_enabled ? (
-                  <p className="text-xs text-[hsl(var(--status-amber))]">
-                    We hebben je ERE-aanvraag ontvangen en nemen binnenkort contact met je op om je ERE-certificaten aan te melden. De bedragen in je dashboard zijn een indicatie.
-                  </p>
+                  <p className="text-xs text-[hsl(var(--status-amber))]">{ERE_RECEIVED_NOTICE}</p>
                 ) : (
-                  <p className="text-xs text-[hsl(var(--status-amber))]">
-                    Aanmelden voor ERE-certificaten kan binnenkort. Zet je dit aan en sla je op, dan geef je aan dat je ERE's wilt en nemen we binnenkort contact met je op om ze aan te melden. De bedragen in je dashboard zijn een indicatie.
-                  </p>
+                  <p className="text-xs text-[hsl(var(--status-amber))]">{ERE_OPTIN_DISCLAIMER}</p>
                 )}
               </div>
 
@@ -757,7 +753,7 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
           {bankEditing ? (
             <form onSubmit={submitBank} noValidate className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="payout-account-holder-name" name="payout-account-holder" suppressManagers label="Naam rekeninghouder" description="Meestal je bedrijfsnaam; pas aan als de rekening op een andere naam staat." value={bankForm.payoutAccountHolderName} onChange={(value) => updateBank("payoutAccountHolderName", value)} error={bankErrors.payoutAccountHolderName} required />
+                <Field id="payout-account-holder-name" name="payout-account-holder" suppressManagers label="Naam rekeninghouder" description={accountHolderHelp(companyForm.vatStatus === "private")} value={bankForm.payoutAccountHolderName} onChange={(value) => updateBank("payoutAccountHolderName", value)} error={bankErrors.payoutAccountHolderName} required />
                 <Field id="payout-iban" name="payout-iban" suppressManagers label="IBAN" value={bankForm.payoutIban} onChange={(value) => updateBank("payoutIban", value)} error={bankErrors.payoutIban} placeholder="NL91ABNA0417164300" required />
                 <Field id="payout-bic" name="payout-bic" suppressManagers label="BIC" value={bankForm.payoutBic} onChange={(value) => updateBank("payoutBic", value)} error={bankErrors.payoutBic} placeholder="Optioneel" />
                 {/* Step-up: alleen bij het WIJZIGEN van een reeds opgeslagen uitbetaalrekening. Eerste keer: geen wachtwoord. */}

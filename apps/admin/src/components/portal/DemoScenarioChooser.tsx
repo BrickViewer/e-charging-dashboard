@@ -70,7 +70,7 @@ export function DemoScenarioChooser({ presets }: { presets: DemoPreset[] }) {
         </div>
 
         <p className="mt-8 text-xs text-muted-foreground/70">
-          Tip: vanuit de configurator open je een demo met exact de geconfigureerde gegevens.
+          Tip: vanuit de configurator opent u een demo met exact de geconfigureerde gegevens.
         </p>
       </div>
     </DemoShell>

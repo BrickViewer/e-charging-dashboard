@@ -252,7 +252,7 @@ export default function ClientFinancial() {
                               size="icon"
                               className="h-8 w-8 text-muted-foreground hover:text-primary flex-shrink-0"
                               onClick={() => { void handleDownloadInvoice(s); }}
-                              title="Download je vergoeding (PDF)"
+                              title="Download uw vergoeding (PDF)"
                               aria-label={`Download vergoeding ${periodLabel(s.year, s.month)} (PDF)`}
                             >
                               <Download className="w-4 h-4" />
@@ -286,8 +286,8 @@ export default function ClientFinancial() {
               <Euro className="w-5 h-5 text-primary" />
             </div>
             <p className="font-medium text-foreground mb-1">Nog geen vergoedingen</p>
-            <p className="text-sm">Zodra E-Charging je maandvergoeding heeft goedgekeurd, verschijnt deze hier.</p>
-            <p className="text-xs mt-3 text-muted-foreground/80">De actuele stand voor de lopende maand zie je op je dashboard.</p>
+            <p className="text-sm">Zodra E-Charging uw maandvergoeding heeft goedgekeurd, verschijnt deze hier.</p>
+            <p className="text-xs mt-3 text-muted-foreground/80">De actuele stand voor de lopende maand ziet u op uw dashboard.</p>
           </CardContent>
         </Card>
       )}

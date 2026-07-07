@@ -37,7 +37,7 @@ export default function PortalHome() {
           to="/portal/welkom"
           className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-primary/30 bg-primary/15 px-4 py-1.5 text-xs font-medium text-primary shadow-sm backdrop-blur transition-colors hover:bg-primary/25 lg:bottom-6"
         >
-          Rond je aanmelding af →
+          Rond uw aanmelding af →
         </Link>
       )}
     </>

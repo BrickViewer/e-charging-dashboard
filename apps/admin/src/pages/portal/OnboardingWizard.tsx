@@ -27,6 +27,7 @@ import {
   updatePortalCompanyDetails,
 } from "@/services/clientPaymentDetails";
 import {
+  accountHolderHelp,
   applyCompanyServerError,
   BANK_REQUIRED_FIELDS,
   firstError,
@@ -185,7 +186,7 @@ export default function OnboardingWizard() {
       const firstKey = Object.keys(errs)[0] as keyof CompanyFormState;
       const target = FIELD_STEP[firstKey];
       if (target) setStep(target);
-      toast.error(errs[firstKey] ?? "Controleer je gegevens");
+      toast.error(errs[firstKey] ?? "Controleer uw gegevens");
       return false;
     }
     setSaving(true);
@@ -245,7 +246,7 @@ export default function OnboardingWizard() {
       // zodra onboarding_completed_at ververst is, is de gate sowieso voldaan.
       sessionStorage.setItem("portal-onboarding-snoozed", "1");
       await queryClient.invalidateQueries({ queryKey: ["client-profile"] });
-      toast.success("Je aanmelding is compleet");
+      toast.success("Uw aanmelding is compleet");
       navigate("/portal");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Afronden mislukt");
@@ -272,10 +273,10 @@ export default function OnboardingWizard() {
         return (
           <div className="space-y-4 text-center">
             <p className="cockpit-section-label text-primary">Welkom bij E-Charging</p>
-            <h2 className="text-xl font-semibold text-foreground">Laten we je account instellen</h2>
+            <h2 className="text-xl font-semibold text-foreground">Laten we uw account instellen</h2>
             <p className="mx-auto max-w-md text-sm leading-6 text-muted-foreground">
-              We nemen je in een paar korte stappen mee door je gegevens. Zo kan E-Charging je laadpunten
-              koppelen en je afrekeningen netjes verwerken. Houd je KvK- en BTW-nummer (als bedrijf) en je IBAN
+              We nemen u in een paar korte stappen mee door uw gegevens. Zo kan E-Charging uw laadpunten
+              koppelen en uw afrekeningen netjes verwerken. Houd uw KvK- en BTW-nummer (als bedrijf) en uw IBAN
               bij de hand.
             </p>
           </div>
@@ -298,7 +299,7 @@ export default function OnboardingWizard() {
       case 2:
         return (
           <div className="space-y-4">
-            <StepHeader step={3} title="Bedrijf en BTW-status" subtitle="Dit bepaalt hoe we je vergoeding factureren." />
+            <StepHeader step={3} title="Bedrijf en BTW-status" subtitle="Dit bepaalt hoe we uw vergoeding factureren." />
             <VatStatusField value={companyForm.vatStatus} onChange={(v) => updateCompany("vatStatus", v)} error={companyErrors.vatStatus} />
             <div className="grid gap-4 sm:grid-cols-2">
               <Field id="company-name" name="organization" autoComplete="organization" className="sm:col-span-2" label={isParticulier ? "Naam" : "Bedrijfsnaam"} description={invoiceNameHelp(isParticulier)} value={companyForm.companyName} onChange={(v) => updateCompany("companyName", v)} error={companyErrors.companyName} required />
@@ -326,14 +327,14 @@ export default function OnboardingWizard() {
       case 4:
         return (
           <div className="space-y-4">
-            <StepHeader step={5} title="ERE-certificaten" subtitle="Optioneel: geef aan of je ERE's wilt." />
+            <StepHeader step={5} title="ERE-certificaten" subtitle="Optioneel: geef aan of u ERE's wilt." />
             <EreOptInField checked={companyForm.calculateEreEnabled} onChange={(v) => updateCompany("calculateEreEnabled", v)} />
           </div>
         );
       case 5:
         return (
           <div className="space-y-4">
-            <StepHeader step={6} title="Bankgegevens" subtitle="Op deze rekening keren we je laadopbrengst uit." />
+            <StepHeader step={6} title="Bankgegevens" subtitle="Op deze rekening keren we uw laadopbrengst uit." />
             {bankAlreadySaved && !bankForm.payoutIban.trim() ? (
               <div className="rounded-md border border-border/80 px-3 py-3 text-sm">
                 <p className="font-medium text-foreground">Bankgegevens opgeslagen</p>
@@ -343,7 +344,7 @@ export default function OnboardingWizard() {
               </div>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="holder" name="payout-account-holder" suppressManagers className="sm:col-span-2" label="Naam rekeninghouder" description="Meestal je bedrijfsnaam; pas aan als de rekening op een andere naam staat." value={bankForm.payoutAccountHolderName} onChange={(v) => updateBank("payoutAccountHolderName", v)} error={bankErrors.payoutAccountHolderName} required />
+              <Field id="holder" name="payout-account-holder" suppressManagers className="sm:col-span-2" label="Naam rekeninghouder" description={accountHolderHelp(isParticulier)} value={bankForm.payoutAccountHolderName} onChange={(v) => updateBank("payoutAccountHolderName", v)} error={bankErrors.payoutAccountHolderName} required />
               <Field id="iban" name="payout-iban" suppressManagers label="IBAN" placeholder="NL91ABNA0417164300" value={bankForm.payoutIban} onChange={(v) => updateBank("payoutIban", v)} error={bankErrors.payoutIban} required={!bankAlreadySaved} />
               <Field id="bic" name="payout-bic" suppressManagers label="BIC (optioneel)" placeholder="Optioneel" value={bankForm.payoutBic} onChange={(v) => updateBank("payoutBic", v)} error={bankErrors.payoutBic} />
               {/* Step-up: alleen bij het WIJZIGEN van een reeds opgeslagen uitbetaalrekening. Eerste keer: geen wachtwoord. */}
@@ -352,14 +353,14 @@ export default function OnboardingWizard() {
               )}
             </div>
             {bankAlreadySaved && (
-              <p className="text-xs text-muted-foreground">Ter beveiliging bevestig je je wachtwoord bij het wijzigen van je uitbetaalrekening.</p>
+              <p className="text-xs text-muted-foreground">Ter beveiliging bevestigt u uw wachtwoord bij het wijzigen van uw uitbetaalrekening.</p>
             )}
           </div>
         );
       case 6:
         return (
           <div className="space-y-5">
-            <StepHeader step={7} title="Zo staan je gegevens nu" subtitle="Controleer alles en rond je aanmelding af." />
+            <StepHeader step={7} title="Zo staan uw gegevens nu" subtitle="Controleer alles en rond uw aanmelding af." />
             <div className="space-y-4">
               <SummaryBlock title="Contactgegevens" onEdit={() => setStep(1)}>
                 <InfoItem label="Naam" value={`${companyForm.contactFirstName} ${companyForm.contactLastName}`.trim()} />
@@ -387,10 +388,10 @@ export default function OnboardingWizard() {
             <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
               <p className="text-sm font-medium text-foreground">Wat gebeurt er nu?</p>
               <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-muted-foreground">
-                <li>E-Charging controleert je gegevens en bevestigt je BTW-status.</li>
-                <li>We koppelen je laadpunten aan je klantnummer.</li>
-                <li>Je ziet je sessies, geleverde kWh en de maandelijkse afrekening in het portaal.</li>
-                {companyForm.calculateEreEnabled && <li>Je ERE-aanvraag zetten we door zodat we contact met je kunnen opnemen.</li>}
+                <li>E-Charging controleert uw gegevens en bevestigt uw BTW-status.</li>
+                <li>We koppelen uw laadpunten aan uw klantnummer.</li>
+                <li>U ziet uw sessies, geleverde kWh en de maandelijkse afrekening in het portaal.</li>
+                {companyForm.calculateEreEnabled && <li>Uw ERE-aanvraag zetten we door zodat we contact met u kunnen opnemen.</li>}
               </ul>
             </div>
           </div>

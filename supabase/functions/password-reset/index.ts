@@ -33,11 +33,11 @@ function renderResetHtml(opts: { actionLink: string; logoUrl: string }) {
   return `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
   <div style="max-width:520px;margin:0 auto;padding:32px 24px;">
     <img src="${opts.logoUrl}" alt="E-Charging" height="30" style="display:block;margin-bottom:28px;" />
-    <h1 style="font-size:20px;color:#ffffff;margin:0 0 12px;">Stel je wachtwoord opnieuw in</h1>
-    <p style="font-size:14px;line-height:1.6;margin:0 0 20px;">We ontvingen een verzoek om het wachtwoord van je E-Charging-account opnieuw in te stellen. Klik op de knop hieronder om een nieuw wachtwoord te kiezen. Deze link is beperkt geldig.</p>
+    <h1 style="font-size:20px;color:#ffffff;margin:0 0 12px;">Stel uw wachtwoord opnieuw in</h1>
+    <p style="font-size:14px;line-height:1.6;margin:0 0 20px;">We ontvingen een verzoek om het wachtwoord van uw E-Charging-account opnieuw in te stellen. Klik op de knop hieronder om een nieuw wachtwoord te kiezen. Deze link is beperkt geldig.</p>
     <a href="${opts.actionLink}" style="display:inline-block;background:#05A500;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:8px;">Nieuw wachtwoord instellen</a>
-    <p style="font-size:12px;line-height:1.6;color:#9ca3af;margin:24px 0 0;">Werkt de knop niet? Kopieer deze link in je browser:<br/><span style="color:#6b7280;word-break:break-all;">${opts.actionLink}</span></p>
-    <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:24px 0 0;">Heb je dit niet aangevraagd? Negeer deze e-mail dan — je wachtwoord blijft ongewijzigd.</p>
+    <p style="font-size:12px;line-height:1.6;color:#9ca3af;margin:24px 0 0;">Werkt de knop niet? Kopieer deze link in uw browser:<br/><span style="color:#6b7280;word-break:break-all;">${opts.actionLink}</span></p>
+    <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:24px 0 0;">Heeft u dit niet aangevraagd? Negeer deze e-mail dan — uw wachtwoord blijft ongewijzigd.</p>
   </div></body></html>`;
 }
 
@@ -96,7 +96,7 @@ Deno.serve(async (req: Request) => {
       to: [email],
       subject: "Wachtwoord opnieuw instellen — E-Charging",
       html,
-      text: `Stel je wachtwoord opnieuw in via deze link: ${actionLink}\n\nHeb je dit niet aangevraagd? Negeer deze e-mail.`,
+      text: `Stel uw wachtwoord opnieuw in via deze link: ${actionLink}\n\nHeeft u dit niet aangevraagd? Negeer deze e-mail.`,
       tags: [{ name: "type", value: "password_reset" }],
     });
     if (!res.ok) {
