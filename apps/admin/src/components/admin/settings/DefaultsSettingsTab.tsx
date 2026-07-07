@@ -20,6 +20,7 @@ export function DefaultsSettingsTab() {
     default_echarging_fee_per_kwh: "",
     avg_annual_revenue_per_charge_point: "",
     lead_estimate_source: "computed",
+    handoff_notification_email: "",
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
 
@@ -29,6 +30,7 @@ export function DefaultsSettingsTab() {
       default_echarging_fee_per_kwh: String(org.default_echarging_fee_per_kwh ?? "0.10"),
       avg_annual_revenue_per_charge_point: org.avg_annual_revenue_per_charge_point != null ? String(org.avg_annual_revenue_per_charge_point) : "",
       lead_estimate_source: org.lead_estimate_source === "manual" ? "manual" : "computed",
+      handoff_notification_email: org.handoff_notification_email ?? "willi-jan.jonkers@e-group.nl",
     });
   }, [org]);
 
@@ -48,6 +50,7 @@ export function DefaultsSettingsTab() {
           default_echarging_fee_per_kwh: fee,
           avg_annual_revenue_per_charge_point: Number.isFinite(avgParsed) && avgParsed > 0 ? avgParsed : null,
           lead_estimate_source: defaults.lead_estimate_source === "manual" ? "manual" : "computed",
+          handoff_notification_email: defaults.handoff_notification_email.trim() || "willi-jan.jonkers@e-group.nl",
         },
       });
       queryClient.invalidateQueries({ queryKey: ["admin-avg-revenue-per-cp"] });
@@ -110,6 +113,21 @@ export function DefaultsSettingsTab() {
               <Label htmlFor="avg-revenue">Vaste waarde per paal/jaar (€)</Label>
               <Input id="avg-revenue" type="number" step="0.01" min="0" value={defaults.avg_annual_revenue_per_charge_point} onChange={e => setDefaults(p => ({ ...p, avg_annual_revenue_per_charge_point: e.target.value }))} placeholder="bijv. 180" />
               <p className="text-[11px] text-muted-foreground mt-1.5">Gebruikt bij modus 'Vaste waarde' en als terugval bij 'Berekend'. Leeg = geen schatting zonder data.</p>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3 rounded-md border border-border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Opdrachten doorsturen (e-portal)</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Zodra je een opdracht doorstuurt naar de e-portal gaat er automatisch een branded mail naar dit adres, met de opdrachtdetails en het ordernummer.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="handoff-email">Notificatie-mailadres</Label>
+              <Input id="handoff-email" type="email" value={defaults.handoff_notification_email} onChange={e => setDefaults(p => ({ ...p, handoff_notification_email: e.target.value }))} placeholder="willi-jan.jonkers@e-group.nl" />
+              <p className="text-[11px] text-muted-foreground mt-1.5">Standaard willi-jan.jonkers@e-group.nl. De opdracht wordt niet geblokkeerd als de mail onverhoopt faalt.</p>
             </div>
           </div>
         </div>

@@ -2684,6 +2684,7 @@ export type Database = {
           fault_detection_enabled: boolean
           fault_heartbeat_grace_minutes: number
           fault_notification_email: string
+          handoff_notification_email: string
           iban: string | null
           id: string
           kvk: string | null
@@ -2724,6 +2725,7 @@ export type Database = {
           fault_detection_enabled?: boolean
           fault_heartbeat_grace_minutes?: number
           fault_notification_email?: string
+          handoff_notification_email?: string
           iban?: string | null
           id?: string
           kvk?: string | null
@@ -2764,6 +2766,7 @@ export type Database = {
           fault_detection_enabled?: boolean
           fault_heartbeat_grace_minutes?: number
           fault_notification_email?: string
+          handoff_notification_email?: string
           iban?: string | null
           id?: string
           kvk?: string | null

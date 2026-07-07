@@ -5,6 +5,9 @@ import { buildHandoffPayload, validateSiteForHandoff } from "../_shared/installa
 import { resolveSecret } from "../_shared/secrets.ts";
 import { EgroupApiError, EgroupClient } from "./egroup-api.ts";
 import { CORS_STD } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/email.ts";
+import { logoBrightUrl } from "../_shared/email-assets.ts";
+import { renderHandoffEmail } from "./handoff-email.ts";
 
 // Overdracht van een installatie-order naar de E-Group portal. Bouwt een
 // volledig payload (klant, site-adres, contact + site_contact, offerte-regels),
@@ -120,6 +123,50 @@ Deno.serve(async (req) => {
           description: `Installatie-order overgedragen naar E-Group (${result.order_number || result.order_id})`,
           metadata: { order_id: orderId, egroup_order_id: result.order_id, egroup_order_number: result.order_number },
         });
+      }
+
+      // Best-effort notificatie naar E-Group: de opdracht staat klaar in de e-portal.
+      // Staat ná de idempotente short-circuit (boven), dus alleen een échte nieuwe handoff
+      // mailt — geen dubbele. Een mislukte mail mag de handoff nooit laten falen.
+      try {
+        const { data: org } = await sb
+          .from("organizations")
+          .select("handoff_notification_email")
+          .eq("id", order.organization_id)
+          .maybeSingle();
+        const recipient = (org?.handoff_notification_email || "").trim() || "willi-jan.jonkers@e-group.nl";
+        const clientName = order.clients?.company_name || order.companies?.name || order.leads?.company_name || "Onbekende klant";
+        const siteAddress = [
+          [order.site_street, order.site_house_number].filter(Boolean).join(" ").trim(),
+          [order.site_postal, order.site_city].filter(Boolean).join(" ").trim(),
+        ].filter(Boolean).join(", ");
+        const serviceLabel = [order.service_category, order.service_summary]
+          .filter((v) => v && String(v).trim())
+          .map((v) => String(v).trim())
+          .join(" — ");
+        const { subject, html, text } = renderHandoffEmail({
+          orderNumber: result.order_number || null,
+          clientName,
+          siteAddress,
+          contactName: order.site_contact_name ?? null,
+          contactPhone: order.site_contact_phone ?? null,
+          contactEmail: order.site_contact_email ?? null,
+          serviceLabel,
+          notes: order.notes ?? null,
+          logoUrl: logoBrightUrl,
+        });
+        const mailRes = await sendEmail({
+          to: [recipient],
+          subject,
+          html,
+          text,
+          tags: [{ name: "type", value: "order_handoff" }],
+        });
+        if (!mailRes.ok) {
+          console.error("order-handoff notificatiemail Resend-fout", mailRes.status, await mailRes.text().catch(() => ""));
+        }
+      } catch (mailErr) {
+        console.error("order-handoff notificatiemail mislukt", mailErr);
       }
 
       return json({ status: "ok", egroup_order_id: result.order_id, egroup_order_number: result.order_number });
