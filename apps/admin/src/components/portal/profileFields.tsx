@@ -1,7 +1,7 @@
 // Herbruikbare portaal-veldcomponenten voor de onboarding-wizard (en potentieel het
 // "Mijn gegevens"-formulier). De ERE-/BTW-copy komt uit lib/portalProfile zodat er geen drift ontstaat.
 
-import type { HTMLAttributes } from "react";
+import { useId, type HTMLAttributes } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,7 +65,11 @@ export function Field({
   const inputId = `${idPrefix}-${id}`;
   const errorId = `${inputId}-error`;
   const descId = description ? `${inputId}-desc` : undefined;
-  const resolvedAutoComplete = suppressManagers ? "off" : autoComplete;
+  // Chrome negeert autoComplete="off" voor contactgegevens; "new-password" + een willekeurige
+  // veldnaam voorkomen dat de browser hier e-mail/naam/adres in propt (IBAN/BIC/rekeninghouder).
+  const reactId = useId();
+  const resolvedName = suppressManagers ? `nf-${reactId.replace(/:/g, "")}` : name;
+  const resolvedAutoComplete = suppressManagers ? "new-password" : autoComplete;
   const managerProps = suppressManagers
     ? { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" }
     : {};
@@ -83,7 +87,7 @@ export function Field({
       )}
       <Input
         id={inputId}
-        name={name}
+        name={resolvedName}
         value={value}
         type={type}
         inputMode={inputMode}

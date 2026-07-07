@@ -1,4 +1,4 @@
-import { FormEvent, HTMLAttributes, useEffect, useRef, useState } from "react";
+import { FormEvent, HTMLAttributes, useEffect, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -978,7 +978,11 @@ function Field({
   const inputId = `company-details-${id}`;
   const errorId = `${inputId}-error`;
   const descId = description ? `${inputId}-desc` : undefined;
-  const resolvedAutoComplete = suppressManagers ? "off" : autoComplete;
+  // Chrome negeert autoComplete="off" voor contactgegevens; "new-password" + een willekeurige
+  // veldnaam voorkomen dat de browser hier e-mail/naam/adres in propt (IBAN/BIC/rekeninghouder).
+  const reactId = useId();
+  const resolvedName = suppressManagers ? `nf-${reactId.replace(/:/g, "")}` : name;
+  const resolvedAutoComplete = suppressManagers ? "new-password" : autoComplete;
   const managerProps = suppressManagers
     ? { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" }
     : {};
@@ -996,7 +1000,7 @@ function Field({
       )}
       <Input
         id={inputId}
-        name={name}
+        name={resolvedName}
         value={value}
         type={type}
         inputMode={inputMode}
