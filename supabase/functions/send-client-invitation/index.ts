@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { getEmailHeroV1Bytes, getEmailHeroV2Bytes, getEmailLogoBytes } from "./email-logo.ts";
 import { renderInviteEmail } from "./email-template.ts";
+import { heroV2Url, logoBrightUrl } from "../_shared/email-assets.ts";
 import { sha256Hex, generateToken } from "../_shared/hash.ts";
 import { CORS_STD } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
@@ -13,40 +13,21 @@ import { sendEmail } from "../_shared/email.ts";
 
 const corsHeaders = CORS_STD;
 
-function imageHeaders(filename: string) {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Cache-Control": "public, max-age=31536000, immutable",
-    "Content-Disposition": `inline; filename="${filename}"`,
-    "Content-Type": "image/png",
-    "X-Content-Type-Options": "nosniff",
-  };
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "GET" || req.method === "HEAD") {
+    // Legacy image-server: oude, reeds verzonden uitnodigingen verwijzen nog naar deze
+    // supabase.co-URLs. De plaatjes staan nu on-domain (dashboard.e-charging.nl/email/*);
+    // we leiden deze legacy-paden daarheen door (302), zodat ook oude mails on-domain laden.
     const path = new URL(req.url).pathname;
     if (path.endsWith("/logo-v3.png") || path.endsWith("/logo.png")) {
-      const logoBytes = getEmailLogoBytes();
-      return new Response(req.method === "HEAD" ? null : logoBytes, {
-        headers: imageHeaders("e-charging-logo-bright.png"),
-      });
+      return Response.redirect(logoBrightUrl, 302);
     }
-
     if (path.endsWith("/hero-mobile-v2.png") || path.endsWith("/hero-v2.png")) {
-      const heroBytes = getEmailHeroV2Bytes();
-      return new Response(req.method === "HEAD" ? null : heroBytes, {
-        headers: imageHeaders("e-charging-invite-hero-v2.png"),
-      });
+      return Response.redirect(heroV2Url, 302);
     }
-
     if (path.endsWith("/hero-mobile-v1.png") || path.endsWith("/hero-v1.png")) {
-      const heroBytes = getEmailHeroV1Bytes();
-      return new Response(req.method === "HEAD" ? null : heroBytes, {
-        headers: imageHeaders("e-charging-invite-hero-v1.png"),
-      });
+      return Response.redirect(heroV2Url, 302); // v1 niet meer on-domain → val terug op de huidige hero
     }
-
     return json({ status: "not_found" }, 404);
   }
 
@@ -167,7 +148,7 @@ Deno.serve(async (req: Request) => {
       inviteUrl,
       expiresInDays: Math.max(expiresInDays, 1),
       fromName: FROM_NAME,
-      heroUrl: `${supabaseUrl}/functions/v1/send-client-invitation/hero-mobile-v2.png`,
+      heroUrl: heroV2Url, // on-domain (dashboard.e-charging.nl) i.p.v. supabase.co
       clientNumber: client.client_number,
     });
 

@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { CORS_STD } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { logoBrightUrl } from "../_shared/email-assets.ts";
 
 // invite-team-member — nodigt een intern teamlid (admin/manager/viewer) uit voor het
 // beheer-portaal. Alleen de superadmin mag uitnodigen + rollen toekennen.
@@ -103,7 +104,7 @@ Deno.serve(async (req: Request) => {
     // Branded uitnodiging via Resend (indien geconfigureerd).
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (RESEND_API_KEY) {
-      const logoUrl = `${supabaseUrl}/functions/v1/send-client-invitation/logo-v3.png`;
+      const logoUrl = logoBrightUrl; // on-domain i.p.v. supabase.co
       const html = renderTeamInviteHtml({ name, role, actionLink, logoUrl });
       const text = `Je bent uitgenodigd voor het E-Charging beheer-portaal (rol: ${role}). Activeer je account: ${actionLink}`;
       const res = await sendEmail({

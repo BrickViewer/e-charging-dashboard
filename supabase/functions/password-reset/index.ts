@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { sha256Hex } from "../_shared/hash.ts";
 import { CORS_STD } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { logoBrightUrl } from "../_shared/email-assets.ts";
 
 // Publieke "wachtwoord vergeten"-flow met branded Resend-mail (verify_jwt = false).
 // Body: { email: string, redirectTo?: string }
@@ -88,7 +89,7 @@ Deno.serve(async (req: Request) => {
       console.error("password-reset: RESEND_API_KEY ontbreekt");
       return json({ status: "ok" }); // niet onthullen
     }
-    const logoUrl = `${supabaseUrl}/functions/v1/send-client-invitation/logo-v3.png`;
+    const logoUrl = logoBrightUrl; // on-domain i.p.v. supabase.co
     const html = renderResetHtml({ actionLink, logoUrl });
 
     const res = await sendEmail({

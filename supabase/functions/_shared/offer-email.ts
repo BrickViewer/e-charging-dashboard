@@ -2,7 +2,7 @@
 // Doelgroep: pandeigenaren — rustig, net, helder, professioneel. Table-based +
 // inline CSS, bulletproof (VML) knop, NL-datums, robuust in Gmail/Outlook/Apple Mail.
 
-const LOGO_PATH = "/storage/v1/object/public/blog-media/branding/echarging-logo.png";
+import { logoColorUrl } from "./email-assets.ts";
 
 export function eur0(n: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -16,8 +16,9 @@ function nlDate(iso?: string | null): string {
   return d.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function shell(supabaseUrl: string, innerHtml: string): string {
-  const logo = `${supabaseUrl.replace(/\/+$/, "")}${LOGO_PATH}`;
+function shell(_supabaseUrl: string, innerHtml: string): string {
+  // Logo on-domain (dashboard.e-charging.nl) i.p.v. supabase.co — anders markeert Gmail het als verdacht.
+  const logo = logoColorUrl;
   return `<!doctype html>
 <html lang="nl" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -37,7 +38,7 @@ function shell(supabaseUrl: string, innerHtml: string): string {
     <tr><td align="center" style="padding:32px 16px">
       <table role="presentation" class="ec-card" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #e6e8eb;border-radius:10px;overflow:hidden">
         <tr><td style="padding:34px 40px 22px;border-bottom:1px solid #f0f1f3">
-          <img src="${logo}" alt="E-Charging" width="168" height="40" style="display:block;width:168px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700">
+          <img src="${logo}" alt="E-Charging" width="168" height="67" style="display:block;width:168px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700">
         </td></tr>
         <tr><td style="padding:30px 40px 34px;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
           ${innerHtml}

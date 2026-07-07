@@ -4,6 +4,7 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { renderFaultEmail, type FaultEmailItem } from "./email-template.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { logoBrightUrl } from "../_shared/email-assets.ts";
 
 // Verstuurt een branded storingsmail (gebundeld per locatie) naar het
 // ingestelde notificatie-adres. Aangeroepen door eflux-sync (x-internal-secret)
@@ -60,7 +61,7 @@ Deno.serve(async (req) => {
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     const PUBLIC_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://e-charging.nl").replace(/\/+$/, "");
-    const logoUrl = `${supabaseUrl}/functions/v1/send-client-invitation/logo-v3.png`;
+    const logoUrl = logoBrightUrl; // on-domain i.p.v. supabase.co
 
     const fmtId = (...parts: (string | number | null | undefined)[]) =>
       parts.filter((x) => x !== null && x !== undefined && String(x).trim() !== "").join(" / ") || "onbekend";
