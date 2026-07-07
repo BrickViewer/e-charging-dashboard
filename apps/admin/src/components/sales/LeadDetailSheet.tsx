@@ -262,7 +262,18 @@ export function LeadDetailSheet({
       window.open(data.url, "_blank", "noopener,noreferrer,width=1400,height=900");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Configurator starten mislukt"); }
   };
-  const removeLead = async () => { await deleteLead.mutateAsync(lead.id); toast.success("Lead verwijderd"); onOpenChange(false); };
+  const removeLead = async () => {
+    try {
+      await deleteLead.mutateAsync(lead.id);
+      toast.success("Lead verwijderd");
+      setConfirmDelete(false);
+      onOpenChange(false);
+    } catch (e) {
+      // Bv. de guard bij een getekende offerte — toon de melding i.p.v. stil falen.
+      toast.error(e instanceof Error ? e.message : "Verwijderen mislukt");
+      setConfirmDelete(false);
+    }
+  };
   const addNote = async () => {
     if (!newNote.trim()) return;
     const { data: u } = await supabase.auth.getUser();
@@ -644,14 +655,35 @@ export function LeadDetailSheet({
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Lead verwijderen?</AlertDialogTitle>
-            <AlertDialogDescription>Dit verwijdert de lead met al zijn to-do's en activiteit. Dit kan niet ongedaan worden gemaakt.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuleren</AlertDialogCancel>
-            <AlertDialogAction onClick={removeLead} className="bg-red-600 hover:bg-red-700">Verwijderen</AlertDialogAction>
-          </AlertDialogFooter>
+          {(() => {
+            const qs = quotes.data ?? [];
+            const heeftGetekend = qs.some((q) => q.status === "getekend");
+            const n = qs.length;
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Lead verwijderen?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {heeftGetekend ? (
+                      <>Deze lead heeft een <strong>getekende offerte</strong> (een echte deal) en kan niet worden verwijderd. Handel dit af via het klantdossier.</>
+                    ) : (
+                      <>
+                        Dit verwijdert de lead met al zijn to-do's en activiteit.
+                        {n > 0 && <> Let op: ook <strong>{n} offerte{n === 1 ? "" : "s"}</strong> word{n === 1 ? "t" : "en"} verwijderd.</>}
+                        {" "}Dit kan niet ongedaan worden gemaakt.
+                      </>
+                    )}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuleren</AlertDialogCancel>
+                  {!heeftGetekend && (
+                    <AlertDialogAction onClick={removeLead} className="bg-red-600 hover:bg-red-700">Verwijderen</AlertDialogAction>
+                  )}
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
         </AlertDialogContent>
       </AlertDialog>
 

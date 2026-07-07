@@ -248,9 +248,9 @@ export function useDeleteLead() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("leads").delete().eq("id", id);
       if (error) {
-        // FK restrict: een lead met offertes mag niet verdwijnen (de offerte zou uit de
-        // pipeline vallen). Koppel de offertes eerst aan een andere lead of verwijder ze.
-        if (error.code === "23503") throw new Error("Deze lead heeft gekoppelde offertes; verwijder of verplaats die eerst.");
+        // De guard-trigger (P0001) blokkeert verwijderen bij een getekende offerte met een
+        // duidelijke NL-melding; die surfacen we direct. Niet-getekende offertes cascaden mee.
+        if (error.code === "P0001") throw new Error(error.message);
         throw error;
       }
     },
