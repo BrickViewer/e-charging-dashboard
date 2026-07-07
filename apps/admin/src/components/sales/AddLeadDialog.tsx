@@ -13,6 +13,7 @@ import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { PhoneField } from "@/components/contacts/PhoneField";
 import { AddressFields, type AddressValue } from "@/components/contacts/AddressFields";
 import { splitHouse } from "@/lib/houseNumber";
+import { SCOPES, SCOPE_LABEL, type QuoteScope } from "@/lib/quoteScope";
 import { LeadTagPicker } from "@/components/sales/LeadTagPicker";
 import { useSetLeadTags } from "@/hooks/useLeadTags";
 import { useCreateProjectLocation, useLinkLeadObject, findMatchingLocation, useObjectsByPostcode, type ObjectPostcodeSuggestion } from "@/hooks/useProjectLocations";
@@ -60,6 +61,8 @@ export function AddLeadDialog({
   const [stageId, setStageId] = useState(defaultStageId ?? fallbackStage ?? "");
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+  const [chargePoints, setChargePoints] = useState("");
+  const [scope, setScope] = useState<QuoteScope | "">("");
   const [match, setMatch] = useState<{ id: string; location_number: number; lead_id: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
   // Expliciet gekozen bestaand object uit de suggestielijst (blokkeert de auto-dedup zodat de keuze blijft staan).
@@ -151,6 +154,7 @@ export function AddLeadDialog({
   const reset = () => {
     setCompanyId(""); setCompanyName(""); setPersonId(""); setPersonName("");
     setAddr({ ...EMPTY_ADDR }); setTagIds([]); setNotes(""); setMatch(null); setPickedObjectId(null);
+    setChargePoints(""); setScope("");
     resetCompany(); resetPerson();
   };
 
@@ -228,6 +232,8 @@ export function AddLeadDialog({
         notes: notes.trim() || null,
         source: "manual",
         position: 0,
+        estimated_charge_points: chargePoints.trim() && Number(chargePoints) > 0 ? Math.round(Number(chargePoints)) : null,
+        scope: scope || null,
       });
 
       // 4. Adres → object. Bestaat er al een object op dit adres (gekozen of gematcht), koppel
@@ -355,6 +361,31 @@ export function AddLeadDialog({
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">Kies of maak een bedrijf en/of contactpersoon — minstens één. Geen bedrijf = particulier.</p>
+          </div>
+
+          {/* AANVRAAG — scope + aantal palen; meteen zichtbaar op de lead-kaart, nog vóór er een offerte is */}
+          <div className="space-y-3 rounded-lg border p-3">
+            <p className="text-sm font-semibold text-foreground">Aanvraag <span className="font-normal text-muted-foreground">(optioneel)</span></p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Aantal palen">
+                <Input
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  placeholder="bijv. 2"
+                  value={chargePoints}
+                  onChange={(e) => setChargePoints(e.target.value)}
+                />
+              </Field>
+              <Field label="Scope">
+                <Select value={scope} onValueChange={(v) => setScope(v as QuoteScope)}>
+                  <SelectTrigger><SelectValue placeholder="Kies…" /></SelectTrigger>
+                  <SelectContent>
+                    {SCOPES.map((s) => <SelectItem key={s} value={s}>{SCOPE_LABEL[s]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
           </div>
 
           {/* TAGS (intern) */}

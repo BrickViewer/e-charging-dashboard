@@ -2403,6 +2403,7 @@ export type Database = {
           position: number
           postal_code: string | null
           priority: string
+          scope: string | null
           sector: string | null
           source: string
           stage_id: string | null
@@ -2451,6 +2452,7 @@ export type Database = {
           position?: number
           postal_code?: string | null
           priority?: string
+          scope?: string | null
           sector?: string | null
           source?: string
           stage_id?: string | null
@@ -2499,6 +2501,7 @@ export type Database = {
           position?: number
           postal_code?: string | null
           priority?: string
+          scope?: string | null
           sector?: string | null
           source?: string
           stage_id?: string | null

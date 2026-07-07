@@ -2,7 +2,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ListChecks, MapPin, Plug, Send, User } from "lucide-react";
 import { primaryQuote, type LeadWithTasks } from "@/hooks/useLeads";
-import { scopeFromFlags, SCOPE_SHORT, SCOPE_BADGE_CLASS } from "@/lib/quoteScope";
+import { scopeFromFlags, SCOPE_SHORT, SCOPE_BADGE_CLASS, type QuoteScope } from "@/lib/quoteScope";
 import { tagTextColor } from "@/hooks/useLeadTags";
 import { useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
 import { leadMgmtYearEstimate } from "@/lib/leadEstimate";
@@ -40,7 +40,10 @@ export function LeadCard({
   const openTasks = lead.lead_tasks?.filter((t) => !t.done).length ?? 0;
   const address = (lead.address_street || lead.city) ? formatObjectAddress(lead) : "";
   const pq = primaryQuote(lead);
-  const scope = pq ? scopeFromFlags(pq.with_installation !== false, pq.with_management !== false) : null;
+  // Scope uit de offerte als die er is; anders de bij de lead vastgelegde scope (nog vóór er een offerte is).
+  const scope = pq
+    ? scopeFromFlags(pq.with_installation !== false, pq.with_management !== false)
+    : (lead.scope as QuoteScope | null);
   const palen = pq?.num_charge_points ?? lead.estimated_charge_points ?? null;
   const sentDate = pq?.sent_at ?? null;
   const { data: avgPerPaal } = useAvgRevenuePerChargePoint();
