@@ -165,9 +165,7 @@ Deno.serve(async (req) => {
   const bic = normalizeCompact(body.payoutBic ?? "");
   const now = new Date().toISOString();
 
-  if (body.currentPassword.length < 1) {
-    return jsonResponse({ field: "currentPassword", error: "Vul uw huidige wachtwoord in" }, 400);
-  }
+  // Basisvalidatie. Het wachtwoord hangt af van first-time-vs-wijzigen en wordt pas hieronder afgedwongen.
   if (accountHolder.length < 2) {
     return jsonResponse({ field: "payoutAccountHolderName", error: "Vul de naam van de rekeninghouder in" }, 400);
   }
@@ -196,16 +194,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Geen login e-mail gevonden" }, 400);
   }
 
-  const verifyClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
-  const { error: passwordError } = await verifyClient.auth.signInWithPassword({
-    email: user.email,
-    password: body.currentPassword,
-  });
-
-  if (passwordError) {
-    return jsonResponse({ field: "currentPassword", error: "Huidig wachtwoord klopt niet" }, 403);
-  }
-
   const { data: client, error: clientError } = await serviceClient
     .from("clients")
     .select("id, contact_email")
@@ -221,12 +209,30 @@ Deno.serve(async (req) => {
 
   const { data: existingPaymentDetails, error: detailsError } = await serviceClient
     .from("client_payment_details")
-    .select("invoice_email")
+    .select("invoice_email, payout_iban_last4")
     .eq("client_id", client.id)
     .maybeSingle();
 
   if (detailsError) {
     return jsonResponse({ error: detailsError.message }, 500);
+  }
+
+  // De SERVER bepaalt first-time-vs-wijzigen op basis van een reeds opgeslagen IBAN — nooit de client vertrouwen.
+  // Eerste keer bankgegevens invullen: géén wachtwoord (voorkomt de "bankwachtwoord?"-verwarring).
+  // Een bestaande uitbetaalrekening WIJZIGEN: step-up (huidig wachtwoord opnieuw bevestigen).
+  const isFirstTime = !existingPaymentDetails?.payout_iban_last4;
+  if (!isFirstTime) {
+    if (body.currentPassword.length < 1) {
+      return jsonResponse({ field: "currentPassword", error: "Vul uw huidige wachtwoord in" }, 400);
+    }
+    const verifyClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
+    const { error: passwordError } = await verifyClient.auth.signInWithPassword({
+      email: user.email,
+      password: body.currentPassword,
+    });
+    if (passwordError) {
+      return jsonResponse({ field: "currentPassword", error: "Huidig wachtwoord klopt niet" }, 403);
+    }
   }
 
   const invoiceEmail = existingPaymentDetails?.invoice_email ?? client.contact_email;

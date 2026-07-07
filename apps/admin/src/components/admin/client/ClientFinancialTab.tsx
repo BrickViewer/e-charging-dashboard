@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { formatEuro } from "@/services/calculations";
-import type { ClientPaymentDetails, ClientWithRelations, Organization, QuarterlySettlement } from "@/types/db";
+import type { ClientPaymentDetails, ClientWithRelations, Organization, Settlement } from "@/types/db";
 import { ClientSettlementCard } from "./ClientSettlementCard";
 
 export function ClientFinancialTab({
@@ -23,7 +23,7 @@ export function ClientFinancialTab({
   executeMoneyFlow,
   markEfluxReimbursed,
 }: {
-  settlements: QuarterlySettlement[];
+  settlements: Settlement[];
   settlementsLoading: boolean;
   settlementsError: boolean;
   totalPaidOut: number;
@@ -38,7 +38,7 @@ export function ClientFinancialTab({
   approvingId: string | null;
   approveSettlement: (id: string) => void;
   unapproveSettlement: (id: string) => void;
-  executeMoneyFlow: (settlement: QuarterlySettlement) => void;
+  executeMoneyFlow: (settlement: Settlement) => void;
   markEfluxReimbursed: (id: string) => void;
 }) {
   return (
@@ -47,7 +47,7 @@ export function ClientFinancialTab({
         <Card><CardContent className="pt-4">
           <p className="text-sm text-muted-foreground">Totaal uitbetaald</p>
           <p className="text-2xl font-semibold">{formatEuro(totalPaidOut)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{paidCount} kwartaal uitbetaald</p>
+          <p className="text-xs text-muted-foreground mt-1">{paidCount} {paidCount === 1 ? "maandafrekening" : "maandafrekeningen"} uitbetaald</p>
         </CardContent></Card>
         <Card><CardContent className="pt-4">
           <p className="text-sm text-muted-foreground">Nog uit te betalen</p>

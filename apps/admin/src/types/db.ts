@@ -16,8 +16,6 @@ export type Notification = Tables<"notifications">;
 export type Organization = Tables<"organizations">;
 export type Profile = Tables<"profiles">;
 export type Settlement = Tables<"settlements">;
-/** @deprecated maandelijks model: gebruik Settlement. Alias voor compat. */
-export type QuarterlySettlement = Settlement;
 
 export type ClientInvitationSummary = Pick<
   ClientInvitation,

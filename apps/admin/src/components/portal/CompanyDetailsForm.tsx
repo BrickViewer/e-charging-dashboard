@@ -13,6 +13,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePostcodeLookup } from "@/hooks/usePostcodeLookup";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { isValidIban } from "@/lib/iban";
+import { evaluatePassword } from "@/lib/passwordStrength";
+import { PasswordStrengthMeter, usePasswordStrength } from "@/components/PasswordStrengthMeter";
+// Gedeelde copy-constante (bewuste uitzondering op de duplicatie om copy-drift te voorkomen).
+import { invoiceNameHelp } from "@/lib/portalProfile";
 import { cn } from "@/lib/utils";
 import {
   changePortalLoginEmail,
@@ -86,10 +90,11 @@ const COMPANY_REQUIRED_FIELDS: Array<keyof CompanyFormState> = [
   "invoiceEmail",
 ];
 
+// currentPassword staat hier bewust NIET meer in: eerste keer invullen = geen wachtwoord.
+// Alleen bij het wijzigen van een reeds opgeslagen rekening (step-up) via requirePassword.
 const BANK_REQUIRED_FIELDS: Array<keyof BankFormState> = [
   "payoutAccountHolderName",
   "payoutIban",
-  "currentPassword",
 ];
 
 function splitContactName(name?: string | null) {
@@ -237,12 +242,15 @@ function validateCompanyForm(form: CompanyFormState): CompanyErrors {
   return errors;
 }
 
-function validateBankForm(form: BankFormState): BankErrors {
+function validateBankForm(form: BankFormState, requirePassword = false): BankErrors {
   const errors: BankErrors = {};
   const normalized = normalizeBankForm(form);
 
   for (const field of BANK_REQUIRED_FIELDS) {
     if (!normalized[field]) errors[field] = "Dit veld is verplicht";
+  }
+  if (requirePassword && !normalized.currentPassword) {
+    errors.currentPassword = "Dit veld is verplicht";
   }
 
   if (normalized.payoutAccountHolderName && normalized.payoutAccountHolderName.length < 2) {
@@ -310,6 +318,15 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
   });
   const [activeSecurityAction, setActiveSecurityAction] = useState<SecurityAction>(null);
   const [bankEditing, setBankEditing] = useState(!paymentDetails?.payout_iban_last4);
+  // Reeds een uitbetaalrekening opgeslagen? Dan is dit een WIJZIGING → step-up (wachtwoord). Eerste keer niet.
+  const bankIsChange = Boolean(paymentDetails?.payout_iban_last4);
+  // Live wachtwoordsterkte voor het wijzig-wachtwoord-formulier (userInputs straffen eigen naam/e-mail af).
+  const pwStrength = usePasswordStrength(passwordForm.newPassword, [
+    user?.email ?? "",
+    companyForm.companyName,
+    companyForm.contactFirstName,
+    companyForm.contactLastName,
+  ]);
 
   useEffect(() => {
     setCompanyForm(initialCompanyForm(client, paymentDetails));
@@ -448,8 +465,12 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
 
   const submitBank = async (event: FormEvent) => {
     event.preventDefault();
-    const validationErrors = validateBankForm(bankForm);
-    const firstInvalidField = firstError([...BANK_REQUIRED_FIELDS, "payoutBic"], validationErrors);
+    // Eerste keer bankgegevens invullen = geen wachtwoord; een bestaande rekening wijzigen = step-up.
+    const requirePassword = bankIsChange;
+    const validationErrors = validateBankForm(bankForm, requirePassword);
+    const fields: Array<keyof BankFormState> = [...BANK_REQUIRED_FIELDS, "payoutBic"];
+    if (requirePassword) fields.push("currentPassword");
+    const firstInvalidField = firstError(fields, validationErrors);
 
     if (firstInvalidField) {
       setBankErrors(validationErrors);
@@ -543,7 +564,13 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
     event.preventDefault();
     const errors: PasswordErrors = {};
     if (!passwordForm.currentPassword) errors.currentPassword = "Vul uw huidige wachtwoord in";
-    if (passwordForm.newPassword.length < 10) errors.newPassword = "Kies minimaal 10 tekens";
+    const pwEval = await evaluatePassword(passwordForm.newPassword, [
+      user?.email ?? "",
+      companyForm.companyName,
+      companyForm.contactFirstName,
+      companyForm.contactLastName,
+    ]);
+    if (!pwEval.ok) errors.newPassword = pwEval.warningNl ?? "Kies een sterker wachtwoord";
     if (passwordForm.newPassword !== passwordForm.confirmPassword) errors.confirmPassword = "Wachtwoorden komen niet overeen";
 
     if (Object.keys(errors).length > 0) {
@@ -594,12 +621,12 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="contact-first-name" label="Voornaam" value={companyForm.contactFirstName} onChange={(value) => updateCompany("contactFirstName", value)} error={companyErrors.contactFirstName} required />
-              <Field id="contact-last-name" label="Achternaam" value={companyForm.contactLastName} onChange={(value) => updateCompany("contactLastName", value)} error={companyErrors.contactLastName} required />
-              <Field id="contact-email" label="Contact e-mail" type="email" value={companyForm.contactEmail} onChange={(value) => updateCompany("contactEmail", value)} error={companyErrors.contactEmail} required />
+              <Field id="contact-first-name" name="given-name" autoComplete="given-name" label="Voornaam" value={companyForm.contactFirstName} onChange={(value) => updateCompany("contactFirstName", value)} error={companyErrors.contactFirstName} required />
+              <Field id="contact-last-name" name="family-name" autoComplete="family-name" label="Achternaam" value={companyForm.contactLastName} onChange={(value) => updateCompany("contactLastName", value)} error={companyErrors.contactLastName} required />
+              <Field id="contact-email" name="email" autoComplete="email" label="Contact e-mail" type="email" value={companyForm.contactEmail} onChange={(value) => updateCompany("contactEmail", value)} error={companyErrors.contactEmail} required />
               <div className="grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)]">
                 <CountryCodeField value={companyForm.contactCountryCode} onChange={(value) => updateCompany("contactCountryCode", value)} error={companyErrors.contactCountryCode} />
-                <Field id="contact-phone" label="Telefoonnummer" value={companyForm.contactPhone} onChange={(value) => updateCompany("contactPhone", value)} error={companyErrors.contactPhone} inputMode="tel" placeholder="612345678" required />
+                <Field id="contact-phone" name="tel-national" autoComplete="tel-national" label="Telefoonnummer" value={companyForm.contactPhone} onChange={(value) => updateCompany("contactPhone", value)} error={companyErrors.contactPhone} inputMode="tel" placeholder="612345678" required />
               </div>
             </div>
           </CardContent>
@@ -659,16 +686,16 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="company-name" label={companyForm.vatStatus === "private" ? "Naam" : "Bedrijfsnaam"} value={companyForm.companyName} onChange={(value) => updateCompany("companyName", value)} error={companyErrors.companyName} required />
-                <Field id="kvk" label="KvK-nummer" value={companyForm.kvk} onChange={(value) => updateCompany("kvk", value)} error={companyErrors.kvk} inputMode="numeric" required={companyForm.vatStatus !== "private"} />
-                <Field id="btw-number" label="BTW-nummer" value={companyForm.btwNumber} onChange={(value) => updateCompany("btwNumber", value)} error={companyErrors.btwNumber} placeholder="NL123456789B01" required={companyForm.vatStatus === "vat_liable"} />
-                <Field id="invoice-email" label="Factuurmail" type="email" value={companyForm.invoiceEmail} onChange={(value) => updateCompany("invoiceEmail", value)} error={companyErrors.invoiceEmail} required />
+                <Field id="company-name" name="organization" autoComplete="organization" className="sm:col-span-2" label={companyForm.vatStatus === "private" ? "Naam" : "Bedrijfsnaam"} description={invoiceNameHelp(companyForm.vatStatus === "private")} value={companyForm.companyName} onChange={(value) => updateCompany("companyName", value)} error={companyErrors.companyName} required />
+                <Field id="kvk" autoComplete="off" label="KvK-nummer" value={companyForm.kvk} onChange={(value) => updateCompany("kvk", value)} error={companyErrors.kvk} inputMode="numeric" required={companyForm.vatStatus !== "private"} />
+                <Field id="btw-number" autoComplete="off" label="BTW-nummer" value={companyForm.btwNumber} onChange={(value) => updateCompany("btwNumber", value)} error={companyErrors.btwNumber} placeholder="NL123456789B01" required={companyForm.vatStatus === "vat_liable"} />
+                <Field id="invoice-email" autoComplete="off" label="Factuurmail" type="email" value={companyForm.invoiceEmail} onChange={(value) => updateCompany("invoiceEmail", value)} error={companyErrors.invoiceEmail} required />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field id="billing-address-street" className="sm:col-span-3" label={companyForm.vatStatus === "private" ? "Adres" : "Factuuradres"} value={companyForm.billingAddressStreet} onChange={(value) => updateCompany("billingAddressStreet", value)} error={companyErrors.billingAddressStreet} placeholder="Straat en huisnummer" required />
-                <Field id="billing-address-postal" label="Postcode" value={companyForm.billingAddressPostal} onChange={(value) => updateCompany("billingAddressPostal", value)} error={companyErrors.billingAddressPostal} required />
-                <Field id="billing-address-city" className="sm:col-span-2" label="Plaats" value={companyForm.billingAddressCity} onChange={(value) => updateCompany("billingAddressCity", value)} error={companyErrors.billingAddressCity} required />
+                <Field id="billing-address-street" name="street-address" autoComplete="street-address" className="sm:col-span-3" label={companyForm.vatStatus === "private" ? "Adres" : "Factuuradres"} value={companyForm.billingAddressStreet} onChange={(value) => updateCompany("billingAddressStreet", value)} error={companyErrors.billingAddressStreet} placeholder="Straat en huisnummer" required />
+                <Field id="billing-address-postal" name="postal-code" autoComplete="postal-code" label="Postcode" value={companyForm.billingAddressPostal} onChange={(value) => updateCompany("billingAddressPostal", value)} error={companyErrors.billingAddressPostal} required />
+                <Field id="billing-address-city" name="address-level2" autoComplete="address-level2" className="sm:col-span-2" label="Plaats" value={companyForm.billingAddressCity} onChange={(value) => updateCompany("billingAddressCity", value)} error={companyErrors.billingAddressCity} required />
               </div>
 
               <div className="space-y-2 rounded-md border border-border/80 px-3 py-3">
@@ -730,10 +757,13 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
           {bankEditing ? (
             <form onSubmit={submitBank} noValidate className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="payout-account-holder-name" label="Naam rekeninghouder" value={bankForm.payoutAccountHolderName} onChange={(value) => updateBank("payoutAccountHolderName", value)} error={bankErrors.payoutAccountHolderName} required />
-                <Field id="payout-iban" label="IBAN" value={bankForm.payoutIban} onChange={(value) => updateBank("payoutIban", value)} error={bankErrors.payoutIban} placeholder="NL91ABNA0417164300" required />
-                <Field id="payout-bic" label="BIC" value={bankForm.payoutBic} onChange={(value) => updateBank("payoutBic", value)} error={bankErrors.payoutBic} placeholder="Optioneel" />
-                <Field id="bank-current-password" label="Huidig wachtwoord" type="password" value={bankForm.currentPassword} onChange={(value) => updateBank("currentPassword", value)} error={bankErrors.currentPassword} autoComplete="current-password" required />
+                <Field id="payout-account-holder-name" name="payout-account-holder" suppressManagers label="Naam rekeninghouder" description="Meestal je bedrijfsnaam; pas aan als de rekening op een andere naam staat." value={bankForm.payoutAccountHolderName} onChange={(value) => updateBank("payoutAccountHolderName", value)} error={bankErrors.payoutAccountHolderName} required />
+                <Field id="payout-iban" name="payout-iban" suppressManagers label="IBAN" value={bankForm.payoutIban} onChange={(value) => updateBank("payoutIban", value)} error={bankErrors.payoutIban} placeholder="NL91ABNA0417164300" required />
+                <Field id="payout-bic" name="payout-bic" suppressManagers label="BIC" value={bankForm.payoutBic} onChange={(value) => updateBank("payoutBic", value)} error={bankErrors.payoutBic} placeholder="Optioneel" />
+                {/* Step-up: alleen bij het WIJZIGEN van een reeds opgeslagen uitbetaalrekening. Eerste keer: geen wachtwoord. */}
+                {bankIsChange && (
+                  <Field id="bank-current-password" label="Huidig wachtwoord" type="password" value={bankForm.currentPassword} onChange={(value) => updateBank("currentPassword", value)} error={bankErrors.currentPassword} autoComplete="current-password" required />
+                )}
               </div>
 
               <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-5">
@@ -814,6 +844,9 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
                   <Field id="new-password" label="Nieuw wachtwoord" type="password" value={passwordForm.newPassword} onChange={(value) => updatePassword("newPassword", value)} error={passwordErrors.newPassword} autoComplete="new-password" required />
                   <Field id="confirm-password" label="Herhaal nieuw wachtwoord" type="password" value={passwordForm.confirmPassword} onChange={(value) => updatePassword("confirmPassword", value)} error={passwordErrors.confirmPassword} autoComplete="new-password" required />
                 </div>
+                {passwordForm.newPassword && (
+                  <PasswordStrengthMeter result={pwStrength.result} loading={pwStrength.loading} />
+                )}
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" onClick={closeSecurityAction} disabled={passwordSaving}>
                     Annuleren
@@ -893,6 +926,8 @@ function CountryCodeField({
       </Label>
       <select
         id={inputId}
+        name="tel-country-code"
+        autoComplete="tel-country-code"
         value={value}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
@@ -925,6 +960,9 @@ function Field({
   error,
   inputMode,
   autoComplete,
+  name,
+  description,
+  suppressManagers,
 }: {
   id: string;
   label: string;
@@ -937,9 +975,17 @@ function Field({
   error?: string;
   inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
   autoComplete?: string;
+  name?: string;
+  description?: string;
+  suppressManagers?: boolean;
 }) {
   const inputId = `company-details-${id}`;
   const errorId = `${inputId}-error`;
+  const descId = description ? `${inputId}-desc` : undefined;
+  const resolvedAutoComplete = suppressManagers ? "off" : autoComplete;
+  const managerProps = suppressManagers
+    ? { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" }
+    : {};
 
   return (
     <div className={className}>
@@ -947,17 +993,24 @@ function Field({
         {label}
         {required && <span className="ml-1 text-destructive">*</span>}
       </Label>
+      {description && (
+        <p id={descId} className="mt-0.5 text-xs leading-relaxed text-muted-foreground/90">
+          {description}
+        </p>
+      )}
       <Input
         id={inputId}
+        name={name}
         value={value}
         type={type}
         inputMode={inputMode}
-        autoComplete={autoComplete}
+        autoComplete={resolvedAutoComplete}
         placeholder={placeholder}
         aria-invalid={Boolean(error)}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={[error ? errorId : null, descId].filter(Boolean).join(" ") || undefined}
         onChange={(event) => onChange(event.target.value)}
         className={cn("mt-1 portal-card", error && "border-destructive focus-visible:ring-destructive")}
+        {...managerProps}
       />
       {error && (
         <p id={errorId} className="mt-1 text-xs leading-relaxed text-destructive">

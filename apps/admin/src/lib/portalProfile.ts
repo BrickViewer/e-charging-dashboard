@@ -42,6 +42,15 @@ export const ERE_OPTIN_DISCLAIMER =
 export const ERE_RECEIVED_NOTICE =
   "We hebben je ERE-aanvraag ontvangen en nemen binnenkort contact met je op om je ERE-certificaten aan te melden. De bedragen in je dashboard zijn een indicatie.";
 
+// Uitleg bij de bedrijfsnaam/naam: die verschijnt op de factuur/betaalspecificatie en is een
+// ander begrip dan de contactpersoon of de rekeninghouder. Op één plek zodat wizard en
+// "Mijn gegevens" niet uit elkaar lopen.
+export function invoiceNameHelp(isPrivate: boolean): string {
+  return isPrivate
+    ? "Deze naam komt op je betaalspecificatie te staan."
+    : "Deze naam komt op de factuur en betaalspecificatie te staan — dit is niet per se de contactpersoon of de rekeninghouder.";
+}
+
 export const COMPANY_REQUIRED_FIELDS: Array<keyof CompanyFormState> = [
   "companyName",
   "vatStatus",
@@ -56,10 +65,12 @@ export const COMPANY_REQUIRED_FIELDS: Array<keyof CompanyFormState> = [
   "invoiceEmail",
 ];
 
+// currentPassword staat hier bewust NIET meer in: bij de eerste keer bankgegevens invullen
+// vragen we geen wachtwoord. Alleen bij het WIJZIGEN van een reeds opgeslagen rekening
+// (step-up) wordt het wachtwoord verplicht — via de requirePassword-parameter hieronder.
 export const BANK_REQUIRED_FIELDS: Array<keyof BankFormState> = [
   "payoutAccountHolderName",
   "payoutIban",
-  "currentPassword",
 ];
 
 export function splitContactName(name?: string | null) {
@@ -207,12 +218,17 @@ export function validateCompanyForm(form: CompanyFormState): CompanyErrors {
   return errors;
 }
 
-export function validateBankForm(form: BankFormState): BankErrors {
+// requirePassword = true bij het wijzigen van een reeds opgeslagen uitbetaalrekening
+// (step-up-beveiliging). Bij de eerste keer invullen is het wachtwoord niet vereist.
+export function validateBankForm(form: BankFormState, requirePassword = false): BankErrors {
   const errors: BankErrors = {};
   const normalized = normalizeBankForm(form);
 
   for (const field of BANK_REQUIRED_FIELDS) {
     if (!normalized[field]) errors[field] = "Dit veld is verplicht";
+  }
+  if (requirePassword && !normalized.currentPassword) {
+    errors.currentPassword = "Dit veld is verplicht";
   }
 
   if (normalized.payoutAccountHolderName && normalized.payoutAccountHolderName.length < 2) {

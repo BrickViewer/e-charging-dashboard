@@ -38,6 +38,9 @@ export function Field({
   error,
   inputMode,
   autoComplete,
+  name,
+  description,
+  suppressManagers,
   idPrefix = "onboarding",
 }: {
   id: string;
@@ -51,10 +54,21 @@ export function Field({
   error?: string;
   inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
   autoComplete?: string;
+  // `name` helpt de browser het veld correct te herkennen voor autofill.
+  name?: string;
+  // Optionele hulptekst onder het label (bv. "deze naam komt op de factuur").
+  description?: string;
+  // Onderdruk autofill + wachtwoordmanagers (IBAN/BIC/rekeninghouder): geen adres/naam in IBAN.
+  suppressManagers?: boolean;
   idPrefix?: string;
 }) {
   const inputId = `${idPrefix}-${id}`;
   const errorId = `${inputId}-error`;
+  const descId = description ? `${inputId}-desc` : undefined;
+  const resolvedAutoComplete = suppressManagers ? "off" : autoComplete;
+  const managerProps = suppressManagers
+    ? { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" }
+    : {};
 
   return (
     <div className={className}>
@@ -62,17 +76,24 @@ export function Field({
         {label}
         {required && <span className="ml-1 text-destructive">*</span>}
       </Label>
+      {description && (
+        <p id={descId} className="mt-0.5 text-xs leading-relaxed text-muted-foreground/90">
+          {description}
+        </p>
+      )}
       <Input
         id={inputId}
+        name={name}
         value={value}
         type={type}
         inputMode={inputMode}
-        autoComplete={autoComplete}
+        autoComplete={resolvedAutoComplete}
         placeholder={placeholder}
         aria-invalid={Boolean(error)}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={[error ? errorId : null, descId].filter(Boolean).join(" ") || undefined}
         onChange={(event) => onChange(event.target.value)}
         className={cn("mt-1 portal-card", error && "border-destructive focus-visible:ring-destructive")}
+        {...managerProps}
       />
       {error && (
         <p id={errorId} className="mt-1 text-xs leading-relaxed text-destructive">
@@ -102,6 +123,8 @@ export function CountryCodeField({
       </Label>
       <select
         id={inputId}
+        name="tel-country-code"
+        autoComplete="tel-country-code"
         value={value}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}

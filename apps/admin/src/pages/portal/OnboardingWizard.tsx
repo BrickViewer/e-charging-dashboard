@@ -32,6 +32,7 @@ import {
   firstError,
   initialBankForm,
   initialCompanyForm,
+  invoiceNameHelp,
   normalizeBankForm,
   normalizeCompanyForm,
   validateBankForm,
@@ -206,8 +207,12 @@ export default function OnboardingWizard() {
   const saveBank = async (): Promise<boolean> => {
     // Al opgeslagen en niets nieuws ingevuld → overslaan.
     if (bankAlreadySaved && !bankForm.payoutIban.trim()) return true;
-    const errs = validateBankForm(bankForm);
-    const bad = firstError([...BANK_REQUIRED_FIELDS, "payoutBic"], errs);
+    // Eerste keer = geen wachtwoord; een bestaande rekening wijzigen = step-up (wachtwoord vereist).
+    const requirePassword = bankAlreadySaved;
+    const errs = validateBankForm(bankForm, requirePassword);
+    const fields: Array<keyof BankFormState> = [...BANK_REQUIRED_FIELDS, "payoutBic"];
+    if (requirePassword) fields.push("currentPassword");
+    const bad = firstError(fields, errs);
     if (bad) {
       setBankErrors(errs);
       toast.error(errs[bad] ?? "Controleer de bankgegevens");
@@ -280,12 +285,12 @@ export default function OnboardingWizard() {
           <div className="space-y-4">
             <StepHeader step={2} title="Contactgegevens" subtitle="Wie is de contactpersoon voor E-Charging?" />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="first-name" label="Voornaam" value={companyForm.contactFirstName} onChange={(v) => updateCompany("contactFirstName", v)} error={companyErrors.contactFirstName} required />
-              <Field id="last-name" label="Achternaam" value={companyForm.contactLastName} onChange={(v) => updateCompany("contactLastName", v)} error={companyErrors.contactLastName} required />
-              <Field id="contact-email" label="Contact e-mail" type="email" value={companyForm.contactEmail} onChange={(v) => updateCompany("contactEmail", v)} error={companyErrors.contactEmail} required />
+              <Field id="first-name" name="given-name" autoComplete="given-name" label="Voornaam" value={companyForm.contactFirstName} onChange={(v) => updateCompany("contactFirstName", v)} error={companyErrors.contactFirstName} required />
+              <Field id="last-name" name="family-name" autoComplete="family-name" label="Achternaam" value={companyForm.contactLastName} onChange={(v) => updateCompany("contactLastName", v)} error={companyErrors.contactLastName} required />
+              <Field id="contact-email" name="email" autoComplete="email" label="Contact e-mail" type="email" value={companyForm.contactEmail} onChange={(v) => updateCompany("contactEmail", v)} error={companyErrors.contactEmail} required />
               <div className="grid grid-cols-[auto_1fr] gap-2">
                 <CountryCodeField value={companyForm.contactCountryCode} onChange={(v) => updateCompany("contactCountryCode", v)} error={companyErrors.contactCountryCode} />
-                <Field id="contact-phone" label="Telefoonnummer" inputMode="tel" placeholder="612345678" value={companyForm.contactPhone} onChange={(v) => updateCompany("contactPhone", v)} error={companyErrors.contactPhone} required />
+                <Field id="contact-phone" name="tel-national" autoComplete="tel-national" label="Telefoonnummer" inputMode="tel" placeholder="612345678" value={companyForm.contactPhone} onChange={(v) => updateCompany("contactPhone", v)} error={companyErrors.contactPhone} required />
               </div>
             </div>
           </div>
@@ -296,12 +301,12 @@ export default function OnboardingWizard() {
             <StepHeader step={3} title="Bedrijf en BTW-status" subtitle="Dit bepaalt hoe we je vergoeding factureren." />
             <VatStatusField value={companyForm.vatStatus} onChange={(v) => updateCompany("vatStatus", v)} error={companyErrors.vatStatus} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="company-name" label={isParticulier ? "Naam" : "Bedrijfsnaam"} value={companyForm.companyName} onChange={(v) => updateCompany("companyName", v)} error={companyErrors.companyName} required />
+              <Field id="company-name" name="organization" autoComplete="organization" className="sm:col-span-2" label={isParticulier ? "Naam" : "Bedrijfsnaam"} description={invoiceNameHelp(isParticulier)} value={companyForm.companyName} onChange={(v) => updateCompany("companyName", v)} error={companyErrors.companyName} required />
               {!isParticulier && (
-                <Field id="kvk" label="KvK-nummer" inputMode="numeric" value={companyForm.kvk} onChange={(v) => updateCompany("kvk", v)} error={companyErrors.kvk} required />
+                <Field id="kvk" autoComplete="off" label="KvK-nummer" inputMode="numeric" value={companyForm.kvk} onChange={(v) => updateCompany("kvk", v)} error={companyErrors.kvk} required />
               )}
               {companyForm.vatStatus === "vat_liable" && (
-                <Field id="btw" label="BTW-nummer" placeholder="NL123456789B01" value={companyForm.btwNumber} onChange={(v) => updateCompany("btwNumber", v)} error={companyErrors.btwNumber} required />
+                <Field id="btw" autoComplete="off" label="BTW-nummer" placeholder="NL123456789B01" value={companyForm.btwNumber} onChange={(v) => updateCompany("btwNumber", v)} error={companyErrors.btwNumber} required />
               )}
             </div>
           </div>
@@ -311,10 +316,10 @@ export default function OnboardingWizard() {
           <div className="space-y-4">
             <StepHeader step={4} title="Factuurgegevens" subtitle="Waar sturen we de betaalspecificatie naartoe?" />
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field id="billing-street" className="sm:col-span-3" label={isParticulier ? "Adres" : "Factuuradres"} placeholder="Straat en huisnummer" value={companyForm.billingAddressStreet} onChange={(v) => updateCompany("billingAddressStreet", v)} error={companyErrors.billingAddressStreet} required />
-              <Field id="billing-postal" label="Postcode" value={companyForm.billingAddressPostal} onChange={(v) => updateCompany("billingAddressPostal", v)} error={companyErrors.billingAddressPostal} required />
-              <Field id="billing-city" className="sm:col-span-2" label="Plaats" value={companyForm.billingAddressCity} onChange={(v) => updateCompany("billingAddressCity", v)} error={companyErrors.billingAddressCity} required />
-              <Field id="invoice-email" className="sm:col-span-3" label="Factuurmail" type="email" value={companyForm.invoiceEmail} onChange={(v) => updateCompany("invoiceEmail", v)} error={companyErrors.invoiceEmail} required />
+              <Field id="billing-street" name="street-address" autoComplete="street-address" className="sm:col-span-3" label={isParticulier ? "Adres" : "Factuuradres"} placeholder="Straat en huisnummer" value={companyForm.billingAddressStreet} onChange={(v) => updateCompany("billingAddressStreet", v)} error={companyErrors.billingAddressStreet} required />
+              <Field id="billing-postal" name="postal-code" autoComplete="postal-code" label="Postcode" value={companyForm.billingAddressPostal} onChange={(v) => updateCompany("billingAddressPostal", v)} error={companyErrors.billingAddressPostal} required />
+              <Field id="billing-city" name="address-level2" autoComplete="address-level2" className="sm:col-span-2" label="Plaats" value={companyForm.billingAddressCity} onChange={(v) => updateCompany("billingAddressCity", v)} error={companyErrors.billingAddressCity} required />
+              <Field id="invoice-email" autoComplete="off" className="sm:col-span-3" label="Factuurmail" type="email" value={companyForm.invoiceEmail} onChange={(v) => updateCompany("invoiceEmail", v)} error={companyErrors.invoiceEmail} required />
             </div>
           </div>
         );
@@ -338,12 +343,17 @@ export default function OnboardingWizard() {
               </div>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="holder" className="sm:col-span-2" label="Naam rekeninghouder" value={bankForm.payoutAccountHolderName} onChange={(v) => updateBank("payoutAccountHolderName", v)} error={bankErrors.payoutAccountHolderName} required />
-              <Field id="iban" label="IBAN" placeholder="NL91ABNA0417164300" value={bankForm.payoutIban} onChange={(v) => updateBank("payoutIban", v)} error={bankErrors.payoutIban} required={!bankAlreadySaved} />
-              <Field id="bic" label="BIC (optioneel)" placeholder="Optioneel" value={bankForm.payoutBic} onChange={(v) => updateBank("payoutBic", v)} error={bankErrors.payoutBic} />
-              <Field id="bank-password" className="sm:col-span-2" label="Huidig wachtwoord" type="password" autoComplete="current-password" value={bankForm.currentPassword} onChange={(v) => updateBank("currentPassword", v)} error={bankErrors.currentPassword} required />
+              <Field id="holder" name="payout-account-holder" suppressManagers className="sm:col-span-2" label="Naam rekeninghouder" description="Meestal je bedrijfsnaam; pas aan als de rekening op een andere naam staat." value={bankForm.payoutAccountHolderName} onChange={(v) => updateBank("payoutAccountHolderName", v)} error={bankErrors.payoutAccountHolderName} required />
+              <Field id="iban" name="payout-iban" suppressManagers label="IBAN" placeholder="NL91ABNA0417164300" value={bankForm.payoutIban} onChange={(v) => updateBank("payoutIban", v)} error={bankErrors.payoutIban} required={!bankAlreadySaved} />
+              <Field id="bic" name="payout-bic" suppressManagers label="BIC (optioneel)" placeholder="Optioneel" value={bankForm.payoutBic} onChange={(v) => updateBank("payoutBic", v)} error={bankErrors.payoutBic} />
+              {/* Step-up: alleen bij het WIJZIGEN van een reeds opgeslagen uitbetaalrekening. Eerste keer: geen wachtwoord. */}
+              {bankAlreadySaved && (
+                <Field id="bank-password" className="sm:col-span-2" label="Huidig wachtwoord" type="password" autoComplete="current-password" value={bankForm.currentPassword} onChange={(v) => updateBank("currentPassword", v)} error={bankErrors.currentPassword} required />
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">Ter beveiliging vragen we je wachtwoord bij het opslaan van bankgegevens.</p>
+            {bankAlreadySaved && (
+              <p className="text-xs text-muted-foreground">Ter beveiliging bevestig je je wachtwoord bij het wijzigen van je uitbetaalrekening.</p>
+            )}
           </div>
         );
       case 6:

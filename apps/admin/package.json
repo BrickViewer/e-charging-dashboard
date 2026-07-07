@@ -12,6 +12,9 @@
   "dependencies": {
     "@azure/msal-browser": "^5.14.0",
     "@azure/msal-react": "^5.4.5",
+    "@zxcvbn-ts/core": "^4.1.2",
+    "@zxcvbn-ts/language-common": "^4.1.2",
+    "@zxcvbn-ts/language-en": "^4.1.1",
     "@tiptap/extension-image": "^3.26.0",
     "@tiptap/extension-link": "^3.26.0",
     "@tiptap/extension-placeholder": "^3.26.0",

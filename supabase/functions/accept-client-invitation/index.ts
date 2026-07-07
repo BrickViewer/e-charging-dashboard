@@ -41,8 +41,8 @@ Deno.serve(async (req: Request) => {
       if (!token || !password) {
         return json({ status: "error", message: "token + password verplicht" }, 400);
       }
-      if (password.length < 8) {
-        return json({ status: "error", message: "Wachtwoord minimaal 8 tekens" }, 400);
+      if (password.length < 10) {
+        return json({ status: "error", message: "Wachtwoord minimaal 10 tekens" }, 400);
       }
       return await handlePost(supabase, token, password);
     }

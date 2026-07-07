@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import logoBright from "@/assets/logo-bright.svg";
+import { evaluatePassword } from "@/lib/passwordStrength";
+import { PasswordStrengthMeter, usePasswordStrength } from "@/components/PasswordStrengthMeter";
 
 interface InvitationInfo {
   status: "valid" | "already_accepted" | "revoked" | "expired" | "not_found";
@@ -36,6 +38,7 @@ export default function InviteAccept() {
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const pwStrength = usePasswordStrength(password, [info?.email ?? "", info?.company_name ?? "", info?.contact_name ?? ""]);
 
   useEffect(() => {
     if (!token) {
@@ -73,8 +76,9 @@ export default function InviteAccept() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
-    if (password.length < 8) {
-      toast.error("Wachtwoord moet minimaal 8 tekens zijn");
+    const evalResult = await evaluatePassword(password, [info?.email ?? "", info?.company_name ?? "", info?.contact_name ?? ""]);
+    if (!evalResult.ok) {
+      toast.error(evalResult.warningNl ?? "Kies een sterker wachtwoord");
       return;
     }
     if (password !== confirmPw) {
@@ -168,6 +172,7 @@ export default function InviteAccept() {
                   setShowPassword={setShowPassword}
                   submitting={submitting}
                   onSubmit={handleSubmit}
+                  strength={pwStrength}
                 />
               )}
               {!loading && info?.status === "already_accepted" && (
@@ -232,6 +237,7 @@ function ValidState({
   setShowPassword,
   submitting,
   onSubmit,
+  strength,
 }: {
   info: InvitationInfo;
   password: string;
@@ -242,6 +248,7 @@ function ValidState({
   setShowPassword: (b: boolean) => void;
   submitting: boolean;
   onSubmit: (e: React.FormEvent) => void;
+  strength: ReturnType<typeof usePasswordStrength>;
 }) {
   return (
     <form onSubmit={onSubmit} className="space-y-6">
@@ -272,9 +279,9 @@ function ValidState({
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimaal 8 tekens"
+              placeholder="Minimaal 10 tekens"
               required
-              minLength={8}
+              minLength={10}
               autoComplete="new-password"
               className="pr-10"
             />
@@ -287,6 +294,7 @@ function ValidState({
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
+          <PasswordStrengthMeter result={strength.result} loading={strength.loading} />
         </div>
         <div>
           <Label htmlFor="confirm" className="text-sm font-medium">
@@ -299,7 +307,7 @@ function ValidState({
             onChange={(e) => setConfirmPw(e.target.value)}
             placeholder="Herhaal wachtwoord"
             required
-            minLength={8}
+            minLength={10}
             autoComplete="new-password"
             className="mt-1.5"
           />
@@ -308,7 +316,7 @@ function ValidState({
 
       <Button
         type="submit"
-        disabled={submitting || password.length < 8 || password !== confirmPw}
+        disabled={submitting || !strength.result.ok || password !== confirmPw}
         className="w-full"
       >
         {submitting ? (

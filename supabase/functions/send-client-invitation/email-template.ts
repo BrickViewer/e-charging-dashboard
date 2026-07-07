@@ -204,7 +204,7 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
                     <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">1. U kiest een wachtwoord en activeert het account.</td>
                   </tr>
                   <tr>
-                    <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">2. U vult contact-, factuur- en bankgegevens aan in Mijn gegevens.</td>
+                    <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">2. U vult contact-, factuur- en bankgegevens aan in het portaal.</td>
                   </tr>
                   <tr>
                     <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">3. E-Charging koppelt de juiste locaties aan uw klantprofiel.</td>
@@ -248,7 +248,7 @@ ${p.inviteUrl}
 
 Na activatie:
 1. U kiest een wachtwoord en activeert het account.
-2. U vult contact-, factuur- en bankgegevens aan in Mijn gegevens.
+2. U vult contact-, factuur- en bankgegevens aan in het portaal.
 3. E-Charging koppelt de juiste locaties aan uw klantprofiel.
 
 Deze uitnodiging vervalt over ${p.expiresInDays} dagen.

@@ -26,7 +26,7 @@ import type {
   AdminActivity,
   ClientInvitationSummary,
   ClientWithRelations,
-  QuarterlySettlement,
+  Settlement,
 } from "@/types/db";
 import {
   splitContactName,
@@ -328,7 +328,7 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
     }
   };
 
-  const typedSettlements = (settlements ?? []) as QuarterlySettlement[];
+  const typedSettlements = (settlements ?? []) as Settlement[];
   const typedActivity = (activity ?? []) as AdminActivity[];
   const typedInvitation = invitation as ClientInvitationSummary | null | undefined;
   const allCPs = (client.locations || []).flatMap((l) => l.charge_points || []);

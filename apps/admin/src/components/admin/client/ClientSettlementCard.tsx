@@ -7,7 +7,7 @@ import { formatEuro, formatNumber, settlementVat, settlementNetToTransfer } from
 import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
 import { FeeWaiverControl } from "@/components/admin/financial/FeeWaiverControl";
 import { toast } from "sonner";
-import type { ClientPaymentDetails, ClientWithRelations, Organization, QuarterlySettlement } from "@/types/db";
+import type { ClientPaymentDetails, ClientWithRelations, Organization, Settlement } from "@/types/db";
 import { settlementPeriodLabel } from "./clientDetailUtils";
 import { SettlementAdminStatusBadge } from "./SettlementAdminStatusBadge";
 
@@ -22,14 +22,14 @@ export function ClientSettlementCard({
   executeMoneyFlow,
   markEfluxReimbursed,
 }: {
-  settlement: QuarterlySettlement;
+  settlement: Settlement;
   client: ClientWithRelations;
   org: Organization | null | undefined;
   paymentDetails?: ClientPaymentDetails | null;
   approvingId: string | null;
   approveSettlement: (id: string) => void;
   unapproveSettlement: (id: string) => void;
-  executeMoneyFlow: (settlement: QuarterlySettlement) => void;
+  executeMoneyFlow: (settlement: Settlement) => void;
   markEfluxReimbursed: (id: string) => void;
 }) {
   const grossRevenue = Number(s.gross_revenue || 0);

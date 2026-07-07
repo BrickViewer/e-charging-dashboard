@@ -9,7 +9,7 @@ import {
   markSettlementInvoiceSent as markSettlementInvoiceSentRpc,
   markSettlementInvoicePaid as markSettlementInvoicePaidRpc,
 } from "@/services/settlements";
-import type { QuarterlySettlement } from "@/types/db";
+import type { Settlement } from "@/types/db";
 import { settlementCustomerCashflow } from "./clientDetailUtils";
 
 // Gedeelde afreken-acties voor de klantdetailpagina. `approvingId` blijft één gelifte waarde
@@ -52,7 +52,7 @@ export function useClientSettlementActions(id: string | undefined) {
     }
   };
 
-  const executeMoneyFlow = async (settlement: QuarterlySettlement) => {
+  const executeMoneyFlow = async (settlement: Settlement) => {
     const settlementId = settlement.id;
     setApprovingId(settlementId);
     try {

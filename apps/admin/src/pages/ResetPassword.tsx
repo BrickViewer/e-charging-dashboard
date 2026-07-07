@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { completePasswordReset } from "@/services/clientPaymentDetails";
 import { supabase } from "@/integrations/supabase/client";
+import { evaluatePassword } from "@/lib/passwordStrength";
+import { PasswordStrengthMeter, usePasswordStrength } from "@/components/PasswordStrengthMeter";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -16,13 +18,15 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const pwStrength = usePasswordStrength(newPassword);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
 
-    if (newPassword.length < 10) {
-      setError("Kies minimaal 10 tekens");
+    const evalResult = await evaluatePassword(newPassword);
+    if (!evalResult.ok) {
+      setError(evalResult.warningNl ?? "Kies een sterker wachtwoord");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -67,6 +71,7 @@ export default function ResetPassword() {
                 className="mt-2 portal-card"
                 required
               />
+              <PasswordStrengthMeter result={pwStrength.result} loading={pwStrength.loading} />
             </div>
 
             <div>
@@ -88,7 +93,7 @@ export default function ResetPassword() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={saving}>
+            <Button type="submit" className="w-full" disabled={saving || !pwStrength.result.ok}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Wachtwoord opslaan
             </Button>

@@ -3,7 +3,7 @@ import { settlementNetExcl } from "@/services/calculations";
 import type {
   ClientPaymentDetails,
   ClientWithRelations,
-  QuarterlySettlement,
+  Settlement,
 } from "@/types/db";
 
 export function splitContactName(name?: string | null) {
@@ -58,12 +58,12 @@ export function hasCompleteClientProfile(
 
 // Bruto vergoeding = client_payout. Blijft de bron voor de teken-routing (positief =
 // uitbetalen, negatief = incasso), want de netto (na activatie) klemt op ≥ 0.
-export const settlementCustomerCashflow = (settlement: QuarterlySettlement) =>
+export const settlementCustomerCashflow = (settlement: Settlement) =>
   Number(settlement.client_payout || 0);
 
 // Netto daadwerkelijk uitbetaald (excl-equivalent) = vergoeding − verrekende activatie,
 // via de gedeelde helper zodat het overeenkomt met de factuur "Netto over te boeken".
-export const settlementNetPaid = (settlement: QuarterlySettlement) =>
+export const settlementNetPaid = (settlement: Settlement) =>
   settlementNetExcl({
     clientPayout: Number(settlement.client_payout || 0),
     activationCost: Number(settlement.activation_cost || 0),
