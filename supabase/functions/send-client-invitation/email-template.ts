@@ -19,6 +19,17 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
   const fromName = escapeHtml(p.fromName);
   const heroUrl = escapeHtml(p.heroUrl);
   const clientNumber = typeof p.clientNumber === "number" ? `#${p.clientNumber}` : "Wordt gekoppeld";
+  // Particulier: bedrijfsnaam == contactnaam → "Beste X, Voor X is het portaal voorbereid" leest dubbelop.
+  // Dan een neutrale zin zonder de naam te herhalen.
+  const isPrivate =
+    !!p.companyName && !!p.contactName &&
+    p.companyName.trim().toLowerCase() === p.contactName.trim().toLowerCase();
+  const introHtml = isPrivate
+    ? "Uw E-Charging klantportaal staat klaar. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd."
+    : `Voor ${companyName} is het E-Charging klantportaal voorbereid. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd.`;
+  const introText = isPrivate
+    ? "Uw E-Charging klantportaal staat klaar."
+    : `Voor ${p.companyName} is het E-Charging klantportaal voorbereid.`;
 
   const html = `<!DOCTYPE html>
 <html lang="nl">
@@ -184,7 +195,7 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
                 Beste ${contactName},
               </p>
               <p class="mobile-body-copy" style="margin:0 0 20px; color:#cbd5e1; font-size:16px; line-height:1.7;">
-                Voor ${companyName} is het E-Charging klantportaal voorbereid. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd.
+                ${introHtml}
               </p>
 
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:28px 0;">
@@ -240,7 +251,7 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
 
   const text = `Beste ${p.contactName},
 
-Voor ${p.companyName} is het E-Charging klantportaal voorbereid.
+${introText}
 Klantnummer: ${clientNumber}
 
 Activeer uw account via deze link:
