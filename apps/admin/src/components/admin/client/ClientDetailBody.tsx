@@ -42,6 +42,7 @@ import { ClientOverviewTab } from "@/components/admin/client/ClientOverviewTab";
 import { ClientLocationsTab } from "@/components/admin/client/ClientLocationsTab";
 import { ClientFinancialTab } from "@/components/admin/client/ClientFinancialTab";
 import { ClientActivityTab } from "@/components/admin/client/ClientActivityTab";
+import { LinkLocationsDialog } from "@/components/admin/client/LinkLocationsDialog";
 
 // Klant-rij-updates lopen via één react-query-mutatie (i.p.v. losse supabase.from(...).update-calls
 // verspreid door de component) zodat de caches consistent invalideren.
@@ -83,6 +84,7 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
   const [sendingInvite, setSendingInvite] = useState(false);
   const [eraseDialogOpen, setEraseDialogOpen] = useState(false);
+  const [linkLocationOpen, setLinkLocationOpen] = useState(false);
   const [erasingClient, setErasingClient] = useState(false);
   const { approvingId, approveSettlement, unapproveSettlement, executeMoneyFlow, markEfluxReimbursed } =
     useClientSettlementActions(clientId);
@@ -529,7 +531,7 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
           paymentDetails={paymentDetails}
           sendingInvite={sendingInvite}
           onSendInvitation={handleSendInvitation}
-          onLinkLocation={() => navigate("/admin/locaties?filter=unlinked")}
+          onLinkLocation={() => setLinkLocationOpen(true)}
           onEdit={() => setIsEditing(true)}
         />
       )}
@@ -578,9 +580,13 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
           />
         </TabsContent>
 
-        {/* Tab 2: Locaties & Laadpunten — read-only, koppelen gebeurt via /admin/locaties */}
+        {/* Tab 2: Locaties & Laadpunten — koppelen via het zoekbare koppel-scherm (LinkLocationsDialog). */}
         <TabsContent value="locaties" className="space-y-4">
-          <ClientLocationsTab client={client} onNavigate={(path) => navigate(path)} />
+          <ClientLocationsTab
+            client={client}
+            onNavigate={(path) => navigate(path)}
+            onLinkLocation={() => setLinkLocationOpen(true)}
+          />
         </TabsContent>
 
         {/* Tab 3: Financieel — detail-breakdown per kwartaal */}
@@ -625,6 +631,13 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
           />
         </TabsContent>
       </Tabs>
+
+      <LinkLocationsDialog
+        clientId={clientId}
+        clientName={client.company_name}
+        open={linkLocationOpen}
+        onOpenChange={setLinkLocationOpen}
+      />
 
       <DeleteConfirmDialog
         open={eraseDialogOpen}

@@ -1,35 +1,48 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MapPin } from "lucide-react";
+import { MapPin, Plug } from "lucide-react";
 import type { ClientWithRelations } from "@/types/db";
 
 export function ClientLocationsTab({
   client,
   onNavigate,
+  onLinkLocation,
 }: {
   client: ClientWithRelations;
   onNavigate: (path: string) => void;
+  onLinkLocation?: () => void;
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-lg font-medium">Locaties ({(client.locations || []).length})</h3>
-        <Button variant="outline" onClick={() => onNavigate("/admin/locaties?filter=unlinked")}>
-          <MapPin className="w-4 h-4 mr-1" />
-          Naar Locaties-overzicht
-        </Button>
+        <div className="flex gap-2">
+          {onLinkLocation && (
+            <Button onClick={onLinkLocation}>
+              <Plug className="w-4 h-4 mr-1" />
+              Locatie koppelen
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => onNavigate("/admin/locaties?filter=unlinked")}>
+            <MapPin className="w-4 h-4 mr-1" />
+            Naar Locaties-overzicht
+          </Button>
+        </div>
       </div>
 
       {(client.locations || []).length === 0 && (
         <Card>
           <CardContent className="p-12 text-center text-muted-foreground">
-            Geen locaties gekoppeld aan deze klant. Koppel een locatie via het{" "}
-            <button
-              onClick={() => onNavigate("/admin/locaties")}
-              className="text-primary hover:underline"
-            >
-              Locaties-overzicht
-            </button>
+            Geen locaties gekoppeld aan deze klant.{" "}
+            {onLinkLocation ? (
+              <button onClick={onLinkLocation} className="text-primary hover:underline">
+                Koppel een locatie
+              </button>
+            ) : (
+              <button onClick={() => onNavigate("/admin/locaties")} className="text-primary hover:underline">
+                Locaties-overzicht
+              </button>
+            )}
             .
           </CardContent>
         </Card>
