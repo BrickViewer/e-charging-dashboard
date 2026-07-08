@@ -41,7 +41,10 @@ export function leadMgmtYearEstimate(
 // (hardware + installatie). 0 wanneer er nog geen offerte is.
 export function leadQuoteValue(lead: LeadWithTasks): number {
   const pq = primaryQuoteOf(lead);
-  if (!pq) return 0;
+  // Bij alleen-beheer (with_installation === false) is het eenmalige offertebedrag de
+  // activatie/onboarding — die wordt ingehouden op de eerste afrekening en telt NIET als
+  // pipeline-omzet. Alleen echte levering & installatie telt als eenmalige waarde.
+  if (!pq || pq.with_installation === false) return 0;
   return (Number(pq.total_hardware_cost) || 0) + (Number(pq.total_installation_cost) || 0);
 }
 

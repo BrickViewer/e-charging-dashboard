@@ -57,6 +57,11 @@ describe("leadQuoteValue", () => {
   it("is 0 zonder offerte", () => {
     expect(leadQuoteValue(mkLead({}))).toBe(0);
   });
+
+  it("negeert het eenmalige bedrag bij alleen-beheer (activatie telt niet als omzet)", () => {
+    const lead = mkLead({ quotes: [mkQuote({ total_installation_cost: 500, with_installation: false, with_management: true })] });
+    expect(leadQuoteValue(lead)).toBe(0);
+  });
 });
 
 describe("leadPipelineValue", () => {
@@ -72,5 +77,10 @@ describe("leadPipelineValue", () => {
 
   it("is 0 wanneer er niets bekend is", () => {
     expect(leadPipelineValue(mkLead({}), 180)).toBe(0);
+  });
+
+  it("bij alleen-beheer telt alleen de jaarschatting, niet de eenmalige activatie", () => {
+    const lead = mkLead({ quotes: [mkQuote({ total_installation_cost: 500, with_installation: false, with_management: true, num_charge_points: 10 })] });
+    expect(leadPipelineValue(lead, 180)).toBe(1800); // 0 activatie + 10×180
   });
 });
