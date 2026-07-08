@@ -35,9 +35,15 @@ Deno.serve(async (req) => {
     if (!blogPostId) return json({ status: "error", message: "blog_post_id ontbreekt" }, 400);
 
     const { data: post, error: postErr } = await sb
-      .from("blog_posts").select("id, slug, title, category, source_topic_id").eq("id", blogPostId).maybeSingle();
+      .from("blog_posts").select("id, slug, title, category, source_topic_id, cover_image_url").eq("id", blogPostId).maybeSingle();
     if (postErr) throw postErr;
     if (!post) return json({ status: "error", message: "Blog niet gevonden" }, 404);
+
+    // Idempotent: een bestaande omslag niet opnieuw genereren (cron-vangnet + keten-kick kunnen
+    // racen; dubbel Imagen-verbruik + weesbestanden). Expliciet vervangen = {force:true} of photo_url.
+    if (post.cover_image_url && body.force !== true && !photoUrl) {
+      return json({ status: "ok", action: "skipped_existing", url: post.cover_image_url });
+    }
 
     // Zoekwoord (voor de beeld-brief) via het gekoppelde onderwerp, indien aanwezig.
     let keyword: string | null = null;

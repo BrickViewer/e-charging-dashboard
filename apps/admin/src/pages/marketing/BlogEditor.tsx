@@ -19,7 +19,9 @@ import { RichTextEditor } from "@/components/marketing/RichTextEditor";
 import { useBlogPost, useCreateBlogPost, useUpdateBlogPost, useDeleteBlogPost, uploadBlogImage, BLOG_STATUSES } from "@/hooks/useBlogPosts";
 import { slugify, readingMinutes } from "@/lib/slug";
 import { useCategories } from "@/hooks/useCategories";
+import { useContentSettings } from "@/hooks/useContentPipeline";
 import { iconByName } from "@/lib/blogIcon";
+import { Score, ReviewStateBadge } from "@/components/marketing/ScoreBadge";
 
 type FaqItem = { question: string; answer: string };
 function imageDims(file: File): Promise<{ w: number; h: number }> {
@@ -37,6 +39,7 @@ export default function BlogEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const postQ = useBlogPost(id);
+  const contentSettingsQ = useContentSettings();
   const createMut = useCreateBlogPost();
   const updateMut = useUpdateBlogPost();
   const deleteMut = useDeleteBlogPost();
@@ -94,7 +97,8 @@ export default function BlogEditor() {
     if (!id) { toast.error("Sla de blog eerst op om een merk-omslag te genereren."); return; }
     setCoverGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("blog-cover", { body: { blog_post_id: id } });
+      // force: bewust vervangen — de edge skipt anders wanneer er al een omslag staat (idempotentie-guard).
+      const { data, error } = await supabase.functions.invoke("blog-cover", { body: { blog_post_id: id, force: true } });
       if (error) throw error;
       const r = data as { status: string; url?: string; width?: number; height?: number; message?: string };
       if (r.status !== "ok" || !r.url) throw new Error(r.message || "Genereren mislukt");
@@ -183,6 +187,21 @@ export default function BlogEditor() {
           </Button>
         </div>
       </div>
+
+      {/* AI-beoordeling van de kwaliteitspoort (alleen bij AI-gegenereerde/beoordeelde posts). */}
+      {id && postQ.data && (typeof postQ.data.quality_score === "number" || typeof postQ.data.seo_score === "number" || typeof postQ.data.aeo_score === "number") && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+          <span className="font-medium text-muted-foreground">AI-beoordeling</span>
+          {typeof postQ.data.quality_score === "number" && (
+            <Score label="Kwaliteit" v={postQ.data.quality_score}
+              good={contentSettingsQ.data?.settings?.autoblog_target_quality ?? 82}
+              ok={contentSettingsQ.data?.settings?.min_quality ?? 75} />
+          )}
+          {typeof postQ.data.seo_score === "number" && <Score label="SEO" v={postQ.data.seo_score} />}
+          {typeof postQ.data.aeo_score === "number" && <Score label="AEO" v={postQ.data.aeo_score} />}
+          {postQ.data.status === "concept" && <ReviewStateBadge state={postQ.data.review_state} />}
+        </div>
+      )}
 
       {id && !ready ? (
         <Skeleton className="h-96 w-full rounded-xl" />

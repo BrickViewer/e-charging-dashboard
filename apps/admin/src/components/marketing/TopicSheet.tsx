@@ -12,10 +12,11 @@ import { CheckCircle2, ExternalLink, Pencil, Rocket, Trash2, XCircle } from "luc
 import { useActiveCategories } from "@/hooks/useCategories";
 import { slugify } from "@/lib/slug";
 import {
-  useContentTopic, useUpdateTopic, useDeleteTopic, useContentKeywords, useGenerateBrief,
+  useContentTopic, useUpdateTopic, useDeleteTopic, useContentKeywords, useGenerateBrief, useContentSettings,
   TOPIC_STATUS_LABEL, SOURCE_LABEL, INTENT_LABEL,
 } from "@/hooks/useContentPipeline";
 import { useBlogPost, useUpdateBlogPost } from "@/hooks/useBlogPosts";
+import { Score, ReviewStateBadge } from "@/components/marketing/ScoreBadge";
 import DOMPurify from "dompurify";
 
 export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | null; open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -208,8 +209,12 @@ export function TopicSheet({ topicId, open, onOpenChange }: { topicId: string | 
 function DraftReviewPanel({ blogPostId, onPublished }: { blogPostId: string; onPublished: () => void }) {
   const postQ = useBlogPost(blogPostId);
   const update = useUpdateBlogPost();
+  const settingsQ = useContentSettings();
   const navigate = useNavigate();
   const post = postQ.data;
+  // Kwaliteitsdrempels van de publicatiepoort: doel (auto-publiceren) en vloer (min. om te publiceren).
+  const qGood = settingsQ.data?.settings?.autoblog_target_quality ?? 82;
+  const qOk = settingsQ.data?.settings?.min_quality ?? 75;
 
   if (!post) return <div className="space-y-2"><Skeleton className="h-6 w-full" /><Skeleton className="h-24 w-full" /></div>;
 
@@ -241,9 +246,13 @@ function DraftReviewPanel({ blogPostId, onPublished }: { blogPostId: string; onP
 
   return (
     <div className="space-y-3 rounded-lg border p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-foreground">Concept ter review</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-foreground">Concept ter review</p>
+          {!isPublished && <ReviewStateBadge state={post.review_state} />}
+        </div>
         <div className="flex items-center gap-2 text-[11px]">
+          {typeof post.quality_score === "number" && <Score label="Kwaliteit" v={post.quality_score} good={qGood} ok={qOk} />}
           {typeof post.seo_score === "number" && <Score label="SEO" v={post.seo_score} />}
           {typeof post.aeo_score === "number" && <Score label="AEO" v={post.aeo_score} />}
         </div>
@@ -281,11 +290,6 @@ function DraftReviewPanel({ blogPostId, onPublished }: { blogPostId: string; onP
       </div>
     </div>
   );
-}
-
-function Score({ label, v }: { label: string; v: number }) {
-  const cls = v >= 80 ? "text-green-600" : v >= 65 ? "text-amber-600" : "text-red-600";
-  return <span className={`font-semibold ${cls}`}>{label} {v}</span>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

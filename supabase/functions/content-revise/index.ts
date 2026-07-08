@@ -46,10 +46,20 @@ Deno.serve(async (req) => {
     // Alleen autoblog-CONCEPTEN herschrijven (idempotent: een reeds gepubliceerde post door een parallelle schakel = klaar).
     // In FINALIZE-modus mag de post juist wél gepubliceerd zijn (we werken hem in place bij).
     const { data: post } = await sb.from("blog_posts")
-      .select("id, slug, title, content, category, category_slug, category_slugs, source_topic_id, status, revise_count")
+      .select("id, slug, title, content, category, category_slug, category_slugs, source_topic_id, status, revise_count, cover_image_url")
       .eq("id", blogPostId).maybeSingle();
     if (!post) return json({ status: "not_found", message: "Post niet gevonden" });
     if (!finalize && post.status === "gepubliceerd") return json({ status: "already_published", blog_post_id: blogPostId });
+
+    // Omslag op KETEN-EINDES (published/kept_concept): async kick naar blog-cover (eigen 150s-budget;
+    // Imagen inline zou deze schakel over de edge-limiet duwen). Niet mid-keten — de cover bakt de
+    // titel in het beeld en die kan nog wijzigen. blog-cover skipt zelf als er al een cover staat.
+    const kickCoverIfMissing = async () => {
+      if (post.cover_image_url) return;
+      try {
+        await sb.rpc("invoke_edge_function", { fn_name: "blog-cover", body: { blog_post_id: blogPostId } });
+      } catch { /* best-effort */ }
+    };
 
     const { data: settingsRow } = await sb.from("content_engine_settings").select("id, settings").eq("is_active", true).limit(1).maybeSingle();
     const settings = (settingsRow?.settings ?? {}) as any;
@@ -138,7 +148,8 @@ Deno.serve(async (req) => {
         await sb.rpc("invoke_edge_function", { fn_name: "content-revise", body: { blog_post_id: blogPostId, iteration: iteration + 1, issues, missing_experience: missingExp } });
         return json({ status: "ok", action: "retry_json", blog_post_id: blogPostId, iteration, reason: e instanceof Error ? e.message.slice(0, 140) : "json", ms: Date.now() - runStart });
       }
-      // Keteneinde zonder publicatie (JSON bleef ongeldig): meld het, anders blijft dit onzichtbaar.
+      // Keteneinde zonder publicatie (JSON bleef ongeldig): omslag alsnog + melding.
+      await kickCoverIfMissing();
       await notifyContentEngine(settings, {
         kind: "kept_concept",
         title: post.title,
@@ -218,7 +229,7 @@ Deno.serve(async (req) => {
       audit = { seo_score: draft.seo_score, aeo_score: draft.aeo_score, quality_score: draft.quality_score, has_information_gain: false, has_first_hand_signal: false, issues: [], missing_experience: [], verdict: "revise" as const };
     }
     // Auditor-scores gezaghebbend op de post + het onderwerp.
-    await sb.from("blog_posts").update({ seo_score: audit.seo_score, aeo_score: audit.aeo_score }).eq("id", blogPostId);
+    await sb.from("blog_posts").update({ seo_score: audit.seo_score, aeo_score: audit.aeo_score, quality_score: audit.quality_score }).eq("id", blogPostId);
     if (post.source_topic_id) await sb.from("content_topics").update({ quality_score: audit.quality_score }).eq("id", post.source_topic_id);
 
     const q = audit.quality_score, seo = audit.seo_score, aeo = audit.aeo_score;
@@ -231,6 +242,7 @@ Deno.serve(async (req) => {
     const publish = async (reason: string) => {
       await sb.from("blog_posts").update({ status: "gepubliceerd", published_at: new Date().toISOString(), review_state: "approved" }).eq("id", blogPostId);
       if (post.source_topic_id) await sb.from("content_topics").update({ status: "published" }).eq("id", post.source_topic_id);
+      await kickCoverIfMissing();
       return json({ status: "ok", action: "published", reason, blog_post_id: blogPostId, iteration, scores: { q, seo, aeo }, verdict: audit.verdict, ms: Date.now() - runStart });
     };
 
@@ -248,7 +260,9 @@ Deno.serve(async (req) => {
     // MAX bereikt: publiceer de best-mogelijke versie zolang 'ie boven de (lage) vloer zit. Na maximaal herschrijven
     // is dit zo goed als het wordt en de gebruiker wil geen omkijken → publiceren, niet als concept laten hangen.
     if (scored && (q as number) >= FLOOR) return await publish("floor_after_max");
-    // Keteneinde zonder publicatie: zonder melding blijft dit onzichtbaar tot iemand de blog mist.
+    // Keteneinde zonder publicatie: omslag alsnog genereren (reviewer ziet het eindresultaat mét
+    // beeld, en bij latere handmatige publicatie staat de cover al klaar) + melding sturen.
+    await kickCoverIfMissing();
     await notifyContentEngine(settings, {
       kind: "kept_concept",
       title: draft.title ?? post.title,

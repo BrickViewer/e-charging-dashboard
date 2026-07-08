@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useBlogPosts, BLOG_STATUSES } from "@/hooks/useBlogPosts";
 import { useContentSettings } from "@/hooks/useContentPipeline";
+import { ScoreLine, ReviewStateBadge } from "@/components/marketing/ScoreBadge";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   concept: { label: "Concept", cls: "bg-zinc-100 text-zinc-600" },
@@ -114,10 +115,13 @@ export default function MarketingBlogs() {
                     <span className="truncate font-medium text-foreground">{p.title || "(zonder titel)"}</span>
                     {p.featured && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st.cls}`}>{st.label}</span>
+                    {p.status === "concept" && <ReviewStateBadge state={p.review_state} />}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {[p.category, ...(p.tags ?? [])].filter(Boolean).join(" · ") || "Geen categorie"}
                   </p>
+                  <ScoreLine quality={p.quality_score} seo={p.seo_score} aeo={p.aeo_score}
+                    qualityGood={s?.autoblog_target_quality ?? 82} qualityOk={s?.min_quality ?? 75} />
                 </div>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {p.published_at ? new Date(p.published_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "concept"}

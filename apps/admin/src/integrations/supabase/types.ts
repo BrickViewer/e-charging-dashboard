@@ -14,54 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      feedback: {
-        Row: {
-          admin_notes: string | null
-          created_at: string
-          created_by: string
-          created_by_email: string | null
-          description: string
-          feedback_type: Database["public"]["Enums"]["feedback_type"]
-          id: string
-          page_url: string | null
-          resolved_at: string | null
-          resolved_by: string | null
-          screenshot_path: string | null
-          status: Database["public"]["Enums"]["feedback_status"]
-          updated_at: string
-        }
-        Insert: {
-          admin_notes?: string | null
-          created_at?: string
-          created_by?: string
-          created_by_email?: string | null
-          description: string
-          feedback_type: Database["public"]["Enums"]["feedback_type"]
-          id?: string
-          page_url?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          screenshot_path?: string | null
-          status?: Database["public"]["Enums"]["feedback_status"]
-          updated_at?: string
-        }
-        Update: {
-          admin_notes?: string | null
-          created_at?: string
-          created_by?: string
-          created_by_email?: string | null
-          description?: string
-          feedback_type?: Database["public"]["Enums"]["feedback_type"]
-          id?: string
-          page_url?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          screenshot_path?: string | null
-          status?: Database["public"]["Enums"]["feedback_status"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
       access_requests: {
         Row: {
           decided_at: string | null
@@ -149,6 +101,130 @@ export type Database = {
           },
         ]
       }
+      blog_categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon: string | null
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      blog_index_status: {
+        Row: {
+          blog_post_id: string | null
+          checked_at: string
+          coverage_state: string | null
+          google_canonical: string | null
+          indexing_state: string | null
+          last_crawl_time: string | null
+          page_fetch_state: string | null
+          robots_state: string | null
+          url: string
+          verdict: string | null
+        }
+        Insert: {
+          blog_post_id?: string | null
+          checked_at?: string
+          coverage_state?: string | null
+          google_canonical?: string | null
+          indexing_state?: string | null
+          last_crawl_time?: string | null
+          page_fetch_state?: string | null
+          robots_state?: string | null
+          url: string
+          verdict?: string | null
+        }
+        Update: {
+          blog_post_id?: string | null
+          checked_at?: string
+          coverage_state?: string | null
+          google_canonical?: string | null
+          indexing_state?: string | null
+          last_crawl_time?: string | null
+          page_fetch_state?: string | null
+          robots_state?: string | null
+          url?: string
+          verdict?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_index_status_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blog_metrics: {
+        Row: {
+          blog_post_id: string | null
+          clicks: number
+          ctr: number
+          date: string
+          id: number
+          impressions: number
+          page_url: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          blog_post_id?: string | null
+          clicks?: number
+          ctr?: number
+          date: string
+          id?: never
+          impressions?: number
+          page_url: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          blog_post_id?: string | null
+          clicks?: number
+          ctr?: number
+          date?: string
+          id?: never
+          impressions?: number
+          page_url?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_metrics_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blog_posts: {
         Row: {
           aeo_score: number | null
@@ -156,6 +232,7 @@ export type Database = {
           canonical_url: string | null
           category: string | null
           category_slug: string | null
+          category_slugs: string[]
           content: string | null
           cover_image_alt: string | null
           cover_image_height: number | null
@@ -167,14 +244,18 @@ export type Database = {
           faq: Json
           featured: boolean
           generated_by: string | null
+          hero_image_alt: string | null
+          hero_image_url: string | null
           id: string
           internal_link_suggestions: Json
           meta_variants: Json
           noindex: boolean
           organization_id: string
           published_at: string | null
+          quality_score: number | null
           reading_minutes: number | null
           review_state: string
+          revise_count: number
           seo_description: string | null
           seo_score: number | null
           seo_title: string | null
@@ -191,6 +272,7 @@ export type Database = {
           canonical_url?: string | null
           category?: string | null
           category_slug?: string | null
+          category_slugs?: string[]
           content?: string | null
           cover_image_alt?: string | null
           cover_image_height?: number | null
@@ -202,14 +284,18 @@ export type Database = {
           faq?: Json
           featured?: boolean
           generated_by?: string | null
+          hero_image_alt?: string | null
+          hero_image_url?: string | null
           id?: string
           internal_link_suggestions?: Json
           meta_variants?: Json
           noindex?: boolean
           organization_id?: string
           published_at?: string | null
+          quality_score?: number | null
           reading_minutes?: number | null
           review_state?: string
+          revise_count?: number
           seo_description?: string | null
           seo_score?: number | null
           seo_title?: string | null
@@ -226,6 +312,7 @@ export type Database = {
           canonical_url?: string | null
           category?: string | null
           category_slug?: string | null
+          category_slugs?: string[]
           content?: string | null
           cover_image_alt?: string | null
           cover_image_height?: number | null
@@ -237,14 +324,18 @@ export type Database = {
           faq?: Json
           featured?: boolean
           generated_by?: string | null
+          hero_image_alt?: string | null
+          hero_image_url?: string | null
           id?: string
           internal_link_suggestions?: Json
           meta_variants?: Json
           noindex?: boolean
           organization_id?: string
           published_at?: string | null
+          quality_score?: number | null
           reading_minutes?: number | null
           review_state?: string
+          revise_count?: number
           seo_description?: string | null
           seo_score?: number | null
           seo_title?: string | null
@@ -268,6 +359,53 @@ export type Database = {
             columns: ["source_topic_id"]
             isOneToOne: false
             referencedRelation: "content_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blog_query_metrics: {
+        Row: {
+          blog_post_id: string | null
+          clicks: number
+          ctr: number
+          id: number
+          impressions: number
+          page_url: string
+          position: number
+          query: string
+          snapshot_date: string
+          updated_at: string
+        }
+        Insert: {
+          blog_post_id?: string | null
+          clicks?: number
+          ctr?: number
+          id?: never
+          impressions?: number
+          page_url: string
+          position?: number
+          query: string
+          snapshot_date: string
+          updated_at?: string
+        }
+        Update: {
+          blog_post_id?: string | null
+          clicks?: number
+          ctr?: number
+          id?: never
+          impressions?: number
+          page_url?: string
+          position?: number
+          query?: string
+          snapshot_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_query_metrics_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
             referencedColumns: ["id"]
           },
         ]
@@ -869,8 +1007,8 @@ export type Database = {
           erasure_reason: string | null
           ere_arranged_at: string | null
           ere_arranged_by: string | null
-          ere_requested_at: string | null
           ere_rate_per_kwh: number | null
+          ere_requested_at: string | null
           id: string
           kvk: string | null
           managed: boolean
@@ -921,8 +1059,8 @@ export type Database = {
           erasure_reason?: string | null
           ere_arranged_at?: string | null
           ere_arranged_by?: string | null
-          ere_requested_at?: string | null
           ere_rate_per_kwh?: number | null
+          ere_requested_at?: string | null
           id?: string
           kvk?: string | null
           managed?: boolean
@@ -973,8 +1111,8 @@ export type Database = {
           erasure_reason?: string | null
           ere_arranged_at?: string | null
           ere_arranged_by?: string | null
-          ere_requested_at?: string | null
           ere_rate_per_kwh?: number | null
+          ere_requested_at?: string | null
           id?: string
           kvk?: string | null
           managed?: boolean
@@ -1221,6 +1359,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "configurator_sessions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list_v"
             referencedColumns: ["id"]
           },
           {
@@ -1944,6 +2089,54 @@ export type Database = {
         }
         Relationships: []
       }
+      feedback: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          created_by: string
+          created_by_email: string | null
+          description: string
+          feedback_type: Database["public"]["Enums"]["feedback_type"]
+          id: string
+          page_url: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          screenshot_path: string | null
+          status: Database["public"]["Enums"]["feedback_status"]
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          created_by?: string
+          created_by_email?: string | null
+          description: string
+          feedback_type: Database["public"]["Enums"]["feedback_type"]
+          id?: string
+          page_url?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          status?: Database["public"]["Enums"]["feedback_status"]
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          created_by?: string
+          created_by_email?: string | null
+          description?: string
+          feedback_type?: Database["public"]["Enums"]["feedback_type"]
+          id?: string
+          page_url?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          status?: Database["public"]["Enums"]["feedback_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       installation_orders: {
         Row: {
           client_id: string | null
@@ -2067,6 +2260,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "installation_orders_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list_v"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "installation_orders_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -2143,6 +2343,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list_v"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "lead_activities_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -2182,6 +2389,49 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_project_locations: {
+        Row: {
+          created_at: string
+          id: string
+          lead_id: string
+          project_location_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_id: string
+          project_location_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_id?: string
+          project_location_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_project_locations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_project_locations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_project_locations_project_location_id_fkey"
+            columns: ["project_location_id"]
+            isOneToOne: false
+            referencedRelation: "project_locations"
             referencedColumns: ["id"]
           },
         ]
@@ -2300,6 +2550,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "lead_tag_links_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list_v"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "lead_tag_links_tag_id_fkey"
             columns: ["tag_id"]
             isOneToOne: false
@@ -2392,6 +2649,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "lead_tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list_v"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "lead_tasks_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -2405,6 +2669,7 @@ export type Database = {
           address_street: string | null
           appointment_at: string | null
           appointment_notes: string | null
+          attribution: Json | null
           charger_type: string | null
           city: string | null
           company_id: string | null
@@ -2423,11 +2688,14 @@ export type Database = {
           estimated_kwh_per_month: number | null
           estimated_value: number | null
           expected_close_date: string | null
+          first_touch_at: string | null
+          first_touch_path: string | null
           grid_notes: string | null
           has_solar: boolean | null
           house_number: string | null
           id: string
           kvk: string | null
+          landing_page: string | null
           location_type: string | null
           lost_at: string | null
           lost_reason: string | null
@@ -2443,12 +2711,18 @@ export type Database = {
           position: number
           postal_code: string | null
           priority: string
+          referrer: string | null
           scope: string | null
           sector: string | null
           source: string
           stage_id: string | null
           status: string
           updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
           website: string | null
           won_at: string | null
         }
@@ -2456,6 +2730,7 @@ export type Database = {
           address_street?: string | null
           appointment_at?: string | null
           appointment_notes?: string | null
+          attribution?: Json | null
           charger_type?: string | null
           city?: string | null
           company_id?: string | null
@@ -2474,11 +2749,14 @@ export type Database = {
           estimated_kwh_per_month?: number | null
           estimated_value?: number | null
           expected_close_date?: string | null
+          first_touch_at?: string | null
+          first_touch_path?: string | null
           grid_notes?: string | null
           has_solar?: boolean | null
           house_number?: string | null
           id?: string
           kvk?: string | null
+          landing_page?: string | null
           location_type?: string | null
           lost_at?: string | null
           lost_reason?: string | null
@@ -2494,12 +2772,18 @@ export type Database = {
           position?: number
           postal_code?: string | null
           priority?: string
+          referrer?: string | null
           scope?: string | null
           sector?: string | null
           source?: string
           stage_id?: string | null
           status?: string
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           website?: string | null
           won_at?: string | null
         }
@@ -2507,6 +2791,7 @@ export type Database = {
           address_street?: string | null
           appointment_at?: string | null
           appointment_notes?: string | null
+          attribution?: Json | null
           charger_type?: string | null
           city?: string | null
           company_id?: string | null
@@ -2525,11 +2810,14 @@ export type Database = {
           estimated_kwh_per_month?: number | null
           estimated_value?: number | null
           expected_close_date?: string | null
+          first_touch_at?: string | null
+          first_touch_path?: string | null
           grid_notes?: string | null
           has_solar?: boolean | null
           house_number?: string | null
           id?: string
           kvk?: string | null
+          landing_page?: string | null
           location_type?: string | null
           lost_at?: string | null
           lost_reason?: string | null
@@ -2545,12 +2833,18 @@ export type Database = {
           position?: number
           postal_code?: string | null
           priority?: string
+          referrer?: string | null
           scope?: string | null
           sector?: string | null
           source?: string
           stage_id?: string | null
           status?: string
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           website?: string | null
           won_at?: string | null
         }
@@ -2567,6 +2861,13 @@ export type Database = {
             columns: ["converted_client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_lost_reason_id_fkey"
+            columns: ["lost_reason_id"]
+            isOneToOne: false
+            referencedRelation: "lead_lost_reasons"
             referencedColumns: ["id"]
           },
           {
@@ -2595,6 +2896,7 @@ export type Database = {
       locations: {
         Row: {
           address: string | null
+          archived_at: string | null
           city: string | null
           client_assigned_at: string | null
           client_id: string | null
@@ -2609,7 +2911,6 @@ export type Database = {
           longitude: number | null
           name: string | null
           parking_spots: number | null
-          archived_at: string | null
           postal_code: string | null
           property_type: string | null
           road_synced_at: string | null
@@ -2618,6 +2919,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          archived_at?: string | null
           city?: string | null
           client_assigned_at?: string | null
           client_id?: string | null
@@ -2640,6 +2942,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          archived_at?: string | null
           city?: string | null
           client_assigned_at?: string | null
           client_id?: string | null
@@ -2708,7 +3011,6 @@ export type Database = {
           address_street: string | null
           avg_annual_revenue_per_charge_point: number | null
           bic: string | null
-          lead_estimate_source: string
           btw_number: string | null
           country: string
           created_at: string
@@ -2732,6 +3034,7 @@ export type Database = {
           iban: string | null
           id: string
           kvk: string | null
+          lead_estimate_source: string
           logo_url: string | null
           name: string
           phone: string | null
@@ -2749,7 +3052,6 @@ export type Database = {
           address_street?: string | null
           avg_annual_revenue_per_charge_point?: number | null
           bic?: string | null
-          lead_estimate_source?: string
           btw_number?: string | null
           country?: string
           created_at?: string
@@ -2773,6 +3075,7 @@ export type Database = {
           iban?: string | null
           id?: string
           kvk?: string | null
+          lead_estimate_source?: string
           logo_url?: string | null
           name: string
           phone?: string | null
@@ -2790,7 +3093,6 @@ export type Database = {
           address_street?: string | null
           avg_annual_revenue_per_charge_point?: number | null
           bic?: string | null
-          lead_estimate_source?: string
           btw_number?: string | null
           country?: string
           created_at?: string
@@ -2814,6 +3116,7 @@ export type Database = {
           iban?: string | null
           id?: string
           kvk?: string | null
+          lead_estimate_source?: string
           logo_url?: string | null
           name?: string
           phone?: string | null
@@ -3049,6 +3352,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_locations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list_v"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_locations_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -3265,6 +3575,7 @@ export type Database = {
           internal_signer_function: string | null
           internal_signer_name: string | null
           internal_signer_user_id: string | null
+          is_private: boolean | null
           lead_id: string | null
           line_items: Json
           locations_data: Json | null
@@ -3283,19 +3594,24 @@ export type Database = {
           prospect_contact: string | null
           prospect_email: string | null
           quote_number: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejected_reason: string | null
+          rejected_reason_category: string | null
           revenue_share_pct: number | null
+          revision_of_quote_id: string | null
           sent_at: string | null
           signed_at: string | null
           signed_pdf_path: string | null
           signer_name: string | null
           solar_percentage: number | null
           status: string | null
+          superseded_by_quote_id: string | null
           tariff_data: Json | null
           total_hardware_cost: number | null
           total_installation_cost: number | null
           updated_at: string | null
           valid_until: string | null
-          is_private: boolean | null
           with_installation: boolean
           with_management: boolean
         }
@@ -3318,6 +3634,7 @@ export type Database = {
           internal_signer_function?: string | null
           internal_signer_name?: string | null
           internal_signer_user_id?: string | null
+          is_private?: boolean | null
           lead_id?: string | null
           line_items?: Json
           locations_data?: Json | null
@@ -3336,19 +3653,24 @@ export type Database = {
           prospect_contact?: string | null
           prospect_email?: string | null
           quote_number?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejected_reason?: string | null
+          rejected_reason_category?: string | null
           revenue_share_pct?: number | null
+          revision_of_quote_id?: string | null
           sent_at?: string | null
           signed_at?: string | null
           signed_pdf_path?: string | null
           signer_name?: string | null
           solar_percentage?: number | null
           status?: string | null
+          superseded_by_quote_id?: string | null
           tariff_data?: Json | null
           total_hardware_cost?: number | null
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
-          is_private?: boolean | null
           with_installation?: boolean
           with_management?: boolean
         }
@@ -3371,6 +3693,7 @@ export type Database = {
           internal_signer_function?: string | null
           internal_signer_name?: string | null
           internal_signer_user_id?: string | null
+          is_private?: boolean | null
           lead_id?: string | null
           line_items?: Json
           locations_data?: Json | null
@@ -3389,19 +3712,24 @@ export type Database = {
           prospect_contact?: string | null
           prospect_email?: string | null
           quote_number?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejected_reason?: string | null
+          rejected_reason_category?: string | null
           revenue_share_pct?: number | null
+          revision_of_quote_id?: string | null
           sent_at?: string | null
           signed_at?: string | null
           signed_pdf_path?: string | null
           signer_name?: string | null
           solar_percentage?: number | null
           status?: string | null
+          superseded_by_quote_id?: string | null
           tariff_data?: Json | null
           total_hardware_cost?: number | null
           total_installation_cost?: number | null
           updated_at?: string | null
           valid_until?: string | null
-          is_private?: boolean | null
           with_installation?: boolean
           with_management?: boolean
         }
@@ -3428,6 +3756,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "quotes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list_v"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "quotes_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -3446,6 +3781,20 @@ export type Database = {
             columns: ["project_location_id"]
             isOneToOne: false
             referencedRelation: "project_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_revision_of_quote_id_fkey"
+            columns: ["revision_of_quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_superseded_by_quote_id_fkey"
+            columns: ["superseded_by_quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
             referencedColumns: ["id"]
           },
         ]
@@ -3627,6 +3976,7 @@ export type Database = {
           address_street: string | null
           appointment_at: string | null
           appointment_notes: string | null
+          attribution: Json | null
           charger_type: string | null
           city: string | null
           company_id: string | null
@@ -3645,6 +3995,8 @@ export type Database = {
           estimated_kwh_per_month: number | null
           estimated_value: number | null
           expected_close_date: string | null
+          first_touch_at: string | null
+          first_touch_path: string | null
           grid_notes: string | null
           has_open_order: boolean | null
           has_solar: boolean | null
@@ -3652,6 +4004,7 @@ export type Database = {
           id: string | null
           is_invoiced: boolean | null
           kvk: string | null
+          landing_page: string | null
           last_activity_at: string | null
           lifecycle: string | null
           location_type: string | null
@@ -3660,30 +4013,79 @@ export type Database = {
           lost_reason_id: string | null
           message_body: string | null
           message_subject: string | null
+          mgmt_in_scope: boolean | null
           notes: string | null
           organization_id: string | null
           owner_user_id: string | null
           owns_property: boolean | null
+          paal_count: number | null
           parking_spaces: number | null
           person_id: string | null
           position: number | null
           postal_code: string | null
           priority: string | null
+          quote_value: number | null
+          referrer: string | null
           scope: string | null
+          scope_effective: string | null
           sector: string | null
           source: string | null
           stage_id: string | null
           status: string | null
           tag_ids: string[] | null
           updated_at: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
           website: string | null
-          mgmt_in_scope: boolean | null
-          paal_count: number | null
-          quote_value: number | null
-          scope_effective: string | null
           won_at: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_converted_client_id_fkey"
+            columns: ["converted_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_lost_reason_id_fkey"
+            columns: ["lost_reason_id"]
+            isOneToOne: false
+            referencedRelation: "lead_lost_reasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "lead_stages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
@@ -3728,6 +4130,61 @@ export type Database = {
         Args: { p_location_id: string }
         Returns: number
       }
+      avg_echarging_revenue_per_charge_point: { Args: never; Returns: Json }
+      blog_categories_overview: {
+        Args: never
+        Returns: {
+          description: string
+          icon: string
+          is_active: boolean
+          name: string
+          post_count: number
+          slug: string
+          sort_order: number
+        }[]
+      }
+      blog_index_status_overview: {
+        Args: never
+        Returns: {
+          blog_post_id: string | null
+          checked_at: string
+          coverage_state: string | null
+          google_canonical: string | null
+          indexing_state: string | null
+          last_crawl_time: string | null
+          page_fetch_state: string | null
+          robots_state: string | null
+          url: string
+          verdict: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "blog_index_status"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      blog_performance_overview: {
+        Args: never
+        Returns: {
+          avg_position: number
+          blog_post_id: string
+          category: string
+          clicks_28d: number
+          clicks_all: number
+          impressions_28d: number
+          impressions_all: number
+          leads_count: number
+          pipeline_value: number
+          published_at: string
+          realized_recurring: number
+          slug: string
+          title: string
+          won_count: number
+          won_oneoff_value: number
+        }[]
+      }
+      complete_portal_onboarding: { Args: never; Returns: undefined }
       confirm_client_vat_status: {
         Args: { p_client_id: string; p_vat_status: string }
         Returns: {
@@ -3741,6 +4198,17 @@ export type Database = {
       content_apply_serp_gap: {
         Args: { p_gap: number; p_id: string; p_notes: string }
         Returns: undefined
+      }
+      content_cluster_performance: {
+        Args: never
+        Returns: {
+          clicks_28d: number
+          cluster: string
+          impressions_28d: number
+          leads: number
+          perf_score: number
+          posts: number
+        }[]
       }
       content_ingest_draft: {
         Args: {
@@ -3811,7 +4279,55 @@ export type Database = {
         Args: { p_only_unmatched?: boolean; p_threshold?: number }
         Returns: number
       }
+      content_proof_stats: { Args: never; Returns: Json }
       content_recluster_keywords: { Args: never; Returns: number }
+      content_select_autoblog_topics: {
+        Args: { p_limit?: number }
+        Returns: {
+          aeo_score: number | null
+          agenda_at: string | null
+          assigned_category: string | null
+          assigned_category_slug: string | null
+          background: string | null
+          blog_post_id: string | null
+          brief_generated_at: string | null
+          conversation_question: string | null
+          created_at: string
+          created_by: string | null
+          dedup_of: string | null
+          discussed_at: string | null
+          generated_by: string | null
+          id: string
+          match_strength: number | null
+          matched_keyword_id: string | null
+          novelty_key: string
+          novelty_score: number | null
+          organization_id: string
+          quality_score: number | null
+          raw_summary: string | null
+          raw_title: string
+          rejected_reason: string | null
+          reviewer_notes: string | null
+          scheduled_for: string | null
+          seo_opportunity: number | null
+          seo_score: number | null
+          source_name: string | null
+          source_published_at: string | null
+          source_type: string
+          source_url: string | null
+          status: string
+          suggested_angle: string | null
+          target_cluster: string | null
+          target_keyword: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "content_topics"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       create_activity_log: {
         Args: {
           action: string
@@ -3845,6 +4361,7 @@ export type Database = {
         }
         Returns: Json
       }
+      create_order_from_quote: { Args: { p_quote_id: string }; Returns: string }
       erase_client_for_privacy: {
         Args: { p_client_id: string; p_performed_by: string; p_reason: string }
         Returns: Json
@@ -3894,6 +4411,7 @@ export type Database = {
       get_portal_dashboard_kpis: {
         Args: never
         Returns: {
+          activation_cost: number
           co2_kg_avoided: number
           ere_estimate: number
           estimated_client_yield: number
@@ -3904,6 +4422,7 @@ export type Database = {
           status: string
           total_customer_cashflow: number
           total_kwh: number
+          vat_rate: number
           year: number
         }[]
       }
@@ -3964,6 +4483,14 @@ export type Database = {
         Args: { body?: Json; fn_name: string }
         Returns: number
       }
+      mark_ere_arranged: {
+        Args: { p_client_id: string }
+        Returns: {
+          ere_arranged_at: string
+          ere_requested_at: string
+          id: string
+        }[]
+      }
       mark_settlements_eflux_reimbursed: {
         Args: { settlement_ids: string[] }
         Returns: {
@@ -3991,6 +4518,7 @@ export type Database = {
       monthly_financial_overview: {
         Args: { p_year?: number }
         Returns: {
+          activation_total: number
           assigned_reimb: number
           cnt_approved: number
           cnt_calculated: number
@@ -4247,6 +4775,8 @@ export const Constants = {
         "automatisch_hersteld",
         "vals_alarm",
       ],
+      feedback_status: ["open", "in_behandeling", "opgelost"],
+      feedback_type: ["bug", "idee", "vraag"],
     },
   },
 } as const

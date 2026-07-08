@@ -10,6 +10,7 @@ export const BLOG_STATUSES = ["concept", "gepubliceerd", "gearchiveerd"] as cons
 export type BlogListItem = Pick<
   BlogPost,
   "id" | "slug" | "title" | "excerpt" | "status" | "category" | "tags" | "featured" | "cover_image_url" | "published_at" | "updated_at" | "author_name"
+  | "quality_score" | "seo_score" | "aeo_score" | "review_state"
 >;
 
 export function useBlogPosts() {
@@ -18,7 +19,7 @@ export function useBlogPosts() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("blog_posts")
-        .select("id, slug, title, excerpt, status, category, tags, featured, cover_image_url, published_at, updated_at, author_name")
+        .select("id, slug, title, excerpt, status, category, tags, featured, cover_image_url, published_at, updated_at, author_name, quality_score, seo_score, aeo_score, review_state")
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as BlogListItem[];

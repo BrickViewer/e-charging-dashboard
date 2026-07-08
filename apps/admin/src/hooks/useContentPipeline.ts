@@ -255,6 +255,8 @@ export type ContentEngineSettings = {
   last_autoblog_at?: string;
   autoblog_schedule?: { days: number[]; hour: number };
   notify_email?: string;
+  autoblog_target_quality?: number;
+  autoblog_target_seo_aeo?: number;
 };
 
 // ---- Zoekvragen van de doelgroep (content_keywords, Laag A) ----
