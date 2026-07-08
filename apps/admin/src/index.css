@@ -137,7 +137,7 @@
      gradiënten of glas; bewust hetzelfde palet als de admin-:root voor
      merkcoherentie. Activeer met klasse "portal-theme light". */
   .portal-theme.light {
-    --background: 0 0% 96%;
+    --background: 0 0% 97%;
     --foreground: 0 0% 15%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 15%;
@@ -169,7 +169,7 @@
     --gauge-red: 350 88% 38%;
     --gauge-blue: 200 100% 30%;
     --gauge-green: 118 100% 24%;
-    --gauge-track: 0 0% 82%;      /* zichtbaar maar terughoudend spoor */
+    --gauge-track: 0 0% 83%;      /* zichtbaar maar terughoudend spoor */
     --gauge-glow-opacity: 0;      /* vlak: geen blur-gloed rond de bogen */
 
     /* Statusaccenten — diepe, leesbare varianten (≥5:1 op card); tegel-tinten
@@ -191,10 +191,10 @@
     /* Cockpit-arc — bijna-vlak neutraal verloop dat exact op de
        pagina-achtergrond landt: structuur zonder satijn of gloed. */
     --arc-hood-1: 0 0% 85%;
-    --arc-hood-2: 0 0% 88%;
-    --arc-hood-3: 0 0% 92%;
-    --arc-hood-4: 0 0% 95%;
-    --arc-hood-end: 0 0% 96%;
+    --arc-hood-2: 0 0% 89%;
+    --arc-hood-3: 0 0% 93%;
+    --arc-hood-4: 0 0% 96%;
+    --arc-hood-end: 0 0% 97%;
     --arc-shine-opacity: 0;
     --arc-glow: 0 0% 96%;
     --arc-shadow: 0 0% 40%;      /* minimale neutrale penumbra */
@@ -559,12 +559,30 @@
     transform: translateY(-1px);
   }
 
-  /* Dagmodus — geen neon: vlak groen icoon met lichte groene chip-vulling */
+  /* Dagmodus — merkgroene lijn-iconen zoals op het visitekaartje: groen in
+     rust, vol groen + lichte chip-vulling bij hover/actief. Geen neon. */
+  .portal-theme.light .portal-nav-link {
+    color: hsl(var(--primary) / 0.75);
+  }
+
+  /* Hover/actief expliciet vol groen (de rust-regel hierboven staat later
+     dan de basis-hoverregel en zou hem anders overrulen) */
+  .portal-theme.light .portal-nav-link:hover,
+  .portal-theme.light .portal-nav-link:focus-visible,
+  .portal-theme.light .portal-nav-link[data-active="true"] {
+    color: hsl(var(--gauge-green));
+  }
+
   .portal-theme.light .portal-nav-link:hover .portal-nav-icon,
   .portal-theme.light .portal-nav-link:focus-visible .portal-nav-icon,
   .portal-theme.light .portal-nav-link[data-active="true"] .portal-nav-icon {
-    fill: hsl(var(--primary) / 0.08);
+    fill: hsl(var(--primary) / 0.10);
     filter: none;
+  }
+
+  /* Terug-pijl in de rail volgt hetzelfde groen */
+  .portal-theme.light .portal-back-link {
+    color: hsl(var(--primary) / 0.65);
   }
 
   .portal-theme .portal-nav-link:active {
@@ -634,9 +652,9 @@
         6px 0 16px hsl(0 0% 0% / 0.05);
     }
 
-    /* Neutrale grijze iconen in rust (secundair-grijs uit het visitekaartje) */
+    /* Merkgroene lijn-iconen in rust — de groene iconen van het visitekaartje */
     .portal-theme.light .portal-nav-stack .portal-nav-link {
-      color: hsl(0 0% 42%);
+      color: hsl(var(--primary) / 0.75);
     }
 
     /* Hover/actief expliciet — de rust-regel hierboven is specifieker dan de
@@ -663,10 +681,12 @@
       filter: drop-shadow(0 0 8px hsl(var(--gauge-green) / 0.18));
     }
 
-    /* Dagmodus — dunne SOLIDE groene divider zonder gloed: het motief van
-       de groene lijn op het visitekaartje. */
+    /* Dagmodus — SOLIDE merkgroene divider zonder gloed: het motief van
+       de groene lijn op het visitekaartje, met wat meer presence (2px). */
     .portal-theme.light .portal-fixed-nav::after {
-      background: hsl(var(--gauge-green));
+      width: 2px;
+      border-radius: 999px;
+      background: hsl(var(--primary));
       filter: none;
     }
 
