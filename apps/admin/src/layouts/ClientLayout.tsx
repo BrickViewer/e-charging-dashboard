@@ -6,6 +6,8 @@ import { ThemeToggle } from "@/components/portal/ThemeToggle";
 import { StartConfiguratorButton } from "@/components/portal/StartConfiguratorButton";
 import { usePortalTheme } from "@/hooks/usePortalTheme";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
+import logoBright from "@/assets/logo-bright.svg";
+import logoFullColor from "@/assets/logo-full-color.svg";
 
 // Titels op sub-pad, zodat ze zowel onder /portal als /demo werken.
 const TITLES: Record<string, string> = {
@@ -53,8 +55,15 @@ export default function ClientLayout() {
             <span className="portal-demo-chip" aria-label="Demo-omgeving">Demo</span>
           </div>
         )}
-        <div className="flex-shrink-0 w-full pt-0">
+        <div className="relative flex-shrink-0 w-full pt-0">
           <CockpitArc className="h-[clamp(80px,14vh,240px)]" />
+          {/* Merk-anker op de kap — zelfde plek als de paginatitels op subpagina's.
+              Op breedte gemaat + items-center: de twee logo-SVG's hebben hetzelfde
+              merkteken (2000×399) maar full-color heeft 200px lucht boven/onder in
+              zijn viewBox; zo vallen beide varianten exact samen. */}
+          <div className="absolute inset-x-0 top-[clamp(10px,2.4vh,44px)] h-[clamp(20px,3vh,32px)] flex items-center justify-center px-4 pointer-events-none">
+            <img src={isLight ? logoFullColor : logoBright} alt="e-charging" className="w-[clamp(100px,15vh,160px)]" />
+          </div>
         </div>
         <div className="portal-fixed-nav">
           <NavIconBar />
