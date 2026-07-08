@@ -83,7 +83,7 @@ export default function ClientLayout() {
           <div className="relative h-[clamp(80px,14vh,240px)]">
             <CockpitArc className="absolute inset-0 w-full h-full" />
             {title && (
-              <div className="absolute inset-x-0 top-[clamp(20px,4.2vh,72px)] flex justify-center px-4">
+              <div className="absolute inset-x-0 top-[clamp(10px,2.4vh,44px)] flex justify-center px-4">
                 <h1 className="cockpit-title">{title}</h1>
               </div>
             )}
