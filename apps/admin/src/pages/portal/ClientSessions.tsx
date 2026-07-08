@@ -218,24 +218,28 @@ export default function ClientSessions() {
       <Card className="portal-card">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
+            {/* Mobiel: Duur-kolom verbergen (sm:) zodat de 4 kernkolommen zonder
+                afknijpen op een telefoon passen; nowrap houdt rijhoogtes gelijk */}
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left p-3 cockpit-section-label">Datum</th>
-                  <th className="text-left p-3 cockpit-section-label">Laadpunt</th>
-                  <th className="text-right p-3 cockpit-section-label">Duur</th>
+                  <th className="hidden sm:table-cell text-left p-3 cockpit-section-label">Laadpunt</th>
+                  <th className="hidden sm:table-cell text-right p-3 cockpit-section-label">Duur</th>
                   <th className="text-right p-3 cockpit-section-label">kWh</th>
-                  <th className="text-right p-3 cockpit-section-label">Vergoeding (excl. BTW)</th>
+                  <th className="text-right p-3 cockpit-section-label whitespace-nowrap">
+                    Vergoeding<span className="hidden sm:inline"> (excl. BTW)</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {paged.map((s) => (
                   <tr key={s.id} className="border-b border-border last:border-0 hover:bg-accent/40 transition-colors">
                     <td className="p-3">{s.started_at ? format(new Date(s.started_at), "d MMM yyyy HH:mm", { locale: nl }) : "-"}</td>
-                    <td className="p-3">{s.charge_point_name || "-"}</td>
-                    <td className="p-3 text-right tabular-nums">{s.duration_minutes ? `${Math.floor(s.duration_minutes / 60)}u ${s.duration_minutes % 60}m` : "-"}</td>
-                    <td className="p-3 text-right tabular-nums">{s.kwh_delivered != null ? Number(s.kwh_delivered).toLocaleString("nl-NL", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "-"}</td>
-                    <td className="p-3 text-right tabular-nums">€{Number(s.vergoeding || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="hidden sm:table-cell p-3">{s.charge_point_name || "-"}</td>
+                    <td className="hidden sm:table-cell p-3 text-right tabular-nums whitespace-nowrap">{s.duration_minutes ? `${Math.floor(s.duration_minutes / 60)}u ${s.duration_minutes % 60}m` : "-"}</td>
+                    <td className="p-3 text-right tabular-nums whitespace-nowrap">{s.kwh_delivered != null ? Number(s.kwh_delivered).toLocaleString("nl-NL", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "-"}</td>
+                    <td className="p-3 text-right tabular-nums whitespace-nowrap">€{Number(s.vergoeding || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
                 {showInitialLoading && (
