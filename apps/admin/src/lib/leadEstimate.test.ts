@@ -27,9 +27,14 @@ describe("estimateYearlyManagementRevenue", () => {
 });
 
 describe("leadMgmtYearEstimate", () => {
-  it("gebruikt num_charge_points van de offerte × gemiddelde", () => {
+  it("gebruikt de offerte-palen als terugval (lead heeft geen eigen schatting)", () => {
     const lead = mkLead({ quotes: [mkQuote({ num_charge_points: 10, with_management: true })] });
     expect(leadMgmtYearEstimate(lead, 180)).toBe(1800);
+  });
+
+  it("verkiest de lead-palen boven de offerte (offerte is slechts terugval)", () => {
+    const lead = mkLead({ estimated_charge_points: 4, quotes: [mkQuote({ num_charge_points: 1, with_management: true })] });
+    expect(leadMgmtYearEstimate(lead, 180)).toBe(720); // 4×180, niet 1×180
   });
 
   it("valt terug op estimated_charge_points zonder offerte", () => {

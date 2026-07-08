@@ -25,14 +25,15 @@ function primaryQuoteOf(lead: LeadWithTasks): LeadQuoteMini | null {
 }
 
 // De geschatte jaarlijkse beheeropbrengst voor één lead: gem. service-fee-omzet per paal
-// × aantal palen op de offerte (num_charge_points, anders estimated_charge_points), maar
-// alleen wanneer beheer in scope zit. Eén bron voor kaart, detailpaneel én pijplijn.
+// × aantal palen van de LEAD (estimated_charge_points), anders de offerte (num_charge_points),
+// maar alleen wanneer beheer in scope zit. De lead is leidend (bewerkbaar op het lead-detail);
+// de offerte is slechts terugval. Eén bron voor kaart, detailpaneel én pijplijn.
 export function leadMgmtYearEstimate(
   lead: LeadWithTasks,
   avgPerPaalPerYear: number | null | undefined,
 ): number | null {
   const pq = primaryQuoteOf(lead);
-  const palen = pq?.num_charge_points ?? lead.estimated_charge_points ?? null;
+  const palen = lead.estimated_charge_points ?? pq?.num_charge_points ?? null;
   const mgmtInScope = pq ? pq.with_management !== false : true;
   return mgmtInScope ? estimateYearlyManagementRevenue(palen, avgPerPaalPerYear) : null;
 }

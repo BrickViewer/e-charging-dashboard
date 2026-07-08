@@ -44,7 +44,7 @@ export function LeadCard({
   const scope = pq
     ? scopeFromFlags(pq.with_installation !== false, pq.with_management !== false)
     : (lead.scope as QuoteScope | null);
-  const palen = pq?.num_charge_points ?? lead.estimated_charge_points ?? null;
+  const palen = lead.estimated_charge_points ?? pq?.num_charge_points ?? null;
   const sentDate = pq?.sent_at ?? null;
   const { data: avgPerPaal } = useAvgRevenuePerChargePoint();
   // Installatie = hard offertebedrag; beheer = geschatte jaaropbrengst voor E-Charging
