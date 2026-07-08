@@ -48,6 +48,7 @@ Stijl (huisstijl - alle blogs lezen als een familie):
 - Gebruik GEEN gedachtestreepjes (em-dashes) in de tekst.
 - Verzin geen feiten. Gebruik alleen wat in de bron en de visie staat; als iets onbekend is, schrijf het algemeen.
 - content is geldige HTML (<h2>, <p>, <ul>, <table>, enz.), geen markdown, geen <html>/<head>/<body>.
+- excerpt: 1 tot 2 VOLLEDIGE zinnen (maximaal ±250 tekens) die de kern samenvatten; de excerpt wordt letterlijk als ondertitel getoond, dus eindig altijd met een afgeronde zin.
 - Plaats 3 tot 5 INTERNE LINKS INLINE in de lopende tekst als <a href="/kennisbank/<slug>">natuurlijke ankertekst</a>, ALLEEN naar aangeleverde slugs (verzin geen slugs); kies contextueel relevante ankerteksten (geen "klik hier"). Zet dezelfde links ook in internal_link_suggestions.
 
 Geef ook eerlijke kwaliteitsscores (0 tot 100):
@@ -62,6 +63,18 @@ export const clampScore = (n: any): number | null => {
   const v = Number(n);
   return Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : null;
 };
+
+// Excerpt-truncatie op WOORDGRENS: de site toont de excerpt 1-op-1 als ondertitel, dus een harde
+// slice(0,300) knipte mid-woord af ("…hoe u de juiste proc"). Knip op de laatste spatie vóór de
+// limiet, strip hangende leestekens en sluit af met een beletselteken.
+export function truncateExcerpt(s: string, max = 300): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const i = cut.lastIndexOf(" ");
+  const base = i > max * 0.6 ? cut.slice(0, i) : cut;
+  return base.replace(/[\s,;:.…-]+$/, "") + "…";
+}
 
 // Vangnet voor interne links: injecteert gevalideerde <a href="/kennisbank/<slug>"> in de HTML voor elke
 // suggestie die de schrijver NIET al inline heeft geplaatst. Vervangt alleen de eerste voorkomst van de
@@ -158,7 +171,7 @@ export function validateBlogJson(p: any, validSlugs: Set<string>, validCategoryS
   return {
     title: p.title.trim(),
     content: p.content,
-    excerpt: typeof p.excerpt === "string" ? p.excerpt.slice(0, 300) : null,
+    excerpt: typeof p.excerpt === "string" ? truncateExcerpt(p.excerpt) : null,
     seo_title: typeof p.seo_title === "string" ? p.seo_title : null,
     seo_description: typeof p.seo_description === "string" ? p.seo_description : null,
     tags, category_slugs, suggested_category, faq, meta_variants: meta, internal_link_suggestions: links,
@@ -243,6 +256,7 @@ Verbeter gericht:
 - Behoud en versterk de structuur: "In het kort:"-blok bovenaan, een vroege definitiezin, logische H2-koppen met answer-first (1-3 zinnen direct antwoord onder elke H2), waar zinvol een vergelijkingstabel (<table>), en een FAQ met precies 5 vragen.
 - Behoud de bestaande INTERNE LINKS (<a href="/kennisbank/<slug>">). Verweef de EIGEN PRAKTIJK als kwalitatieve observatie ("uit onze eigen praktijk blijkt dat ...") en trek daar een conclusie uit.
 - Zakelijk, neutraal en behulpzaam, NIET promotioneel. Spreek de lezer aan met "u", korte alinea's, actieve zinnen. Gebruik GEEN gedachtestreepjes (em-dashes). content is geldige HTML, geen markdown, geen <html>/<head>/<body>.
+- excerpt: 1 tot 2 VOLLEDIGE zinnen (maximaal ±250 tekens); wordt letterlijk als ondertitel getoond, dus eindig altijd met een afgeronde zin.
 
 IJZEREN REGEL - GEEN exacte platform- of interne cijfers: verwijder en gebruik NOOIT concrete interne cijfers uit ons eigen systeem (aantal laadpunten, aantal locaties, aantal laadsessies, kWh-hoeveelheden, euro-opbrengsten, bezettings-/groeipercentages van onszelf). Staan die in de HUIDIGE BLOG, herschrijf ze naar een kwalitatieve formulering zonder getal. De eigen praktijkstem is uitsluitend kwalitatief. Publiek gebronde marktcijfers (met bron+jaartal) mogen wel.
 
