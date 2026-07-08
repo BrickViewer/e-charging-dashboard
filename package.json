@@ -16,6 +16,7 @@
     "build:configurator": "npm run build -w @echarging/configurator",
     "build:dashboard": "npm run build:admin && npm run build:configurator && rm -rf apps/admin/dist/configurator && cp -r apps/configurator/dist apps/admin/dist/configurator",
     "build:packages": "npm run build -w @echarging/pricing-engine && npm run build -w @echarging/api-client && npm run build -w @echarging/ui-kit",
+    "deploy:dashboard": "npm run build:dashboard && sh scripts/deploy-dashboard.sh",
     "lint": "eslint .",
     "preview": "npm run preview -w @echarging/admin",
     "security:probe:live": "node scripts/security/live-rls-probe.mjs",

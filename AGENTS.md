@@ -214,14 +214,29 @@ Allemaal Deno, draaien op Supabase. Auth-handling per function:
 ## Commands
 
 ```bash
-npm run dev          # Vite dev server op localhost:8080
-npm run build        # Production build naar dist/
-npm run lint         # ESLint
-npm test             # Vitest run
-npx tsc --noEmit     # Type-check zonder build
+npm run dev              # Vite dev server op localhost:8080 (admin, tegen productie-Supabase)
+npm run dev:configurator # Configurator lokaal
+npm run build            # Production build naar dist/
+npm run deploy:dashboard # build:dashboard + wrangler-deploy naar dashboard.e-charging.nl (creds in root-.env)
+npm run lint             # ESLint
+npm test                 # Vitest run
+npx tsc --noEmit         # Type-check zonder build
 ```
 
 Supabase migrations + edge function deploys gebeuren via de Supabase MCP-tools (geen lokale supabase CLI flow ingesteld). Migration-bestanden in `supabase/migrations/` zijn historische snapshots.
+
+## Werkproces & deploys (afgesproken 2026-07-08, ijkpunt = tag `punt-0`)
+
+- **`main` = productie.** Wat op main staat is live of direct deploybaar; half werk komt nooit op main. Een push naar main deployt in deze repo NIETS automatisch (geen CI) — deployen is een bewust, handmatig moment.
+- **Werk per klus op een branch** (`feat/...` / `fix/...`), test lokaal met `npm run dev` (hot-reload, tegen de productie-Supabase — dus voorzichtig met destructieve acties), merge daarna naar main. Meerdere merges mogen zich op main opsparen tot één deploy. Typo's/tekstwijzigingen mogen direct op main.
+- **Deploy-ritueel, altijd in deze volgorde:**
+  1. **Migration** — als bestand in `supabase/migrations/` + toepassen via MCP `apply_migration`. Destructieve tests altijd in `BEGIN…ROLLBACK`; additief boven wijzigend. Cron-jobs NOOIT in een migration (out-of-band via `execute_sql`).
+  2. **Edge functions** — deployen via MCP `deploy_edge_function` (verify_jwt-stand behouden!), daarna smoke-testen via `invoke_edge_function`.
+  3. **Frontend** — `npm run deploy:dashboard` (bouwt admin + configurator en deployt via wrangler; Cloudflare-creds staan in de gitignored root-`.env`, ook in de Supabase Vault).
+  4. **Verificatie** — live bundle-hash checken + de gewijzigde flow echt aanraken.
+- **Frontend-types**: na een schemawijziging `types.ts` regenereren via MCP `generate_typescript_types` (output is JSON `{"types": "..."}` — uitpakken), nooit handmatig patchen.
+- ⚠️ **`deno check --node-modules-dir=auto` herschrijft de root-node_modules** (Deno-layout) en breekt de vite-build. Na een typecheck van edges altijd `rm -rf node_modules deno.lock && npm ci`.
+- De website-repo (`../e-charging-website`, www.e-charging.nl) heeft het omgekeerde deploymodel: push naar main = automatisch live. Zie de AGENTS.md daar.
 
 ## Conventions
 
