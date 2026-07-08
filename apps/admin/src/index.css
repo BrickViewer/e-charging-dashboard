@@ -681,12 +681,11 @@
       filter: drop-shadow(0 0 8px hsl(var(--gauge-green) / 0.18));
     }
 
-    /* Dagmodus — SOLIDE merkgroene divider zonder gloed: het motief van
-       de groene lijn op het visitekaartje, met wat meer presence (2px). */
+    /* Dagmodus — géén rail-divider: een harde groene streep vloekt met de
+       afgeronde hoek van het witte paneel. Het merkgroen zit in de iconen
+       en de actieve indicator; dat is de vlakke visitekaartjes-taal. */
     .portal-theme.light .portal-fixed-nav::after {
-      width: 2px;
-      border-radius: 999px;
-      background: hsl(var(--primary));
+      background: none;
       filter: none;
     }
 
