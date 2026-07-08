@@ -6,12 +6,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LogOut, ShieldAlert, RefreshCw } from "lucide-react";
 import logoBright from "@/assets/icon-bright.svg";
+import logoFullColor from "@/assets/icon-full-color.svg";
+import { usePortalThemeSync } from "@/hooks/usePortalTheme";
 
 // Geauthenticeerd (bv. via Microsoft, e-group) maar nog géén rol toegekend → nette
 // wachtpagina. Er staat automatisch een toegangsverzoek open; zodra een admin een rol
 // toekent, herlaadt de pagina zichzelf en komt de gebruiker in z'n werkblad.
 export default function NoAccess() {
   const { isLoading, user, role, signOut } = useAuth();
+  // Volg de dag/nacht-voorkeur van het apparaat (zelfde localStorage als het portaal).
+  const { isLight } = usePortalThemeSync();
 
   const { data: request } = useQuery({
     queryKey: ["my-access-request", user?.id],
@@ -35,9 +39,9 @@ export default function NoAccess() {
   const denied = request?.status === "denied";
 
   return (
-    <div className="portal-theme relative min-h-screen flex flex-col items-center justify-center gap-6 bg-background px-4 text-foreground">
-      <img src={logoBright} alt="E-Charging" className="h-10 w-auto opacity-90" />
-      <div className="portal-card max-w-md rounded-2xl bg-card/80 p-7 text-center backdrop-blur-md">
+    <div className={`portal-theme${isLight ? " light" : ""} relative min-h-screen flex flex-col items-center justify-center gap-6 bg-background px-4 text-foreground`}>
+      <img src={isLight ? logoFullColor : logoBright} alt="E-Charging" className="h-10 w-auto opacity-90" />
+      <div className={`portal-card max-w-md rounded-2xl p-7 text-center ${isLight ? "" : "bg-card/80 backdrop-blur-md"}`}>
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
           <ShieldAlert className="h-6 w-6" />
         </div>

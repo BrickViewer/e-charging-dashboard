@@ -421,7 +421,10 @@ export default function OnboardingWizard() {
           {/* Logo + merk */}
           <div className="flex flex-shrink-0 flex-col items-center">
             <div className="relative">
-              <div className="pointer-events-none absolute -inset-3 rounded-2xl bg-gradient-to-br from-primary/25 via-blue-400/10 to-transparent blur-xl" />
+              {/* Logo-aura is nachtdecor; dagmodus is vlak */}
+              {!isLight && (
+                <div className="pointer-events-none absolute -inset-3 rounded-2xl bg-gradient-to-br from-primary/25 via-blue-400/10 to-transparent blur-xl" />
+              )}
               <img src={isLight ? logoFullColor : logoBright} alt="E-Charging" className="relative h-8 w-auto sm:h-9" />
             </div>
             <p className="cockpit-title mt-5">Aanmelden</p>
@@ -437,19 +440,24 @@ export default function OnboardingWizard() {
                   i < step
                     ? "bg-primary"
                     : i === step
-                    ? "bg-primary shadow-[0_0_10px_hsl(118_100%_45%/0.6)]"
+                    ? `bg-primary${isLight ? "" : " shadow-[0_0_10px_hsl(118_100%_45%/0.6)]"}`
                     : "bg-border"
                 }`}
               />
             ))}
           </div>
 
-          {/* Gloed-kaart — krimpt bij een lange stap; de inhoud scrollt dan intern */}
+          {/* Kaart — nacht: gloed-rand + glas; dag: vlakke witte visitekaartje-kaart.
+              Krimpt bij een lange stap; de inhoud scrollt dan intern. */}
           <div className="relative flex min-h-0 flex-col">
-            <div className="pointer-events-none absolute -inset-px rounded-3xl bg-gradient-to-br from-primary/30 via-transparent to-blue-400/20" />
+            {!isLight && (
+              <div className="pointer-events-none absolute -inset-px rounded-3xl bg-gradient-to-br from-primary/30 via-transparent to-blue-400/20" />
+            )}
             <div
-              className="relative flex min-h-0 flex-col rounded-3xl border border-border/60 bg-card/80 backdrop-blur-md"
-              style={{ boxShadow: "0 0 60px rgba(5,165,0,0.06), 0 1px 0 rgba(255,255,255,0.04) inset" }}
+              className={`relative flex min-h-0 flex-col rounded-3xl border ${
+                isLight ? "border-border bg-card shadow-sm" : "border-border/60 bg-card/80 backdrop-blur-md"
+              }`}
+              style={isLight ? undefined : { boxShadow: "0 0 60px rgba(5,165,0,0.06), 0 1px 0 rgba(255,255,255,0.04) inset" }}
             >
               <div key={step} className="animate-fade-in overflow-y-auto overscroll-contain p-6 sm:p-8">
                 {renderStep()}
@@ -524,6 +532,20 @@ const wizardStyles = `
   box-shadow: 0 0 0 1px hsl(118 100% 40% / 0.4), 0 4px 12px hsl(118 100% 32% / 0.3);
 }
 .ignition-button:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* Dagmodus — solide merkgroene knop zonder gloed (visitekaartje-stijl) */
+.portal-theme.light .ignition-button {
+  background: hsl(var(--primary));
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.10);
+}
+.portal-theme.light .ignition-button:hover:not(:disabled) {
+  background: hsl(var(--primary-hover, var(--primary)));
+  box-shadow: 0 2px 6px hsl(0 0% 0% / 0.12);
+  transform: none;
+}
+.portal-theme.light .ignition-button:active:not(:disabled) {
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.10);
+}
 `;
 
 function StepHeader({ step, title, subtitle }: { step: number; title: string; subtitle: string }) {

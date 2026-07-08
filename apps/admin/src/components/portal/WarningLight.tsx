@@ -41,12 +41,12 @@ export function WarningLight({ count, variant }: WarningLightProps) {
     ? (count === 0 ? "Geen storingen" : `${count} ${woord} buiten gebruik`)
     : (count === 0 ? "Geen palen actief" : `${count} ${woord} actief`);
 
-  const iconClass = "w-9 h-9 flex-shrink-0";
+  // Gloed via CSS-klasse (.warning-light-active in index.css) zodat de
+  // dagmodus hem kan uitzetten; kleur als custom property voor de filter.
+  const iconClass = `w-9 h-9 flex-shrink-0${active ? " warning-light-active" : ""}`;
   const iconStyle: CSSProperties = {
     color: active ? `hsl(${colorHsl})` : "hsl(var(--muted-foreground) / 0.35)",
-    filter: active
-      ? `drop-shadow(0 0 10px hsl(${colorHsl} / 0.7)) drop-shadow(0 0 4px hsl(${colorHsl} / 0.5))`
-      : "none",
+    ["--wl-color" as string]: colorHsl,
     transition: "color 600ms ease, filter 600ms ease",
   };
 

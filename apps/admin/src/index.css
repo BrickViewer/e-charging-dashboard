@@ -128,46 +128,50 @@
     --arc-shadow: 0 0% 0%;     /* vignet/overhang-schaduwkleur */
     --arc-shadow-strength: 1;  /* opacity-multiplier voor schaduwlagen */
     --arc-seam: 132 42% 78%;   /* paneelnaden */
+    --arc-decor-opacity: 1;    /* decoratieve gloed-/rimlagen (uit in dagmodus) */
+    --arc-led-opacity: 0;      /* merkgroene LED-strip; dagmodus-equivalent van de rim */
   }
 
-  /* Portal — dagmodus "Daglicht-satijn": gedempt salie-porselein, één tint
-     dieper dan eerst (90%) zodat kap en rail er vloeiend in overlopen — de
-     dag-uitvoering van het nachtontwerp. Gauge-kleuren blijven identiek.
-     Activeer met klasse "portal-theme light". */
+  /* Portal — dagmodus "Visitekaartje": vlak en neutraal, naar het model van
+     de fysieke visitekaartjes — lichtgrijs canvas, zuiver witte vlakken,
+     antraciet tekst en merkgroen #05A500 als spaarzaam accent. Geen gloed,
+     gradiënten of glas; bewust hetzelfde palet als de admin-:root voor
+     merkcoherentie. Activeer met klasse "portal-theme light". */
   .portal-theme.light {
-    --background: 150 9% 90%;
-    --foreground: 165 12% 15%;
-    --card: 150 12% 95%;
-    --card-foreground: 165 12% 15%;
-    --popover: 150 12% 95%;
-    --popover-foreground: 165 12% 15%;
-    --secondary: 146 10% 88%;
-    --secondary-foreground: 165 12% 15%;
-    --muted: 148 9% 86%;
-    --muted-foreground: 160 9% 30%; /* 6.5:1 vol op bg 90%; ×0.85 nog ≥4.5:1 */
-    --accent: 144 12% 86%;
-    --accent-foreground: 165 12% 15%;
+    --background: 0 0% 97%;
+    --foreground: 0 0% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 15%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 15%;
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 35%; /* 6.6:1 op wit; ×0.85 gecomposiet nog ~4.9:1 */
+    --accent: 0 0% 93%;
+    --accent-foreground: 0 0% 15%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 148 9% 78%;
-    --input: 148 9% 78%;
-    --ring: 200 95% 45%;
-    --sidebar-background: 150 12% 96%;
-    --sidebar-foreground: 165 12% 15%;
-    --sidebar-primary: 200 95% 45%;
+    --border: 0 0% 86%;
+    --input: 0 0% 86%;
+    --ring: 118.2 100% 32.4%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 15%;
+    --sidebar-primary: 118.2 100% 32.4%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 146 10% 89%;
-    --sidebar-accent-foreground: 165 12% 15%;
-    --sidebar-border: 148 9% 80%;
-    --sidebar-ring: 200 95% 45%;
+    --sidebar-accent: 0 0% 95%;
+    --sidebar-accent-foreground: 0 0% 15%;
+    --sidebar-border: 0 0% 88%;
+    --sidebar-ring: 118.2 100% 32.4%;
 
-    /* Gauges — zelfde hue/sat als donker, alleen lightness omlaag: "dezelfde
-       wijzerplaat bij daglicht". Alle drie ≥4.9:1 op de achtergrond. */
+    /* Gauges — rood/blauw blijven functioneel diep; groen verhuist naar de
+       merk-hue (118 = #05A500-familie) voor kaartjes-coherentie. 24% zodat
+       hij óók als tekst ≥4.5:1 haalt op bg én card. Geen gloed. */
     --gauge-red: 350 88% 38%;
     --gauge-blue: 200 100% 30%;
-    --gauge-green: 140 70% 26%;
-    --gauge-track: 148 10% 70%;   /* zichtbaar maar terughoudend spoor */
-    --gauge-glow-opacity: 0.45;   /* diepe kleuren + volle blur = grauwe veeg → dimmen */
+    --gauge-green: 118 100% 24%;
+    --gauge-track: 0 0% 83%;      /* zichtbaar maar terughoudend spoor */
+    --gauge-glow-opacity: 0;      /* vlak: geen blur-gloed rond de bogen */
 
     /* Statusaccenten — diepe, leesbare varianten (≥5:1 op card); tegel-tinten
        iets sterker omdat lichte gronden ze perceptueel verzwakken */
@@ -179,27 +183,26 @@
 
     color-scheme: light;
 
-    /* Ambient gloed/vignet — dezelfde groene aura als nacht, maar in
-       daglicht-tinten; bindt shell, kap en rail tot één materiaalwereld */
-    --portal-glow-green: 138 48% 40%;
-    --portal-glow-bright: 136 60% 46%;
-    --portal-vignette: 155 14% 58%;
+    /* Glow-vars geneutraliseerd (vangnet voor gemiste referenties); de
+       shell-/rail-overrides hieronder zijn in dagmodus volledig vlak. */
+    --portal-glow-green: 0 0% 55%;
+    --portal-glow-bright: 0 0% 60%;
+    --portal-vignette: 0 0% 45%;
 
-    /* Cockpit-arc — "daglicht-satijn": satijnen verloop van gunmetal-sage
-       (60% boven) dat exact op de pagina-achtergrond landt — de naadloze
-       blend van het nachtontwerp, maar licht. Hue-reis 204→150 spiegelt
-       nacht 222→140. Zichtbaarheid uit toonsprong + gloed, niet uit donkerte;
-       de schaduw is een zachte penumbra (licht grafiet op 0.3). */
-    --arc-hood-1: 204 16% 60%;
-    --arc-hood-2: 196 14% 67%;
-    --arc-hood-3: 168 11% 77%;
-    --arc-hood-4: 152 10% 85%;
-    --arc-hood-end: 150 9% 90%;
-    --arc-shine-opacity: 0.20;
-    --arc-glow: 134 42% 46%;
-    --arc-shadow: 202 18% 38%;   /* licht grafiet i.p.v. zwart */
-    --arc-shadow-strength: 0.3;
-    --arc-seam: 162 14% 36%;
+    /* Cockpit-arc — bijna-vlak neutraal verloop dat exact op de
+       pagina-achtergrond landt: structuur zonder satijn of gloed. */
+    --arc-hood-1: 0 0% 85%;
+    --arc-hood-2: 0 0% 89%;
+    --arc-hood-3: 0 0% 93%;
+    --arc-hood-4: 0 0% 96%;
+    --arc-hood-end: 0 0% 97%;
+    --arc-shine-opacity: 0;
+    --arc-glow: 0 0% 96%;
+    --arc-shadow: 0 0% 40%;      /* minimale neutrale penumbra */
+    --arc-shadow-strength: 0.15;
+    --arc-seam: 0 0% 45%;
+    --arc-decor-opacity: 0;      /* gloed-/rimlagen van de kap uit */
+    --arc-led-opacity: 1;        /* merkgroene LED-strip langs de kaprand aan */
   }
 
   /* Portal-specific overrides */
@@ -235,20 +238,14 @@
       radial-gradient(ellipse at center, transparent 58%, hsl(var(--portal-vignette) / 0.34) 100%);
   }
 
-  /* Dagmodus — zelfde gelaagdheid als nacht: groene aura-radials over een
-     zachte groengrijze bottom-fade, zodat chrome en interieur één geheel zijn. */
+  /* Dagmodus — vlak visitekaartje-canvas: geen aura's, geen vignet. */
   .portal-theme.light.portal-shell {
-    background:
-      radial-gradient(ellipse at 72% 16%, hsl(var(--portal-glow-green) / 0.10) 0%, hsl(var(--portal-glow-green) / 0.045) 26%, transparent 50%),
-      radial-gradient(ellipse at 50% 50%, hsl(var(--portal-glow-green) / 0.05) 0%, transparent 45%),
-      radial-gradient(ellipse at center bottom, hsl(152 16% 52% / 0.08) 0%, transparent 60%),
-      hsl(var(--background));
+    background: hsl(var(--background));
   }
 
+  .portal-theme.light.portal-shell::before,
   .portal-theme.light.portal-shell::after {
-    background:
-      linear-gradient(180deg, transparent 0%, transparent 56%, hsl(155 14% 42% / 0.05) 86%, hsl(155 16% 36% / 0.09) 100%),
-      radial-gradient(ellipse at center, transparent 58%, hsl(var(--portal-vignette) / 0.16) 100%);
+    background: none;
   }
 
   .portal-theme.portal-shell > * {
@@ -293,12 +290,10 @@
       radial-gradient(ellipse at center, transparent 58%, hsl(var(--portal-vignette) / 0.34) 100%);
   }
 
-  /* Dagmodus — zwarte bottom-fade/vignet wordt zachte groengrijze schaduw,
-     identiek aan .portal-theme.light.portal-shell::after. */
+  /* Dagmodus — vlak: geen aura's of vignet, ook niet in de admin-shell. */
+  .portal-theme.light.admin-shell::before,
   .portal-theme.light.admin-shell::after {
-    background:
-      linear-gradient(180deg, transparent 0%, transparent 56%, hsl(155 14% 42% / 0.05) 86%, hsl(155 16% 36% / 0.09) 100%),
-      radial-gradient(ellipse at center, transparent 58%, hsl(var(--portal-vignette) / 0.16) 100%);
+    background: none;
   }
 
   .portal-theme.admin-shell > * {
@@ -317,15 +312,11 @@
       8px 0 26px hsl(var(--portal-glow-green) / 0.05);
   }
 
-  /* Dagmodus — zelfde schaduwtaal als de portal-rail: groene edge-lijn,
-     zachte aura-inzet en groengrijze (geen zwarte) slagschaduw */
+  /* Dagmodus — vlak: neutrale rand + minimale slagschaduw, geen aura */
   .portal-theme.light .admin-sidebar {
     box-shadow:
-      inset -1px 0 0 hsl(140 55% 36% / 0.38),
-      inset -16px 0 38px hsl(138 48% 40% / 0.11),
-      inset 0 1px 0 hsl(0 0% 100% / 0.45),
-      14px 0 36px hsl(165 20% 28% / 0.10),
-      8px 0 26px hsl(138 48% 40% / 0.09);
+      inset -1px 0 0 hsl(var(--border)),
+      2px 0 8px hsl(0 0% 0% / 0.05);
   }
 
   /* Admin-sidebar-oppervlak — was een inline gradient in WorkspaceLayout;
@@ -334,15 +325,9 @@
     background: linear-gradient(180deg, hsl(222 24% 5%) 0%, hsl(222 22% 7%) 100%);
   }
 
-  /* Dagmodus — semi-translucent satijnpaneel in dezelfde taal als de
-     portal-rail ("Daglicht-satijn"): de pagina schemert erdoorheen en de
-     groene aura bindt de sidebar aan het geheel. Verticale variant van de
-     rail-gradient, iets lagere alpha vanwege de tekst op het paneel. */
+  /* Dagmodus — vlak wit paneel (visitekaartje-oppervlak) */
   .portal-theme.light .admin-sidebar-surface {
-    background:
-      radial-gradient(ellipse at 88% 8%, hsl(var(--portal-glow-bright) / 0.14) 0%, transparent 36%),
-      radial-gradient(ellipse at 70% 55%, hsl(var(--portal-glow-green) / 0.10) 0%, transparent 50%),
-      linear-gradient(180deg, hsl(202 14% 61% / 0.42) 0%, hsl(178 12% 62% / 0.38) 52%, hsl(146 22% 63% / 0.34) 100%);
+    background: hsl(var(--card));
   }
 
   .portal-theme .portal-card {
@@ -354,6 +339,30 @@
   /* Zachte kleurovergang van de cockpit-arc bij themawissel */
   .portal-theme svg stop {
     transition: stop-color 300ms ease;
+  }
+
+  /* Storinglampje — gloed rond het actieve icoon (kleur via --wl-color op het
+     element); dagmodus is vlak en zet hem uit. */
+  .portal-theme .warning-light-active {
+    filter:
+      drop-shadow(0 0 10px hsl(var(--wl-color) / 0.7))
+      drop-shadow(0 0 4px hsl(var(--wl-color) / 0.5));
+  }
+  .portal-theme.light .warning-light-active {
+    filter: none;
+  }
+
+  /* Demo-scenariokaarten — nacht: zachte groene hover-glow; dag: vlakke
+     groene rand (visitekaartje-stijl, geen gloed). */
+  .portal-theme .portal-scenario-card:hover {
+    border-color: hsl(var(--gauge-green) / 0.6);
+    box-shadow:
+      0 0 0 1px hsl(var(--gauge-green) / 0.4),
+      0 12px 40px -12px hsl(var(--gauge-green) / 0.35);
+  }
+  .portal-theme.light .portal-scenario-card:hover {
+    border-color: hsl(var(--gauge-green));
+    box-shadow: none;
   }
 
   /* Dag/nacht-toggle — zwevende glazen chip rechtsboven, op de cockpit-arc.
@@ -464,20 +473,34 @@
   }
   .portal-theme .portal-demo-start:disabled { opacity: 0.6; cursor: default; }
 
-  /* Dagmodus — licht satijnglas-chip op de zachte kap; hover-groen volgt het
-     verenigde --gauge-green van het thema */
+  /* Dagmodus — vlakke witte chip met nette rand: geen glas, geen gloed */
   .portal-theme.light .portal-theme-toggle {
-    color: hsl(192 18% 18%);
-    background: linear-gradient(165deg, hsl(152 20% 96% / 0.48) 0%, hsl(150 16% 90% / 0.40) 100%);
-    border-color: hsl(150 18% 98% / 0.45);
+    color: hsl(0 0% 30%);
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.08);
   }
 
   /* Hover expliciet — de regel hierboven staat later dan de basis-hover en
-     zou het groen anders overrulen */
+     zou het groen anders overrulen; reset ook de groene basis-hoverglow */
   .portal-theme.light .portal-theme-toggle:hover,
   .portal-theme.light .portal-theme-toggle:focus-visible {
     color: hsl(var(--gauge-green));
-    border-color: hsl(var(--gauge-green) / 0.35);
+    border-color: hsl(var(--gauge-green) / 0.45);
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.10);
+  }
+
+  /* Dagmodus — chips vlak: witte kaart-achtergrond, geen glasblur */
+  .portal-theme.light .portal-demo-chip,
+  .portal-theme.light .portal-demo-start {
+    background: hsl(var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .portal-theme.light .portal-demo-start:hover {
+    background: hsl(var(--muted));
   }
 
   .portal-theme .portal-fixed-nav {
@@ -538,6 +561,32 @@
     transform: translateY(-1px);
   }
 
+  /* Dagmodus — merkgroene lijn-iconen zoals op het visitekaartje: groen in
+     rust, vol groen + lichte chip-vulling bij hover/actief. Geen neon. */
+  .portal-theme.light .portal-nav-link {
+    color: hsl(var(--primary) / 0.75);
+  }
+
+  /* Hover/actief expliciet vol groen (de rust-regel hierboven staat later
+     dan de basis-hoverregel en zou hem anders overrulen) */
+  .portal-theme.light .portal-nav-link:hover,
+  .portal-theme.light .portal-nav-link:focus-visible,
+  .portal-theme.light .portal-nav-link[data-active="true"] {
+    color: hsl(var(--gauge-green));
+  }
+
+  .portal-theme.light .portal-nav-link:hover .portal-nav-icon,
+  .portal-theme.light .portal-nav-link:focus-visible .portal-nav-icon,
+  .portal-theme.light .portal-nav-link[data-active="true"] .portal-nav-icon {
+    fill: hsl(var(--primary) / 0.10);
+    filter: none;
+  }
+
+  /* Terug-pijl in de rail volgt hetzelfde groen */
+  .portal-theme.light .portal-back-link {
+    color: hsl(var(--primary) / 0.65);
+  }
+
   .portal-theme .portal-nav-link:active {
     transform: scale(0.94);
   }
@@ -566,7 +615,10 @@
 
   @media (min-width: 1024px) {
     .portal-theme .portal-fixed-nav {
-      top: 50%;
+      /* Middellijn volgt het bedrag in de XL-gauge: het cluster staat op
+         50% + 18px + 2vh (ClientDashboard), de waarde ~2px boven dat anker.
+         Verschuift het cluster? Dan deze offset mee aanpassen + nameten. */
+      top: calc(50% + 2vh + 16px);
       bottom: auto;
       left: 0;
       width: clamp(3.625rem, 4.8vw, 4.75rem);
@@ -596,26 +648,18 @@
         10px 0 34px hsl(var(--portal-glow-green) / 0.06);
     }
 
-    /* Dagmodus — semi-translucent satijnpaneel: de pagina schemert erdoorheen
-       en de groene aura (dezelfde glow-vars als shell en kap) bindt de rail
-       aan het geheel. Eén diep merkgroen (--gauge-green 26%) geldt overal —
-       gauges, rail-hover, indicator én back-link — geen aparte neon-scope. */
+    /* Dagmodus — vlak wit rail-paneel met nette rand; de dunne solide groene
+       divider (::after hieronder) is het visitekaartje-motief. */
     .portal-theme.light .portal-fixed-nav::before {
-      background:
-        radial-gradient(ellipse at 92% 22%, hsl(var(--portal-glow-bright) / 0.16) 0%, transparent 34%),
-        radial-gradient(ellipse at 82% 58%, hsl(var(--portal-glow-green) / 0.13) 0%, transparent 52%),
-        linear-gradient(90deg, hsl(202 14% 61% / 0.56) 0%, hsl(178 12% 62% / 0.53) 52%, hsl(146 22% 63% / 0.50) 100%);
+      background: hsl(var(--card));
       box-shadow:
-        inset -1px 0 0 hsl(140 55% 36% / 0.38),
-        inset -18px 0 42px hsl(138 48% 40% / 0.11),
-        inset 0 1px 0 hsl(0 0% 100% / 0.45),
-        14px 0 36px hsl(165 20% 28% / 0.10),
-        8px 0 26px hsl(138 48% 40% / 0.09);
+        inset 0 0 0 1px hsl(var(--border)),
+        6px 0 16px hsl(0 0% 0% / 0.05);
     }
 
-    /* Donkere iconen op het lichte satijnpaneel (≥4.9:1 doorgecomposiet) */
+    /* Merkgroene lijn-iconen in rust — de groene iconen van het visitekaartje */
     .portal-theme.light .portal-nav-stack .portal-nav-link {
-      color: hsl(195 16% 22% / 0.9);
+      color: hsl(var(--primary) / 0.75);
     }
 
     /* Hover/actief expliciet — de rust-regel hierboven is specifieker dan de
@@ -640,6 +684,14 @@
         transparent 100%
       );
       filter: drop-shadow(0 0 8px hsl(var(--gauge-green) / 0.18));
+    }
+
+    /* Dagmodus — géén rail-divider: een harde groene streep vloekt met de
+       afgeronde hoek van het witte paneel. Het merkgroen zit in de iconen
+       en de actieve indicator; dat is de vlakke visitekaartjes-taal. */
+    .portal-theme.light .portal-fixed-nav::after {
+      background: none;
+      filter: none;
     }
 
     .portal-theme .portal-nav-stack {
@@ -669,6 +721,11 @@
         0 0 8px hsl(var(--gauge-green) / 0.62),
         0 0 18px hsl(var(--gauge-green) / 0.28);
       transform: translateY(-50%);
+    }
+
+    /* Dagmodus — solide groene indicator zonder gloed */
+    .portal-theme.light .portal-nav-link[data-active="true"]::after {
+      box-shadow: none;
     }
 
     .portal-theme .portal-nav-link:hover .portal-nav-icon,
@@ -773,11 +830,10 @@
     transition: color 250ms ease;
   }
 
-  /* Dagmodus — donkere titel op de satijnen kap (5.6:1 op de bovenzone),
-     met lichte emboss-schaduw: zelfde rol als de nachtgloed, daglicht-uitvoering */
+  /* Dagmodus — vlakke antraciet titel, geen schaduw (visitekaartje-typografie) */
   .portal-theme.light .cockpit-title {
-    color: hsl(202 26% 13%);
-    text-shadow: 0 1px 0 hsl(0 0% 100% / 0.30), 0 2px 12px hsl(150 22% 94% / 0.30);
+    color: hsl(var(--foreground));
+    text-shadow: none;
   }
 
   /* Subtiel accentlijntje onder de cockpit-titel — optioneel onderscheidsteken */
@@ -785,6 +841,12 @@
     height: 1px;
     width: clamp(40px, 6vh, 72px);
     background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.25), transparent);
+  }
+
+  /* Dagmodus — korte solide merkgroene hairline: de groene lijn van het kaartje */
+  .portal-theme.light .cockpit-title-accent {
+    height: 2px;
+    background: hsl(var(--primary));
   }
 
   /* Section-label — uppercase tracking voor secties binnen pagina's, past bij cockpit-stijl */

@@ -2,7 +2,7 @@
 // elke component (layout, nav, instellingen) dezelfde state deelt zonder
 // provider of prop-drilling. Donker is de standaard; de voorkeur wordt
 // bewaard in localStorage en bij module-init gelezen (vóór de eerste render).
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "ec-portal-theme"; // "light" | "dark"
 
@@ -41,4 +41,18 @@ export function usePortalTheme() {
     setTheme(theme === "light" ? "dark" : "light");
   }, []);
   return { theme: current, isLight: current === "light", toggle };
+}
+
+// Zet de thema-klassen óók op <html>, zodat Radix-portals (toasts, dialogs,
+// popovers — gemount in document.body) dezelfde tokens erven als de pagina.
+// Gebruikt door layouts én losstaande schermen (login, uitnodiging, wizard).
+export function usePortalThemeSync() {
+  const state = usePortalTheme();
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("portal-theme");
+    root.classList.toggle("light", state.isLight);
+    return () => root.classList.remove("portal-theme", "light");
+  }, [state.isLight]);
+  return state;
 }

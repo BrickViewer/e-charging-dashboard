@@ -37,7 +37,7 @@ export function DemoScenarioChooser({ presets }: { presets: DemoPreset[] }) {
                 key={preset.key}
                 type="button"
                 onClick={() => pick(preset.key)}
-                className="group relative flex flex-col rounded-2xl border border-border bg-card p-6 text-left transition-all hover:border-[hsl(var(--gauge-green)/0.6)] hover:shadow-[0_0_0_1px_hsl(var(--gauge-green)/0.4),0_12px_40px_-12px_hsl(var(--gauge-green)/0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gauge-green))]"
+                className="portal-scenario-card group relative flex flex-col rounded-2xl border border-border bg-card p-6 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gauge-green))]"
               >
                 <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground/80">{preset.label}</p>
                 <div className="mt-1 flex items-baseline gap-1.5">
