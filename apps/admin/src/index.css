@@ -615,7 +615,10 @@
 
   @media (min-width: 1024px) {
     .portal-theme .portal-fixed-nav {
-      top: 50%;
+      /* Middellijn volgt het bedrag in de XL-gauge: het cluster staat op
+         50% + 18px + 2vh (ClientDashboard), de waarde ~2px boven dat anker.
+         Verschuift het cluster? Dan deze offset mee aanpassen + nameten. */
+      top: calc(50% + 2vh + 16px);
       bottom: auto;
       left: 0;
       width: clamp(3.625rem, 4.8vw, 4.75rem);
