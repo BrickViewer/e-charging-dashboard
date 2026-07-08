@@ -62,7 +62,7 @@ export default function ClientLayout() {
               merkteken (2000×399) maar full-color heeft 200px lucht boven/onder in
               zijn viewBox; zo vallen beide varianten exact samen. */}
           <div className="absolute inset-x-0 top-[clamp(17px,3.4vh,65px)] h-[clamp(20px,3vh,32px)] flex items-center justify-center px-4 pointer-events-none">
-            <img src={isLight ? logoFullColor : logoBright} alt="e-charging" className="w-[clamp(100px,15vh,160px)]" />
+            <img src={isLight ? logoFullColor : logoBright} alt="e-charging" className="w-[clamp(130px,20vh,210px)]" />
           </div>
         </div>
         <div className="portal-fixed-nav">
