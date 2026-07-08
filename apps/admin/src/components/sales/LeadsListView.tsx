@@ -15,7 +15,6 @@ import { MarkLostDialog } from "@/components/sales/MarkLostDialog";
 
 const euro0 = (n: number | null | undefined) =>
   n == null ? "—" : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-const dateShort = (s: string | null) => (s ? new Date(s).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
 const LIFECYCLE_BADGE: Record<string, { label: string; cls: string }> = {
   open: { label: "Open", cls: "bg-muted text-muted-foreground" },
@@ -32,16 +31,16 @@ const SEGMENTS: { key: NonNullable<LeadListFilters["segment"]>; label: string }[
   { key: "all", label: "Alle" },
 ];
 
-const SORTABLE: { field: string; label: string; className?: string }[] = [
+const COLUMNS: { field?: string; label: string; className?: string }[] = [
   { field: "company_name", label: "Bedrijf / contact" },
   { field: "stage_id", label: "Fase" },
   { field: "owner_user_id", label: "Eigenaar" },
   { field: "scope_effective", label: "Scope" },
-  { field: "estimated_value", label: "Waarde", className: "text-right" },
-  { field: "estimated_charge_points", label: "Palen", className: "text-right" },
-  { field: "expected_close_date", label: "Verwacht sluiten" },
+  { field: "quote_value", label: "Eenmalig", className: "text-right" },
+  { label: "Beheer/jr", className: "text-right" },
+  { field: "paal_count", label: "Palen", className: "text-right" },
   { field: "lifecycle", label: "Status" },
-  { field: "updated_at", label: "Leeftijd" },
+  { field: "updated_at", label: "Laatst gewijzigd" },
 ];
 
 export function LeadsListView({
@@ -58,6 +57,7 @@ export function LeadsListView({
   ownerName,
   ownerOptions,
   onRowClick,
+  avgPerPaal,
 }: {
   filters: LeadListFilters;
   sort: LeadSort;
@@ -72,6 +72,7 @@ export function LeadsListView({
   ownerName: (id: string | null) => string | null;
   ownerOptions: { user_id: string; full_name: string | null }[];
   onRowClick: (leadId: string) => void;
+  avgPerPaal: number | null;
 }) {
   const listQ = useLeadsList({ filters: { ...filters, segment }, sort, page, pageSize });
   const bulk = useBulkPatchLeads();
@@ -156,12 +157,16 @@ export function LeadsListView({
           <thead className="border-b bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="w-8 px-3 py-2"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Alles selecteren" /></th>
-              {SORTABLE.map((c) => (
-                <th key={c.field} className={`px-3 py-2 ${c.className ?? ""}`}>
-                  <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setSort(c.field)}>
-                    {c.label}
-                    {sort.field === c.field && (sort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
-                  </button>
+              {COLUMNS.map((c) => (
+                <th key={c.field ?? c.label} className={`px-3 py-2 ${c.className ?? ""}`}>
+                  {c.field ? (
+                    <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setSort(c.field!)}>
+                      {c.label}
+                      {sort.field === c.field && (sort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+                    </button>
+                  ) : (
+                    <span>{c.label}</span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -169,15 +174,16 @@ export function LeadsListView({
           <tbody className="divide-y">
             {listQ.isLoading ? (
               [...Array(8)].map((_, i) => (
-                <tr key={i}><td className="px-3 py-3" colSpan={SORTABLE.length + 1}><Skeleton className="h-5 w-full" /></td></tr>
+                <tr key={i}><td className="px-3 py-3" colSpan={COLUMNS.length + 1}><Skeleton className="h-5 w-full" /></td></tr>
               ))
             ) : rows.length === 0 ? (
-              <tr><td colSpan={SORTABLE.length + 1} className="px-3 py-10 text-center text-sm text-muted-foreground">Geen leads voor deze filters.</td></tr>
+              <tr><td colSpan={COLUMNS.length + 1} className="px-3 py-10 text-center text-sm text-muted-foreground">Geen leads voor deze filters.</td></tr>
             ) : (
               rows.map((r) => {
                 const st = r.stage_id ? stageById.get(r.stage_id) : null;
                 const lc = LIFECYCLE_BADGE[r.lifecycle ?? "open"] ?? LIFECYCLE_BADGE.open;
                 const scope = r.scope_effective as QuoteScope | null;
+                const beheer = r.mgmt_in_scope && r.paal_count && avgPerPaal ? r.paal_count * avgPerPaal : null;
                 return (
                   <tr
                     key={r.id}
@@ -200,9 +206,9 @@ export function LeadsListView({
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">{ownerName(r.owner_user_id) ?? "—"}</td>
                     <td className="px-3 py-2">{scope ? <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SCOPE_BADGE_CLASS[scope]}`}>{SCOPE_SHORT[scope]}</span> : "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{euro0(r.estimated_value)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.estimated_charge_points ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{dateShort(r.expected_close_date)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.quote_value ? euro0(r.quote_value) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{beheer != null ? `≈ ${euro0(beheer)}/jr` : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.paal_count ?? "—"}</td>
                     <td className="px-3 py-2"><span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${lc.cls}`}>{lc.label}</span></td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">{r.updated_at ? formatDistanceToNow(new Date(r.updated_at), { addSuffix: true, locale: nl }) : "—"}</td>
                   </tr>

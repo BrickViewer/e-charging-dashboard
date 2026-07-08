@@ -3677,6 +3677,9 @@ export type Database = {
           tag_ids: string[] | null
           updated_at: string | null
           website: string | null
+          mgmt_in_scope: boolean | null
+          paal_count: number | null
+          quote_value: number | null
           scope_effective: string | null
           won_at: string | null
         }

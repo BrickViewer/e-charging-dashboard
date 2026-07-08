@@ -121,15 +121,11 @@ export default function SalesLeads() {
   const now = new Date();
   const mStart = isoDay(new Date(now.getFullYear(), now.getMonth(), 1));
   const mEnd = isoDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-  const qi = Math.floor(now.getMonth() / 3);
-  const qStart = isoDay(new Date(now.getFullYear(), qi * 3, 1));
-  const qEnd = isoDay(new Date(now.getFullYear(), qi * 3 + 3, 0));
   const systemViews: { name: string; state: Partial<LeadViewState> }[] = [
     { name: "Mijn open leads", state: { view: "list", segment: "open", owner: "me" } },
     { name: "Alle open", state: { view: "board", segment: "open" } },
     { name: "Gewonnen deze maand", state: { view: "list", segment: "all", dateField: "won_at", dateFrom: mStart, dateTo: mEnd, sort: { field: "won_at", dir: "desc" } } },
     { name: "Verloren", state: { view: "list", segment: "lost", sort: { field: "lost_at", dir: "desc" } } },
-    { name: "Sluit dit kwartaal", state: { view: "list", segment: "open", dateField: "expected_close_date", dateFrom: qStart, dateTo: qEnd, sort: { field: "expected_close_date", dir: "asc" } } },
   ];
 
   const saveCurrent = () => {
@@ -194,6 +190,7 @@ export default function SalesLeads() {
           ownerName={ownerName}
           ownerOptions={profiles}
           onRowClick={setSelectedId}
+          avgPerPaal={avgQ.data?.value ?? null}
         />
       ) : stagesQ.isLoading || openQ.isLoading ? (
         <div className="flex gap-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-96 w-72 flex-shrink-0 rounded-xl" />)}</div>

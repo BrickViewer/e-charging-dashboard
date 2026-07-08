@@ -15,7 +15,6 @@ import { activeFilterCount, type LeadViewState, type LeadDateField } from "@/hoo
 const PRIORITIES = [{ v: "high", l: "Hoog" }, { v: "medium", l: "Middel" }, { v: "low", l: "Laag" }];
 const DATE_FIELDS: { v: LeadDateField; l: string }[] = [
   { v: "created_at", l: "Aangemaakt" },
-  { v: "expected_close_date", l: "Verwacht sluiten" },
   { v: "won_at", l: "Gewonnen" },
   { v: "lost_at", l: "Verloren" },
 ];
