@@ -129,6 +129,7 @@
     --arc-shadow-strength: 1;  /* opacity-multiplier voor schaduwlagen */
     --arc-seam: 132 42% 78%;   /* paneelnaden */
     --arc-decor-opacity: 1;    /* decoratieve gloed-/rimlagen (uit in dagmodus) */
+    --arc-led-opacity: 0;      /* merkgroene LED-strip; dagmodus-equivalent van de rim */
   }
 
   /* Portal — dagmodus "Visitekaartje": vlak en neutraal, naar het model van
@@ -201,6 +202,7 @@
     --arc-shadow-strength: 0.15;
     --arc-seam: 0 0% 45%;
     --arc-decor-opacity: 0;      /* gloed-/rimlagen van de kap uit */
+    --arc-led-opacity: 1;        /* merkgroene LED-strip langs de kaprand aan */
   }
 
   /* Portal-specific overrides */

@@ -95,6 +95,26 @@ export function CockpitArc({ className = "" }: CockpitArcProps) {
           <stop offset="58%" stopColor="hsl(132 82% 36%)" stopOpacity="0.075" />
           <stop offset="100%" stopColor="hsl(130 80% 35%)" stopOpacity="0" />
         </linearGradient>
+
+        {/* LED-strip (dagmodus): zachte merkgroene bloom onder de kaprand */}
+        <linearGradient id="led-glow" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="hsl(118.2 100% 32.4%)" stopOpacity="0" />
+          <stop offset="25%" stopColor="hsl(118.2 100% 32.4%)" stopOpacity="0.13" />
+          <stop offset="50%" stopColor="hsl(118.2 100% 32.4%)" stopOpacity="0.24" />
+          <stop offset="75%" stopColor="hsl(118.2 100% 32.4%)" stopOpacity="0.13" />
+          <stop offset="100%" stopColor="hsl(118.2 100% 32.4%)" stopOpacity="0" />
+        </linearGradient>
+
+        {/* LED-strip (dagmodus): de lijn zelf, met lichte hotspot in het midden */}
+        <linearGradient id="led-core" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="hsl(118 90% 38%)" stopOpacity="0" />
+          <stop offset="8%" stopColor="hsl(118 90% 38%)" stopOpacity="0.55" />
+          <stop offset="35%" stopColor="hsl(118 90% 38%)" stopOpacity="0.85" />
+          <stop offset="50%" stopColor="hsl(118 85% 45%)" stopOpacity="0.95" />
+          <stop offset="65%" stopColor="hsl(118 90% 38%)" stopOpacity="0.85" />
+          <stop offset="92%" stopColor="hsl(118 90% 38%)" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="hsl(118 90% 38%)" stopOpacity="0" />
+        </linearGradient>
       </defs>
 
       {/* Laag 1: hoofd-kap (gevuld materiaal) */}
@@ -185,6 +205,26 @@ export function CockpitArc({ className = "" }: CockpitArcProps) {
           d="M 0 215 Q 600 22 1200 215"
           stroke="url(#rim-subtle)"
           strokeWidth="1.1"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </g>
+
+      {/* Laag 13-14: LED-strip in merkgroen — het dagmodus-equivalent van de
+          groene rim hierboven (die is getuned op donker). Fallback 0 houdt
+          nachtmodus byte-voor-byte identiek. */}
+      <g style={{ opacity: "var(--arc-led-opacity, 0)", transition: "opacity 300ms ease" }}>
+        <path
+          d="M 0 215 Q 600 22 1200 215"
+          stroke="url(#led-glow)"
+          strokeWidth="13"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 0 215 Q 600 22 1200 215"
+          stroke="url(#led-core)"
+          strokeWidth="2.2"
           fill="none"
           strokeLinecap="round"
         />
