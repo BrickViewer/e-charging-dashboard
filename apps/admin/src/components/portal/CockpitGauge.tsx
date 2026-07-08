@@ -58,9 +58,12 @@ export function CockpitGauge({
   const cx = svgSize / 2;
   const cy = svgSize / 2;
   const radius = isXl ? 175 : 100;
+  // min(-vangnet): op smalle schermen (telefoon) nooit breder dan de viewport;
+  // op desktop is 100vw − marge altijd ruimer dan de clamp-max (no-op).
+  // --gauge-w-*: context (bv. de mobiele carousel) mag de maat overrulen.
   const renderWidth = isXl
-    ? "clamp(460px, 67vh, 760px)"
-    : "clamp(205px, 28vh, 340px)";
+    ? "var(--gauge-w-xl, min(clamp(460px, 67vh, 760px), calc(100vw - 40px)))"
+    : "var(--gauge-w-md, min(clamp(205px, 28vh, 340px), calc(100vw - 56px)))";
   const strokeWidth = isXl ? 6 : 3;
   const tickInner = radius - (isXl ? 16 : 10);
   const tickOuter = radius + (isXl ? 7 : 4);

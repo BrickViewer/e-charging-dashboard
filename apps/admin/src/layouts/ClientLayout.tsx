@@ -92,8 +92,10 @@ export default function ClientLayout() {
           <div className="relative h-[clamp(100px,18vh,300px)]">
             <CockpitArc className="absolute inset-0 w-full h-full" />
             {title && (
-              /* Zelfde container-maat en middellijn als het logo op de homepagina */
-              <div className="absolute inset-x-0 top-[clamp(17px,3.4vh,65px)] h-[clamp(20px,3vh,32px)] flex items-center justify-center px-4">
+              /* Zelfde container-maat en middellijn als het logo op de homepagina.
+                 Mobiel: één regel lager, onder de band met DEMO-chip/thema-toggle,
+                 zodat lange titels (FINANCIEEL, MIJN GEGEVENS) nergens tegenaan lopen */
+              <div className="absolute inset-x-0 top-[clamp(40px,6.5vh,65px)] lg:top-[clamp(17px,3.4vh,65px)] h-[clamp(20px,3vh,32px)] flex items-center justify-center px-4">
                 <h1 className="cockpit-title">{title}</h1>
               </div>
             )}
@@ -111,7 +113,8 @@ export default function ClientLayout() {
         <div className="relative pt-[clamp(100px,18vh,300px)]">
           {/* Ruime top-padding: optische rustzone tussen kaprand en eerste content,
               vh-gekoppeld zodat hij meeschaalt met de kap */}
-          <div className="max-w-5xl mx-auto px-4 lg:px-8 lg:pl-24 xl:pl-8 pt-[clamp(24px,4.5vh,56px)] pb-28 md:pb-10">
+          {/* pb: onder lg reserveert de padding ruimte voor de zwevende nav-pill */}
+          <div className="max-w-5xl mx-auto px-4 lg:px-8 lg:pl-24 xl:pl-8 pt-[clamp(24px,4.5vh,56px)] pb-28 lg:pb-10">
             <Outlet />
           </div>
         </div>

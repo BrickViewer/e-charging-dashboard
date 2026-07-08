@@ -11,6 +11,9 @@ import { Wrench } from "lucide-react";
 interface WarningLightProps {
   count: number;
   variant: "offline" | "online";
+  /** Toon het aantal als zichtbaar cijfer naast het lampje — voor touch-schermen,
+      waar de hover-tooltip onbereikbaar is */
+  showCount?: boolean;
 }
 
 function ChargerIcon({ className, style }: { className?: string; style?: CSSProperties }) {
@@ -32,7 +35,7 @@ function ChargerIcon({ className, style }: { className?: string; style?: CSSProp
   );
 }
 
-export function WarningLight({ count, variant }: WarningLightProps) {
+export function WarningLight({ count, variant, showCount = false }: WarningLightProps) {
   const active = count > 0;
   // Theme-aware: volgt de --gauge-* overrides van de dagmodus
   const colorHsl = variant === "offline" ? "var(--gauge-red)" : "var(--gauge-green)";
@@ -52,11 +55,20 @@ export function WarningLight({ count, variant }: WarningLightProps) {
 
   return (
     <div className="relative group inline-flex" title={tooltipText}>
-      <div className="cursor-default select-none inline-flex">
+      <div className="cursor-default select-none inline-flex items-center gap-1">
         {variant === "offline" ? (
           <Wrench className={iconClass} strokeWidth={1.6} style={iconStyle} />
         ) : (
           <ChargerIcon className={iconClass} style={iconStyle} />
+        )}
+        {showCount && (
+          <span
+            className="text-sm font-semibold tabular-nums"
+            style={{ color: active ? `hsl(${colorHsl})` : "hsl(var(--muted-foreground) / 0.5)" }}
+            aria-hidden="true"
+          >
+            {count}
+          </span>
         )}
       </div>
       {/* CSS-only tooltip — verschijnt bij hover op de wrapper */}

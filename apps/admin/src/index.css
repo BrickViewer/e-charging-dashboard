@@ -512,6 +512,90 @@
     transform: translateX(-50%);
   }
 
+  /* Mobiel/tablet: de nav is een echte pill-balk (kaart + border + blur) i.p.v.
+     losse iconen; de light-override staat direct onder de dark-regel (conventie) */
+  @media (max-width: 1023px) {
+    .portal-theme .portal-fixed-nav {
+      padding: 0.4rem 1.15rem;
+      border-radius: 999px;
+      background: hsl(var(--card) / 0.88);
+      border: 1px solid hsl(var(--border) / 0.7);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow:
+        inset 0 1px 0 hsl(0 0% 100% / 0.06),
+        0 10px 30px hsl(0 0% 0% / 0.35);
+    }
+    .portal-theme.light .portal-fixed-nav {
+      background: hsl(var(--card) / 0.96);
+      border-color: hsl(var(--border));
+      box-shadow: 0 8px 24px hsl(0 0% 0% / 0.1);
+    }
+
+    /* Terug-pijl overbodig op mobiel: het eerste nav-icoon ís home.
+       Extra specificiteit: de basisregel (display:flex) staat later in dit bestand. */
+    .portal-theme .portal-fixed-nav .portal-back-link {
+      display: none;
+    }
+
+    /* "Start configurator" botst met het kap-logo; de DEMO-chip verhuist naar
+       linksboven zodat rechtsboven alleen de thema-toggle staat */
+    .portal-theme .portal-demo-start {
+      display: none;
+    }
+    .portal-theme .portal-demo-actions {
+      right: auto;
+      left: max(1.1rem, env(safe-area-inset-left));
+    }
+
+    /* iOS zoomt automatisch in op inputs met een font kleiner dan 16px —
+       funest voor de onboarding/login-flow op de telefoon */
+    .portal-theme input,
+    .portal-theme select,
+    .portal-theme textarea {
+      font-size: 16px;
+    }
+
+    /* Touch-norm: tikbare doelen ≥44px. Iconen blijven visueel gelijk,
+       alleen de hitbox groeit */
+    .portal-theme .portal-nav-link {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+    .portal-theme .portal-theme-toggle::after {
+      content: "";
+      position: absolute;
+      inset: -5px;
+      border-radius: 999px;
+    }
+  }
+
+  /* Swipe-carousel (dashboard mobiel): native gevoel — geen tap-flits of
+     tekstselectie tijdens het slepen; verticaal scrollen blijft van de pagina.
+     --gauge-w-md: in de carousel is elke gauge de ster van zijn slide en mag de
+     md-maat royaler dan in de desktop-zijkolommen (CockpitGauge leest deze var). */
+  .portal-theme .portal-gauge-carousel {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: pan-y pinch-zoom;
+    /* 46vh laat de zij-gauges meegroeien op tablets (iPad: ~470px i.p.v. 320px),
+       zodat elke slide zijn scherm vult; telefoons blijven op viewportbreedte begrensd */
+    --gauge-w-md: min(46vh, calc(100vw - 64px), 480px);
+  }
+
+  /* Telefoon in landschapsstand: te weinig hoogte voor het één-scherm-dashboard —
+     dan mag de homepagina verticaal scrollen en krijgt de carousel echte hoogte */
+  @media (max-width: 1023px) and (orientation: landscape) {
+    .portal-theme .portal-dashboard-root {
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+    }
+    .portal-theme .portal-gauge-carousel {
+      min-height: 330px;
+    }
+  }
+
   .portal-theme .portal-nav-stack {
     display: flex;
     align-items: center;

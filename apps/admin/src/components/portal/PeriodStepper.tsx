@@ -28,7 +28,8 @@ export function PeriodStepper({ label, index, count, onIndexChange }: PeriodStep
         onClick={() => step(-1)}
         disabled={!canPrev}
         className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
+          // Mobiel 44px tapzone (touch-norm); desktop de compacte 32px van het ontwerp
+          "w-11 h-11 lg:w-8 lg:h-8 rounded-full flex items-center justify-center transition-colors",
           canPrev
             ? "text-muted-foreground hover:text-foreground hover:bg-card/80 active:scale-95"
             : "text-muted-foreground/25 cursor-not-allowed"
@@ -50,7 +51,7 @@ export function PeriodStepper({ label, index, count, onIndexChange }: PeriodStep
         onClick={() => step(1)}
         disabled={!canNext}
         className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
+          "w-11 h-11 lg:w-8 lg:h-8 rounded-full flex items-center justify-center transition-colors",
           canNext
             ? "text-muted-foreground hover:text-foreground hover:bg-card/80 active:scale-95"
             : "text-muted-foreground/25 cursor-not-allowed"

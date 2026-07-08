@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import useEmblaCarousel from "embla-carousel-react";
 import {
   useClientProfile,
   useClientKPIs,
@@ -12,6 +13,10 @@ import { CockpitGauge } from "@/components/portal/CockpitGauge";
 import { niceQuarterMax } from "@/components/portal/gaugeUtils";
 import { WarningLight } from "@/components/portal/WarningLight";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
+
+// Mobiel: de XL-vergoedingsgauge (index 2) staat bij openen in het midden;
+// links ervan energie + uitbetaald, rechts CO₂ + ERE — zelfde ordening als desktop.
+const MOBILE_START_SLIDE = 2;
 
 const fmtKwh = (v: number) => v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Euros altijd op 2 decimalen (geen afronding naar gehele euro)
@@ -59,6 +64,18 @@ export default function ClientDashboard() {
   const selectedPeriod: DashboardPeriod = orderedPeriods[effectiveIndex] ?? { type: "ttm" };
   const kpis = useClientKPIs(client?.id, selectedPeriod, client?.calculate_ere_enabled ?? false);
 
+  // Mobiele gauge-carousel: één gauge per slide, native swipe met snap (embla)
+  const [emblaRef, emblaApi] = useEmblaCarousel({ startIndex: MOBILE_START_SLIDE, align: "center" });
+  const [activeSlide, setActiveSlide] = useState(MOBILE_START_SLIDE);
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => setActiveSlide(emblaApi.selectedScrollSnap());
+    emblaApi.on("select", onSelect);
+    return () => {
+      emblaApi.off("select", onSelect);
+    };
+  }, [emblaApi]);
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64 text-muted-foreground">Laden...</div>;
   }
@@ -91,10 +108,75 @@ export default function ClientDashboard() {
       />
     ) : null;
 
+  // Gauges eenmaal gedefinieerd, gebruikt door zowel het desktop-grid als de
+  // mobiele carousel (twee losse render-trees, CSS-gegate op lg).
+  const gaugeKwh = (
+    <CockpitGauge
+      value={kpis.ttmKwh}
+      max={kwhMax}
+      label="Energie geleverd via laadpalen"
+      sublabel="kWh"
+      color="red"
+      size="md"
+      formatValue={fmtKwh}
+    />
+  );
+  const gaugePaidOut = (
+    <CockpitGauge
+      value={kpis.totalPaidOut}
+      max={totalPaidOutMax}
+      label="Totaal uitbetaald"
+      sublabel="EUR"
+      color="red"
+      size="md"
+      formatValue={fmtEuro}
+    />
+  );
+  const gaugeMain = (
+    <CockpitGauge
+      value={kpis.ttmCustomerCashflow}
+      max={vergoedingMax}
+      label={`Uw vergoeding - ${kpis.periodLabel}`}
+      sublabel="EUR"
+      color="blue"
+      size="xl"
+      formatValue={fmtEuro}
+    />
+  );
+  const gaugeCo2 = (
+    <CockpitGauge
+      value={kpis.ttmEreCo2}
+      max={ereCo2Max}
+      label="± kg CO₂ vermeden"
+      sublabel="ERE's"
+      color="green"
+      size="md"
+      formatValue={fmtKg}
+    />
+  );
+  const gaugeEre = (
+    <CockpitGauge
+      value={kpis.ttmEreClientEstimate}
+      max={ereRevMax}
+      label="Geschatte ERE's"
+      sublabel="EUR"
+      color="green"
+      size="md"
+      formatValue={fmtEuro}
+    />
+  );
+
+  const mobileSlides = [
+    { key: "kwh", label: "Energie geleverd via laadpalen", el: gaugeKwh },
+    { key: "uitbetaald", label: "Totaal uitbetaald", el: gaugePaidOut },
+    { key: "vergoeding", label: "Uw vergoeding", el: gaugeMain },
+    { key: "co2", label: "CO₂ vermeden", el: gaugeCo2 },
+    { key: "ere", label: "Geschatte ERE's", el: gaugeEre },
+  ];
+
   return (
-    <div className="animate-fade-in h-full flex flex-col overflow-hidden overscroll-none">
-      {/* Storinglampjes — op desktop fixed gepositioneerd in de gap tussen XL en small gauges.
-          Op mobile worden ze inline gerenderd binnen de XL wrapper (zie verderop) */}
+    <div className="portal-dashboard-root animate-fade-in h-full flex flex-col overflow-hidden overscroll-none">
+      {/* Storinglampjes — desktop: fixed gepositioneerd in de gap tussen XL en small gauges */}
       <div className="hidden lg:block">
         <div className="fixed top-[24vh] left-[calc(37.5vw_-_13vh_+_32px)] -translate-x-1/2 -translate-y-1/2 z-50">
           <WarningLight count={kpis.offlineCount} variant="offline" />
@@ -104,80 +186,74 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* Vijf gauges — XL center, zij-kolommen links/rechts */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-x-6 gap-y-4 items-center min-h-0">
-        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:gap-12 lg:order-1 lg:fixed lg:top-[calc(50%+2vh)] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:left-[calc(25vw_-_clamp(460px,_67vh,_760px)/8)]">
-          <CockpitGauge
-            value={kpis.ttmKwh}
-            max={kwhMax}
-            label="Energie geleverd via laadpalen"
-            sublabel="kWh"
-            color="red"
-            size="md"
-            formatValue={fmtKwh}
-          />
-          <CockpitGauge
-            value={kpis.totalPaidOut}
-            max={totalPaidOutMax}
-            label="Totaal uitbetaald"
-            sublabel="EUR"
-            color="red"
-            size="md"
-            formatValue={fmtEuro}
-          />
+      {/* Desktop: vijf gauges — XL center, zij-kolommen links/rechts */}
+      <div className="hidden lg:grid flex-1 grid-cols-12 gap-x-6 gap-y-4 items-center min-h-0">
+        <div className="col-span-3 flex flex-col items-center gap-12 order-1 fixed top-[calc(50%+2vh)] -translate-x-1/2 -translate-y-1/2 left-[calc(25vw_-_clamp(460px,_67vh,_760px)/8)]">
+          {gaugeKwh}
+          {gaugePaidOut}
         </div>
 
-        <div className="lg:col-span-6 flex flex-col items-center justify-center lg:order-2">
-          <div className="relative w-fit pt-4 lg:fixed lg:top-[calc(50%+18px+2vh)] lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:z-10">
-            <div className="relative">
-              <div className="absolute top-[27px] left-[8%] z-50 lg:hidden">
-                <WarningLight
-                  count={kpis.offlineCount}
-                  variant="offline"
-                />
-              </div>
-              <div className="absolute top-[27px] right-[8%] z-50 lg:hidden">
-                <WarningLight
-                  count={kpis.chargePointsOnline}
-                  variant="online"
-                />
-              </div>
-              <CockpitGauge
-                value={kpis.ttmCustomerCashflow}
-                max={vergoedingMax}
-                label={`Uw vergoeding - ${kpis.periodLabel}`}
-                sublabel="EUR"
-                color="blue"
-                size="xl"
-                formatValue={fmtEuro}
-              />
-            </div>
-            <div className="mt-5 lg:mt-10 lg:translate-y-[clamp(28px,4vh,42px)]">
+        <div className="col-span-6 flex flex-col items-center justify-center order-2">
+          <div className="w-fit pt-4 fixed top-[calc(50%+18px+2vh)] left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+            {gaugeMain}
+            <div className="mt-10 translate-y-[clamp(28px,4vh,42px)]">
               {periodFilter}
             </div>
           </div>
         </div>
 
-        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:gap-12 lg:order-3 lg:fixed lg:top-[calc(50%+2vh)] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:left-[calc(75vw_+_clamp(460px,_67vh,_760px)/8)]">
-          <CockpitGauge
-            value={kpis.ttmEreCo2}
-            max={ereCo2Max}
-            label="± kg CO₂ vermeden"
-            sublabel="ERE's"
-            color="green"
-            size="md"
-            formatValue={fmtKg}
-          />
-          <CockpitGauge
-            value={kpis.ttmEreClientEstimate}
-            max={ereRevMax}
-            label="Geschatte ERE's"
-            sublabel="EUR"
-            color="green"
-            size="md"
-            formatValue={fmtEuro}
-          />
+        <div className="col-span-3 flex flex-col items-center gap-12 order-3 fixed top-[calc(50%+2vh)] -translate-x-1/2 -translate-y-1/2 left-[calc(75vw_+_clamp(460px,_67vh,_760px)/8)]">
+          {gaugeCo2}
+          {gaugeEre}
         </div>
+      </div>
+
+      {/* Mobiel/tablet (<lg): storingslampjes vast onder de kap + fullscreen
+          swipe-carousel — één gauge per slide, hoofdgauge gecentreerd bij openen.
+          De lampjes staan búiten de carousel zodat ze blijven staan bij het swipen. */}
+      <div className="lg:hidden flex-1 min-h-0 flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-1">
+          <WarningLight count={kpis.offlineCount} variant="offline" showCount />
+          <WarningLight count={kpis.chargePointsOnline} variant="online" showCount />
+        </div>
+
+        <div className="portal-gauge-carousel flex-1 min-h-0 overflow-hidden" ref={emblaRef}>
+          <div className="flex h-full items-center">
+            {mobileSlides.map((slide) => (
+              <div
+                key={slide.key}
+                className="min-w-0 flex-[0_0_100%] h-full flex items-center justify-center px-4"
+                aria-label={slide.label}
+              >
+                {slide.el}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Slide-indicator: tikbare dots (44px tapzone, kleine visuele punt) */}
+        <div className="flex items-center justify-center -mt-1">
+          {mobileSlides.map((slide, i) => (
+            <button
+              key={slide.key}
+              type="button"
+              aria-label={`Ga naar ${slide.label}`}
+              aria-current={i === activeSlide}
+              onClick={() => emblaApi?.scrollTo(i)}
+              className="w-11 h-11 flex items-center justify-center"
+            >
+              <span
+                className={
+                  i === activeSlide
+                    ? "h-2 w-5 rounded-full bg-[hsl(var(--gauge-green))] transition-all duration-300"
+                    : "h-2 w-2 rounded-full bg-muted-foreground/30 transition-all duration-300"
+                }
+              />
+            </button>
+          ))}
+        </div>
+
+        <div className="pb-2">{periodFilter}</div>
       </div>
 
     </div>
