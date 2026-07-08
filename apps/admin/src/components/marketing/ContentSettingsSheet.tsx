@@ -135,6 +135,11 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <NumField label="Blogs per run" value={s.autoblog_per_run} onChange={(v) => setField("autoblog_per_run", v)} />
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Notificatie-e-mail</Label>
+                <Input type="email" value={s.notify_email ?? ""} onChange={(e) => setField("notify_email", e.target.value)} placeholder="info@e-charging.nl" />
+                <p className="text-[11px] text-muted-foreground">Krijgt een mail wanneer een geplande run eindigt zónder publicatie (blog bleef in review, lege pool of fout). Leeg = geen mail.</p>
+              </div>
               <p className="text-[11px] text-muted-foreground">Laatste autoblog-run: {fmtAt(s.last_autoblog_at)}.</p>
               <Button variant="outline" size="sm" onClick={runAutoblogTest} disabled={autoblogRunning}>
                 <Sparkles className="mr-1.5 h-4 w-4" /> {autoblogRunning ? "Bezig..." : "Genereer nu 1 testblog (concept)"}

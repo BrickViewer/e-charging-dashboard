@@ -6,6 +6,7 @@ import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { getAnthropicKey, anthropicMessage, extractJson, DEFAULT_MODEL } from "../_shared/anthropic.ts";
 import { BLOG_REVISE_SYSTEM, BLOG_AUDIT_SYSTEM, validateBlogJson, validateAuditJson, applyInternalLinks } from "../_shared/blog.ts";
 import { fetchProofBlock } from "../_shared/proof.ts";
+import { notifyContentEngine } from "../_shared/content-notify.ts";
 
 // content-revise: één schakel in de HERSCHRIJF-TOT-TOPKWALITEIT-keten. Neemt een autoblog-CONCEPT + de auditor-kritiek,
 // herschrijft het gericht (Sonnet, GEEN web-search → snel, ~50-70s, ruim onder de 150s-edgelimiet), her-audit (Haiku),
@@ -61,7 +62,11 @@ Deno.serve(async (req) => {
     const FLOOR = Number.isFinite(settings.min_quality) ? Number(settings.min_quality) : 75;
 
     const apiKey = await getAnthropicKey(sb);
-    if (!apiKey) return json({ status: "no_key", message: "Claude-sleutel ontbreekt" });
+    if (!apiKey) {
+      // Keten sterft zonder sleutel: de post blijft anders geruisloos concept.
+      if (!finalize) await notifyContentEngine(settings, { kind: "no_key", title: post.title, reason: "Claude-sleutel viel weg tijdens de herschrijf-keten", blogPostId });
+      return json({ status: "no_key", message: "Claude-sleutel ontbreekt" });
+    }
 
     // Zoekvraag + context.
     let zoekvraag = post.title;
@@ -133,6 +138,13 @@ Deno.serve(async (req) => {
         await sb.rpc("invoke_edge_function", { fn_name: "content-revise", body: { blog_post_id: blogPostId, iteration: iteration + 1, issues, missing_experience: missingExp } });
         return json({ status: "ok", action: "retry_json", blog_post_id: blogPostId, iteration, reason: e instanceof Error ? e.message.slice(0, 140) : "json", ms: Date.now() - runStart });
       }
+      // Keteneinde zonder publicatie (JSON bleef ongeldig): meld het, anders blijft dit onzichtbaar.
+      await notifyContentEngine(settings, {
+        kind: "kept_concept",
+        title: post.title,
+        reason: `Herschrijven bleef ongeldige JSON opleveren na ${iteration} rondes; concept staat ter review`,
+        blogPostId,
+      });
       return json({ status: "ok", action: "kept_concept_jsonfail", blog_post_id: blogPostId, iteration, ms: Date.now() - runStart });
     }
 
@@ -236,6 +248,14 @@ Deno.serve(async (req) => {
     // MAX bereikt: publiceer de best-mogelijke versie zolang 'ie boven de (lage) vloer zit. Na maximaal herschrijven
     // is dit zo goed als het wordt en de gebruiker wil geen omkijken → publiceren, niet als concept laten hangen.
     if (scored && (q as number) >= FLOOR) return await publish("floor_after_max");
+    // Keteneinde zonder publicatie: zonder melding blijft dit onzichtbaar tot iemand de blog mist.
+    await notifyContentEngine(settings, {
+      kind: "kept_concept",
+      title: draft.title ?? post.title,
+      scores: { quality: q, seo, aeo },
+      reason: `Kwaliteit onder de vloer (${FLOOR}) na ${iteration} revisierondes`,
+      blogPostId,
+    });
     return json({ status: "ok", action: "kept_concept", blog_post_id: blogPostId, iteration, scores: { q, seo, aeo }, verdict: audit.verdict, ms: Date.now() - runStart });
   } catch (err) {
     return json({ status: "error", message: err instanceof Error ? err.message : "Herschrijven mislukt" }, 500);

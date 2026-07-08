@@ -7,6 +7,7 @@ import { getAnthropicKey, anthropicMessage, extractJson, DEFAULT_MODEL } from ".
 import { BLOG_SYSTEM, BLOG_AUDIT_SYSTEM, INTENT_NL, validateBlogJson, validateAuditJson, applyInternalLinks } from "../_shared/blog.ts";
 import { buildBlogCover } from "../_shared/cover.ts";
 import { fetchProofBlock } from "../_shared/proof.ts";
+import { notifyContentEngine } from "../_shared/content-notify.ts";
 
 // Content-autoblog: de AUTONOME blog-tak naast de opname/podcast-machine. Pakt zelf de best-scorende
 // SEO-onderwerpen (content_topics.seo_opportunity), laat Claude met web-search een publicatieklaar
@@ -46,20 +47,35 @@ Deno.serve(async (req) => {
       .from("content_engine_settings").select("id, settings").eq("is_active", true).limit(1).maybeSingle();
     if (settingsErr) throw settingsErr;
     const settings = (settingsRow?.settings ?? {}) as any;
+
+    // Testhaakje voor het notificatie-vangnet: stuurt alleen de voorbeeldmail en stopt (geen generatie).
+    if (body.notify_test === true) {
+      await notifyContentEngine(settings, {
+        kind: "kept_concept",
+        title: "Testmelding — voorbeeldblog",
+        scores: { quality: 71, seo: 78, aeo: 82 },
+        reason: "Dit is een testmelding (notify_test); er is niets gegenereerd",
+      });
+      return json({ status: "ok", action: "notify_test", notify_email: settings.notify_email ?? null });
+    }
+
     if (!settings.autoblog_enabled && !force) {
       return json({ status: "disabled", message: "autoblog_enabled=false" });
     }
 
-    // 2) Claude-sleutel (zonder sleutel netjes slapen, geen crash).
-    const apiKey = await getAnthropicKey(sb);
-    if (!apiKey) {
-      return json({ status: "no_key", message: "Stel eerst de Claude-sleutel (ANTHROPIC_API_KEY) in om blogs te genereren." });
-    }
-
-    // 3) Effectieve auto-publiceer-beslissing. body.publish===false forceert concept (testmodus).
+    // 2) Effectieve auto-publiceer-beslissing. body.publish===false forceert concept (testmodus).
+    // Vóór de sleutel-check: autopublish bepaalt ook of een mislukte run een vangnet-mail verdient
+    // (testmodus/handmatige conceptruns melden niet — de uitkomst is dan al zichtbaar in de UI).
     const autopublish = body.publish === true ? true
       : body.publish === false ? false
       : settings.autoblog_autopublish === true;
+
+    // 3) Claude-sleutel (zonder sleutel netjes slapen, geen crash).
+    const apiKey = await getAnthropicKey(sb);
+    if (!apiKey) {
+      if (autopublish) await notifyContentEngine(settings, { kind: "no_key", reason: "ANTHROPIC_API_KEY ontbreekt in de Vault" });
+      return json({ status: "no_key", message: "Stel eerst de Claude-sleutel (ANTHROPIC_API_KEY) in om blogs te genereren." });
+    }
 
     // 4) Onderwerpen selecteren: gepind of top-N op SEO-kans, nog niet in een blog verwerkt.
     const perRun = Number.isFinite(body.limit) ? Math.max(1, Math.min(5, Number(body.limit)))
@@ -79,6 +95,7 @@ Deno.serve(async (req) => {
       topics = (data ?? []) as any[];
     }
     if (topics.length === 0) {
+      if (autopublish) await notifyContentEngine(settings, { kind: "empty_pool" });
       return json({ status: "ok", generated: 0, published: 0, concepts: 0, errors: 0, results: [], message: "Geen onderwerpen in de pool." });
     }
 
@@ -364,6 +381,16 @@ Deno.serve(async (req) => {
       await sb.from("content_engine_settings")
         .update({ settings: { ...base, last_autoblog_at: new Date().toISOString() } })
         .eq("id", settingsRow.id);
+    }
+
+    // Vangnet: productie-run eindigde zonder publicatie én zonder lopende revise-keten (die meldt
+    // haar eigen keteneinde via kept_concept). Zonder mail blijft zo'n uitkomst onzichtbaar.
+    if (autopublish && published === 0 && !results.some((r) => r.action === "revising")) {
+      await notifyContentEngine(settings, {
+        kind: "run_failed",
+        reason: `Run afgerond: ${generated} gegenereerd, ${concepts} concept, ${errors} fout — geen publicatie`,
+        details: results.map((r) => r.reason ?? r.publish_error).filter((d): d is string => typeof d === "string"),
+      });
     }
 
     return json({ status: "ok", generated, published, concepts, errors, results });
