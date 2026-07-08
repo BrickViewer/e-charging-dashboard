@@ -109,7 +109,9 @@ export default function ClientLayout() {
 
         {/* Content area — start direct onder de cockpit-arc (padding compenseert de h-0 sticky) */}
         <div className="relative pt-[clamp(100px,18vh,300px)]">
-          <div className="max-w-5xl mx-auto px-4 lg:px-8 lg:pl-24 xl:pl-8 pt-4 pb-28 md:pb-10">
+          {/* Ruime top-padding: optische rustzone tussen kaprand en eerste content,
+              vh-gekoppeld zodat hij meeschaalt met de kap */}
+          <div className="max-w-5xl mx-auto px-4 lg:px-8 lg:pl-24 xl:pl-8 pt-[clamp(24px,4.5vh,56px)] pb-28 md:pb-10">
             <Outlet />
           </div>
         </div>

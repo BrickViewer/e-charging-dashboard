@@ -96,17 +96,17 @@ export default function ClientDashboard() {
       {/* Storinglampjes — op desktop fixed gepositioneerd in de gap tussen XL en small gauges.
           Op mobile worden ze inline gerenderd binnen de XL wrapper (zie verderop) */}
       <div className="hidden lg:block">
-        <div className="fixed top-[22vh] left-[calc(37.5vw_-_13vh_+_32px)] -translate-x-1/2 -translate-y-1/2 z-50">
+        <div className="fixed top-[24vh] left-[calc(37.5vw_-_13vh_+_32px)] -translate-x-1/2 -translate-y-1/2 z-50">
           <WarningLight count={kpis.offlineCount} variant="offline" />
         </div>
-        <div className="fixed top-[22vh] left-[calc(62.5vw_+_13vh_-_32px)] -translate-x-1/2 -translate-y-1/2 z-50">
+        <div className="fixed top-[24vh] left-[calc(62.5vw_+_13vh_-_32px)] -translate-x-1/2 -translate-y-1/2 z-50">
           <WarningLight count={kpis.chargePointsOnline} variant="online" />
         </div>
       </div>
 
       {/* Vijf gauges — XL center, zij-kolommen links/rechts */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-x-6 gap-y-4 items-center min-h-0">
-        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:gap-12 lg:order-1 lg:fixed lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:left-[calc(25vw_-_clamp(460px,_67vh,_760px)/8)]">
+        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:gap-12 lg:order-1 lg:fixed lg:top-[calc(50%+2vh)] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:left-[calc(25vw_-_clamp(460px,_67vh,_760px)/8)]">
           <CockpitGauge
             value={kpis.ttmKwh}
             max={kwhMax}
@@ -128,7 +128,7 @@ export default function ClientDashboard() {
         </div>
 
         <div className="lg:col-span-6 flex flex-col items-center justify-center lg:order-2">
-          <div className="relative w-fit pt-4 lg:fixed lg:top-[calc(50%+18px)] lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:z-10">
+          <div className="relative w-fit pt-4 lg:fixed lg:top-[calc(50%+18px+2vh)] lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:z-10">
             <div className="relative">
               <div className="absolute top-[27px] left-[8%] z-50 lg:hidden">
                 <WarningLight
@@ -158,7 +158,7 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:gap-12 lg:order-3 lg:fixed lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:left-[calc(75vw_+_clamp(460px,_67vh,_760px)/8)]">
+        <div className="lg:col-span-3 flex flex-col items-center gap-10 lg:gap-12 lg:order-3 lg:fixed lg:top-[calc(50%+2vh)] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:left-[calc(75vw_+_clamp(460px,_67vh,_760px)/8)]">
           <CockpitGauge
             value={kpis.ttmEreCo2}
             max={ereCo2Max}
