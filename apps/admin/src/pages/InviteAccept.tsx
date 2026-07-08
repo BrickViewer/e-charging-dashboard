@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import logoBright from "@/assets/logo-bright.svg";
+import logoFullColor from "@/assets/logo-full-color.svg";
+import { usePortalThemeSync } from "@/hooks/usePortalTheme";
 import { evaluatePassword } from "@/lib/passwordStrength";
 import { PasswordStrengthMeter, usePasswordStrength } from "@/components/PasswordStrengthMeter";
 
@@ -31,6 +33,8 @@ interface InvitationInfo {
 export default function InviteAccept() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  // Volg de dag/nacht-voorkeur van het apparaat (zelfde localStorage als het portaal).
+  const { isLight } = usePortalThemeSync();
 
   const [info, setInfo] = useState<InvitationInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,15 +131,20 @@ export default function InviteAccept() {
   };
 
   return (
-    <div className="portal-theme relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_28%,rgba(5,165,0,0.26),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_34%)]" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[linear-gradient(180deg,rgba(0,0,0,0.72),transparent)]" />
+    <div className={`portal-theme${isLight ? " light" : ""} relative min-h-screen overflow-hidden bg-background text-foreground`}>
+      {/* Ambient gloed is nachtdecor; dagmodus is vlak */}
+      {!isLight && (
+        <>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_28%,rgba(5,165,0,0.26),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_34%)]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[linear-gradient(180deg,rgba(0,0,0,0.72),transparent)]" />
+        </>
+      )}
 
       <main className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10">
         <div className="grid w-full max-w-5xl gap-5 lg:grid-cols-[0.9fr_1.1fr]">
           <section className="portal-card hidden min-h-[520px] flex-col justify-between p-8 lg:flex">
             <div>
-              <img src={logoBright} alt="E-Charging" className="h-9 w-auto" />
+              <img src={isLight ? logoFullColor : logoBright} alt="E-Charging" className="h-9 w-auto" />
               <div className="mt-16">
                 <p className="cockpit-section-label text-primary">Klantportaal</p>
                 <h1 className="mt-4 max-w-sm text-4xl font-semibold leading-tight text-foreground">
@@ -151,10 +160,10 @@ export default function InviteAccept() {
             </p>
           </section>
 
-          <Card className="portal-card min-h-[520px] border-primary/15 bg-card/80 shadow-2xl shadow-black/30">
+          <Card className={`portal-card min-h-[520px] ${isLight ? "" : "border-primary/15 bg-card/80 shadow-2xl shadow-black/30"}`}>
             <CardContent className="p-6 sm:p-8">
               <div className="mb-8 flex items-center justify-between gap-4 lg:hidden">
-                <img src={logoBright} alt="E-Charging" className="h-8 w-auto" />
+                <img src={isLight ? logoFullColor : logoBright} alt="E-Charging" className="h-8 w-auto" />
                 <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                   Klantportaal
                 </span>

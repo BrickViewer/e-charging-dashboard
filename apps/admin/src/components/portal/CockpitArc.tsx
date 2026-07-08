@@ -103,17 +103,18 @@ export function CockpitArc({ className = "" }: CockpitArcProps) {
         fill="url(#hood-material)"
       />
 
-      {/* Laag 2: subtiele groene ambient wash */}
-      <path
-        d="M 0 0 L 1200 0 L 1200 215 Q 600 22 0 215 Z"
-        fill="url(#hood-green-wash)"
-      />
-
-      {/* Laag 3: zachte lichtvlek rechts/midden */}
-      <path
-        d="M 0 0 L 1200 0 L 1200 215 Q 600 22 0 215 Z"
-        fill="url(#hood-green-glow)"
-      />
+      {/* Laag 2+3: groene ambient wash + lichtvlek — decoratief, uit in dagmodus.
+          Opacity via style: presentation-attributes lossen var() niet op. */}
+      <g style={{ opacity: "var(--arc-decor-opacity, 1)", transition: "opacity 300ms ease" }}>
+        <path
+          d="M 0 0 L 1200 0 L 1200 215 Q 600 22 0 215 Z"
+          fill="url(#hood-green-wash)"
+        />
+        <path
+          d="M 0 0 L 1200 0 L 1200 215 Q 600 22 0 215 Z"
+          fill="url(#hood-green-glow)"
+        />
+      </g>
 
       {/* Laag 4: bovenshine */}
       <path
@@ -163,32 +164,31 @@ export function CockpitArc({ className = "" }: CockpitArcProps) {
         style={{ stroke: "hsl(var(--arc-shadow))", opacity: "var(--arc-shadow-strength)" }}
       />
 
-      {/* Laag 10: zachte groene blend onder de rand */}
-      <path
-        d="M 0 216 Q 600 23 1200 216"
-        stroke="url(#rim-ambient)"
-        strokeWidth="13"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Laag 11: brede groene randglow onder de scherpe rim */}
-      <path
-        d="M 0 215 Q 600 22 1200 215"
-        stroke="url(#rim-glow)"
-        strokeWidth="3"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Laag 12: subtiele groene randlijn */}
-      <path
-        d="M 0 215 Q 600 22 1200 215"
-        stroke="url(#rim-subtle)"
-        strokeWidth="1.1"
-        fill="none"
-        strokeLinecap="round"
-      />
+      {/* Laag 10-12: groene rand-blend/-glow/-lijn (hardgecodeerd 132-groen) —
+          decoratief cockpit-chrome, uit in dagmodus via --arc-decor-opacity. */}
+      <g style={{ opacity: "var(--arc-decor-opacity, 1)", transition: "opacity 300ms ease" }}>
+        <path
+          d="M 0 216 Q 600 23 1200 216"
+          stroke="url(#rim-ambient)"
+          strokeWidth="13"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 0 215 Q 600 22 1200 215"
+          stroke="url(#rim-glow)"
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 0 215 Q 600 22 1200 215"
+          stroke="url(#rim-subtle)"
+          strokeWidth="1.1"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </g>
     </svg>
   );
 }

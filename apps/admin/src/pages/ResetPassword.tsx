@@ -11,9 +11,12 @@ import { completePasswordReset } from "@/services/clientPaymentDetails";
 import { supabase } from "@/integrations/supabase/client";
 import { evaluatePassword } from "@/lib/passwordStrength";
 import { PasswordStrengthMeter, usePasswordStrength } from "@/components/PasswordStrengthMeter";
+import { usePortalThemeSync } from "@/hooks/usePortalTheme";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  // Volg de dag/nacht-voorkeur van het apparaat (zelfde localStorage als het portaal).
+  const { isLight } = usePortalThemeSync();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -49,7 +52,7 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="portal-theme flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
+    <div className={`portal-theme${isLight ? " light" : ""} flex min-h-screen items-center justify-center bg-background px-4 text-foreground`}>
       <Card className="portal-card w-full max-w-md">
         <CardContent className="p-6">
           <div className="mb-6">

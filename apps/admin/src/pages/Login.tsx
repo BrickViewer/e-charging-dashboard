@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Power, Loader2 } from "lucide-react";
 import { CockpitArc } from "@/components/portal/CockpitArc";
+import { usePortalTheme, usePortalThemeSync } from "@/hooks/usePortalTheme";
 import logoBright from "@/assets/icon-bright.svg";
+import logoFullColor from "@/assets/icon-full-color.svg";
 import { requestPasswordReset } from "@/services/clientPaymentDetails";
 import { toast } from "sonner";
 
@@ -23,6 +25,8 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
 
   const { signIn, signInWithMicrosoft, user, role, isLoading, isInternal } = useAuth();
   const navigate = useNavigate();
+  // Volg de dag/nacht-voorkeur van het apparaat (zelfde localStorage als het portaal).
+  const { isLight } = usePortalThemeSync();
 
   // Bij ignition: na 2.6s pulseringssequentie redirect uitvoeren
   useEffect(() => {
@@ -101,22 +105,24 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
   };
 
   return (
-    <div className="portal-theme relative min-h-screen overflow-hidden bg-background text-foreground">
+    <div className={`portal-theme${isLight ? " light" : ""} relative min-h-screen overflow-hidden bg-background text-foreground`}>
       {/* Cockpit-kap bovenaan */}
       <div className="absolute top-0 left-0 right-0 pointer-events-none">
         <CockpitArc className="h-[clamp(120px,22vh,320px)]" />
       </div>
 
-      {/* Ambient grid + scan lines achtergrond */}
-      <div className="absolute inset-0 pointer-events-none opacity-40">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 20% 30%, hsl(200 100% 64% / 0.08) 0%, transparent 40%), radial-gradient(circle at 80% 70%, hsl(118 100% 50% / 0.06) 0%, transparent 45%)",
-          }}
-        />
-      </div>
+      {/* Ambient grid — nachtdecor; dagmodus is vlak */}
+      {!isLight && (
+        <div className="absolute inset-0 pointer-events-none opacity-40">
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 20% 30%, hsl(200 100% 64% / 0.08) 0%, transparent 40%), radial-gradient(circle at 80% 70%, hsl(118 100% 50% / 0.06) 0%, transparent 45%)",
+            }}
+          />
+        </div>
+      )}
 
       {/* Scrolling scan-line — alleen actief tijdens ignition */}
       {phase === "ignition" && (
@@ -179,28 +185,33 @@ function LoginForm(props: {
 }) {
   const { email, setEmail, password, setPassword, showPw, setShowPw, phase, errMsg, onSubmit, onPasswordReset, resetSending, onMicrosoft, msStarting, mode } = props;
   const submitting = phase === "submitting";
+  const { isLight } = usePortalTheme();
 
   return (
     <div className="w-full max-w-[420px] animate-fade-in">
-      {/* Logo + branding */}
+      {/* Logo + branding — nacht: gloed + glas; dag: vlakke witte kaart */}
       <div className="flex flex-col items-center mb-10">
         <div className="relative">
-          <div className="absolute -inset-3 rounded-2xl bg-gradient-to-br from-primary/30 via-blue-400/10 to-transparent blur-xl pointer-events-none" />
-          <div className="relative bg-gradient-to-br from-card to-card/40 border border-border rounded-2xl p-3 backdrop-blur-sm">
-            <img src={logoBright} alt="E-Charging" className="h-10 w-auto" />
+          {!isLight && (
+            <div className="absolute -inset-3 rounded-2xl bg-gradient-to-br from-primary/30 via-blue-400/10 to-transparent blur-xl pointer-events-none" />
+          )}
+          <div className={`relative rounded-2xl border border-border p-3 ${isLight ? "bg-card shadow-sm" : "bg-gradient-to-br from-card to-card/40 backdrop-blur-sm"}`}>
+            <img src={isLight ? logoFullColor : logoBright} alt="E-Charging" className="h-10 w-auto" />
           </div>
         </div>
         <p className="cockpit-title mt-6">Inloggen</p>
         <div className="cockpit-title-accent mt-2" />
       </div>
 
-      {/* Login card — cockpit-stijl */}
+      {/* Login card — nacht: cockpit-gloed; dag: vlakke visitekaartje-kaart */}
       <div className="relative">
-        <div className="absolute -inset-px rounded-3xl bg-gradient-to-br from-primary/30 via-transparent to-blue-400/20 pointer-events-none" />
+        {!isLight && (
+          <div className="absolute -inset-px rounded-3xl bg-gradient-to-br from-primary/30 via-transparent to-blue-400/20 pointer-events-none" />
+        )}
         <form
           onSubmit={onSubmit}
-          className="relative portal-card rounded-3xl bg-card/80 backdrop-blur-md p-7 space-y-5 border-border/60"
-          style={{ boxShadow: "0 0 60px rgba(5,165,0,0.06), 0 1px 0 rgba(255,255,255,0.04) inset" }}
+          className={`relative portal-card rounded-3xl p-7 space-y-5 ${isLight ? "" : "bg-card/80 backdrop-blur-md border-border/60"}`}
+          style={isLight ? undefined : { boxShadow: "0 0 60px rgba(5,165,0,0.06), 0 1px 0 rgba(255,255,255,0.04) inset" }}
         >
           {mode === "admin" ? (
             <>
@@ -474,5 +485,19 @@ const loginStyles = `
 .ignition-button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+/* Dagmodus — solide merkgroene knop zonder gloed (visitekaartje-stijl) */
+.portal-theme.light .ignition-button {
+  background: hsl(var(--primary));
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.10);
+}
+.portal-theme.light .ignition-button:hover:not(:disabled) {
+  background: hsl(var(--primary-hover, var(--primary)));
+  box-shadow: 0 2px 6px hsl(0 0% 0% / 0.12);
+  transform: none;
+}
+.portal-theme.light .ignition-button:active:not(:disabled) {
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.10);
 }
 `;

@@ -54,7 +54,7 @@ export default function ClientLocationDetail() {
   const statusColor = (status: string) => {
     switch (status) {
       case "online": return "bg-primary text-primary-foreground";
-      case "in_use": return "bg-blue-500 text-white";
+      case "in_use": return "bg-[hsl(var(--status-blue))] text-white";
       case "offline": return "bg-destructive text-destructive-foreground";
       default: return "bg-muted text-muted-foreground";
     }
@@ -104,7 +104,7 @@ export default function ClientLocationDetail() {
           <CardContent className="p-4 text-center">
             <p className="cockpit-section-label">Zonnepanelen</p>
             <div className="flex items-center justify-center gap-1 mt-1">
-              {location.has_solar ? <Sun className="w-3.5 h-3.5 text-yellow-500" /> : null}
+              {location.has_solar ? <Sun className="w-3.5 h-3.5 text-[hsl(var(--status-amber))]" /> : null}
               <p className="font-semibold text-sm">{location.has_solar ? `${location.solar_capacity_kwp || "?"} kWp` : "Nee"}</p>
             </div>
           </CardContent>

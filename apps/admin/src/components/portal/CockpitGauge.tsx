@@ -233,7 +233,8 @@ export function CockpitGauge({
           const dot = polarToCartesian(cx, cy, radius, dotAngle);
           return (
             <g>
-              <circle cx={dot.x} cy={dot.y} r={isXl ? 8 : 5} fill={arcColor} opacity={0.25} />
+              {/* Halo volgt de gloed-instelling van het thema (dagmodus: 0 = vlak) */}
+              <circle cx={dot.x} cy={dot.y} r={isXl ? 8 : 5} fill={arcColor} style={{ opacity: "calc(var(--gauge-glow-opacity, 1) * 0.25)" }} />
               <circle cx={dot.x} cy={dot.y} r={isXl ? 4 : 2.5} fill={arcColor} />
             </g>
           );
