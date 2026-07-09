@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, SlidersHorizontal, X, Tag as TagIcon } from "lucide-react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { sourceLabel } from "@/lib/quoteRequest";
 import { tagTextColor } from "@/hooks/useLeadTags";
 import { SCOPES, SCOPE_LABEL, type QuoteScope } from "@/lib/quoteScope";
 import { activeFilterCount, type LeadViewState, type LeadDateField } from "@/hooks/useLeadViewState";
@@ -89,7 +90,7 @@ export function LeadFilterBar({
           </SelectContent>
         </Select>
 
-        <MultiPopover label="Bron" options={sources.map((s) => ({ value: s, label: s }))} selected={state.sources} onChange={(v) => patch({ sources: v })} />
+        <MultiPopover label="Bron" options={sources.map((s) => ({ value: s, label: sourceLabel(s) }))} selected={state.sources} onChange={(v) => patch({ sources: v })} />
         <MultiPopover label="Tags" icon={<TagIcon className="h-3.5 w-3.5" />} options={tags.map((t) => ({ value: t.id, label: t.name, color: t.color }))} selected={state.tagIds} onChange={(v) => patch({ tagIds: v })} />
 
         <Popover>
@@ -160,7 +161,7 @@ export function LeadFilterBar({
         <div className="flex flex-wrap items-center gap-1.5">
           {state.search && <Chip onClear={() => patch({ search: "" })}>Zoek: "{state.search}"</Chip>}
           {state.owner !== "all" && <Chip onClear={() => patch({ owner: "all" })}>Eigenaar: {state.owner === "me" ? "ik" : state.owner === "none" ? "geen" : (profiles.find((p) => p.user_id === state.owner)?.full_name ?? "…")}</Chip>}
-          {state.sources.map((s) => <Chip key={s} onClear={() => patch({ sources: state.sources.filter((x) => x !== s) })}>Bron: {s}</Chip>)}
+          {state.sources.map((s) => <Chip key={s} onClear={() => patch({ sources: state.sources.filter((x) => x !== s) })}>Bron: {sourceLabel(s)}</Chip>)}
           {state.tagIds.map((t) => { const tag = tags.find((x) => x.id === t); return tag ? <span key={t} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium" style={{ backgroundColor: tag.color, color: tagTextColor(tag.color) }}>{tag.name}<button onClick={() => patch({ tagIds: state.tagIds.filter((x) => x !== t) })}><X className="h-3 w-3" /></button></span> : null; })}
           {state.priorities.map((p) => <Chip key={p} onClear={() => patch({ priorities: state.priorities.filter((x) => x !== p) })}>Prio: {PRIORITIES.find((x) => x.v === p)?.l ?? p}</Chip>)}
           {state.scopes.map((s) => <Chip key={s} onClear={() => patch({ scopes: state.scopes.filter((x) => x !== s) })}>{SCOPE_LABEL[s as QuoteScope] ?? s}</Chip>)}

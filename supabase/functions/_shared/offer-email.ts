@@ -16,7 +16,7 @@ function nlDate(iso?: string | null): string {
   return d.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function shell(_supabaseUrl: string, innerHtml: string): string {
+export function shell(_supabaseUrl: string, innerHtml: string): string {
   // Logo on-domain (dashboard.e-charging.nl) i.p.v. supabase.co — anders markeert Gmail het als verdacht.
   const logo = logoColorUrl;
   return `<!doctype html>
@@ -56,25 +56,25 @@ function shell(_supabaseUrl: string, innerHtml: string): string {
 }
 
 // Bulletproof CTA-knop: VML-roundrect voor Outlook, gewone &lt;a&gt; voor de rest.
-function btn(url: string, label: string): string {
+export function btn(url: string, label: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 0"><tr><td align="left">
   <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:48px;v-text-anchor:middle;width:330px;" arcsize="16%" stroke="f" fillcolor="#05A500"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${label}</center></v:roundrect><![endif]-->
   <!--[if !mso]><!-- --><a href="${url}" style="display:inline-block;background:#05A500;border-radius:8px;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;mso-padding-alt:0;line-height:100%">${label}</a><!--<![endif]-->
 </td></tr></table>`;
 }
 
-const eyebrow = (t: string) => `<p style="margin:0 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#05A500;font-weight:700">${t}</p>`;
-const h1 = (t: string) => `<h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#111827;font-weight:700">${t}</h1>`;
-const p = (t: string) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#374151">${t}</p>`;
-const fine = (t: string) => `<p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#6b7280">${t}</p>`;
-const greet = `<p style="margin:22px 0 0;font-size:15px;line-height:1.65;color:#374151">Met vriendelijke groet,<br>Team E-Charging</p>`;
+export const eyebrow = (t: string) => `<p style="margin:0 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#05A500;font-weight:700">${t}</p>`;
+export const h1 = (t: string) => `<h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#111827;font-weight:700">${t}</h1>`;
+export const p = (t: string) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#374151">${t}</p>`;
+export const fine = (t: string) => `<p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#6b7280">${t}</p>`;
+export const greet = `<p style="margin:22px 0 0;font-size:15px;line-height:1.65;color:#374151">Met vriendelijke groet,<br>Team E-Charging</p>`;
 
 // "Beste {naam}," bij een bekende naam (correct bij voornaam+achternaam), anders
 // het formele "Geachte heer/mevrouw,".
 const aanhef = (naam?: string | null) => p(naam && naam.trim() ? `Beste ${naam.trim()},` : "Geachte heer/mevrouw,");
 
 // HTML-escape voor door de gebruiker ingevoerde mailtekst (voorkomt kapotte HTML/injectie).
-function escHtml(s: string): string {
+export function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 // Vrije body-tekst → losse <p>-alinea's (lege regel = nieuwe alinea, enkele newline = <br>). Markdown-vet

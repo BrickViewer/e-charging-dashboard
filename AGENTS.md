@@ -193,6 +193,8 @@ Allemaal Deno, draaien op Supabase. Auth-handling per function:
 | `order-handoff` | **true** | Knop "Versturen opdracht" (sales/admin) | POST naar E-Group `intake-external-order`; bouwt payload uit installation_orders+joins; secrets via env/Vault |
 | `installation-completion-webhook` | **false** | E-Group `pg_net`-trigger | Inbound statusterugkoppeling; auth via `x-echarging-secret` (Vault `egroup_webhook_secret`) |
 | `send-fault-notification` | **false** | eflux-sync (x-internal-secret) of admin (JWT) | Branded storingsmail gebundeld per locatie; body `{fault_ids, dry_run?}`; ondersteunt `dry_run` |
+| `quote-intake` | **false** | Publiek: offerte-wizard op www.e-charging.nl/offerte | Twee acties: `upload_url` (signed upload URL naar privé-bucket `intake-uploads`) en `submit` (lead + `quote_requests` + vervolgtaak + bevestigingsmail + interne melding). Beveiliging: CORS-allowlist, honeypot, IP-rate-limit via `quote_intake_log` (40 uploads/10 min, 5 submits/60 min), optioneel Turnstile. Servervalidatie spiegelt `src/lib/offerte/validation.ts` van de website-repo |
+| `quote-uploads-cleanup` | **false** | Cron (daily 03:30) via `invoke_edge_function` (x-internal-secret) | Verwijdert wees-uploads uit `intake-uploads` (>30 dagen, nergens in `quote_requests.files`). Body `{older_than_days?}`. De frontend heeft geen verwijderpad, dus dit is de enige opruiming |
 
 ⚠️ De `invoke_edge_function()` SQL helper haalt `supabase_anon_key` uit Vault en doet `net.http_post` met Bearer. Dat betekent: chained edge functions worden aangeroepen met **anon-rechten**, niet service-role. Bij `verify_jwt=false` werkt dat; bij `verify_jwt=true` zou je een geldige user-JWT moeten meegeven.
 

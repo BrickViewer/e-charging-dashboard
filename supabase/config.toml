@@ -154,3 +154,9 @@ verify_jwt = false
 
 [functions.update-portal-bank-details]
 verify_jwt = false
+
+[functions.quote-intake]
+verify_jwt = false
+
+[functions.quote-uploads-cleanup]
+verify_jwt = false
