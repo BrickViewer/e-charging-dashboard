@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   computeTotals,
+  GEEN_OFFERPRIJS_KEUZE,
   hoursSplit,
+  offerPriceFor,
   r2,
+  restoreOfferChoice,
   roundUpTo,
   sectionOfLine,
   sectionSellSubtotal,
@@ -89,6 +92,45 @@ describe("roundUpTo", () => {
     expect(roundUpTo(0, 50)).toBe(0);
     expect(roundUpTo(-10, 50)).toBe(0);
     expect(roundUpTo(1234.5, 0)).toBe(1234.5);
+  });
+});
+
+describe("offerteprijs volgt de calculatie", () => {
+  const totalsVoor = computeTotals([line({ qty: 1, unit_sell: 4017.18 })], { ...header, retour_km: 0, stelpost_graafwerk: 0 });
+  const totalsNa = computeTotals([line({ qty: 1, unit_sell: 4500 })], { ...header, retour_km: 0, stelpost_graafwerk: 0 });
+
+  it("volgt zonder keuze het voorstel", () => {
+    expect(offerPriceFor(totalsVoor, GEEN_OFFERPRIJS_KEUZE)).toBe(4018);
+    expect(offerPriceFor(totalsNa, GEEN_OFFERPRIJS_KEUZE)).toBe(4500);
+  });
+
+  it("laat een afrondstap MEEBEWEGEN met de calculatie", () => {
+    // De kern van de bug: een pill is een regel, geen bevroren bedrag.
+    const keuze = { roundStep: 50, manual: null };
+    expect(offerPriceFor(totalsVoor, keuze)).toBe(4050);
+    expect(offerPriceFor(totalsNa, keuze)).toBe(4500);
+  });
+
+  it("laat een handmatig bedrag juist wél staan", () => {
+    const keuze = { roundStep: null, manual: 3950 };
+    expect(offerPriceFor(totalsVoor, keuze)).toBe(3950);
+    expect(offerPriceFor(totalsNa, keuze)).toBe(3950);
+  });
+
+  describe("terughalen van een opgeslagen prijs", () => {
+    it("herkent een afrondstap en herstelt de regel", () => {
+      expect(restoreOfferChoice(totalsVoor, 4050)).toEqual({ roundStep: 50, manual: null });
+      expect(restoreOfferChoice(totalsVoor, 4100)).toEqual({ roundStep: 100, manual: null });
+    });
+
+    it("ziet het voorstel als 'geen keuze', zodat de prijs blijft volgen", () => {
+      expect(restoreOfferChoice(totalsVoor, 4018)).toEqual(GEEN_OFFERPRIJS_KEUZE);
+      expect(restoreOfferChoice(totalsVoor, null)).toEqual(GEEN_OFFERPRIJS_KEUZE);
+    });
+
+    it("houdt een afwijkend bedrag als handmatige keuze", () => {
+      expect(restoreOfferChoice(totalsVoor, 3950)).toEqual({ roundStep: null, manual: 3950 });
+    });
   });
 });
 

@@ -23,8 +23,10 @@ function renderCard(overrides: Partial<React.ComponentProps<typeof CalcTotalsCar
   const props = {
     totals,
     offerPrice: totals.suggestedOfferPrice,
+    roundStep: null,
     frozen: false,
     onOfferPriceCommit: vi.fn(),
+    onPickRoundStep: vi.fn(),
     ...overrides,
   };
   render(<CalcTotalsCard {...props} />);
@@ -40,31 +42,27 @@ describe("CalcTotalsCard", () => {
     expect(screen.queryByText("Montage")).not.toBeInTheDocument();
   });
 
-  it("rondt met één klik naar boven af op 25, 50 of 100", () => {
+  it("kiest met één klik een afrondstap", () => {
     const props = renderCard();
     expect(totals.totalSell).toBe(4017.18);
-
-    fireEvent.click(pill(25));
-    expect(props.onOfferPriceCommit).toHaveBeenLastCalledWith(4025);
-
     fireEvent.click(pill(50));
-    expect(props.onOfferPriceCommit).toHaveBeenLastCalledWith(4050);
-
-    fireEvent.click(pill(100));
-    expect(props.onOfferPriceCommit).toHaveBeenLastCalledWith(4100);
+    expect(props.onPickRoundStep).toHaveBeenCalledWith(50);
+    // Niet het bedrag bevriezen: de stap is de keuze.
+    expect(props.onOfferPriceCommit).not.toHaveBeenCalled();
   });
 
-  it("rondt altijd vanaf de calculatie, niet vanaf de huidige prijs", () => {
-    // Anders zou 100 → 50 blijven hangen op 4.100 in plaats van 4.050 te geven.
-    const props = renderCard({ offerPrice: 4100 });
-    fireEvent.click(pill(50));
-    expect(props.onOfferPriceCommit).toHaveBeenCalledWith(4050);
+  it("toont per stap welk bedrag eruit komt", () => {
+    renderCard();
+    // formatEuro zet een harde spatie na het euroteken; toets op de cijfers.
+    expect(pill(25).getAttribute("title")).toContain("4.025,00");
+    expect(pill(50).getAttribute("title")).toContain("4.050,00");
+    expect(pill(100).getAttribute("title")).toContain("4.100,00");
   });
 
-  it("markeert de stap die bij de huidige prijs hoort", () => {
-    renderCard({ offerPrice: 4025 });
-    expect(pill(25)).toHaveAttribute("aria-pressed", "true");
-    expect(pill(50)).toHaveAttribute("aria-pressed", "false");
+  it("markeert de gekozen stap, niet een toevallig gelijk bedrag", () => {
+    renderCard({ roundStep: 50, offerPrice: 4050 });
+    expect(pill(50)).toHaveAttribute("aria-pressed", "true");
+    expect(pill(25)).toHaveAttribute("aria-pressed", "false");
   });
 
   it("laat het bedrag ook handmatig invoeren", () => {
@@ -73,6 +71,16 @@ describe("CalcTotalsCard", () => {
     fireEvent.change(veld, { target: { value: "3950" } });
     fireEvent.blur(veld);
     expect(props.onOfferPriceCommit).toHaveBeenCalledWith(3950);
+  });
+
+  it("waarschuwt als de prijs onder de calculatie ligt", () => {
+    renderCard({ offerPrice: 3950 });
+    expect(screen.getByText(/ligt onder de calculatie van € 4.017,18/)).toBeInTheDocument();
+  });
+
+  it("waarschuwt niet bij een prijs op of boven de calculatie", () => {
+    renderCard({ offerPrice: 4018 });
+    expect(screen.queryByText(/onder de calculatie/)).not.toBeInTheDocument();
   });
 
   it("verbergt de afrondknoppen bij een bevroren calculatie", () => {

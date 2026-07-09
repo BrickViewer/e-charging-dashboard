@@ -11,11 +11,15 @@ import { useQuoteCalculation, useSaveQuoteCalculation } from "@/hooks/useQuoteCa
 import { useCatalogProducts, netCost, sellPrice, type CatalogProduct } from "@/hooks/useCatalogProducts";
 import {
   computeTotals,
+  GEEN_OFFERPRIJS_KEUZE,
+  offerPriceFor,
+  restoreOfferChoice,
   sortLinesBySection,
   type CalcHeaderDraft,
   type CalcLineDraft,
   type CalcSection,
   type CalcSummary,
+  type OfferPriceChoice,
 } from "@/services/calcTypes";
 import { CalcSheet } from "@/components/sales/calc/CalcSheet";
 import { CalcTotalsCard } from "@/components/sales/calc/CalcTotalsCard";
@@ -45,7 +49,7 @@ export default function SalesOfferteCalculatie() {
   const [lines, setLines] = useState<CalcLineDraft[]>([]);
   const [header, setHeader] = useState<CalcHeaderDraft>(DEFAULT_HEADER);
   const [summary, setSummary] = useState<CalcSummary>({});
-  const [offerPrice, setOfferPrice] = useState<number | null>(null);
+  const [offerChoice, setOfferChoice] = useState<OfferPriceChoice>(GEEN_OFFERPRIJS_KEUZE);
   const [busy, setBusy] = useState(false);
   const [kmBusy, setKmBusy] = useState(false);
   const [kmHint, setKmHint] = useState<string | null>(null);
@@ -67,25 +71,39 @@ export default function SalesOfferteCalculatie() {
       stelpost_note: calc.stelpost_note ?? "",
     });
     setSummary((calc.summary ?? {}) as CalcSummary);
-    setOfferPrice(calc.offer_price_rounded == null ? null : Number(calc.offer_price_rounded));
-    setLines(
-      dbLines.map((l, i) => ({
-        uid: nextUid(),
-        id: l.id,
-        line_type: l.line_type as CalcLineDraft["line_type"],
-        product_id: l.product_id,
-        description: l.description,
-        category: l.category,
-        supplier: l.supplier,
-        order_number: l.order_number,
-        unit: l.unit,
-        qty: Number(l.qty),
-        unit_gross: Number(l.unit_gross),
-        unit_cost: Number(l.unit_cost),
-        unit_sell: Number(l.unit_sell),
-        unit_hours: Number(l.unit_hours),
-        position: i,
-      })),
+    const seededHeader: CalcHeaderDraft = {
+      hourly_rate: Number(calc.hourly_rate),
+      km_price: Number(calc.km_price),
+      retour_km: Number(calc.retour_km),
+      travel_days: Number(calc.travel_days),
+      stelpost_graafwerk: Number(calc.stelpost_graafwerk),
+      stelpost_note: calc.stelpost_note ?? "",
+    };
+    const seededLines = dbLines.map((l, i) => ({
+      uid: nextUid(),
+      id: l.id,
+      line_type: l.line_type as CalcLineDraft["line_type"],
+      product_id: l.product_id,
+      description: l.description,
+      category: l.category,
+      supplier: l.supplier,
+      order_number: l.order_number,
+      unit: l.unit,
+      qty: Number(l.qty),
+      unit_gross: Number(l.unit_gross),
+      unit_cost: Number(l.unit_cost),
+      unit_sell: Number(l.unit_sell),
+      unit_hours: Number(l.unit_hours),
+      position: i,
+    }));
+    setLines(seededLines);
+    // Alleen het bedrag is opgeslagen, niet hoe het gekozen is: viel het op een
+    // afrondstap, dan gaat die regel weer meebewegen met de calculatie.
+    setOfferChoice(
+      restoreOfferChoice(
+        computeTotals(seededLines, seededHeader),
+        calc.offer_price_rounded == null ? null : Number(calc.offer_price_rounded),
+      ),
     );
   }, [calcQuery.data]);
 
@@ -93,9 +111,18 @@ export default function SalesOfferteCalculatie() {
   // Wat we opslaan is wat je op het blad ziet: regels gegroepeerd per sectie.
   // Dit bepaalt `position`, de volgorde van de offerteregels en het Excel.
   const orderedLines = useMemo(() => sortLinesBySection(lines), [lines]);
-  // Effectieve offerteprijs: handmatig afgerond bedrag, anders het voorstel.
-  const effectiveOfferPrice = offerPrice ?? totals.suggestedOfferPrice;
+  // Een afrondstap beweegt mee met de calculatie; een handmatig bedrag blijft staan.
+  const effectiveOfferPrice = offerPriceFor(totals, offerChoice);
   const isConcept = quote.data?.status === "concept";
+
+  const pickRoundStep = (step: number) => setOfferChoice({ roundStep: step, manual: null });
+
+  /** NumField commit óók op blur zonder wijziging — dan mag de afrondstap niet
+      stilletjes in een bevroren bedrag veranderen. */
+  const commitOfferPrice = (n: number) => {
+    if (n === effectiveOfferPrice) return;
+    setOfferChoice({ roundStep: null, manual: n > 0 ? n : null });
+  };
 
   // Kilometers automatisch: rijafstand kantoor (Zaltbommel) ↔ projectadres.
   const computeKm = async (manual: boolean) => {
@@ -374,8 +401,10 @@ export default function SalesOfferteCalculatie() {
           <CalcTotalsCard
             totals={totals}
             offerPrice={effectiveOfferPrice}
+            roundStep={offerChoice.roundStep}
             frozen={frozen}
-            onOfferPriceCommit={(n) => setOfferPrice(n > 0 ? n : null)}
+            onOfferPriceCommit={commitOfferPrice}
+            onPickRoundStep={pickRoundStep}
           />
         </div>
       </div>

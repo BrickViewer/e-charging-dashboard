@@ -71,6 +71,34 @@ export function roundUpTo(amount: number, step: number): number {
   return Math.ceil(r2(amount) / step) * step;
 }
 
+/**
+ * Hoe de offerteprijs tot stand komt. Een afrondstap is een REGEL en beweegt
+ * dus mee als de calculatie verandert; een handmatig bedrag is een bewuste
+ * keuze en blijft staan. Geen van beide = het voorstel volgen.
+ */
+export interface OfferPriceChoice {
+  roundStep: number | null;
+  manual: number | null;
+}
+
+export const GEEN_OFFERPRIJS_KEUZE: OfferPriceChoice = { roundStep: null, manual: null };
+
+export function offerPriceFor(totals: CalcTotals, choice: OfferPriceChoice): number {
+  if (choice.roundStep) return roundUpTo(totals.totalSell, choice.roundStep);
+  return choice.manual ?? totals.suggestedOfferPrice;
+}
+
+/**
+ * Bij het openen van een opgeslagen calculatie kennen we alleen het bedrag,
+ * niet hoe het gekozen is. Valt het precies op een afrondstap, dan herstellen
+ * we die stap — anders blijft de prijs waar hij stond aan de vorige kant.
+ */
+export function restoreOfferChoice(totals: CalcTotals, price: number | null): OfferPriceChoice {
+  if (price == null || price === totals.suggestedOfferPrice) return GEEN_OFFERPRIJS_KEUZE;
+  const step = AFROND_STAPPEN.find((s) => roundUpTo(totals.totalSell, s) === price);
+  return step ? { roundStep: step, manual: null } : { roundStep: null, manual: price };
+}
+
 /** Secties van het calculatieblad, in leesvolgorde. */
 export type CalcSection = "laadpalen" | "installatiemateriaal" | "arbeid";
 
