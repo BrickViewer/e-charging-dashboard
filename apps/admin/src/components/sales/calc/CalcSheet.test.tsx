@@ -251,15 +251,23 @@ describe("CalcSheet", () => {
     expect(props.onRecomputeKm).toHaveBeenCalled();
   });
 
-  it("toont een lege sectie met kop en één toevoeg-regel", () => {
+  it("toont een lege sectie als kop met alleen de toevoeg-regel", () => {
     renderSheet({ lines: [], totals: computeTotals([], header) });
     expect(screen.getByText("Laadpalen")).toBeInTheDocument();
-    expect(screen.getAllByText("Nog geen regels")).toHaveLength(2);
+    expect(screen.queryByText(/Nog geen/)).not.toBeInTheDocument();
     expect(screen.getByTestId("add-laadpalen")).toBeInTheDocument();
     expect(screen.getByTestId("add-installatiemateriaal")).toBeInTheDocument();
     // Uurloon en Voorrijkosten staan er altijd, ook zonder regels.
     expect(row("uurloon")).toBeInTheDocument();
     expect(row("voorrijkosten")).toBeInTheDocument();
+  });
+
+  it("houdt de toevoeg-regel onder de bestaande regels, zodat je door kunt", () => {
+    renderSheet();
+    const laadpalen = section("laadpalen");
+    const kinderen = [...laadpalen.children];
+    expect(kinderen.at(-1)).toBe(screen.getByTestId("add-laadpalen"));
+    expect(within(laadpalen).getByDisplayValue("Zaptec onepole")).toBeInTheDocument();
   });
 
   it("is bevroren leesbaar: geen knoppen, wel chevrons, alle velden disabled", () => {

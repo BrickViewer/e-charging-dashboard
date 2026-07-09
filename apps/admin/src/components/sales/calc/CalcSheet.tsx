@@ -137,10 +137,9 @@ export function CalcSheet(props: CalcSheetProps) {
               />
             ))}
 
-            {rows.length === 0 && (
-              <p className="border-b border-border/60 px-4 py-4 text-center text-sm text-muted-foreground">Nog geen regels</p>
-            )}
-
+            {/* Geen lege-staat-tekst: een lege sectie is gewoon haar kop met de
+                toevoeg-regel eronder. Die regel staat er altijd, dus na elke
+                toevoeging kun je meteen door. */}
             {!frozen && (
               <AddLineRow
                 section={section.value}
