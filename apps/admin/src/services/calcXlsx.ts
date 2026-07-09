@@ -52,14 +52,13 @@ export async function buildCalcXlsx(input: CalcXlsxInput): Promise<Uint8Array> {
     rStel.getCell(2).numFmt = EURO_FMT;
   }
   cover.addRow([]);
-  const s = input.summary;
-  if (s.chargerModel || s.numSockets || s.eindgroepen) {
-    cover.addRow(["Installatie"]).font = bold;
-    if (s.chargerModel) cover.addRow(["Laadpaal-model:", s.chargerModel]);
-    if (s.numSockets) cover.addRow(["Laadpunten:", s.numSockets]);
-    if (s.numPoles) cover.addRow(["Laadpalen (fysiek):", s.numPoles]);
-    if (s.loadBalancerModel) cover.addRow(["Load balancer:", s.loadBalancerModel]);
-    if (s.eindgroepen) cover.addRow(["Eindgroepen:", `${s.eindgroepen}× ${s.eindgroepAmperage ?? ""}A`]);
+  const offerteTekst = (input.summary.leveringText ?? "").trim();
+  if (offerteTekst) {
+    cover.addRow(["Offertetekst"]).font = bold;
+    for (const regel of offerteTekst.split("\n")) {
+      const row = cover.addRow([regel]);
+      row.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    }
   }
 
   // ---- Calculatie -----------------------------------------------------------

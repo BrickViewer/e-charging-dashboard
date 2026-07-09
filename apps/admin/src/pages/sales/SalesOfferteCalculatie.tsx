@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Calculator, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Calculator, ChevronsUpDown, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import { applyCalcToQuote } from "@/services/calcPrefill";
 import { scopeFromFlags, SCOPE_LABEL } from "@/lib/quoteScope";
 import { supabase } from "@/integrations/supabase/client";
 import { formatEuro as euro } from "@/services/calculations";
+import { calcRetourKm, resolveQuoteAddress } from "@/services/calcDistance";
 
 const num = (s: string | number) => {
   const n = Number(String(s).replace(",", "."));
@@ -69,7 +71,10 @@ export default function SalesOfferteCalculatie() {
   const [offerPrice, setOfferPrice] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [kmBusy, setKmBusy] = useState(false);
+  const [kmHint, setKmHint] = useState<string | null>(null);
   const seeded = useRef(false);
+  const kmAutoDone = useRef(false);
 
   // Bestaande calculatie in de editor laden (eenmalig)
   useEffect(() => {
@@ -111,6 +116,39 @@ export default function SalesOfferteCalculatie() {
   // Effectieve offerteprijs: handmatig afgerond bedrag, anders het voorstel.
   const effectiveOfferPrice = offerPrice ?? totals.suggestedOfferPrice;
   const isConcept = quote.data?.status === "concept";
+
+  // Kilometers automatisch: rijafstand kantoor (Zaltbommel) ↔ projectadres.
+  const computeKm = async (manual: boolean) => {
+    if (!quote.data) return;
+    setKmBusy(true);
+    try {
+      const address = await resolveQuoteAddress(quote.data);
+      if (!address) {
+        if (manual) toast.error("Geen projectadres gevonden op de offerte");
+        return;
+      }
+      const result = await calcRetourKm(address);
+      if (!result) {
+        if (manual) toast.error("Afstand kon niet worden berekend — vul de kilometers handmatig in");
+        return;
+      }
+      setHeader((h) => ({ ...h, retour_km: result.retourKm }));
+      setKmHint(`Berekend: kantoor ↔ ${result.targetAddress}`);
+    } finally {
+      setKmBusy(false);
+    }
+  };
+
+  // Eénmalig automatisch berekenen bij openen, alleen zolang er nog niets is ingevuld.
+  useEffect(() => {
+    if (kmAutoDone.current || !quote.data || !calcQuery.data) return;
+    if (quote.data.status !== "concept") return;
+    kmAutoDone.current = true;
+    const existing = calcQuery.data.calc ? Number(calcQuery.data.calc.retour_km) : 0;
+    if (existing > 0) return;
+    void computeKm(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote.data, calcQuery.data]);
   const scope = quote.data ? scopeFromFlags(quote.data.with_installation !== false, quote.data.with_management !== false) : null;
   const suggestSkip = scope === "alleen_beheer";
 
@@ -418,54 +456,68 @@ export default function SalesOfferteCalculatie() {
             </div>
           )}
 
-          {/* Offerte-samenvatting: voedt de gegenereerde leveringstekst + xlsx */}
+          {/* Offertetekst — vrije tekst van de invuller; wordt bij Afronden de
+              "Levering en installatie"-tekst op de offerte (en komt op het
+              xlsx-voorblad, zoals het Offertetekst-blok in de oude Excel) */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Installatie-samenvatting (voor de offertetekst)</CardTitle>
+              <CardTitle className="text-sm">Offertetekst — Levering en installatie</CardTitle>
+              <p className="text-[11px] text-muted-foreground">
+                Schrijf hier de tekst zoals hij op de offerte moet komen (alinea's scheiden met een lege regel).
+                Bij afronden wordt dit de "Levering en installatie"-tekst; op de offertepagina kun je hem daarna nog bijwerken.
+              </p>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Laadpaal-model</Label>
-                <Input className="h-8" value={summary.chargerModel ?? ""} disabled={frozen} placeholder="Zaptec GO 2…" onChange={(e) => setSummary({ ...summary, chargerModel: e.target.value })} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Laadpunten (sockets)</Label>
-                <NumField className="h-8" value={summary.numSockets ?? 0} disabled={frozen} onCommit={(n) => setSummary({ ...summary, numSockets: n || undefined })} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Laadpalen (fysiek)</Label>
-                <NumField className="h-8" value={summary.numPoles ?? 0} disabled={frozen} onCommit={(n) => setSummary({ ...summary, numPoles: n || undefined })} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Load balancer</Label>
-                <Input className="h-8" value={summary.loadBalancerModel ?? ""} disabled={frozen} placeholder="Zaptec Sense…" onChange={(e) => setSummary({ ...summary, loadBalancerModel: e.target.value })} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Eindgroepen</Label>
-                <NumField className="h-8" value={summary.eindgroepen ?? 0} disabled={frozen} onCommit={(n) => setSummary({ ...summary, eindgroepen: n || undefined })} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Amperage (A)</Label>
-                <NumField className="h-8" value={summary.eindgroepAmperage ?? 0} disabled={frozen} onCommit={(n) => setSummary({ ...summary, eindgroepAmperage: n || undefined })} />
-              </div>
+            <CardContent>
+              <Textarea
+                className="min-h-[9rem] leading-relaxed"
+                placeholder={"Het leveren, monteren en aansluiten van 2 stuks Zaptec Pro gemonteerd op 1 nieuwe laadpaal.\n\nMeterkast wordt uitgebreid met 2 eindgroepen van 32A."}
+                value={summary.leveringText ?? ""}
+                disabled={frozen}
+                onChange={(e) => setSummary({ ...summary, leveringText: e.target.value })}
+              />
             </CardContent>
           </Card>
         </div>
 
-        {/* Kop-parameters + totalen */}
+        {/* Kop-parameters + totalen — alles onder elkaar, in rekenvolgorde */}
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Uren & voorrijkosten</CardTitle>
+              <CardTitle className="text-sm">Uren & montage</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3">
+            <CardContent className="space-y-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Uurloon (€)</Label>
+                <Label className="text-xs">Uurloon (€ per uur)</Label>
                 <NumField className="h-8" value={header.hourly_rate} disabled={frozen} onCommit={(n) => setHeader({ ...header, hourly_rate: n })} />
               </div>
+              <Row label="Montage-uren (uit de regels)" value={`${totals.hoursTotal.toLocaleString("nl-NL")} u`} muted />
+              <Row label="Montagebedrag" value={euro(totals.laborSell)} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Voorrijkosten</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
               <div className="grid gap-1.5">
                 <Label className="text-xs">Retour project (km)</Label>
-                <NumField className="h-8" value={header.retour_km} disabled={frozen} onCommit={(n) => setHeader({ ...header, retour_km: n })} />
+                <div className="flex items-center gap-2">
+                  <NumField className="h-8 flex-1" value={header.retour_km} disabled={frozen} onCommit={(n) => { setHeader({ ...header, retour_km: n }); setKmHint(null); }} />
+                  {!frozen && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2.5"
+                      title="Afstand kantoor ↔ projectlocatie opnieuw berekenen"
+                      disabled={kmBusy}
+                      onClick={() => void computeKm(true)}
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${kmBusy ? "animate-spin" : ""}`} />
+                    </Button>
+                  )}
+                </div>
+                {kmHint && <p className="text-[11px] text-muted-foreground">{kmHint}</p>}
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs">Kosten per km (€)</Label>
@@ -475,12 +527,22 @@ export default function SalesOfferteCalculatie() {
                 <Label className="text-xs">Dagen</Label>
                 <NumField className="h-8" value={header.travel_days} disabled={frozen} onCommit={(n) => setHeader({ ...header, travel_days: n })} />
               </div>
-              <div className="col-span-2 grid gap-1.5">
-                <Label className="text-xs">Stelpost graafwerk (€)</Label>
+              <Row label="Voorrijkosten" value={euro(totals.travelSell)} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Stelpost graafwerk</CardTitle>
+              <p className="text-[11px] text-muted-foreground">Staat als aparte post op de offerte — telt niet mee in de offerteprijs.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Bedrag (€)</Label>
                 <NumField className="h-8" value={header.stelpost_graafwerk} disabled={frozen} onCommit={(n) => setHeader({ ...header, stelpost_graafwerk: n })} />
               </div>
-              <div className="col-span-2 grid gap-1.5">
-                <Label className="text-xs">Notitie stelpost</Label>
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Notitie</Label>
                 <Input className="h-8" value={header.stelpost_note} disabled={frozen} placeholder="€115 p/u, koppeluren, Slegh Infra…" onChange={(e) => setHeader({ ...header, stelpost_note: e.target.value })} />
               </div>
             </CardContent>
@@ -494,7 +556,7 @@ export default function SalesOfferteCalculatie() {
               <Row label="Materiaal (verkoop)" value={euro(totals.materialSell)} />
               <Row label="Materiaal (inkoop netto)" value={euro(totals.materialCost)} muted />
               <Row label="Marge materiaal" value={euro(totals.marginMaterial)} accent />
-              <Row label={`Montage (${totals.hoursTotal.toLocaleString("nl-NL")} u × ${euro(header.hourly_rate)})`} value={euro(totals.laborSell)} />
+              <Row label="Montage" value={euro(totals.laborSell)} />
               <Row label="Voorrijkosten" value={euro(totals.travelSell)} />
               <div className="my-2 border-t" />
               <Row label="Totaal calculatie" value={euro(totals.totalSell)} strong />

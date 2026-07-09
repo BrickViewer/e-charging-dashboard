@@ -31,13 +31,11 @@ export interface CalcHeaderDraft {
 }
 
 export interface CalcSummary {
-  chargerModel?: string;
-  numPoles?: number;
-  numSockets?: number;
-  loadBalancerModel?: string;
-  eindgroepen?: number;
-  eindgroepAmperage?: number;
-  _lastGeneratedLevering?: string;
+  /** Vrije "Levering en installatie"-offertetekst, door de invuller zelf geschreven. */
+  leveringText?: string;
+  /** Laatst naar de offerte toegepaste tekst — guard zodat handmatige
+      bewerkingen op de offerte-detailpagina niet overschreven worden. */
+  _lastApplied?: string;
 }
 
 export interface CalcTotals {

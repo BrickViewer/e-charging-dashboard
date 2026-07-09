@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import type { QuoteLineItem } from "@/hooks/useQuotes";
 import type { OfferDetails } from "./offerTypes";
 import { r2, type CalcHeaderDraft, type CalcLineDraft, type CalcSummary, type CalcTotals } from "./calcTypes";
-import { generateLeveringText } from "./calcLeveringText";
 
 /** Klantgerichte offerteregels: materiaal op verkoopprijs + één geaggregeerde
     montage-regel (of kortingsregel bij een lager afgerond bedrag), zodat de
@@ -39,8 +38,8 @@ export interface ApplyCalcInput {
 }
 
 export interface ApplyCalcResult {
-  /** Summary inclusief bijgewerkte _lastGeneratedLevering — door de caller mee
-      te persisteren in dezelfde calc-save (géén tweede write nodig). */
+  /** Summary inclusief bijgewerkte _lastApplied — door de caller mee te
+      persisteren in dezelfde calc-save (géén tweede write nodig). */
   nextSummary: CalcSummary;
   leveringOverwritten: boolean;
 }
@@ -48,10 +47,9 @@ export interface ApplyCalcResult {
 /**
  * Patcht de offerte met de calculatie-uitkomst, op basis van de VERSE
  * offer_details uit de database (niet de mogelijk verouderde query-cache).
- * De leveringstekst wordt alleen automatisch vervangen als de huidige tekst
- * leeg is of gelijk aan de laatst gegenereerde (het lastDefaultRef-patroon);
- * de gestructureerde scope-velden volgen de calculatie onvoorwaardelijk —
- * de calculatie is de bron, dus leegmaken in de calc wist ze ook op de offerte.
+ * De offertetekst uit de calculator wordt alleen toegepast als de huidige
+ * offertetekst leeg is of gelijk aan de laatst toegepaste (het
+ * lastDefaultRef-patroon) — handmatige bewerkingen op de detailpagina winnen.
  */
 export async function applyCalcToQuote(input: ApplyCalcInput): Promise<ApplyCalcResult> {
   const { quoteId, lines, header, summary, totals, offerPrice } = input;
@@ -63,20 +61,15 @@ export async function applyCalcToQuote(input: ApplyCalcInput): Promise<ApplyCalc
     .single();
   if (freshErr) throw freshErr;
 
-  const generated = generateLeveringText(summary);
+  const calcText = (summary.leveringText ?? "").trim();
   const od = ((fresh.offer_details ?? {}) as OfferDetails) || {};
   const current = (od.leveringText ?? "").trim();
-  const lastGenerated = (summary._lastGeneratedLevering ?? "").trim();
-  const leveringOverwritten = !!generated && (current === "" || current === lastGenerated);
+  const lastApplied = (summary._lastApplied ?? "").trim();
+  const leveringOverwritten = !!calcText && (current === "" || current === lastApplied);
 
   const nextOd: OfferDetails = {
     ...od,
-    ...(leveringOverwritten ? { leveringText: generated } : {}),
-    chargerModel: summary.chargerModel?.trim() || null,
-    numPoles: summary.numPoles ?? null,
-    loadBalancerModel: summary.loadBalancerModel?.trim() || null,
-    eindgroepen: summary.eindgroepen ?? null,
-    eindgroepAmperage: summary.eindgroepAmperage ?? null,
+    ...(leveringOverwritten ? { leveringText: calcText } : {}),
     stelpostGraafwerk: header.stelpost_graafwerk > 0 ? header.stelpost_graafwerk : null,
   };
 
@@ -86,12 +79,11 @@ export async function applyCalcToQuote(input: ApplyCalcInput): Promise<ApplyCalc
     line_items: calcToLineItems(lines, totals, offerPrice) as unknown,
     offer_details: nextOd as unknown,
   };
-  if (summary.numSockets && summary.numSockets > 0) patch.num_charge_points = summary.numSockets;
 
   const { error } = await supabase.from("quotes").update(patch).eq("id", quoteId);
   if (error) throw error;
 
   const nextSummary: CalcSummary =
-    generated && leveringOverwritten ? { ...summary, _lastGeneratedLevering: generated } : summary;
+    calcText && leveringOverwritten ? { ...summary, _lastApplied: calcText } : summary;
   return { nextSummary, leveringOverwritten };
 }

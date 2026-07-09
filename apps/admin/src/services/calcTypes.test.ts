@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { computeTotals, type CalcHeaderDraft, type CalcLineDraft } from "./calcTypes";
-import { generateLeveringText } from "./calcLeveringText";
 import { calcToLineItems } from "./calcPrefill";
 
 const header: CalcHeaderDraft = {
@@ -55,34 +54,6 @@ describe("computeTotals", () => {
     expect(t.hoursTotal).toBe(3);
     expect(t.laborSell).toBe(180);
     expect(t.totalSell).toBe(200 + 180);
-  });
-});
-
-describe("generateLeveringText", () => {
-  it("bouwt de alinea's uit de samenvatting (meervoud + amperage)", () => {
-    const text = generateLeveringText({
-      chargerModel: "Zaptec GO 2 Asphalt Black",
-      numSockets: 10,
-      numPoles: 5,
-      loadBalancerModel: "Zaptec Sense",
-      eindgroepen: 5,
-      eindgroepAmperage: 32,
-    });
-    expect(text).toContain("10 stuks Zaptec GO 2 Asphalt Black gemonteerd op 5 stuks nieuwe laadpalen.");
-    expect(text).toContain("Zaptec Sense geplaatst");
-    expect(text).toContain("5 eindgroepen van 32A.");
-    expect(text.split("\n\n")).toHaveLength(3);
-  });
-
-  it("enkelvoud en weggelaten onderdelen", () => {
-    const text = generateLeveringText({ chargerModel: "Peblar Home 11kW", numSockets: 1, eindgroepen: 1 });
-    expect(text).toContain("1 stuk Peblar Home 11kW.");
-    expect(text).not.toContain("load balancing");
-    expect(text).toContain("1 eindgroep.");
-  });
-
-  it("leeg bij ontbrekende kerngegevens", () => {
-    expect(generateLeveringText({})).toBe("");
   });
 });
 
