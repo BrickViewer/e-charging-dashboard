@@ -128,10 +128,11 @@ export default function SalesOfferteDetail() {
 
   useEffect(() => {
     if (quote) {
-      // Begin-prijs afleiden uit bestaande regels (som), anders uit de totaalkolommen.
+      // Begin-prijs: de totaalkolommen zijn leidend (bij een calculatie kan de
+      // handmatig bijgestelde prijs afwijken van de regel-som); regel-som als fallback.
       const liSum = lineItemsOf(quote).reduce((s, i) => s + (Number(i.total) || 0), 0);
       const totalsSum = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
-      const initial = liSum || totalsSum;
+      const initial = totalsSum || liSum;
       // Beheer-only: activatiekosten standaard 18,50 per paal (bewerkbaar) wanneer er nog geen totaal is.
       const beheerOnly = quote.with_installation === false;
       const activationTotal = 18.5 * (Number(quote.num_charge_points) || 0);
@@ -227,11 +228,14 @@ export default function SalesOfferteDetail() {
     const p = grandTotal;
     // Zonder calculatie: één samenvattende regel; totaal in total_installation_cost zodat
     // de offertelijst + E-Group-handoff het juiste bedrag tonen. MET afgeronde calculatie
-    // blijven de calc-regels staan (de calculator is dan de bron van de regels) en volgt
-    // alleen het totaal het (evt. handmatig bijgestelde) prijsveld.
-    const lineItems = hasFinalizedCalc
-      ? null
-      : [{ description: withInstallation ? "Levering & installatie" : "Activatie & onboarding beheer", qty: 1, unit_price: p, total: p }];
+    // (en installatie-scope) blijven de calc-regels staan — de calculator is dan de bron.
+    // Zolang de calc-query nog laadt/faalt is de bron onbekend: dan line_items niet
+    // aanraken, anders zou een vroege save de calc-regels stil vernietigen.
+    const calcKnown = !calcQ.isLoading && !calcQ.isError;
+    const keepCalcLines = hasFinalizedCalc && withInstallation;
+    const lineItems = calcKnown && !keepCalcLines
+      ? [{ description: withInstallation ? "Levering & installatie" : "Activatie & onboarding beheer", qty: 1, unit_price: p, total: p }]
+      : null;
     const tariffData = withManagement && (numOr(chargeRate) != null || numOr(idleFee) != null || numOr(idleGrace) != null)
       ? { chargeTariffPerKwh: numOr(chargeRate), idleFeePerMinute: numOr(idleFee), idleGraceMinutes: numOr(idleGrace) }
       : null;

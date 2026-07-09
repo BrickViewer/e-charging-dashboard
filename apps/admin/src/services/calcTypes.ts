@@ -55,7 +55,7 @@ export interface CalcTotals {
   suggestedOfferPrice: number;
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
+export const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export function lineTotals(line: Pick<CalcLineDraft, "qty" | "unit_cost" | "unit_sell" | "unit_hours">) {
   return {

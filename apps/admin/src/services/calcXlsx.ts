@@ -21,7 +21,8 @@ export interface CalcXlsxInput {
 const EURO_FMT = '€ #,##0.00';
 
 export async function buildCalcXlsx(input: CalcXlsxInput): Promise<Uint8Array> {
-  const ExcelJS = (await import("exceljs")).default ?? (await import("exceljs"));
+  const mod = await import("exceljs");
+  const ExcelJS = mod.default ?? mod;
   const wb = new ExcelJS.Workbook();
   wb.creator = "E-Charging dashboard";
 

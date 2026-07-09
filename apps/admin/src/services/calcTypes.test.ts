@@ -105,4 +105,22 @@ describe("calcToLineItems", () => {
     expect(JSON.stringify(items)).not.toContain("921.25");
     expect(JSON.stringify(items)).not.toContain('"8"');
   });
+
+  it("afgeronde prijs lager dan materiaal-verkoop → kortingsregel houdt de som kloppend", () => {
+    const lines: CalcLineDraft[] = [line({ description: "Zaptec PRO", qty: 2, unit_sell: 1000, unit_cost: 800 })];
+    const totals = computeTotals(lines, { ...header, retour_km: 0, stelpost_graafwerk: 0 });
+    const items = calcToLineItems(lines, totals, 1900); // handmatig onder materiaal-verkoop (2000)
+    const korting = items.find((i) => i.description === "Korting");
+    expect(korting?.total).toBe(-100);
+    const sum = items.reduce((acc, i) => acc + i.total, 0);
+    expect(Math.round(sum * 100) / 100).toBe(1900);
+  });
+
+  it("lege omschrijving krijgt een nette fallback (geen em-dash naar de klant)", () => {
+    const lines: CalcLineDraft[] = [line({ description: "  ", qty: 1, unit_sell: 100 })];
+    const totals = computeTotals(lines, { ...header, retour_km: 0, stelpost_graafwerk: 0 });
+    const items = calcToLineItems(lines, totals, 100);
+    expect(items[0].description).toBe("Materiaal");
+    expect(JSON.stringify(items)).not.toContain("—");
+  });
 });

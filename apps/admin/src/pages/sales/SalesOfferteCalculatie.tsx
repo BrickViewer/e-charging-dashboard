@@ -16,8 +16,8 @@ import { computeTotals, lineTotals, type CalcHeaderDraft, type CalcLineDraft, ty
 import { applyCalcToQuote } from "@/services/calcPrefill";
 import { scopeFromFlags, SCOPE_LABEL } from "@/lib/quoteScope";
 import { supabase } from "@/integrations/supabase/client";
+import { formatEuro as euro } from "@/services/calculations";
 
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 const num = (s: string | number) => {
   const n = Number(String(s).replace(",", "."));
   return Number.isFinite(n) ? n : 0;
@@ -108,6 +108,8 @@ export default function SalesOfferteCalculatie() {
   }, [calcQuery.data]);
 
   const totals = useMemo(() => computeTotals(lines, header), [lines, header]);
+  // Effectieve offerteprijs: handmatig afgerond bedrag, anders het voorstel.
+  const effectiveOfferPrice = offerPrice ?? totals.suggestedOfferPrice;
   const isConcept = quote.data?.status === "concept";
   const scope = quote.data ? scopeFromFlags(quote.data.with_installation !== false, quote.data.with_management !== false) : null;
   const suggestSkip = scope === "alleen_beheer";
@@ -158,16 +160,16 @@ export default function SalesOfferteCalculatie() {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   const removeLine = (idx: number) => setLines((prev) => prev.filter((_l, i) => i !== idx));
 
-  const doSave = async (status: "concept" | "afgerond" | "overgeslagen") => {
+  const doSave = async (status: "concept" | "afgerond" | "overgeslagen", summaryOverride?: CalcSummary) => {
     if (!quote.data || !id) return null;
     return save.mutateAsync({
       quoteId: id,
       organizationId: quote.data.organization_id,
       status,
       header,
-      summary,
+      summary: summaryOverride ?? summary,
       totals,
-      offerPriceRounded: status === "overgeslagen" ? null : (offerPrice ?? totals.suggestedOfferPrice),
+      offerPriceRounded: status === "overgeslagen" ? null : effectiveOfferPrice,
       lines: status === "overgeslagen" ? [] : lines,
     });
   };
@@ -204,18 +206,20 @@ export default function SalesOfferteCalculatie() {
     }
     setBusy(true);
     try {
-      await doSave("afgerond");
-      // Offerte voorvullen (prijs, regels, leveringstekst)
-      const finalPrice = offerPrice ?? totals.suggestedOfferPrice;
-      await applyCalcToQuote({
-        quote: quote.data,
+      // Eerst de offerte voorvullen (verse offer_details; regels/prijs/tekst),
+      // daarna pas de calc op 'afgerond' — faalt de tweede stap, dan is
+      // her-afronden voldoende om te herstellen (andersom zou de detailpagina
+      // een 'afgeronde' calc tonen zonder dat de offerte gevuld is).
+      const { nextSummary } = await applyCalcToQuote({
+        quoteId: id,
         lines,
         header,
         summary,
         totals,
-        offerPrice: finalPrice,
-        setSummary,
+        offerPrice: effectiveOfferPrice,
       });
+      setSummary(nextSummary);
+      await doSave("afgerond", nextSummary);
       toast.success("Calculatie afgerond — offerte voorgevuld");
 
       // Interne CALC-xlsx naar het SharePoint-dossier — best-effort (zoals de
@@ -226,9 +230,9 @@ export default function SalesOfferteCalculatie() {
           quoteNumber: quote.data.quote_number ?? "",
           projectLabel: quote.data.prospect_company || quote.data.prospect_contact || "",
           header,
-          summary,
+          summary: nextSummary,
           totals,
-          offerPrice: finalPrice,
+          offerPrice: effectiveOfferPrice,
           lines,
         });
         const { data: up, error: upErr } = await supabase.functions.invoke<{ status: string; skipped?: string; calc_web_url?: string }>(
@@ -499,11 +503,11 @@ export default function SalesOfferteCalculatie() {
                 <Label className="text-xs">Offerteprijs (afgerond)</Label>
                 <NumField
                   className="h-9 text-right text-base font-semibold tabular-nums"
-                  value={offerPrice ?? totals.suggestedOfferPrice}
+                  value={effectiveOfferPrice}
                   disabled={frozen}
-                  onCommit={(n) => setOfferPrice(n)}
+                  onCommit={(n) => setOfferPrice(n > 0 ? n : null)}
                 />
-                <p className="text-[11px] text-muted-foreground">Voorstel: {euro(totals.suggestedOfferPrice)} (naar boven afgerond). Dit bedrag wordt de offerteprijs.</p>
+                <p className="text-[11px] text-muted-foreground">Voorstel: {euro(totals.suggestedOfferPrice)} (naar boven afgerond, zoals op het Excel-voorblad). Leegmaken = terug naar het voorstel. Dit bedrag wordt de offerteprijs.</p>
               </div>
             </CardContent>
           </Card>

@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { formatEuro as euro } from "@/services/calculations";
 import {
   useCatalogProducts,
   useCreateCatalogProduct,
@@ -20,7 +21,6 @@ import {
   type CatalogProduct,
 } from "@/hooks/useCatalogProducts";
 
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 const pct = (n: number) => `${Math.round(Number(n) * 1000) / 10}%`;
 
 type Draft = {
@@ -123,10 +123,12 @@ export default function SalesCatalogus() {
     }
   };
 
+  // Zelfde formules als de tabel/calculator gebruiken — preview mag nooit
+  // afwijken van wat na opslaan daadwerkelijk gerekend wordt.
   const draftPreview = draft
     ? {
-        cost: Math.round(num(draft.gross_price) * (1 - num(draft.supplier_discount_pct) / 100) * 100) / 100,
-        sell: Math.round(num(draft.gross_price) * (1 + num(draft.sell_adjustment_pct) / 100) * 100) / 100,
+        cost: netCost({ gross_price: num(draft.gross_price), supplier_discount_pct: num(draft.supplier_discount_pct) / 100 }),
+        sell: sellPrice({ gross_price: num(draft.gross_price), sell_adjustment_pct: num(draft.sell_adjustment_pct) / 100 }),
       }
     : null;
 

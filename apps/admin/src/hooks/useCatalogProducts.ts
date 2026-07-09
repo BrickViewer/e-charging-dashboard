@@ -48,9 +48,10 @@ export function useCreateCatalogProduct() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (insert: Omit<CatalogProductInsert, "organization_id">) => {
-      // organization_id: enige org van de ingelogde interne gebruiker
-      const { data: org, error: orgErr } = await supabase.from("organizations").select("id").limit(1).single();
+      // organization_id: oudste org (deterministisch — zelfde patroon als useContacts)
+      const { data: org, error: orgErr } = await supabase.from("organizations").select("id").order("created_at").limit(1).maybeSingle();
       if (orgErr) throw orgErr;
+      if (!org) throw new Error("Geen organisatie gevonden");
       const { data, error } = await supabase
         .from("catalog_products")
         .insert({ ...insert, organization_id: org.id })

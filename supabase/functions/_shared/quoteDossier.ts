@@ -21,9 +21,11 @@ export async function resolveQuoteDossier(sb: any, quoteId: string): Promise<Quo
   const rootItemId = (org?.sharepoint_root_item_id as string | null) ?? null;
   if (!driveId) return { ok: false, skipped: "not_configured" };
 
-  const tenant = await resolveSecret(sb, ["SHAREPOINT_TENANT_ID"], "sharepoint_tenant_id");
-  const clientId = await resolveSecret(sb, ["SHAREPOINT_CLIENT_ID"], "sharepoint_client_id");
-  const secret = await resolveSecret(sb, ["SHAREPOINT_CLIENT_SECRET"], "sharepoint_client_secret");
+  const [tenant, clientId, secret] = await Promise.all([
+    resolveSecret(sb, ["SHAREPOINT_TENANT_ID"], "sharepoint_tenant_id"),
+    resolveSecret(sb, ["SHAREPOINT_CLIENT_ID"], "sharepoint_client_id"),
+    resolveSecret(sb, ["SHAREPOINT_CLIENT_SECRET"], "sharepoint_client_secret"),
+  ]);
   if (!tenant || !clientId || !secret) return { ok: false, skipped: "no_secrets" };
   const gc = new GraphClient(tenant, clientId, secret);
 
@@ -46,7 +48,10 @@ export async function resolveQuoteDossier(sb: any, quoteId: string): Promise<Quo
   let locId = quote.project_location_id as string | null;
   let loc: { location_number: number; display_name: string | null; folder_item_id: string | null; opdracht_item_id: string | null; folder_web_url: string | null } | null = null;
   if (locId) {
-    const { data } = await sb.from("project_locations").select("location_number, display_name, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
+    // Error hard doorgeven: een opgeslikte transient fout zou hieronder een
+    // NIEUWE locatie resolven en de offerte stil van dossier laten wisselen.
+    const { data, error } = await sb.from("project_locations").select("location_number, display_name, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
+    if (error) throw error;
     loc = data;
   }
   if (!loc) {
@@ -55,8 +60,9 @@ export async function resolveQuoteDossier(sb: any, quoteId: string): Promise<Quo
       street, postal, city, lead: quote.lead_id ?? null, fallbackLabel: quote.prospect_company ?? undefined,
     });
     locId = resolved.id;
-    const { data } = await sb.from("project_locations")
+    const { data, error } = await sb.from("project_locations")
       .select("location_number, display_name, folder_item_id, opdracht_item_id, folder_web_url").eq("id", locId).maybeSingle();
+    if (error) throw error;
     loc = data;
     const { error: linkErr } = await sb.from("quotes").update({ project_location_id: locId }).eq("id", quoteId);
     if (linkErr) throw linkErr;

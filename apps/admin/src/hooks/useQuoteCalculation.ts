@@ -77,8 +77,15 @@ export function useSaveQuoteCalculation() {
         .single();
       if (error) throw error;
 
-      const { error: delErr } = await supabase.from("quote_calculation_lines").delete().eq("calculation_id", calc.id);
-      if (delErr) throw delErr;
+      // Regel-vervanging: eerst nieuwe regels invoegen, daarna pas de oude
+      // verwijderen. Faalt de delete, dan staan er tijdelijk dubbele regels
+      // (zichtbaar en herstelbaar) — andersom (delete-first) zou een gefaalde
+      // insert de hele calculatie wissen.
+      const { data: oldLines, error: oldErr } = await supabase
+        .from("quote_calculation_lines")
+        .select("id")
+        .eq("calculation_id", calc.id);
+      if (oldErr) throw oldErr;
       if (input.lines.length > 0) {
         const { error: insErr } = await supabase.from("quote_calculation_lines").insert(
           input.lines.map((l, i) => ({
@@ -100,6 +107,11 @@ export function useSaveQuoteCalculation() {
           })),
         );
         if (insErr) throw insErr;
+      }
+      const oldIds = (oldLines ?? []).map((l) => l.id);
+      if (oldIds.length > 0) {
+        const { error: delErr } = await supabase.from("quote_calculation_lines").delete().in("id", oldIds);
+        if (delErr) throw delErr;
       }
       return calc.id as string;
     },
