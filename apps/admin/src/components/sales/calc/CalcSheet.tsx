@@ -154,17 +154,15 @@ export function CalcSheet(props: CalcSheetProps) {
         );
       })}
 
-      {/* Arbeid & voorrijkosten: twee vaste regels in dezelfde vorm als een
-          artikelregel. De urenregels waaruit het totaal is opgebouwd staan als
-          ingesprongen regels achter de chevron van Uurloon. */}
+      {/* Arbeid & voorrijkosten werkt als elke andere sectie: een lijst regels
+          met de toevoeg-regel eronder. Uurloon en Voorrijkosten staan er altijd
+          in; ze klappen niet open, want de subregel toont al hoe ze gerekend
+          zijn. De urenregels die het uurloon voeden zijn gewone regels. */}
       <section data-testid="section-arbeid">
         <SectionHeader id="arbeid" label="Arbeid & voorrijkosten" caption="subtotaal" amount={euro(totals.laborSell + totals.travelSell)} />
 
         <FixedRow
           testId="row-uurloon"
-          detailId="calc-detail-uurloon"
-          expanded={expanded.has("uurloon")}
-          onToggle={() => toggle("uurloon")}
           qty={<Stepper value={totals.hoursTotal} label="Uren" disabled={frozen} canDecrease={emmerUren > 0} onSet={setTotaalUren} />}
           label="Uurloon"
           subline={
@@ -172,75 +170,20 @@ export function CalcSheet(props: CalcSheetProps) {
               <span>€</span>
               <NumField className={MICRO} decimals={2} value={header.hourly_rate} disabled={frozen} onCommit={(n) => onHeaderChange({ hourly_rate: n })} />
               <span className="whitespace-nowrap">per uur</span>
+              {/* Deze uren zitten op materiaalregels (een meterkast draagt er 8)
+                  en tellen mee in het montagebedrag — anders zie je ze nergens. */}
+              {fromProductLines > 0 && (
+                <span className="truncate" title={`${uren(fromProductLines)} calculatietijd uit materiaalregels`}>
+                  · waarvan {uren(fromProductLines)} uit materiaalregels
+                </span>
+              )}
             </>
           }
           amount={euro(totals.laborSell)}
         />
 
-        {expanded.has("uurloon") && (
-          <div id="calc-detail-uurloon">
-            {urenLines.map((line) => (
-              <CalcRow
-                key={line.uid}
-                testId={`row-${line.uid}`}
-                className={DETAIL_ROW}
-                qty={<Stepper value={lineHours(line)} label="Uren" disabled={frozen} canDecrease onSet={(h) => setLineHours(line, h)} />}
-                main={
-                  <Input
-                    className={cn("h-8 text-sm", NAME)}
-                    value={line.description}
-                    placeholder="Omschrijving werkzaamheden…"
-                    disabled={frozen}
-                    onChange={(e) => onPatchLine(line.uid, { description: e.target.value })}
-                  />
-                }
-                amount={<span className="text-sm text-muted-foreground">{uren(lineHours(line))}</span>}
-                action={
-                  !frozen && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Regel verwijderen"
-                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => onRemoveLine(line.uid)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )
-                }
-              />
-            ))}
-
-            {/* Deze uren zitten op materiaalregels (een meterkast draagt er 8) en
-                tellen mee in het montagebedrag — daarom hier zichtbaar. */}
-            {fromProductLines > 0 && (
-              <CalcRow
-                className={DETAIL_ROW}
-                main={<span className="flex h-8 items-center truncate px-1 text-sm text-muted-foreground">Calculatietijd uit materiaalregels</span>}
-                amount={<span className="text-sm text-muted-foreground">{uren(fromProductLines)}</span>}
-              />
-            )}
-
-            {!frozen && (
-              <div className={DETAIL_ROW}>
-                <AddLineRow
-                  section="arbeid"
-                  sectionLabel="Arbeid"
-                  products={catalogFor(catalog, "arbeid")}
-                  hint="Arbeidsregel zoeken of eigen omschrijving typen…"
-                  onPickProduct={onAddProduct}
-                  onCreateFree={(naam) => onAddFree("uren", "arbeid", { description: naam })}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
         <FixedRow
           testId="row-voorrijkosten"
-          detailId="calc-detail-voorrijkosten"
-          expanded={expanded.has("voorrijkosten")}
-          onToggle={() => toggle("voorrijkosten")}
           qty={
             <Stepper
               value={header.retour_km}
@@ -259,38 +202,76 @@ export function CalcSheet(props: CalcSheetProps) {
               <span className="whitespace-nowrap">per km ×</span>
               <NumField className={MICRO_S} value={header.travel_days} disabled={frozen} onCommit={(n) => onHeaderChange({ travel_days: n })} />
               <span className="whitespace-nowrap">dag(en)</span>
+              {!frozen && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 w-5 shrink-0 p-0 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+                  aria-label="Afstand opnieuw berekenen"
+                  title={kmHint ?? "Retour-afstand tussen kantoor en projectlocatie berekenen"}
+                  disabled={kmBusy}
+                  onClick={onRecomputeKm}
+                >
+                  <RefreshCw className={cn("h-3 w-3", kmBusy && "animate-spin")} />
+                </Button>
+              )}
+              {kmHint && <span className="truncate">· {kmHint.replace(/^Berekend: /, "")}</span>}
             </>
           }
           amount={euro(totals.travelSell)}
         />
 
-        {expanded.has("voorrijkosten") && (
+        {urenLines.map((line) => (
           <CalcRow
-            testId="detail-voorrijkosten"
-            className={cn(DETAIL_ROW, "py-1")}
+            key={line.uid}
+            testId={`row-${line.uid}`}
+            className="group border-b border-border/60 transition-colors hover:bg-muted/30"
+            qty={<Stepper value={lineHours(line)} label="Uren" subtle disabled={frozen} canDecrease onSet={(h) => setLineHours(line, h)} />}
             main={
-              <div id="calc-detail-voorrijkosten" className="space-y-1 py-1">
-                <p className="px-1 text-[11px] text-muted-foreground">
-                  Retour-afstand tussen kantoor en projectlocatie{kmHint ? ` — ${kmHint.replace(/^Berekend: /, "")}` : ""}.
-                </p>
-                {!frozen && (
-                  <Button variant="outline" size="sm" className="h-7 text-xs" disabled={kmBusy} onClick={onRecomputeKm}>
-                    <RefreshCw className={cn("mr-1.5 h-3 w-3", kmBusy && "animate-spin")} /> Afstand opnieuw berekenen
-                  </Button>
-                )}
-              </div>
+              <Input
+                className={NAME}
+                value={line.description}
+                title={line.description || undefined}
+                placeholder="Omschrijving werkzaamheden…"
+                disabled={frozen}
+                onChange={(e) => onPatchLine(line.uid, { description: e.target.value })}
+              />
             }
+            amount={<span className="text-sm text-muted-foreground">{uren(lineHours(line))}</span>}
+            action={
+              !frozen && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Regel verwijderen"
+                  className="h-7 w-7 p-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+                  onClick={() => onRemoveLine(line.uid)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )
+            }
+          />
+        ))}
+
+        {!frozen && (
+          <AddLineRow
+            section="arbeid"
+            sectionLabel="Arbeid"
+            products={catalogFor(catalog, "arbeid")}
+            hint="Arbeidsregel zoeken of eigen omschrijving typen…"
+            onPickProduct={onAddProduct}
+            onCreateFree={(naam) => onAddFree("uren", "arbeid", { description: naam })}
           />
         )}
       </section>
 
       <section data-testid="section-stelpost">
         <SectionHeader id="stelpost" label="Stelpost graafwerk" caption="apart op de offerte" />
-        {/* Leest als een vrije regel: omschrijving links, bedrag rechts. Alleen
-            zo blijft het één lijst in plaats van een formulier onderaan. */}
-        <CalcRow
-          testId="row-stelpost"
-          main={
+        {/* Geen aantal en geen chevron: de omschrijving begint tegen de
+            linkerrand (kolommen 1–3), het bedrag valt op de bedragkolom. */}
+        <div className={cn(ROW_GRID, "py-0.5")} data-testid="row-stelpost">
+          <div className="col-span-3 min-w-0">
             <Input
               className={NAME}
               value={header.stelpost_note}
@@ -298,8 +279,8 @@ export function CalcSheet(props: CalcSheetProps) {
               placeholder="Omschrijving — bv. €115 p/u, koppeluren, Slegh Infra"
               onChange={(e) => onHeaderChange({ stelpost_note: e.target.value })}
             />
-          }
-          amount={
+          </div>
+          <div className="flex h-8 items-center justify-end">
             <NumField
               className={cn("h-8 w-full px-1 text-right text-sm tabular-nums", GHOST)}
               decimals={2}
@@ -307,9 +288,10 @@ export function CalcSheet(props: CalcSheetProps) {
               disabled={frozen}
               onCommit={(n) => onHeaderChange({ stelpost_graafwerk: n })}
             />
-          }
-        />
-        <p className="px-3 pb-3 pl-[7rem] text-[11px] text-muted-foreground">
+          </div>
+          <div />
+        </div>
+        <p className="px-4 pb-3 text-[11px] text-muted-foreground">
           Staat als aparte post op de offerte — telt niet mee in de offerteprijs.
         </p>
       </section>
@@ -408,22 +390,19 @@ function ChevronToggle({ expanded, onToggle, controls }: { expanded: boolean; on
   );
 }
 
-/** Vaste regel (Uurloon, Voorrijkosten): geen catalogusartikel, maar wel exact
-    dezelfde vorm — aantal · naam · subregel met prijs per eenheid · bedrag. */
+/**
+ * Vaste regel (Uurloon, Voorrijkosten): geen catalogusartikel, maar wel exact
+ * dezelfde vorm — aantal · naam · subregel · bedrag. Klapt niet open: de
+ * subregel toont al hoe het bedrag is gerekend.
+ */
 function FixedRow({
   testId,
-  detailId,
-  expanded,
-  onToggle,
   qty,
   label,
   subline,
   amount,
 }: {
   testId: string;
-  detailId: string;
-  expanded: boolean;
-  onToggle: () => void;
   qty: ReactNode;
   label: string;
   subline: ReactNode;
@@ -433,7 +412,6 @@ function FixedRow({
     <CalcRow
       testId={testId}
       className="group border-b border-border/60 transition-colors hover:bg-muted/30"
-      chevron={<ChevronToggle expanded={expanded} onToggle={onToggle} controls={detailId} />}
       qty={qty}
       main={
         <>
