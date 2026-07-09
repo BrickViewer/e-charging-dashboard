@@ -117,6 +117,18 @@ describe("CalcSheet", () => {
     expect(props.onPatchLine).toHaveBeenCalledWith("u1", { unit_sell: 900 });
   });
 
+  it("stapt het aantal van een artikelregel", () => {
+    const props = renderSheet();
+    fireEvent.click(within(row("u1")).getByRole("button", { name: "Aantal verhogen" }));
+    expect(props.onPatchLine).toHaveBeenCalledWith("u1", { qty: 3 });
+  });
+
+  it("stapt de kilometers van de voorrijkosten", () => {
+    const props = renderSheet();
+    fireEvent.click(within(row("voorrijkosten")).getByRole("button", { name: "Kilometers verhogen" }));
+    expect(props.onHeaderChange).toHaveBeenCalledWith({ retour_km: 121 });
+  });
+
   it("klapt op de chevron alléén die regel open, met inkoop en montagetijd", () => {
     renderSheet();
     expect(screen.queryByText("Inkoop per stuk")).not.toBeInTheDocument();
@@ -152,13 +164,13 @@ describe("CalcSheet", () => {
     // kloppen met wat eronder staat.
     it("verhoogt de urenregel, niet de calculatietijd", () => {
       const props = renderSheet();
-      fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Meer uren" }));
+      fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Uren verhogen" }));
       expect(props.onPatchLine).toHaveBeenCalledWith("u4", { qty: 5, unit_hours: 1 });
     });
 
     it("verlaagt de urenregel", () => {
       const props = renderSheet();
-      fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Minder uren" }));
+      fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Uren verlagen" }));
       expect(props.onPatchLine).toHaveBeenCalledWith("u4", { qty: 3, unit_hours: 1 });
     });
 
@@ -174,8 +186,8 @@ describe("CalcSheet", () => {
       const zonder = [lines[0], lines[1]]; // laadpaal + meterkast (8 u calculatietijd)
       const props = renderSheet({ lines: zonder, totals: computeTotals(zonder, header) });
       const uurloon = row("uurloon");
-      expect(within(uurloon).getByRole("button", { name: "Minder uren" })).toBeDisabled();
-      fireEvent.click(within(uurloon).getByRole("button", { name: "Meer uren" }));
+      expect(within(uurloon).getByRole("button", { name: "Uren verlagen" })).toBeDisabled();
+      fireEvent.click(within(uurloon).getByRole("button", { name: "Uren verhogen" }));
       expect(props.onAddFree).toHaveBeenCalledWith("uren", "arbeid", { description: "Montage", qty: 1 });
     });
 
@@ -213,7 +225,7 @@ describe("CalcSheet", () => {
   it("stapt de uren van een losse urenregel in het paneel", () => {
     const props = renderSheet();
     fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Details tonen" }));
-    fireEvent.click(within(row("u4")).getByRole("button", { name: "Meer uren" }));
+    fireEvent.click(within(row("u4")).getByRole("button", { name: "Uren verhogen" }));
     expect(props.onPatchLine).toHaveBeenCalledWith("u4", { qty: 5, unit_hours: 1 });
   });
 

@@ -24,16 +24,15 @@ import { formatEuro as euro } from "@/services/calculations";
 const getal = (n: number) => n.toLocaleString("nl-NL");
 const uren = (n: number) => `${getal(n)} u`;
 
-/** Met hoeveel uur de −/+ knoppen springen. Tussenwaarden typ je in het veld. */
-const UUR_STAP = 1;
+/** Met hoeveel de −/+ knoppen springen. Tussenwaarden typ je in het veld. */
+const STAP = 1;
 
 /** Velden in de lijst staan randloos tot je ze aanraakt — zo leest het als een
     lijst en niet als een formulier. */
 const GHOST = "border-transparent bg-transparent focus-visible:border-input";
-const QTY = `h-8 w-full px-1 text-right tabular-nums ${GHOST}`;
 const NAME = `h-8 px-1 ${GHOST}`;
-const MICRO = `h-5 w-[4.5rem] px-0.5 text-[11px] tabular-nums ${GHOST}`;
-const MICRO_S = `h-5 w-8 px-0.5 text-[11px] tabular-nums ${GHOST}`;
+const MICRO = `h-5 w-16 px-0.5 text-[11px] tabular-nums ${GHOST}`;
+const MICRO_S = `h-5 w-6 px-0.5 text-[11px] tabular-nums ${GHOST}`;
 /** Uitklap-regels zijn gewone regels, alleen ingesprongen en gedempt. */
 const DETAIL_ROW = "border-b border-border/40 bg-muted/20";
 
@@ -170,15 +169,7 @@ export function CalcSheet(props: CalcSheetProps) {
           detailId="calc-detail-uurloon"
           expanded={expanded.has("uurloon")}
           onToggle={() => toggle("uurloon")}
-          qty={
-            <Stepper
-              value={totals.hoursTotal}
-              label="uren"
-              disabled={frozen}
-              canDecrease={emmerUren > 0}
-              onSet={setTotaalUren}
-            />
-          }
+          qty={<Stepper value={totals.hoursTotal} label="Uren" disabled={frozen} canDecrease={emmerUren > 0} onSet={setTotaalUren} />}
           label="Uurloon"
           subline={
             <>
@@ -197,7 +188,7 @@ export function CalcSheet(props: CalcSheetProps) {
                 key={line.uid}
                 testId={`row-${line.uid}`}
                 className={DETAIL_ROW}
-                qty={<Stepper value={lineHours(line)} label="uren" disabled={frozen} canDecrease onSet={(h) => setLineHours(line, h)} />}
+                qty={<Stepper value={lineHours(line)} label="Uren" disabled={frozen} canDecrease onSet={(h) => setLineHours(line, h)} />}
                 main={
                   <Input
                     className={cn("h-8 text-sm", NAME)}
@@ -255,7 +246,16 @@ export function CalcSheet(props: CalcSheetProps) {
           detailId="calc-detail-voorrijkosten"
           expanded={expanded.has("voorrijkosten")}
           onToggle={() => toggle("voorrijkosten")}
-          qty={<NumField className={QTY} value={header.retour_km} disabled={frozen} onCommit={(n) => onHeaderChange({ retour_km: n })} />}
+          qty={
+            <Stepper
+              value={header.retour_km}
+              label="Kilometers"
+              subtle
+              disabled={frozen}
+              canDecrease={header.retour_km > 0}
+              onSet={(n) => onHeaderChange({ retour_km: Math.max(0, n) })}
+            />
+          }
           label="Voorrijkosten"
           subline={
             <>
@@ -291,19 +291,22 @@ export function CalcSheet(props: CalcSheetProps) {
 
       <section data-testid="section-stelpost">
         <SectionHeader id="stelpost" label="Stelpost graafwerk" caption="apart op de offerte" />
+        {/* Leest als een vrije regel: omschrijving links, bedrag rechts. Alleen
+            zo blijft het één lijst in plaats van een formulier onderaan. */}
         <CalcRow
+          testId="row-stelpost"
           main={
             <Input
-              className={cn("h-8", GHOST)}
+              className={NAME}
               value={header.stelpost_note}
               disabled={frozen}
-              placeholder="Notitie — bv. €115 p/u, koppeluren, Slegh Infra"
+              placeholder="Omschrijving — bv. €115 p/u, koppeluren, Slegh Infra"
               onChange={(e) => onHeaderChange({ stelpost_note: e.target.value })}
             />
           }
           amount={
             <NumField
-              className="h-8 w-full px-1 text-right font-medium tabular-nums"
+              className={cn("h-8 w-full px-1 text-right text-sm tabular-nums", GHOST)}
               decimals={2}
               value={header.stelpost_graafwerk}
               disabled={frozen}
@@ -319,30 +322,40 @@ export function CalcSheet(props: CalcSheetProps) {
   );
 }
 
-/** −/+ rond een bewerkbaar getal. Grote knoppen, want dit is de handeling die
-    je tijdens het calculeren het vaakst doet. */
+/**
+ * −/+ rond een bewerkbaar getal. Elk aantal op het blad gebruikt dit, ook waar
+ * niet gestapt wordt, zodat alle getallen één kolom vormen. `subtle` laat de
+ * knoppen pas bij hover of focus zien — de ruimte blijft gereserveerd, dus er
+ * verspringt niets.
+ */
 function Stepper({
   value,
   label,
   disabled,
   canDecrease,
+  subtle,
   onSet,
 }: {
   value: number;
   label: string;
   disabled?: boolean;
   canDecrease: boolean;
+  subtle?: boolean;
   onSet: (n: number) => void;
 }) {
+  const knop = cn(
+    "h-6 w-5 shrink-0 p-0 text-muted-foreground hover:text-foreground",
+    subtle && "opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100",
+  );
   return (
     <div className="flex h-8 w-full items-center">
       <Button
         variant="ghost"
         size="sm"
-        className="h-6 w-5 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-        aria-label={`Minder ${label}`}
+        className={knop}
+        aria-label={`${label} verlagen`}
         disabled={disabled || !canDecrease}
-        onClick={() => onSet(r2(value - UUR_STAP))}
+        onClick={() => onSet(r2(value - STAP))}
       >
         <Minus className="h-3 w-3" />
       </Button>
@@ -355,10 +368,10 @@ function Stepper({
       <Button
         variant="ghost"
         size="sm"
-        className="h-6 w-5 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-        aria-label={`Meer ${label}`}
+        className={knop}
+        aria-label={`${label} verhogen`}
         disabled={disabled}
-        onClick={() => onSet(r2(value + UUR_STAP))}
+        onClick={() => onSet(r2(value + STAP))}
       >
         <Plus className="h-3 w-3" />
       </Button>
@@ -424,7 +437,7 @@ function FixedRow({
   return (
     <CalcRow
       testId={testId}
-      className="border-b border-border/60 transition-colors hover:bg-muted/30"
+      className="group border-b border-border/60 transition-colors hover:bg-muted/30"
       chevron={<ChevronToggle expanded={expanded} onToggle={onToggle} controls={detailId} />}
       qty={qty}
       main={
@@ -462,7 +475,16 @@ function LineRow({
         testId={`row-${line.uid}`}
         className="group border-b border-border/60 transition-colors hover:bg-muted/30"
         chevron={<ChevronToggle expanded={expanded} onToggle={onToggle} controls={detailId} />}
-        qty={<NumField className={QTY} value={line.qty} disabled={frozen} onCommit={(n) => onPatch({ qty: n })} />}
+        qty={
+          <Stepper
+            value={line.qty}
+            label="Aantal"
+            subtle
+            disabled={frozen}
+            canDecrease={line.qty > 0}
+            onSet={(n) => onPatch({ qty: Math.max(0, n) })}
+          />
+        }
         main={
           <>
             <Input
