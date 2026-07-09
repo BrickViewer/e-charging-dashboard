@@ -58,6 +58,19 @@ export interface CalcTotals {
 
 export const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Stappen waarop de offerteprijs met één klik afgerond kan worden. */
+export const AFROND_STAPPEN = [25, 50, 100] as const;
+
+/**
+ * Naar boven afronden op een veelvoud. Altijd omhoog — een offerteprijs onder
+ * de calculatie zou marge weggeven, en dat is ook waarom `suggestedOfferPrice`
+ * een `ceil` is.
+ */
+export function roundUpTo(amount: number, step: number): number {
+  if (step <= 0 || amount <= 0) return Math.max(0, r2(amount));
+  return Math.ceil(r2(amount) / step) * step;
+}
+
 /** Secties van het calculatieblad, in leesvolgorde. */
 export type CalcSection = "laadpalen" | "installatiemateriaal" | "arbeid";
 

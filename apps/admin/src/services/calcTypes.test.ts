@@ -3,6 +3,7 @@ import {
   computeTotals,
   hoursSplit,
   r2,
+  roundUpTo,
   sectionOfLine,
   sectionSellSubtotal,
   sortLinesBySection,
@@ -64,6 +65,30 @@ describe("computeTotals", () => {
     expect(t.hoursTotal).toBe(3);
     expect(t.laborSell).toBe(180);
     expect(t.totalSell).toBe(200 + 180);
+  });
+});
+
+describe("roundUpTo", () => {
+  it("rondt altijd naar boven af — nooit onder de calculatie", () => {
+    expect(roundUpTo(6050.95, 25)).toBe(6075);
+    expect(roundUpTo(6050.95, 50)).toBe(6100);
+    expect(roundUpTo(6050.95, 100)).toBe(6100);
+  });
+
+  it("laat een bedrag dat al op de stap valt ongemoeid (idempotent)", () => {
+    expect(roundUpTo(6100, 50)).toBe(6100);
+    expect(roundUpTo(roundUpTo(6050.95, 25), 25)).toBe(6075);
+  });
+
+  it("struikelt niet over centen", () => {
+    expect(roundUpTo(6100.01, 100)).toBe(6200);
+    expect(roundUpTo(3454.68 + 480 + 82.5, 25)).toBe(4025); // = 4017,18
+  });
+
+  it("geeft nul terug bij een lege of ongeldige calculatie", () => {
+    expect(roundUpTo(0, 50)).toBe(0);
+    expect(roundUpTo(-10, 50)).toBe(0);
+    expect(roundUpTo(1234.5, 0)).toBe(1234.5);
   });
 });
 

@@ -1,7 +1,9 @@
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { NumField } from "./NumField";
-import type { CalcTotals } from "@/services/calcTypes";
+import { AFROND_STAPPEN, roundUpTo, type CalcTotals } from "@/services/calcTypes";
 import { formatEuro as euro } from "@/services/calculations";
 
 export function CalcTotalsCard({
@@ -37,10 +39,36 @@ export function CalcTotalsCard({
             disabled={frozen}
             onCommit={onOfferPriceCommit}
           />
-          <p className="text-[11px] text-muted-foreground">
-            Voorstel: {euro(totals.suggestedOfferPrice)} (naar boven afgerond, zoals op het Excel-voorblad). Leegmaken = terug naar het
-            voorstel. Dit bedrag wordt de offerteprijs.
-          </p>
+
+          {/* Snel afronden op een rond bedrag. Altijd naar boven, en altijd
+              vanaf de calculatie zelf — zo levert een tweede klik op een andere
+              stap een voorspelbaar bedrag op in plaats van stapelen. */}
+          {!frozen && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="text-[11px] text-muted-foreground">Afronden op</span>
+              {AFROND_STAPPEN.map((stap) => {
+                const bedrag = roundUpTo(totals.totalSell, stap);
+                const actief = offerPrice === bedrag;
+                return (
+                  <Button
+                    key={stap}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-pressed={actief}
+                    title={`Afronden op een veelvoud van € ${stap} → ${euro(bedrag)}`}
+                    className={cn(
+                      "h-6 rounded-full px-2.5 text-[11px] font-medium tabular-nums",
+                      actief && "border-primary bg-primary/10 text-primary hover:bg-primary/15",
+                    )}
+                    onClick={() => onOfferPriceCommit(bedrag)}
+                  >
+                    € {stap}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
