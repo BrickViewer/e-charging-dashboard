@@ -96,7 +96,7 @@ export function CalcSheet(props: CalcSheetProps) {
   const setTotaalUren = (totaal: number) => {
     const emmerDoel = Math.max(0, r2(totaal - vasteUren));
     if (!emmer) {
-      if (emmerDoel > 0) onAddFree("uren", "arbeid", { description: "Montage", qty: emmerDoel });
+      if (emmerDoel > 0) onAddFree("uren", "arbeid", { description: "Arbeid", qty: emmerDoel });
       return;
     }
     if (emmerDoel <= 0) {
@@ -105,16 +105,6 @@ export function CalcSheet(props: CalcSheetProps) {
     }
     const perEenheid = emmer.unit_hours > 0 ? emmer.unit_hours : 1;
     onPatchLine(emmer.uid, { qty: r2(emmerDoel / perEenheid), unit_hours: perEenheid });
-  };
-
-  /** Uren van één urenregel zetten; op nul verdwijnt de regel. */
-  const setLineHours = (line: CalcLineDraft, hours: number) => {
-    if (hours <= 0) {
-      onRemoveLine(line.uid);
-      return;
-    }
-    const perEenheid = line.unit_hours > 0 ? line.unit_hours : 1;
-    onPatchLine(line.uid, { qty: r2(hours / perEenheid), unit_hours: perEenheid });
   };
 
   return (
@@ -162,9 +152,9 @@ export function CalcSheet(props: CalcSheetProps) {
         <SectionHeader id="arbeid" label="Arbeid & voorrijkosten" caption="subtotaal" amount={euro(totals.laborSell + totals.travelSell)} />
 
         <FixedRow
-          testId="row-uurloon"
+          testId="row-arbeid"
           qty={<Stepper value={totals.hoursTotal} label="Uren" disabled={frozen} canDecrease={emmerUren > 0} onSet={setTotaalUren} />}
-          label="Uurloon"
+          label="Arbeid"
           subline={
             <>
               <span>€</span>
@@ -221,41 +211,10 @@ export function CalcSheet(props: CalcSheetProps) {
           amount={euro(totals.travelSell)}
         />
 
-        {urenLines.map((line) => (
-          <CalcRow
-            key={line.uid}
-            testId={`row-${line.uid}`}
-            className="group border-b border-border/60 transition-colors hover:bg-muted/30"
-            qty={<Stepper value={lineHours(line)} label="Uren" subtle disabled={frozen} canDecrease onSet={(h) => setLineHours(line, h)} />}
-            main={
-              <Input
-                className={NAME}
-                value={line.description}
-                title={line.description || undefined}
-                placeholder="Omschrijving werkzaamheden…"
-                disabled={frozen}
-                onChange={(e) => onPatchLine(line.uid, { description: e.target.value })}
-              />
-            }
-            amount={<span className="text-sm text-muted-foreground">{uren(lineHours(line))}</span>}
-            action={
-              !frozen && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Regel verwijderen"
-                  className="h-7 w-7 p-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
-                  onClick={() => onRemoveLine(line.uid)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )
-            }
-          />
-        ))}
-
-        {/* Geen toevoeg-regel: uren voeg je toe met de + op de Uurloon-regel,
-            die er zo nodig zelf een montageregel voor aanmaakt. */}
+        {/* De urenregel die het aantal draagt is bewust ONZICHTBAAR: de + op de
+            Arbeid-regel hoort alleen het getal op te hogen, niet ineens een
+            tweede regel te laten verschijnen. De regel bestaat wel — hij gaat
+            mee naar de database en het calculatie-Excel. */}
       </section>
 
       <section data-testid="section-stelpost">

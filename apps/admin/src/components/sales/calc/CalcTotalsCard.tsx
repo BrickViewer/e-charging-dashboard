@@ -24,7 +24,7 @@ export function CalcTotalsCard({
         <Row label="Materiaal (verkoop)" value={euro(totals.materialSell)} />
         <Row label="Materiaal (inkoop netto)" value={euro(totals.materialCost)} muted />
         <Row label="Marge materiaal" value={euro(totals.marginMaterial)} accent />
-        <Row label="Montage" value={euro(totals.laborSell)} />
+        <Row label="Arbeid" value={euro(totals.laborSell)} />
         <Row label="Voorrijkosten" value={euro(totals.travelSell)} />
         <div className="my-2 border-t" />
         <Row label="Totaal calculatie" value={euro(totals.totalSell)} strong />
