@@ -55,6 +55,67 @@ export interface CalcTotals {
 
 export const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Secties van het calculatieblad, in leesvolgorde. */
+export type CalcSection = "laadpalen" | "installatiemateriaal" | "arbeid";
+
+export const CALC_SECTIONS: { value: CalcSection; label: string }[] = [
+  { value: "laadpalen", label: "Laadpalen" },
+  { value: "installatiemateriaal", label: "Installatiemateriaal" },
+  { value: "arbeid", label: "Arbeid & voorrijkosten" },
+];
+
+/**
+ * In welke sectie hoort een regel? Totaal: elke regel valt in precies één
+ * sectie, zodat niets onzichtbaar kan worden terwijl het wél meetelt.
+ *
+ * De arbeid-sectie routeert op line_type, NIET op category: alleen urenregels
+ * hebben geen kost/verkoop (computeTotals negeert die), en alleen daar mogen de
+ * bijbehorende kolommen dus leegblijven.
+ */
+export function sectionOfLine(line: Pick<CalcLineDraft, "line_type" | "category">): CalcSection {
+  if (line.line_type === "uren") return "arbeid";
+  if (line.category === "laadpalen") return "laadpalen";
+  return "installatiemateriaal"; // installatiemateriaal, 'overig', null
+}
+
+const SECTION_RANK: Record<CalcSection, number> = { laadpalen: 0, installatiemateriaal: 1, arbeid: 2 };
+
+/**
+ * Regels gegroepeerd per sectie, in bladvolgorde — stabiel, dus de onderlinge
+ * volgorde binnen een sectie blijft. Bepaalt bij opslaan `position`, en daarmee
+ * ook de volgorde van de offerteregels en het calculatie-Excel.
+ */
+export function sortLinesBySection(lines: CalcLineDraft[]): CalcLineDraft[] {
+  return [...lines].sort((a, b) => SECTION_RANK[sectionOfLine(a)] - SECTION_RANK[sectionOfLine(b)]);
+}
+
+/** Verkoop-subtotaal van één sectie. Urenregels tellen nooit mee in materiaal. */
+export function sectionSellSubtotal(lines: CalcLineDraft[], section: CalcSection): number {
+  let sum = 0;
+  for (const line of lines) {
+    if (line.line_type === "uren" || sectionOfLine(line) !== section) continue;
+    sum = r2(sum + lineTotals(line).sell);
+  }
+  return sum;
+}
+
+/**
+ * Uren komen uit twee bronnen: losse urenregels én de calculatietijd die op
+ * materiaalregels zit (bv. 8 uur op een meterkast). Samen vormen ze
+ * `computeTotals().hoursTotal`, dat het montagebedrag voedt — het blad toont
+ * de splitsing zodat dat bedrag navolgbaar is.
+ */
+export function hoursSplit(lines: CalcLineDraft[]): { fromUrenLines: number; fromProductLines: number } {
+  let fromUrenLines = 0;
+  let fromProductLines = 0;
+  for (const line of lines) {
+    const hours = lineTotals(line).hours;
+    if (line.line_type === "uren") fromUrenLines = r2(fromUrenLines + hours);
+    else fromProductLines = r2(fromProductLines + hours);
+  }
+  return { fromUrenLines, fromProductLines };
+}
+
 export function lineTotals(line: Pick<CalcLineDraft, "qty" | "unit_cost" | "unit_sell" | "unit_hours">) {
   return {
     cost: r2(line.qty * line.unit_cost),
