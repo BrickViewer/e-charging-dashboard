@@ -88,6 +88,25 @@ export function offerPriceFor(totals: CalcTotals, choice: OfferPriceChoice): num
   return choice.manual ?? totals.suggestedOfferPrice;
 }
 
+export interface OfferMargin {
+  amount: number;
+  /** Fractie (0,318), niet 31,8 — en bewust NIET afgerond: de opmaak doet dat. */
+  pct: number | null;
+}
+
+/**
+ * Wat er van een offerte overblijft: offerteprijs minus de netto materiaalinkoop,
+ * als percentage van de offerteprijs (zoals `serviceFeePct` in de pricing-engine).
+ *
+ * Let op: uren hebben in dit rekenmodel geen kostprijs — `hourly_rate` is een
+ * verkooptarief. Arbeid en voorrijkosten zitten dus volledig in deze marge. Het
+ * is een brutomarge op materiaal, geen winst na loonkosten.
+ */
+export function offerMargin(offerPrice: number, materialCost: number): OfferMargin {
+  const amount = r2(offerPrice - materialCost);
+  return { amount, pct: offerPrice > 0 ? amount / offerPrice : null };
+}
+
 /**
  * Bij het openen van een opgeslagen calculatie kennen we alleen het bedrag,
  * niet hoe het gekozen is. Valt het precies op een afrondstap, dan herstellen

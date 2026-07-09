@@ -23,6 +23,7 @@ import {
 } from "@/services/calcTypes";
 import { CalcSheet } from "@/components/sales/calc/CalcSheet";
 import { CalcTotalsCard } from "@/components/sales/calc/CalcTotalsCard";
+import { CalcMarginCard } from "@/components/sales/calc/CalcMarginCard";
 import { nextUid } from "@/components/sales/calc/uid";
 import { applyCalcToQuote } from "@/services/calcPrefill";
 import { scopeFromFlags, SCOPE_LABEL } from "@/lib/quoteScope";
@@ -406,6 +407,7 @@ export default function SalesOfferteCalculatie() {
             onOfferPriceCommit={commitOfferPrice}
             onPickRoundStep={pickRoundStep}
           />
+          <CalcMarginCard totals={totals} offerPrice={effectiveOfferPrice} />
         </div>
       </div>
     </div>

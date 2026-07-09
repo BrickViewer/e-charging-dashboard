@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { NumField } from "./NumField";
+import { TotalsRow } from "./TotalsRow";
 import { AFROND_STAPPEN, roundUpTo, type CalcTotals } from "@/services/calcTypes";
 import { formatEuro as euro } from "@/services/calculations";
 
@@ -28,14 +29,14 @@ export function CalcTotalsCard({
         <CardTitle className="text-sm">Totalen</CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5 text-sm">
-        <Row label="Materiaal (verkoop)" value={euro(totals.materialSell)} />
-        <Row label="Materiaal (inkoop netto)" value={euro(totals.materialCost)} muted />
-        <Row label="Marge materiaal" value={euro(totals.marginMaterial)} accent />
-        <Row label="Arbeid" value={euro(totals.laborSell)} />
-        <Row label="Voorrijkosten" value={euro(totals.travelSell)} />
+        {/* Inkoop en marge staan niet meer hier maar op de Marge-kaart eronder:
+            deze kaart gaat over wat de calculatie kost, niet wat we overhouden. */}
+        <TotalsRow label="Materiaal (verkoop)" value={euro(totals.materialSell)} />
+        <TotalsRow label="Arbeid" value={euro(totals.laborSell)} />
+        <TotalsRow label="Voorrijkosten" value={euro(totals.travelSell)} />
         <div className="my-2 border-t" />
-        <Row label="Totaal calculatie" value={euro(totals.totalSell)} strong />
-        {totals.stelpost > 0 && <Row label="Stelpost graafwerk (apart in offerte)" value={euro(totals.stelpost)} muted />}
+        <TotalsRow label="Totaal calculatie" value={euro(totals.totalSell)} strong />
+        {totals.stelpost > 0 && <TotalsRow label="Stelpost graafwerk (apart in offerte)" value={euro(totals.stelpost)} muted />}
         <div className="grid gap-1.5 pt-2">
           <Label className="text-xs">Offerteprijs (afgerond)</Label>
           <NumField
@@ -84,18 +85,5 @@ export function CalcTotalsCard({
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function Row({ label, value, muted, strong, accent }: { label: string; value: string; muted?: boolean; strong?: boolean; accent?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className={`${muted ? "text-muted-foreground" : ""} ${strong ? "font-semibold" : ""}`}>{label}</span>
-      <span
-        className={`tabular-nums ${strong ? "text-base font-semibold" : ""} ${accent ? "font-medium text-primary" : ""} ${muted ? "text-muted-foreground" : ""}`}
-      >
-        {value}
-      </span>
-    </div>
   );
 }

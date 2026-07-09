@@ -104,3 +104,12 @@ export function formatNumber(num: number, decimals = 0): string {
     maximumFractionDigits: decimals,
   }).format(num);
 }
+
+/** Verwacht een FRACTIE (0,318 → "31,8%"); Intl deelt zelf door 100 en rondt af. */
+export function formatPercent(fraction: number, decimals = 1): string {
+  return new Intl.NumberFormat('nl-NL', {
+    style: 'percent',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(fraction);
+}

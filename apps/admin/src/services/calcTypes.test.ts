@@ -3,6 +3,7 @@ import {
   computeTotals,
   GEEN_OFFERPRIJS_KEUZE,
   hoursSplit,
+  offerMargin,
   offerPriceFor,
   r2,
   restoreOfferChoice,
@@ -14,6 +15,7 @@ import {
   type CalcLineDraft,
 } from "./calcTypes";
 import { calcToLineItems } from "./calcPrefill";
+import { formatPercent } from "./calculations";
 
 const header: CalcHeaderDraft = {
   hourly_rate: 60,
@@ -92,6 +94,36 @@ describe("roundUpTo", () => {
     expect(roundUpTo(0, 50)).toBe(0);
     expect(roundUpTo(-10, 50)).toBe(0);
     expect(roundUpTo(1234.5, 0)).toBe(1234.5);
+  });
+});
+
+describe("offerMargin", () => {
+  it("trekt de materiaalinkoop van de offerteprijs af", () => {
+    const { amount, pct } = offerMargin(4050, 2763.75);
+    expect(amount).toBe(1286.25);
+    expect(formatPercent(pct!)).toBe("31,8%");
+  });
+
+  it("geeft een rauwe fractie terug, niet een afgerond percentage", () => {
+    // Zou offerMargin zelf afronden, dan rondde Intl daar nog eens overheen.
+    expect(offerMargin(4050, 2763.75).pct).toBe(1286.25 / 4050);
+  });
+
+  it("is 100% als er geen materiaal in de calculatie zit", () => {
+    const { amount, pct } = offerMargin(500, 0);
+    expect(amount).toBe(500);
+    expect(formatPercent(pct!)).toBe("100,0%");
+  });
+
+  it("wordt negatief als de prijs onder de inkoop ligt", () => {
+    const { amount, pct } = offerMargin(2000, 2763.75);
+    expect(amount).toBe(-763.75);
+    expect(formatPercent(pct!)).toBe("-38,2%");
+  });
+
+  it("heeft geen percentage zonder offerteprijs", () => {
+    expect(offerMargin(0, 0)).toEqual({ amount: 0, pct: null });
+    expect(offerMargin(0, 500)).toEqual({ amount: -500, pct: null });
   });
 });
 

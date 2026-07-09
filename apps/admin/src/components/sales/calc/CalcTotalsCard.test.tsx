@@ -42,6 +42,14 @@ describe("CalcTotalsCard", () => {
     expect(screen.queryByText("Montage")).not.toBeInTheDocument();
   });
 
+  it("laat inkoop en marge over aan de Marge-kaart", () => {
+    renderCard();
+    // Exact matchen: "Materiaal (verkoop)" blijft wél staan.
+    expect(screen.getByText("Materiaal (verkoop)")).toBeInTheDocument();
+    expect(screen.queryByText("Materiaal (inkoop netto)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Marge materiaal")).not.toBeInTheDocument();
+  });
+
   it("kiest met één klik een afrondstap", () => {
     const props = renderCard();
     expect(totals.totalSell).toBe(4017.18);
