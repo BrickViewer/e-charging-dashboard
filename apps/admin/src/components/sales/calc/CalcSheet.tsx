@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { NumField } from "./NumField";
 import { CalcRow, ROW_GRID } from "./CalcRow";
-import { CatalogPickerButton } from "./CatalogPickerButton";
+import { AddLineRow } from "./AddLineRow";
 import type { CatalogProduct } from "@/hooks/useCatalogProducts";
 import {
   CALC_SECTIONS,
@@ -142,16 +142,13 @@ export function CalcSheet(props: CalcSheetProps) {
             )}
 
             {!frozen && (
-              <CalcRow
-                className="border-b border-border/60 py-1"
-                main={
-                  <div className="flex flex-wrap items-center gap-1">
-                    <CatalogPickerButton products={catalogFor(catalog, section.value)} label="Artikel" onPick={onAddProduct} />
-                    <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={() => onAddFree("vrij", section.value)}>
-                      <Plus className="mr-1.5 h-3.5 w-3.5" /> Vrije regel
-                    </Button>
-                  </div>
-                }
+              <AddLineRow
+                section={section.value}
+                sectionLabel={section.label}
+                products={catalogFor(catalog, section.value)}
+                hint="Artikel zoeken of eigen regel typen…"
+                onPickProduct={onAddProduct}
+                onCreateFree={(naam) => onAddFree("vrij", section.value, { description: naam })}
               />
             )}
           </section>
@@ -226,17 +223,16 @@ export function CalcSheet(props: CalcSheetProps) {
             )}
 
             {!frozen && (
-              <CalcRow
-                className={cn(DETAIL_ROW, "py-1")}
-                main={
-                  <div className="flex flex-wrap items-center gap-1">
-                    <CatalogPickerButton products={catalogFor(catalog, "arbeid")} label="Arbeidsregel" onPick={onAddProduct} />
-                    <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={() => onAddFree("uren", "arbeid")}>
-                      <Plus className="mr-1.5 h-3.5 w-3.5" /> Urenregel
-                    </Button>
-                  </div>
-                }
-              />
+              <div className={DETAIL_ROW}>
+                <AddLineRow
+                  section="arbeid"
+                  sectionLabel="Arbeid"
+                  products={catalogFor(catalog, "arbeid")}
+                  hint="Arbeidsregel zoeken of eigen omschrijving typen…"
+                  onPickProduct={onAddProduct}
+                  onCreateFree={(naam) => onAddFree("uren", "arbeid", { description: naam })}
+                />
+              </div>
             )}
           </div>
         )}

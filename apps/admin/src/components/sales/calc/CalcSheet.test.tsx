@@ -229,13 +229,11 @@ describe("CalcSheet", () => {
     expect(props.onPatchLine).toHaveBeenCalledWith("u4", { qty: 5, unit_hours: 1 });
   });
 
-  it("voegt urenregels toe vanuit het uitgeklapte Uurloon-paneel", () => {
-    const props = renderSheet();
+  it("verbergt de toevoeg-regel voor arbeid tot je Uurloon openklapt", () => {
+    renderSheet();
+    expect(screen.queryByTestId("add-arbeid")).not.toBeInTheDocument();
     fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Details tonen" }));
-    const arbeid = section("arbeid");
-    expect(within(arbeid).queryByRole("button", { name: /Vrije regel/ })).not.toBeInTheDocument();
-    fireEvent.click(within(arbeid).getByRole("button", { name: /Urenregel/ }));
-    expect(props.onAddFree).toHaveBeenCalledWith("uren", "arbeid");
+    expect(screen.getByTestId("add-arbeid")).toBeInTheDocument();
   });
 
   it("verbergt de calculatietijd-regel als er geen uren op materiaal staan", () => {
@@ -253,17 +251,12 @@ describe("CalcSheet", () => {
     expect(props.onRecomputeKm).toHaveBeenCalled();
   });
 
-  it("laat een vrije regel de categorie van haar sectie erven", () => {
-    const props = renderSheet();
-    fireEvent.click(within(section("installatiemateriaal")).getByRole("button", { name: /Vrije regel/ }));
-    expect(props.onAddFree).toHaveBeenCalledWith("vrij", "installatiemateriaal");
-  });
-
-  it("toont een lege sectie met kop en toevoegknoppen", () => {
+  it("toont een lege sectie met kop en één toevoeg-regel", () => {
     renderSheet({ lines: [], totals: computeTotals([], header) });
     expect(screen.getByText("Laadpalen")).toBeInTheDocument();
     expect(screen.getAllByText("Nog geen regels")).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: /^Artikel/ })).toHaveLength(2);
+    expect(screen.getByTestId("add-laadpalen")).toBeInTheDocument();
+    expect(screen.getByTestId("add-installatiemateriaal")).toBeInTheDocument();
     // Uurloon en Voorrijkosten staan er altijd, ook zonder regels.
     expect(row("uurloon")).toBeInTheDocument();
     expect(row("voorrijkosten")).toBeInTheDocument();
@@ -272,7 +265,7 @@ describe("CalcSheet", () => {
   it("is bevroren leesbaar: geen knoppen, wel chevrons, alle velden disabled", () => {
     renderSheet({ frozen: true });
     expect(screen.queryByRole("button", { name: "Regel verwijderen" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Artikel|Vrije regel|Urenregel|Arbeidsregel/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-laadpalen")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /opnieuw berekenen/ })).not.toBeInTheDocument();
     // Uitklappen om inkoop te lezen blijft wél mogelijk.
     expect(within(row("u2")).getByRole("button", { name: "Details tonen" })).toBeInTheDocument();

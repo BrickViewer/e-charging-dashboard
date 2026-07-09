@@ -52,13 +52,15 @@ export function useCreateCatalogProduct() {
       const { data: org, error: orgErr } = await supabase.from("organizations").select("id").order("created_at").limit(1).maybeSingle();
       if (orgErr) throw orgErr;
       if (!org) throw new Error("Geen organisatie gevonden");
+      // Volledige rij terug: het calculatieblad zet een nieuw artikel meteen als
+      // regel op het blad, en heeft daarvoor de prijsvelden nodig.
       const { data, error } = await supabase
         .from("catalog_products")
         .insert({ ...insert, organization_id: org.id })
-        .select("id")
+        .select("*")
         .single();
       if (error) throw error;
-      return data.id as string;
+      return data as CatalogProduct;
     },
     onSuccess: () => invalidate(qc),
   });
