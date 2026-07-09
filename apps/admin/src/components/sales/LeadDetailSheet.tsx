@@ -261,7 +261,8 @@ export function LeadDetailSheet({
       toast.success("Offerte aangemaakt");
       setObjectDialogOpen(false);
       onOpenChange(false);
-      navigate(`/sales/offertes?quote=${quoteId}`);
+      // Eerst de interne calculatie (overslaanbaar), dan het opstelscherm
+      navigate(`/sales/offertes/${quoteId}/calculatie`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Offerte aanmaken mislukt"); }
   };
   const launchConfigurator = async () => {

@@ -15,6 +15,7 @@ import {
   Sparkles,
   BarChart3,
   Tags,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/contexts/authContextValue";
@@ -60,6 +61,8 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
       { to: "/sales/offertes", icon: FileText, label: "Offertes" },
       // Onboarding-pijplijn: de hele flow na de getekende offerte (incl. installateur-handoff)
       { to: "/sales/onboarding", icon: Rocket, label: "Onboarding" },
+      // Productcatalogus voor de interne kostencalculator
+      { to: "/sales/catalogus", icon: Package, label: "Catalogus" },
       { to: "/sales/configurator", icon: WandSparkles, label: "Configurator" },
       // Opent het fictieve klantportaal in een eigen venster (configurator-patroon)
       { to: "/demo", icon: MonitorPlay, label: "Demo", newTab: true },
