@@ -104,9 +104,8 @@ describe("CalcSheet", () => {
 
   it("patcht een urenregel binnen het Uurloon-paneel op haar eigen uid", () => {
     const props = renderSheet();
-    const uurloon = row("uurloon");
-    fireEvent.click(within(uurloon).getByRole("button", { name: "Details tonen" }));
-    fireEvent.change(within(uurloon).getByDisplayValue("Montage"), { target: { value: "Montage + inregelen" } });
+    fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Details tonen" }));
+    fireEvent.change(within(row("u4")).getByDisplayValue("Montage"), { target: { value: "Montage + inregelen" } });
     expect(props.onPatchLine).toHaveBeenCalledWith("u4", { description: "Montage + inregelen" });
   });
 
@@ -120,12 +119,13 @@ describe("CalcSheet", () => {
 
   it("klapt op de chevron alléén die regel open, met inkoop en montagetijd", () => {
     renderSheet();
-    expect(within(row("u2")).queryByText("Inkoop per stuk")).not.toBeInTheDocument();
+    expect(screen.queryByText("Inkoop per stuk")).not.toBeInTheDocument();
     fireEvent.click(within(row("u2")).getByRole("button", { name: "Details tonen" }));
-    expect(within(row("u2")).getByText("Inkoop per stuk")).toBeInTheDocument();
-    expect(within(row("u2")).getByText("Montagetijd per stuk")).toBeInTheDocument();
-    // De andere regels blijven dicht.
-    expect(within(row("u1")).queryByText("Inkoop per stuk")).not.toBeInTheDocument();
+    // Eén regel open ⇒ precies één inkoop- en één montagetijd-regel op het blad.
+    expect(screen.getByText("Inkoop per stuk")).toBeInTheDocument();
+    expect(screen.getByText("Montagetijd per stuk")).toBeInTheDocument();
+    expect(document.getElementById("calc-detail-u2")).toBeInTheDocument();
+    expect(document.getElementById("calc-detail-u1")).not.toBeInTheDocument();
   });
 
   it("toont de montagetijd al vóór het uitklappen, maar alleen als er tijd op staat", () => {
@@ -139,11 +139,54 @@ describe("CalcSheet", () => {
   it("leest Uurloon als een gewone regel: uren × uurloon = bedrag", () => {
     renderSheet();
     const uurloon = row("uurloon");
-    expect(within(uurloon).getByText("12")).toBeInTheDocument(); // 4 urenregel + 8 meterkast
+    expect(within(uurloon).getByDisplayValue("12")).toBeInTheDocument(); // 4 urenregel + 8 meterkast
     expect(within(uurloon).getByText("Uurloon")).toBeInTheDocument();
     expect(within(uurloon).getByDisplayValue("60,00")).toBeInTheDocument();
     expect(within(uurloon).getByText("per uur")).toBeInTheDocument();
     expect(within(uurloon).getByText("€ 720,00")).toBeInTheDocument();
+  });
+
+  describe("uren stappen op de Uurloon-regel", () => {
+    // Getoond wordt het TOTAAL (12 = 4 urenregel + 8 calculatietijd), maar de
+    // knoppen verstellen alleen de urenregel — anders zou het totaal niet meer
+    // kloppen met wat eronder staat.
+    it("verhoogt de urenregel, niet de calculatietijd", () => {
+      const props = renderSheet();
+      fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Meer uren" }));
+      expect(props.onPatchLine).toHaveBeenCalledWith("u4", { qty: 5, unit_hours: 1 });
+    });
+
+    it("verlaagt de urenregel", () => {
+      const props = renderSheet();
+      fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Minder uren" }));
+      expect(props.onPatchLine).toHaveBeenCalledWith("u4", { qty: 3, unit_hours: 1 });
+    });
+
+    it("laat je het totaal ook intypen", () => {
+      const props = renderSheet();
+      const veld = within(row("uurloon")).getByDisplayValue("12");
+      fireEvent.change(veld, { target: { value: "20" } });
+      fireEvent.blur(veld);
+      expect(props.onPatchLine).toHaveBeenCalledWith("u4", { qty: 12, unit_hours: 1 }); // 20 − 8 calculatietijd
+    });
+
+    it("maakt een montageregel als er nog geen urenregel is", () => {
+      const zonder = [lines[0], lines[1]]; // laadpaal + meterkast (8 u calculatietijd)
+      const props = renderSheet({ lines: zonder, totals: computeTotals(zonder, header) });
+      const uurloon = row("uurloon");
+      expect(within(uurloon).getByRole("button", { name: "Minder uren" })).toBeDisabled();
+      fireEvent.click(within(uurloon).getByRole("button", { name: "Meer uren" }));
+      expect(props.onAddFree).toHaveBeenCalledWith("uren", "arbeid", { description: "Montage", qty: 1 });
+    });
+
+    it("verwijdert de urenregel als je hem op nul zet", () => {
+      const enkel = [lines[3]]; // alleen de urenregel van 4 u
+      const props = renderSheet({ lines: enkel, totals: computeTotals(enkel, header) });
+      const veld = within(row("uurloon")).getByDisplayValue("4");
+      fireEvent.change(veld, { target: { value: "0" } });
+      fireEvent.blur(veld);
+      expect(props.onRemoveLine).toHaveBeenCalledWith("u4");
+    });
   });
 
   it("leest Voorrijkosten als een gewone regel: km × €/km × dagen = bedrag", () => {
@@ -158,22 +201,28 @@ describe("CalcSheet", () => {
 
   it("verzamelt de urenregels achter de chevron van Uurloon", () => {
     renderSheet();
-    const uurloon = row("uurloon");
-    expect(within(uurloon).queryByDisplayValue("Montage")).not.toBeInTheDocument();
-    fireEvent.click(within(uurloon).getByRole("button", { name: "Details tonen" }));
-    expect(within(uurloon).getByDisplayValue("Montage")).toBeInTheDocument();
-    expect(within(uurloon).getByText("4 u")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Montage")).not.toBeInTheDocument();
+    fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Details tonen" }));
+    expect(within(row("u4")).getByDisplayValue("Montage")).toBeInTheDocument();
+    expect(within(row("u4")).getByText("4 u")).toBeInTheDocument();
     // De 8 uur calculatietijd van de meterkast telt mee in het montagebedrag.
-    expect(within(uurloon).getByText("Calculatietijd uit materiaalregels")).toBeInTheDocument();
-    expect(within(uurloon).getByText("8 u")).toBeInTheDocument();
+    expect(screen.getByText("Calculatietijd uit materiaalregels")).toBeInTheDocument();
+    expect(screen.getByText("8 u")).toBeInTheDocument();
+  });
+
+  it("stapt de uren van een losse urenregel in het paneel", () => {
+    const props = renderSheet();
+    fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Details tonen" }));
+    fireEvent.click(within(row("u4")).getByRole("button", { name: "Meer uren" }));
+    expect(props.onPatchLine).toHaveBeenCalledWith("u4", { qty: 5, unit_hours: 1 });
   });
 
   it("voegt urenregels toe vanuit het uitgeklapte Uurloon-paneel", () => {
     const props = renderSheet();
-    const uurloon = row("uurloon");
-    fireEvent.click(within(uurloon).getByRole("button", { name: "Details tonen" }));
-    expect(within(uurloon).queryByRole("button", { name: /Vrije regel/ })).not.toBeInTheDocument();
-    fireEvent.click(within(uurloon).getByRole("button", { name: /Urenregel/ }));
+    fireEvent.click(within(row("uurloon")).getByRole("button", { name: "Details tonen" }));
+    const arbeid = section("arbeid");
+    expect(within(arbeid).queryByRole("button", { name: /Vrije regel/ })).not.toBeInTheDocument();
+    fireEvent.click(within(arbeid).getByRole("button", { name: /Urenregel/ }));
     expect(props.onAddFree).toHaveBeenCalledWith("uren", "arbeid");
   });
 
@@ -186,10 +235,9 @@ describe("CalcSheet", () => {
 
   it("verbergt de km-herberekening achter de chevron van Voorrijkosten", () => {
     const props = renderSheet();
-    const voorrij = row("voorrijkosten");
-    expect(within(voorrij).queryByRole("button", { name: /opnieuw berekenen/ })).not.toBeInTheDocument();
-    fireEvent.click(within(voorrij).getByRole("button", { name: "Details tonen" }));
-    fireEvent.click(within(voorrij).getByRole("button", { name: /opnieuw berekenen/ }));
+    expect(screen.queryByRole("button", { name: /opnieuw berekenen/ })).not.toBeInTheDocument();
+    fireEvent.click(within(row("voorrijkosten")).getByRole("button", { name: "Details tonen" }));
+    fireEvent.click(screen.getByRole("button", { name: /opnieuw berekenen/ }));
     expect(props.onRecomputeKm).toHaveBeenCalled();
   });
 

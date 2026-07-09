@@ -154,8 +154,10 @@ export default function SalesOfferteCalculatie() {
     ]);
   };
 
-  /** Lege regel onder een sectie; de regel erft de categorie van die sectie. */
-  const addFree = (type: "vrij" | "uren", category: CalcSection) =>
+  /** Lege regel onder een sectie; de regel erft de categorie van die sectie.
+      `init` laat de aanroeper een startwaarde meegeven — de plusknop op de
+      Uurloon-regel maakt er zo meteen een benoemde montageregel van. */
+  const addFree = (type: "vrij" | "uren", category: CalcSection, init?: Partial<CalcLineDraft>) =>
     setLines((prev) => [
       ...prev,
       {
@@ -173,6 +175,7 @@ export default function SalesOfferteCalculatie() {
         unit_sell: 0,
         unit_hours: type === "uren" ? 1 : 0,
         position: prev.length,
+        ...init,
       },
     ]);
 

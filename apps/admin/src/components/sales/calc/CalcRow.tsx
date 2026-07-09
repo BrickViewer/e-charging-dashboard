@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * De actiekolom is altijd gereserveerd, ook als de knop verborgen is — anders
  * verspringt het bedrag zodra je over een regel hovert.
  */
-export const ROW_GRID = "grid grid-cols-[1.25rem_3rem_minmax(0,1fr)_6rem_1.75rem] items-start gap-x-2 px-3";
+export const ROW_GRID = "grid grid-cols-[1.25rem_4.75rem_minmax(0,1fr)_6rem_1.75rem] items-start gap-x-2 px-3";
 
 export function CalcRow({
   chevron,
