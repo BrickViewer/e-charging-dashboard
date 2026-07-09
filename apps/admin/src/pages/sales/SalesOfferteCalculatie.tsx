@@ -15,6 +15,7 @@ import { useCatalogProducts, netCost, sellPrice, catalogCategoryLabel, type Cata
 import { computeTotals, lineTotals, type CalcHeaderDraft, type CalcLineDraft, type CalcSummary } from "@/services/calcTypes";
 import { applyCalcToQuote } from "@/services/calcPrefill";
 import { scopeFromFlags, SCOPE_LABEL } from "@/lib/quoteScope";
+import { supabase } from "@/integrations/supabase/client";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 const num = (s: string | number) => {
@@ -204,7 +205,7 @@ export default function SalesOfferteCalculatie() {
     setBusy(true);
     try {
       await doSave("afgerond");
-      // Offerte voorvullen (prijs, regels, leveringstekst) + xlsx naar SharePoint
+      // Offerte voorvullen (prijs, regels, leveringstekst)
       const finalPrice = offerPrice ?? totals.suggestedOfferPrice;
       await applyCalcToQuote({
         quote: quote.data,
@@ -216,6 +217,30 @@ export default function SalesOfferteCalculatie() {
         setSummary,
       });
       toast.success("Calculatie afgerond — offerte voorgevuld");
+
+      // Interne CALC-xlsx naar het SharePoint-dossier — best-effort (zoals de
+      // OFF-upload): falen blokkeert de flow niet.
+      try {
+        const { buildCalcXlsx, bytesToBase64 } = await import("@/services/calcXlsx");
+        const bytes = await buildCalcXlsx({
+          quoteNumber: quote.data.quote_number ?? "",
+          projectLabel: quote.data.prospect_company || quote.data.prospect_contact || "",
+          header,
+          summary,
+          totals,
+          offerPrice: finalPrice,
+          lines,
+        });
+        const { data: up, error: upErr } = await supabase.functions.invoke<{ status: string; skipped?: string; calc_web_url?: string }>(
+          "quote-sharepoint-calc",
+          { body: { quote_id: id, calc_xlsx_base64: bytesToBase64(bytes) } },
+        );
+        if (upErr) throw upErr;
+        if (up?.status === "ok" && !up.skipped) toast.success("Calculatie-Excel in SharePoint-dossier gezet");
+      } catch (e) {
+        toast.warning(`Calculatie afgerond, maar SharePoint-upload mislukt: ${e instanceof Error ? e.message : e}`);
+      }
+
       navigate(`/sales/offertes/${id}`);
     } catch (e) {
       toast.error(`Afronden mislukt: ${e instanceof Error ? e.message : e}`);
