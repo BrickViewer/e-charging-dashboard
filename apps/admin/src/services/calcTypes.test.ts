@@ -21,6 +21,7 @@ const header: CalcHeaderDraft = {
 };
 
 const line = (partial: Partial<CalcLineDraft>): CalcLineDraft => ({
+  uid: "u0", // vast, niet via nextUid() — tests moeten deterministisch zijn
   line_type: "product",
   product_id: null,
   description: "x",
@@ -200,6 +201,14 @@ describe("calcToLineItems", () => {
     const som = gesorteerd.reduce((acc, i) => acc + i.total, 0);
     expect(r2(som)).toBe(prijs);
     expect(r2(som)).toBe(r2(calcToLineItems(lines, totals, prijs).reduce((acc, i) => acc + i.total, 0)));
+  });
+
+  it("laat het client-side regel-id nooit naar de klantregels lekken", () => {
+    // calcToLineItems noemt zijn velden expliciet; deze test bewaakt dat een
+    // toekomstige `{...line}`-spread `uid` niet stilletjes meesmokkelt.
+    const lines: CalcLineDraft[] = [line({ uid: "UID-LEK-CANARY", description: "Zaptec PRO", qty: 1, unit_sell: 100 })];
+    const totals = computeTotals(lines, header);
+    expect(JSON.stringify(calcToLineItems(lines, totals, 100))).not.toContain("UID-LEK-CANARY");
   });
 
   it("lege omschrijving krijgt een nette fallback (geen em-dash naar de klant)", () => {

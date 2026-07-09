@@ -5,6 +5,9 @@
 export type CalcLineType = "product" | "vrij" | "uren";
 
 export interface CalcLineDraft {
+  /** Client-side regel-id (zie components/sales/calc/uid.ts). Wordt nooit
+      opgeslagen: patch/verwijder/uitklap hangen eraan, de DB niet. */
+  uid: string;
   id?: string;
   line_type: CalcLineType;
   product_id: string | null;

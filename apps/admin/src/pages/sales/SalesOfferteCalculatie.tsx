@@ -19,6 +19,7 @@ import {
 } from "@/services/calcTypes";
 import { CalcSheet } from "@/components/sales/calc/CalcSheet";
 import { CalcTotalsCard } from "@/components/sales/calc/CalcTotalsCard";
+import { nextUid } from "@/components/sales/calc/uid";
 import { applyCalcToQuote } from "@/services/calcPrefill";
 import { scopeFromFlags, SCOPE_LABEL } from "@/lib/quoteScope";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,6 +70,7 @@ export default function SalesOfferteCalculatie() {
     setOfferPrice(calc.offer_price_rounded == null ? null : Number(calc.offer_price_rounded));
     setLines(
       dbLines.map((l, i) => ({
+        uid: nextUid(),
         id: l.id,
         line_type: l.line_type as CalcLineDraft["line_type"],
         product_id: l.product_id,
@@ -134,6 +136,7 @@ export default function SalesOfferteCalculatie() {
     setLines((prev) => [
       ...prev,
       {
+        uid: nextUid(),
         line_type: p.kind === "arbeid" ? "uren" : "product",
         product_id: p.id,
         description: p.name,
@@ -156,6 +159,7 @@ export default function SalesOfferteCalculatie() {
     setLines((prev) => [
       ...prev,
       {
+        uid: nextUid(),
         line_type: type,
         product_id: null,
         description: "",
@@ -172,9 +176,11 @@ export default function SalesOfferteCalculatie() {
       },
     ]);
 
-  const patchLine = (idx: number, patch: Partial<CalcLineDraft>) =>
-    setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-  const removeLine = (idx: number) => setLines((prev) => prev.filter((_l, i) => i !== idx));
+  // Op uid, niet op array-index: het blad rendert per sectie een gefilterde
+  // subset, en een index uit zo'n subset zou de verkeerde regel raken.
+  const patchLine = (uid: string, patch: Partial<CalcLineDraft>) =>
+    setLines((prev) => prev.map((l) => (l.uid === uid ? { ...l, ...patch } : l)));
+  const removeLine = (uid: string) => setLines((prev) => prev.filter((l) => l.uid !== uid));
 
   const patchHeader = (patch: Partial<CalcHeaderDraft>) => {
     // Handmatig ingevoerde kilometers: de "berekend"-toelichting klopt dan niet meer.

@@ -1,7 +1,10 @@
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ChevronRight, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { NumField } from "./NumField";
+import { CalcRow, ROW_GRID } from "./CalcRow";
 import { CatalogPickerButton } from "./CatalogPickerButton";
 import type { CatalogProduct } from "@/hooks/useCatalogProducts";
 import {
@@ -19,9 +22,13 @@ import { formatEuro as euro } from "@/services/calculations";
 
 const uren = (n: number) => `${n.toLocaleString("nl-NL")} u`;
 
-/** Regelvelden staan randloos in het blad en krijgen pas een kader bij focus —
-    zo leest de tabel als een calculatieblad en niet als een formulier. */
-const CELL = "h-8 border-transparent bg-transparent px-1 text-right tabular-nums focus-visible:border-input";
+/** Velden in de lijst staan randloos tot je ze aanraakt — zo leest het als een
+    lijst en niet als een formulier. */
+const GHOST = "border-transparent bg-transparent focus-visible:border-input";
+const QTY = `h-8 w-full px-1 text-right tabular-nums ${GHOST}`;
+const NAME = `h-8 px-1 ${GHOST}`;
+const MICRO = `h-5 w-[4.5rem] px-0.5 text-[11px] tabular-nums ${GHOST}`;
+const PARAM = "h-7 w-16 px-1 text-right text-sm tabular-nums";
 
 export interface CalcSheetProps {
   lines: CalcLineDraft[];
@@ -33,8 +40,8 @@ export interface CalcSheetProps {
   kmHint: string | null;
   onAddProduct: (p: CatalogProduct) => void;
   onAddFree: (type: "vrij" | "uren", category: CalcSection) => void;
-  onPatchLine: (index: number, patch: Partial<CalcLineDraft>) => void;
-  onRemoveLine: (index: number) => void;
+  onPatchLine: (uid: string, patch: Partial<CalcLineDraft>) => void;
+  onRemoveLine: (uid: string) => void;
   onHeaderChange: (patch: Partial<CalcHeaderDraft>) => void;
   onRecomputeKm: () => void;
 }
@@ -48,280 +55,317 @@ function catalogFor(catalog: CatalogProduct[], section: CalcSection): CatalogPro
 }
 
 /**
- * Het calculatieblad: één doorlopende tabel met een kop per categorie, waaronder
- * je regels onder elkaar toevoegt. De rekenparameters (uurloon, voorrijkosten,
- * stelpost) staan als rijen op hun eigen plek in de rekenvolgorde.
+ * Het calculatieblad als lijst: aantal · naam · bedrag, onder elkaar, met een
+ * subtiel kopje per categorie. De interne cijfers (inkoop, montagetijd) zitten
+ * achter een chevron per regel; de verkoopprijs blijft op de subregel staan,
+ * want daarmee maak je een pas toegevoegde vrije regel bruikbaar.
  */
 export function CalcSheet(props: CalcSheetProps) {
   const { lines, header, totals, frozen, catalog, kmBusy, kmHint, onAddProduct, onAddFree, onPatchLine, onRemoveLine, onHeaderChange, onRecomputeKm } =
     props;
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // De globale index vastleggen vóór het filteren: patchLine/removeLine werken
-  // op de volledige array, dus een filter-index zou de verkeerde regel raken.
-  const rowsOf = (section: CalcSection) =>
-    lines.map((line, index) => ({ line, index })).filter((r) => sectionOfLine(r.line) === section);
+  const toggle = (uid: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(uid)) next.add(uid);
+      return next;
+    });
 
   const { fromProductLines } = hoursSplit(lines);
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2.5 font-medium">Omschrijving</th>
-              <th className="w-20 px-2 py-2.5 text-right font-medium">Aantal</th>
-              <th className="w-24 px-2 py-2.5 text-right font-medium">Inkoop/eenh.</th>
-              <th className="w-24 px-2 py-2.5 text-right font-medium">Verkoop/eenh.</th>
-              <th className="w-20 px-2 py-2.5 text-right font-medium">Uur/eenh.</th>
-              <th className="w-28 px-2 py-2.5 text-right font-medium">Totaal</th>
-              <th className="w-10 px-2 py-2.5" />
-            </tr>
-          </thead>
+      {CALC_SECTIONS.map((section) => {
+        const rows = lines.filter((l) => sectionOfLine(l) === section.value);
+        const isArbeid = section.value === "arbeid";
+        const subtotal = isArbeid ? totals.laborSell + totals.travelSell : sectionSellSubtotal(lines, section.value);
 
-          {CALC_SECTIONS.map((section) => {
-            const rows = rowsOf(section.value);
-            const isArbeid = section.value === "arbeid";
-            const sectionTotal = isArbeid ? totals.laborSell + totals.travelSell : sectionSellSubtotal(lines, section.value);
-            const products = catalogFor(catalog, section.value);
+        return (
+          <section key={section.value} data-testid={`section-${section.value}`}>
+            <SectionHeader id={section.value} label={section.label} caption="subtotaal" amount={euro(subtotal)} />
 
-            return (
-              <tbody key={section.value} className="border-b last:border-0">
-                <SectionHeader label={section.label} value={euro(sectionTotal)} caption="subtotaal" />
+            {rows.map((line) => (
+              <LineRow
+                key={line.uid}
+                line={line}
+                frozen={frozen}
+                expanded={expanded.has(line.uid)}
+                onToggle={() => toggle(line.uid)}
+                onPatch={(patch) => onPatchLine(line.uid, patch)}
+                onRemove={() => onRemoveLine(line.uid)}
+              />
+            ))}
 
-                {isArbeid && (
-                  <tr className="border-b">
-                    <td colSpan={4} className="px-3 py-2 text-muted-foreground">
-                      Uurloon
-                    </td>
-                    <td colSpan={2} className="px-2 py-2">
-                      <div className="flex items-center justify-end gap-2">
-                        <NumField
-                          className="h-8 w-24 text-right tabular-nums"
-                          value={header.hourly_rate}
-                          disabled={frozen}
-                          onCommit={(n) => onHeaderChange({ hourly_rate: n })}
-                        />
-                        <span className="text-xs text-muted-foreground">€/uur</span>
-                      </div>
-                    </td>
-                    <td />
-                  </tr>
-                )}
+            {rows.length === 0 && (
+              <p className="border-b border-border/60 px-4 py-4 text-center text-sm text-muted-foreground">
+                {isArbeid ? "Nog geen arbeidsregels" : "Nog geen regels"}
+              </p>
+            )}
 
-                {rows.map(({ line, index }) => (
-                  <LineRow
-                    key={line.id ?? `nieuw-${index}`}
-                    line={line}
-                    frozen={frozen}
-                    onPatch={(patch) => onPatchLine(index, patch)}
-                    onRemove={() => onRemoveLine(index)}
+            {!frozen && (
+              <CalcRow
+                className="border-b border-border/60 py-1"
+                main={
+                  <div className="flex flex-wrap items-center gap-1">
+                    <CatalogPickerButton
+                      products={catalogFor(catalog, section.value)}
+                      label={isArbeid ? "Arbeidsregel" : "Artikel"}
+                      onPick={onAddProduct}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-muted-foreground"
+                      onClick={() => onAddFree(isArbeid ? "uren" : "vrij", section.value)}
+                    >
+                      <Plus className="mr-1.5 h-3.5 w-3.5" /> {isArbeid ? "Urenregel" : "Vrije regel"}
+                    </Button>
+                  </div>
+                }
+              />
+            )}
+
+            {isArbeid && (
+              <>
+                {fromProductLines > 0 && (
+                  <CalcRow
+                    className="border-b border-border/60 text-muted-foreground"
+                    main={<span className="text-sm leading-8">Calculatietijd uit materiaalregels</span>}
+                    amount={<span className="text-sm">{uren(fromProductLines)}</span>}
                   />
-                ))}
-
-                {rows.length === 0 && (
-                  <tr className="border-b">
-                    <td colSpan={7} className="px-4 py-5 text-center text-sm text-muted-foreground">
-                      {isArbeid ? "Nog geen arbeidsregels" : "Nog geen regels"}
-                    </td>
-                  </tr>
                 )}
-
-                {!frozen && (
-                  <tr className="border-b">
-                    <td colSpan={7} className="px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CatalogPickerButton
-                          products={products}
-                          label={isArbeid ? "Arbeidsregel uit catalogus" : "Artikel uit catalogus"}
-                          onPick={onAddProduct}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 text-muted-foreground"
-                          onClick={() => onAddFree(isArbeid ? "uren" : "vrij", section.value)}
-                        >
-                          <Plus className="mr-1.5 h-3.5 w-3.5" /> {isArbeid ? "Urenregel" : "Vrije regel"}
-                        </Button>
+                <CalcRow
+                  className="border-b border-border/60"
+                  main={
+                    <div className="flex h-8 flex-wrap items-center gap-1.5 text-sm">
+                      <span>Uurloon</span>
+                      <NumField
+                        className={PARAM}
+                        decimals={2}
+                        value={header.hourly_rate}
+                        disabled={frozen}
+                        onCommit={(n) => onHeaderChange({ hourly_rate: n })}
+                      />
+                      <span className="text-muted-foreground">€/uur × {uren(totals.hoursTotal)}</span>
+                    </div>
+                  }
+                  amount={<span className="font-medium">{euro(totals.laborSell)}</span>}
+                />
+                <CalcRow
+                  className="border-b border-border/60"
+                  main={
+                    <div>
+                      <div className="flex h-8 flex-wrap items-center gap-1.5 text-sm">
+                        <span>Voorrijkosten</span>
+                        <NumField className={PARAM} value={header.retour_km} disabled={frozen} onCommit={(n) => onHeaderChange({ retour_km: n })} />
+                        <span className="text-muted-foreground">km ×</span>
+                        <NumField className={PARAM} value={header.km_price} disabled={frozen} onCommit={(n) => onHeaderChange({ km_price: n })} />
+                        <span className="text-muted-foreground">€/km ×</span>
+                        <NumField className={PARAM} value={header.travel_days} disabled={frozen} onCommit={(n) => onHeaderChange({ travel_days: n })} />
+                        <span className="text-muted-foreground">dag(en)</span>
+                        {!frozen && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground"
+                            aria-label="Afstand kantoor ↔ projectlocatie opnieuw berekenen"
+                            disabled={kmBusy}
+                            onClick={onRecomputeKm}
+                          >
+                            <RefreshCw className={cn("h-3.5 w-3.5", kmBusy && "animate-spin")} />
+                          </Button>
+                        )}
                       </div>
-                    </td>
-                  </tr>
-                )}
+                      {kmHint && <p className="px-1 pb-1 text-[11px] text-muted-foreground">{kmHint}</p>}
+                    </div>
+                  }
+                  amount={<span className="font-medium">{euro(totals.travelSell)}</span>}
+                />
+              </>
+            )}
+          </section>
+        );
+      })}
 
-                {isArbeid && (
-                  <>
-                    {fromProductLines > 0 && (
-                      <tr className="border-b text-muted-foreground">
-                        <td colSpan={5} className="px-3 py-2">
-                          Calculatietijd uit materiaalregels
-                        </td>
-                        <td className="px-2 py-2 text-right tabular-nums">{uren(fromProductLines)}</td>
-                        <td />
-                      </tr>
-                    )}
-                    <tr className="border-b">
-                      <td colSpan={5} className="px-3 py-2">
-                        Montage — {uren(totals.hoursTotal)} × {euro(header.hourly_rate)}
-                      </td>
-                      <td className="px-2 py-2 text-right font-medium tabular-nums">{euro(totals.laborSell)}</td>
-                      <td />
-                    </tr>
-                    <tr>
-                      <td colSpan={5} className="px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span>Voorrijkosten</span>
-                          <NumField
-                            className="h-8 w-20 text-right tabular-nums"
-                            value={header.retour_km}
-                            disabled={frozen}
-                            onCommit={(n) => onHeaderChange({ retour_km: n })}
-                          />
-                          <span className="text-xs text-muted-foreground">km ×</span>
-                          <NumField
-                            className="h-8 w-20 text-right tabular-nums"
-                            value={header.km_price}
-                            disabled={frozen}
-                            onCommit={(n) => onHeaderChange({ km_price: n })}
-                          />
-                          <span className="text-xs text-muted-foreground">€/km ×</span>
-                          <NumField
-                            className="h-8 w-16 text-right tabular-nums"
-                            value={header.travel_days}
-                            disabled={frozen}
-                            onCommit={(n) => onHeaderChange({ travel_days: n })}
-                          />
-                          <span className="text-xs text-muted-foreground">dag(en)</span>
-                          {!frozen && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2.5"
-                              title="Afstand kantoor ↔ projectlocatie opnieuw berekenen"
-                              disabled={kmBusy}
-                              onClick={onRecomputeKm}
-                            >
-                              <RefreshCw className={`h-3.5 w-3.5 ${kmBusy ? "animate-spin" : ""}`} />
-                            </Button>
-                          )}
-                        </div>
-                        {kmHint && <p className="mt-1 text-[11px] text-muted-foreground">{kmHint}</p>}
-                      </td>
-                      <td className="px-2 py-2 text-right font-medium tabular-nums">{euro(totals.travelSell)}</td>
-                      <td />
-                    </tr>
-                  </>
-                )}
-              </tbody>
-            );
-          })}
-
-          <tbody>
-            <SectionHeader label="Stelpost graafwerk" value={euro(totals.stelpost)} caption="apart op de offerte" />
-            <tr>
-              <td colSpan={7} className="px-3 py-3">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Bedrag</span>
-                    <NumField
-                      className="h-8 w-28 text-right tabular-nums"
-                      value={header.stelpost_graafwerk}
-                      disabled={frozen}
-                      onCommit={(n) => onHeaderChange({ stelpost_graafwerk: n })}
-                    />
-                  </div>
-                  <div className="flex min-w-[16rem] flex-1 items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Notitie</span>
-                    <Input
-                      className="h-8"
-                      value={header.stelpost_note}
-                      disabled={frozen}
-                      placeholder="€115 p/u, koppeluren, Slegh Infra…"
-                      onChange={(e) => onHeaderChange({ stelpost_note: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Staat als aparte post op de offerte — telt niet mee in de offerteprijs.
-                </p>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <section data-testid="section-stelpost">
+        <SectionHeader id="stelpost" label="Stelpost graafwerk" caption="apart op de offerte" />
+        <CalcRow
+          main={
+            <Input
+              className={cn("h-8", GHOST)}
+              value={header.stelpost_note}
+              disabled={frozen}
+              placeholder="Notitie — bv. €115 p/u, koppeluren, Slegh Infra"
+              onChange={(e) => onHeaderChange({ stelpost_note: e.target.value })}
+            />
+          }
+          amount={
+            <NumField
+              className="h-8 w-full px-1 text-right font-medium tabular-nums"
+              decimals={2}
+              value={header.stelpost_graafwerk}
+              disabled={frozen}
+              onCommit={(n) => onHeaderChange({ stelpost_graafwerk: n })}
+            />
+          }
+        />
+        <p className="px-3 pb-3 pl-[5.25rem] text-[11px] text-muted-foreground">
+          Staat als aparte post op de offerte — telt niet mee in de offerteprijs.
+        </p>
+      </section>
     </div>
   );
 }
 
-function SectionHeader({ label, value, caption }: { label: string; value: string; caption?: string }) {
+function SectionHeader({ id, label, caption, amount }: { id: string; label: string; caption: string; amount?: string }) {
   return (
-    <tr className="border-y bg-muted/40">
-      <td colSpan={5} className="px-3 py-2 text-xs font-semibold uppercase tracking-wide">
-        {label}
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums">
-        <span className="text-xs font-medium">{value}</span>
-      </td>
-      <td className="px-2 py-2 text-right">
-        {caption && <span className="whitespace-nowrap text-[10px] uppercase tracking-wide text-muted-foreground">{caption}</span>}
-      </td>
-    </tr>
+    <div className={cn(ROW_GRID, "items-center border-b bg-muted/40 py-2")}>
+      <div className="col-span-3 flex min-w-0 items-baseline justify-between gap-3">
+        <span className="cockpit-section-label truncate" title={label}>
+          {label}
+        </span>
+        {/* Het kopje heeft veel letterafstand; op smalle schermen botst het
+            bijschrift anders op het bedrag. */}
+        <span className="hidden whitespace-nowrap text-[10px] uppercase tracking-wide text-muted-foreground sm:inline">{caption}</span>
+      </div>
+      <div className="text-right text-xs font-medium tabular-nums" data-testid={`subtotal-${id}`}>
+        {amount}
+      </div>
+      <div />
+    </div>
   );
 }
 
 function LineRow({
   line,
   frozen,
+  expanded,
+  onToggle,
   onPatch,
   onRemove,
 }: {
   line: CalcLineDraft;
   frozen: boolean;
+  expanded: boolean;
+  onToggle: () => void;
   onPatch: (patch: Partial<CalcLineDraft>) => void;
   onRemove: () => void;
 }) {
   const t = lineTotals(line);
   const isUren = line.line_type === "uren";
+  const detailId = `calc-detail-${line.uid}`;
+
   return (
-    <tr className="border-b align-middle">
-      <td className="px-3 py-1.5">
-        <Input
-          className="h-8 border-transparent bg-transparent px-1 focus-visible:border-input"
-          value={line.description}
-          placeholder={isUren ? "Omschrijving werkzaamheden…" : "Omschrijving…"}
-          disabled={frozen}
-          onChange={(e) => onPatch({ description: e.target.value })}
-        />
-        <div className="px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {[line.supplier, line.order_number, `per ${line.unit}`].filter(Boolean).join(" · ")}
-        </div>
-      </td>
-      <td className="px-2 py-1.5">
-        <NumField className={CELL} value={line.qty} disabled={frozen} onCommit={(n) => onPatch({ qty: n })} />
-      </td>
-      <td className="px-2 py-1.5">
-        {!isUren && <NumField className={CELL} value={line.unit_cost} disabled={frozen} onCommit={(n) => onPatch({ unit_cost: n })} />}
-      </td>
-      <td className="px-2 py-1.5">
-        {!isUren && <NumField className={CELL} value={line.unit_sell} disabled={frozen} onCommit={(n) => onPatch({ unit_sell: n })} />}
-      </td>
-      <td className="px-2 py-1.5">
-        {/* Materiaal zonder calculatietijd zou anders een kolom nullen opleveren. */}
-        <NumField
-          className={`${CELL} ${line.unit_hours === 0 ? "text-muted-foreground/50" : ""}`}
-          value={line.unit_hours}
-          disabled={frozen}
-          onCommit={(n) => onPatch({ unit_hours: n })}
-        />
-      </td>
-      <td className="px-2 py-1.5 text-right tabular-nums">{isUren ? uren(t.hours) : euro(t.sell)}</td>
-      <td className="px-2 py-1.5 text-right">
-        {!frozen && (
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={onRemove}>
+    <CalcRow
+      testId={`row-${line.uid}`}
+      className="group border-b border-border/60 transition-colors hover:bg-muted/30"
+      chevron={
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          aria-controls={detailId}
+          aria-label={expanded ? "Details verbergen" : "Details tonen"}
+          className="rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} />
+        </button>
+      }
+      qty={<NumField className={QTY} value={line.qty} disabled={frozen} onCommit={(n) => onPatch({ qty: n })} />}
+      main={
+        <>
+          <Input
+            className={NAME}
+            value={line.description}
+            title={line.description || undefined}
+            placeholder={isUren ? "Omschrijving werkzaamheden…" : "Omschrijving…"}
+            disabled={frozen}
+            onChange={(e) => onPatch({ description: e.target.value })}
+          />
+          <div className="flex min-w-0 items-center gap-1 px-1 text-[11px] text-muted-foreground">
+            {isUren ? (
+              <span>per uur</span>
+            ) : (
+              <>
+                <span>€</span>
+                <NumField className={MICRO} decimals={2} value={line.unit_sell} disabled={frozen} onCommit={(n) => onPatch({ unit_sell: n })} />
+                <span className="whitespace-nowrap">per {line.unit}</span>
+                {/* De montagetijd zit in het montagebedrag, niet in dit regelbedrag.
+                    Zonder deze hint verdwijnt hij ongezien achter de chevron. */}
+                {line.unit_hours > 0 && (
+                  <span className="truncate" title={`${uren(line.unit_hours)} montagetijd per ${line.unit}`}>
+                    · {uren(line.unit_hours)} montagetijd per {line.unit}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+
+          {expanded && (
+            <div id={detailId} className="mb-1 mt-1 space-y-1 rounded-md bg-muted/50 px-2 py-1.5">
+              {!isUren && (
+                <DetailField
+                  label={`Inkoop per ${line.unit}`}
+                  value={line.unit_cost}
+                  decimals={2}
+                  disabled={frozen}
+                  onCommit={(n) => onPatch({ unit_cost: n })}
+                />
+              )}
+              <DetailField
+                label={isUren ? "Uren per eenheid" : `Montagetijd per ${line.unit}`}
+                value={line.unit_hours}
+                disabled={frozen}
+                onCommit={(n) => onPatch({ unit_hours: n })}
+              />
+            </div>
+          )}
+        </>
+      }
+      amount={
+        isUren ? <span className="text-sm text-muted-foreground">{uren(t.hours)}</span> : <span className="text-sm">{euro(t.sell)}</span>
+      }
+      action={
+        !frozen && (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Regel verwijderen"
+            className="h-7 w-7 p-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+            onClick={onRemove}
+          >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
-        )}
-      </td>
-    </tr>
+        )
+      }
+    />
+  );
+}
+
+function DetailField({
+  label,
+  value,
+  disabled,
+  decimals,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  disabled: boolean;
+  decimals?: number;
+  onCommit: (n: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <NumField
+        className="h-7 w-24 px-1 text-right text-xs tabular-nums"
+        value={value}
+        decimals={decimals}
+        disabled={disabled}
+        onCommit={onCommit}
+      />
+    </div>
   );
 }
