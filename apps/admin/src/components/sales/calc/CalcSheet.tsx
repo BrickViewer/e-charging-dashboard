@@ -254,16 +254,8 @@ export function CalcSheet(props: CalcSheetProps) {
           />
         ))}
 
-        {!frozen && (
-          <AddLineRow
-            section="arbeid"
-            sectionLabel="Arbeid"
-            products={catalogFor(catalog, "arbeid")}
-            hint="Arbeidsregel zoeken of eigen omschrijving typen…"
-            onPickProduct={onAddProduct}
-            onCreateFree={(naam) => onAddFree("uren", "arbeid", { description: naam })}
-          />
-        )}
+        {/* Geen toevoeg-regel: uren voeg je toe met de + op de Uurloon-regel,
+            die er zo nodig zelf een montageregel voor aanmaakt. */}
       </section>
 
       <section data-testid="section-stelpost">

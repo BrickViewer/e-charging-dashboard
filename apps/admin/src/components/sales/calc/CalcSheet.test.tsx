@@ -209,13 +209,12 @@ describe("CalcSheet", () => {
     expect(within(voorrij).getByText("€ 90,00")).toBeInTheDocument();
   });
 
-  it("toont de urenregels als gewone regels, met de toevoeg-regel eronder", () => {
+  it("toont de urenregels als gewone regels, zonder eigen toevoeg-regel", () => {
     renderSheet();
-    const arbeid = section("arbeid");
     expect(within(row("u4")).getByDisplayValue("Montage")).toBeInTheDocument();
     expect(within(row("u4")).getByText("4 u")).toBeInTheDocument();
-    expect(within(arbeid).getByTestId("add-arbeid")).toBeInTheDocument();
-    expect([...arbeid.children].at(-1)).toBe(screen.getByTestId("add-arbeid"));
+    // Uren voeg je toe met de + op Uurloon, niet met een aparte toevoeg-regel.
+    expect(screen.queryByTestId("add-arbeid")).not.toBeInTheDocument();
   });
 
   it("laat Uurloon en Voorrijkosten niet openklappen", () => {
