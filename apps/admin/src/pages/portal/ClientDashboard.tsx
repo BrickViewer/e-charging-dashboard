@@ -212,8 +212,11 @@ export default function ClientDashboard() {
           swipe-carousel — één gauge per slide, hoofdgauge gecentreerd bij openen.
           De lampjes staan búiten de carousel zodat ze blijven staan bij het swipen. */}
       <div className="lg:hidden flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-1">
+        {/* Statusbalk: lampjes aan de randen, maandselector in het midden —
+            vaste plek, botst nergens mee tijdens het swipen */}
+        <div className="flex items-center justify-between px-4 pt-1">
           <WarningLight count={kpis.offlineCount} variant="offline" showCount />
+          {periodFilter}
           <WarningLight count={kpis.chargePointsOnline} variant="online" showCount />
         </div>
 
@@ -252,8 +255,6 @@ export default function ClientDashboard() {
             </button>
           ))}
         </div>
-
-        <div className="pb-2">{periodFilter}</div>
       </div>
 
     </div>

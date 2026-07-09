@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Activity, Wallet, User, Bell, type LucideIcon } from "lucide-react";
+import { Activity, Wallet, User, Bell, House, type LucideIcon } from "lucide-react";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 
 interface NavItem {
@@ -16,14 +16,14 @@ const navItems: NavItem[] = [
   { to: "berichten", label: "Berichten", icon: Bell },
 ];
 
-function NavTile({ item, isActive }: { item: NavItem; isActive: boolean }) {
+function NavTile({ item, isActive, className }: { item: NavItem; isActive: boolean; className?: string }) {
   const Icon = item.icon;
 
   return (
     <Link
       key={item.to}
       to={item.to}
-      className="portal-nav-link group"
+      className={`portal-nav-link group${className ? ` ${className}` : ""}`}
       aria-current={isActive ? "page" : undefined}
       aria-label={item.label}
       title={item.label}
@@ -44,8 +44,17 @@ export function NavIconBar() {
     return <NavTile key={to} item={{ ...item, to }} isActive={isActive} />;
   };
 
+  // Home alleen op mobiel: desktop heeft de terug-pijl in de rail,
+  // op mobiel is dit de enige weg terug naar het dashboard.
+  const homeActive = pathname === base || pathname === `${base}/`;
+
   return (
     <nav className="portal-nav-stack">
+      <NavTile
+        item={{ to: base, label: "Dashboard", icon: House }}
+        isActive={homeActive}
+        className="portal-nav-home"
+      />
       {navItems.map(renderItem)}
     </nav>
   );

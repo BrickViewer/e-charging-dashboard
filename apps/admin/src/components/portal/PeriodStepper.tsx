@@ -39,7 +39,7 @@ export function PeriodStepper({ label, index, count, onIndexChange }: PeriodStep
       </button>
 
       <span
-        className="min-w-[140px] text-center text-sm font-medium uppercase tracking-[0.14em] text-foreground/90 tabular-nums"
+        className="min-w-[104px] lg:min-w-[140px] text-center text-sm font-medium uppercase tracking-[0.14em] text-foreground/90 tabular-nums"
         aria-live="polite"
       >
         {label}
