@@ -410,6 +410,74 @@ export type Database = {
           },
         ]
       }
+      catalog_products: {
+        Row: {
+          category: string
+          created_at: string
+          gross_price: number
+          id: string
+          install_time_hours: number
+          is_active: boolean
+          kind: string
+          name: string
+          notes: string | null
+          order_number: string | null
+          organization_id: string
+          position: number
+          sell_adjustment_pct: number
+          supplier: string | null
+          supplier_discount_pct: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          gross_price?: number
+          id?: string
+          install_time_hours?: number
+          is_active?: boolean
+          kind?: string
+          name: string
+          notes?: string | null
+          order_number?: string | null
+          organization_id: string
+          position?: number
+          sell_adjustment_pct?: number
+          supplier?: string | null
+          supplier_discount_pct?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          gross_price?: number
+          id?: string
+          install_time_hours?: number
+          is_active?: boolean
+          kind?: string
+          name?: string
+          notes?: string | null
+          order_number?: string | null
+          organization_id?: string
+          position?: number
+          sell_adjustment_pct?: number
+          supplier?: string | null
+          supplier_discount_pct?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_fault_events: {
         Row: {
           created_at: string
@@ -3420,6 +3488,202 @@ export type Database = {
             foreignKeyName: "quote_acceptances_quote_id_fkey"
             columns: ["quote_id"]
             isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quote_calculation_lines: {
+        Row: {
+          calculation_id: string
+          category: string | null
+          created_at: string
+          description: string
+          id: string
+          line_type: string
+          meta: Json
+          order_number: string | null
+          organization_id: string
+          position: number
+          product_id: string | null
+          qty: number
+          supplier: string | null
+          total_cost: number | null
+          total_hours: number | null
+          total_sell: number | null
+          unit: string
+          unit_cost: number
+          unit_gross: number
+          unit_hours: number
+          unit_sell: number
+        }
+        Insert: {
+          calculation_id: string
+          category?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          line_type: string
+          meta?: Json
+          order_number?: string | null
+          organization_id: string
+          position?: number
+          product_id?: string | null
+          qty?: number
+          supplier?: string | null
+          total_cost?: number | null
+          total_hours?: number | null
+          total_sell?: number | null
+          unit?: string
+          unit_cost?: number
+          unit_gross?: number
+          unit_hours?: number
+          unit_sell?: number
+        }
+        Update: {
+          calculation_id?: string
+          category?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          line_type?: string
+          meta?: Json
+          order_number?: string | null
+          organization_id?: string
+          position?: number
+          product_id?: string | null
+          qty?: number
+          supplier?: string | null
+          total_cost?: number | null
+          total_hours?: number | null
+          total_sell?: number | null
+          unit?: string
+          unit_cost?: number
+          unit_gross?: number
+          unit_hours?: number
+          unit_sell?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_calculation_lines_calculation_id_fkey"
+            columns: ["calculation_id"]
+            isOneToOne: false
+            referencedRelation: "quote_calculations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_calculation_lines_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_calculation_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quote_calculations: {
+        Row: {
+          calc_item_id: string | null
+          calc_uploaded_at: string | null
+          calc_web_url: string | null
+          created_at: string
+          finalized_at: string | null
+          hourly_rate: number
+          hours_total: number
+          id: string
+          km_price: number
+          labor_sell: number
+          margin_material: number | null
+          material_cost: number
+          material_sell: number
+          offer_price_rounded: number | null
+          organization_id: string
+          quote_id: string
+          retour_km: number
+          schema_version: number
+          status: string
+          stelpost_graafwerk: number
+          stelpost_note: string | null
+          summary: Json
+          total_sell: number
+          travel_days: number
+          travel_sell: number
+          updated_at: string
+        }
+        Insert: {
+          calc_item_id?: string | null
+          calc_uploaded_at?: string | null
+          calc_web_url?: string | null
+          created_at?: string
+          finalized_at?: string | null
+          hourly_rate?: number
+          hours_total?: number
+          id?: string
+          km_price?: number
+          labor_sell?: number
+          margin_material?: number | null
+          material_cost?: number
+          material_sell?: number
+          offer_price_rounded?: number | null
+          organization_id: string
+          quote_id: string
+          retour_km?: number
+          schema_version?: number
+          status?: string
+          stelpost_graafwerk?: number
+          stelpost_note?: string | null
+          summary?: Json
+          total_sell?: number
+          travel_days?: number
+          travel_sell?: number
+          updated_at?: string
+        }
+        Update: {
+          calc_item_id?: string | null
+          calc_uploaded_at?: string | null
+          calc_web_url?: string | null
+          created_at?: string
+          finalized_at?: string | null
+          hourly_rate?: number
+          hours_total?: number
+          id?: string
+          km_price?: number
+          labor_sell?: number
+          margin_material?: number | null
+          material_cost?: number
+          material_sell?: number
+          offer_price_rounded?: number | null
+          organization_id?: string
+          quote_id?: string
+          retour_km?: number
+          schema_version?: number
+          status?: string
+          stelpost_graafwerk?: number
+          stelpost_note?: string | null
+          summary?: Json
+          total_sell?: number
+          travel_days?: number
+          travel_sell?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_calculations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_calculations_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: true
             referencedRelation: "quotes"
             referencedColumns: ["id"]
           },
