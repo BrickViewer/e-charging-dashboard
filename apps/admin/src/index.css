@@ -206,9 +206,19 @@
   }
 
   /* Portal-specific overrides */
+  /* iOS Safari: 100vh is hoger dan het zichtbare viewport (inklapbare adresbalk),
+     waardoor het document zelf scrollt en de "vaste" chrome meebeweegt. dvh volgt
+     het echte zichtbare viewport; op desktop identiek aan vh. */
+  @supports (height: 100dvh) {
+    .portal-theme.portal-shell {
+      height: 100dvh;
+    }
+  }
+
   .portal-theme.portal-shell {
     position: relative;
     isolation: isolate;
+    overscroll-behavior: none;
     background:
       radial-gradient(ellipse at 72% 16%, hsl(var(--portal-glow-green) / 0.09) 0%, hsl(var(--portal-glow-green) / 0.04) 26%, transparent 50%),
       radial-gradient(ellipse at 50% 50%, hsl(var(--portal-glow-green) / 0.045) 0%, transparent 45%),
@@ -557,10 +567,14 @@
     }
 
     /* Touch-norm: tikbare doelen ≥44px. Iconen blijven visueel gelijk,
-       alleen de hitbox groeit */
+       alleen de hitbox groeit. Gap compacter: met het home-item zijn het
+       5 iconen — bij 2rem gap zou de pill breder worden dan een 360px-scherm */
     .portal-theme .portal-nav-link {
       width: 2.75rem;
       height: 2.75rem;
+    }
+    .portal-theme .portal-nav-stack {
+      gap: 1.25rem;
     }
     .portal-theme .portal-theme-toggle::after {
       content: "";
@@ -698,6 +712,11 @@
   }
 
   @media (min-width: 1024px) {
+    /* Home-item is mobiel-only: desktop heeft de terug-pijl in de rail */
+    .portal-theme .portal-nav-home {
+      display: none;
+    }
+
     .portal-theme .portal-fixed-nav {
       /* Middellijn volgt het bedrag in de XL-gauge: het cluster staat op
          50% + 18px + 2vh (ClientDashboard), de waarde ~2px boven dat anker.

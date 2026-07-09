@@ -93,9 +93,15 @@ export default function ClientLayout() {
             <CockpitArc className="absolute inset-0 w-full h-full" />
             {title && (
               /* Zelfde container-maat en middellijn als het logo op de homepagina.
-                 Mobiel: één regel lager, onder de band met DEMO-chip/thema-toggle,
-                 zodat lange titels (FINANCIEEL, MIJN GEGEVENS) nergens tegenaan lopen */
-              <div className="absolute inset-x-0 top-[clamp(40px,6.5vh,65px)] lg:top-[clamp(17px,3.4vh,65px)] h-[clamp(20px,3vh,32px)] flex items-center justify-center px-4">
+                 Alleen in demo-modus zakt de titel op mobiel een regel, onder de
+                 DEMO-chip; klanten hebben die chip niet en krijgen de titel hoog */
+              <div
+                className={`absolute inset-x-0 ${
+                  isDemo
+                    ? "top-[clamp(40px,6.5vh,65px)] lg:top-[clamp(17px,3.4vh,65px)]"
+                    : "top-[clamp(17px,3.4vh,65px)]"
+                } h-[clamp(20px,3vh,32px)] flex items-center justify-center px-4`}
+              >
                 <h1 className="cockpit-title">{title}</h1>
               </div>
             )}
