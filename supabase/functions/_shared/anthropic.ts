@@ -80,6 +80,7 @@ export async function anthropicMessage(opts: {
         const decoder = new TextDecoder();
         let buf = "";
         let text = "";
+        let stopReason: string | null = null;
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -94,8 +95,14 @@ export async function anthropicMessage(opts: {
             let ev: any;
             try { ev = JSON.parse(payload); } catch { continue; }
             if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta") text += ev.delta.text;
+            if (ev?.type === "message_delta" && typeof ev.delta?.stop_reason === "string") stopReason = ev.delta.stop_reason;
             if (ev?.type === "error") throw new Error(`Anthropic stream-error: ${ev.error?.message ?? "onbekend"}`);
           }
+        }
+        // Een afgebroken beurt (pause_turn bij lange tool-runs, max_tokens) levert
+        // onvolledige tekst — dat mag NOOIT als geldig antwoord doorgaan. Retrybaar.
+        if (stopReason && stopReason !== "end_turn" && stopReason !== "stop_sequence") {
+          throw new Error(`Anthropic-stream eindigde voortijdig (stop_reason=${stopReason})`);
         }
         if (!text) throw new Error("Lege respons van Claude");
         return text;

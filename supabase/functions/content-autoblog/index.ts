@@ -112,7 +112,14 @@ Deno.serve(async (req) => {
         .eq("id", settingsRow.id);
     }
 
+    // Breadcrumbs in content_engine_events: een gestorven isolate laat zo tóch een spoor na.
+    // Bewust ge-await op sleutelmomenten (~ms) zodat de laatste stap vóór een dood altijd vastligt.
+    const ev = async (step: string, detail: Record<string, unknown> = {}) => {
+      try { await sb.from("content_engine_events").insert({ fn: "content-autoblog", step, detail }); } catch { /* nooit blokkeren */ }
+    };
+
     const run = async (): Promise<Record<string, unknown>> => {
+      await ev("run_start", { topics: topics.length });
       // 5) Grondslag die voor alle onderwerpen gelijk is: gepubliceerde slugs (interne links) + model/tokens.
       const { data: slugRows } = await sb.from("blog_posts").select("slug, title").eq("status", "gepubliceerd").limit(50);
       const slugs = (slugRows ?? []) as { slug: string; title: string }[];
@@ -192,14 +199,19 @@ Deno.serve(async (req) => {
           let draft: ReturnType<typeof validateBlogJson> | null = null;
           let genErr: unknown = null;
           let raw0: string | null = null;
+          const genT0 = Date.now();
+          await ev("generate_start", { topic: t.id, title: String(t.raw_title ?? "").slice(0, 80) });
           try {
             raw0 = await anthropicMessage({
               apiKey, system: BLOG_SYSTEM, user, model, maxTokens,
               tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+              retries: 1,
             });
+            await ev("generate_ok", { topic: t.id, ms: Date.now() - genT0, chars: raw0.length });
             draft = validateBlogJson(extractJson<any>(raw0), validSlugs, validCategorySlugs);
           } catch (e) {
             genErr = e;
+            await ev("generate_or_json_failed", { topic: t.id, ms: Date.now() - genT0, error: e instanceof Error ? e.message.slice(0, 200) : String(e) });
           }
           if (!draft && raw0) {
             try {
@@ -209,8 +221,10 @@ Deno.serve(async (req) => {
                 user: raw0,
               });
               draft = validateBlogJson(extractJson<any>(repaired), validSlugs, validCategorySlugs);
+              await ev("repair_ok", { topic: t.id });
             } catch (e) {
               genErr = e;
+              await ev("repair_failed", { topic: t.id, error: e instanceof Error ? e.message.slice(0, 200) : String(e) });
             }
           }
           if (!draft) throw genErr instanceof Error ? genErr : new Error("Generatie mislukt (ongeldige JSON)");
@@ -276,6 +290,8 @@ Deno.serve(async (req) => {
             audit = { seo_score: draft.seo_score, aeo_score: draft.aeo_score, quality_score: draft.quality_score, has_information_gain: false, has_first_hand_signal: false, issues: [], missing_experience: [], verdict: "revise" as const };
           }
 
+          await ev("audit_done", { topic: t.id, q: audit.quality_score, seo: audit.seo_score, aeo: audit.aeo_score, verdict: audit.verdict });
+
           // Wegschrijven via de poort-RPC: altijd status='concept', poort bepaalt review_state o.b.v. de AUDITOR-scores.
           const { data: ingest, error: ingestErr } = await sb.rpc("content_ingest_draft", {
             p_topic_id: t.id, p_title: draft.title, p_content: draft.content, p_excerpt: draft.excerpt,
@@ -291,6 +307,7 @@ Deno.serve(async (req) => {
           if (ingestErr) throw ingestErr;
           const result = ingest as { blog_post_id: string; slug: string; review_state: string };
           generated++;
+          await ev("ingest_ok", { topic: t.id, blog_post_id: result.blog_post_id, slug: result.slug, review_state: result.review_state });
 
           // Multi-categorie + exacte primaire slug wegschrijven (de RPC kent alleen de enkele category/category_slug).
           if (catSlugs.length) {
@@ -381,6 +398,7 @@ Deno.serve(async (req) => {
         } catch (err) {
           errors++;
           results.push({ topic_id: t.id, action: "failed", reason: err instanceof Error ? err.message : "onbekende fout" });
+          await ev("topic_failed", { topic: t.id, error: err instanceof Error ? err.message.slice(0, 300) : "onbekende fout" });
         }
       }
 
@@ -405,6 +423,7 @@ Deno.serve(async (req) => {
         });
       }
 
+      await ev("run_done", { generated, published, concepts, errors, actions: results.map((r) => r.action) });
       return { status: "ok", generated, published, concepts, errors, results };
     };
 
@@ -415,6 +434,7 @@ Deno.serve(async (req) => {
           // Een fout in de achtergrond heeft geen respons meer om in te belanden;
           // zonder deze catch zou hij opnieuw onzichtbaar zijn.
           console.error("content-autoblog achtergrond-run faalde:", err instanceof Error ? err.message : err);
+          await sb.from("content_engine_events").insert({ fn: "content-autoblog", step: "run_crashed", detail: { error: err instanceof Error ? err.message.slice(0, 300) : "onbekende fout" } }).then(undefined, () => {});
           if (autopublish) {
             await notifyContentEngine(settings, {
               kind: "run_failed",
