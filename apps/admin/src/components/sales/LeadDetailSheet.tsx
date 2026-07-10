@@ -25,6 +25,8 @@ import {
   Pencil, Plus, Tag, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
 } from "lucide-react";
 import { useCreateQuoteFromLead, useLeadQuotes, rejectCategoryLabel } from "@/hooks/useQuotes";
+import { useQuoteRequest } from "@/hooks/useQuoteRequest";
+import { QuoteRequestPanel } from "@/components/sales/QuoteRequestPanel";
 import { ObjectSelectDialog } from "@/components/contacts/ObjectSelectDialog";
 import { ObjectCreateDialog } from "@/components/contacts/ObjectCreateDialog";
 import { ObjectDetailSheet } from "@/components/contacts/ObjectDetailSheet";
@@ -100,6 +102,9 @@ export function LeadDetailSheet({
   const deleteTask = useDeleteTask();
   const updateTask = useUpdateTask();
   const tasks = useLeadTasks(open ? lead?.id : undefined);
+  // Aanvraag vanaf de website (quote-intake). Alleen aanwezig bij offerteformulier-leads.
+  const quoteRequest = useQuoteRequest(open ? lead?.id : undefined);
+  const heeftAanvraag = !!quoteRequest.data;
   const activities = useLeadActivities(open ? lead?.id : undefined);
   const quotes = useLeadQuotes(open ? lead?.id : undefined);
   const leadObjects = useProjectLocationsByLead(open ? lead?.id : undefined);
@@ -434,8 +439,9 @@ export function LeadDetailSheet({
             </div>
 
             <Tabs defaultValue="overview">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className={`grid w-full ${heeftAanvraag ? "grid-cols-4" : "grid-cols-3"}`}>
                 <TabsTrigger value="overview">Overzicht</TabsTrigger>
+                {heeftAanvraag && <TabsTrigger value="request">Aanvraag</TabsTrigger>}
                 <TabsTrigger value="tasks">To-do's{tasks.data ? ` (${tasks.data.filter((t) => !t.done).length})` : ""}</TabsTrigger>
                 <TabsTrigger value="activity">Activiteit</TabsTrigger>
               </TabsList>
@@ -619,6 +625,13 @@ export function LeadDetailSheet({
                   )}
                 </div>
               </TabsContent>
+
+              {/* AANVRAAG VANAF DE WEBSITE */}
+              {heeftAanvraag && lead && (
+                <TabsContent value="request" className="mt-4">
+                  <QuoteRequestPanel leadId={lead.id} />
+                </TabsContent>
+              )}
 
               {/* ACTIVITEIT */}
               <TabsContent value="activity" className="mt-4 space-y-4">
