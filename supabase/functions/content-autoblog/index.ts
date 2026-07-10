@@ -190,7 +190,9 @@ Deno.serve(async (req) => {
               t.suggested_angle ? `INVALSHOEK: ${t.suggested_angle}` : null,
             ].filter(Boolean).join("\n"),
             model,
-            maxTokens: 2500,
+            // Ruim budget: bij web-search tellen de zoekresultaat-blokken mee als output-tokens
+            // (zelfde maat als de feitencontrole, die stabiel draait met 8 searches).
+            maxTokens: 8000,
             retries: 1,
             tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
           });
