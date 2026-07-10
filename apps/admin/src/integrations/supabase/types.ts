@@ -414,6 +414,7 @@ export type Database = {
         Row: {
           category: string
           created_at: string
+          extra_links: Json
           gross_price: number
           id: string
           install_time_hours: number
@@ -422,6 +423,7 @@ export type Database = {
           name: string
           notes: string | null
           order_number: string | null
+          order_url: string | null
           organization_id: string
           position: number
           sell_adjustment_pct: number
@@ -433,6 +435,7 @@ export type Database = {
         Insert: {
           category?: string
           created_at?: string
+          extra_links?: Json
           gross_price?: number
           id?: string
           install_time_hours?: number
@@ -441,6 +444,7 @@ export type Database = {
           name: string
           notes?: string | null
           order_number?: string | null
+          order_url?: string | null
           organization_id: string
           position?: number
           sell_adjustment_pct?: number
@@ -452,6 +456,7 @@ export type Database = {
         Update: {
           category?: string
           created_at?: string
+          extra_links?: Json
           gross_price?: number
           id?: string
           install_time_hours?: number
@@ -460,6 +465,7 @@ export type Database = {
           name?: string
           notes?: string | null
           order_number?: string | null
+          order_url?: string | null
           organization_id?: string
           position?: number
           sell_adjustment_pct?: number

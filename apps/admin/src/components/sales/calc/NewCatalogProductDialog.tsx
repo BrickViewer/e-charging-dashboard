@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { catalogCategoryLabel, netCost, sellPrice, useCreateCatalogProduct, type CatalogProduct } from "@/hooks/useCatalogProducts";
+import { normalizeUrl } from "@/lib/url";
 import type { CalcSection } from "@/services/calcTypes";
 import { formatEuro as euro } from "@/services/calculations";
 
@@ -14,7 +15,7 @@ const num = (s: string) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const LEEG = { supplier: "", order_number: "", gross_price: "", supplier_discount_pct: "", sell_adjustment_pct: "", install_time_hours: "" };
+const LEEG = { supplier: "", order_number: "", order_url: "", gross_price: "", supplier_discount_pct: "", sell_adjustment_pct: "", install_time_hours: "" };
 
 /**
  * Een nieuw artikel dat je tijdens het calculeren intypt, meteen in de catalogus
@@ -52,6 +53,11 @@ export function NewCatalogProductDialog({
       toast.error("Vul een artikelnaam in");
       return;
     }
+    const orderUrl = velden.order_url.trim() ? normalizeUrl(velden.order_url) : null;
+    if (velden.order_url.trim() && !orderUrl) {
+      toast.error("De bestellink is geen geldige link");
+      return;
+    }
     try {
       const product = await create.mutateAsync({
         kind: isArbeid ? "arbeid" : "product",
@@ -59,6 +65,7 @@ export function NewCatalogProductDialog({
         name: name.trim(),
         supplier: velden.supplier.trim() || null,
         order_number: velden.order_number.trim() || null,
+        order_url: orderUrl,
         unit,
         gross_price: bruto,
         supplier_discount_pct: num(velden.supplier_discount_pct) / 100,
@@ -133,9 +140,15 @@ export function NewCatalogProductDialog({
             </div>
           </div>
 
-          <div className="grid gap-1.5">
-            <Label>Montagetijd (uur per eenheid)</Label>
-            <Input inputMode="decimal" placeholder="0" {...veld("install_time_hours")} />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label>Montagetijd (uur per eenheid)</Label>
+              <Input inputMode="decimal" placeholder="0" {...veld("install_time_hours")} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Bestellink</Label>
+              <Input inputMode="url" placeholder="https://…" {...veld("order_url")} />
+            </div>
           </div>
 
           {bruto > 0 && (

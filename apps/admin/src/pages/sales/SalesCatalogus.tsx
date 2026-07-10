@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
-import { Package, Plus, Search, Pencil } from "lucide-react";
+import { Package, Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { normalizeUrl, urlHost } from "@/lib/url";
+import { OrderLinksCell, parseExtraLinks, type ExtraLink } from "@/components/sales/OrderLinksCell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +32,8 @@ type Draft = {
   name: string;
   supplier: string;
   order_number: string;
+  order_url: string;
+  extra_links: ExtraLink[];
   unit: string;
   gross_price: string;
   supplier_discount_pct: string; // als % (bv. "20")
@@ -44,6 +48,8 @@ const emptyDraft = (): Draft => ({
   name: "",
   supplier: "",
   order_number: "",
+  order_url: "",
+  extra_links: [],
   unit: "stuk",
   gross_price: "",
   supplier_discount_pct: "",
@@ -59,6 +65,8 @@ const toDraft = (p: CatalogProduct): Draft => ({
   name: p.name,
   supplier: p.supplier ?? "",
   order_number: p.order_number ?? "",
+  order_url: p.order_url ?? "",
+  extra_links: parseExtraLinks(p.extra_links),
   unit: p.unit,
   gross_price: String(p.gross_price ?? ""),
   supplier_discount_pct: p.supplier_discount_pct ? String(Math.round(Number(p.supplier_discount_pct) * 1000) / 10) : "",
@@ -100,12 +108,31 @@ export default function SalesCatalogus() {
       toast.error("Vul een artikelnaam in");
       return;
     }
+    // Bestellinks: normaliseren (https:// erbij als dat ontbreekt) en alleen
+    // echte http(s)-links opslaan — ze worden als klikbare <a href> gerenderd.
+    const orderUrl = draft.order_url.trim() ? normalizeUrl(draft.order_url) : null;
+    if (draft.order_url.trim() && !orderUrl) {
+      toast.error("De bestellink is geen geldige link");
+      return;
+    }
+    const extraLinks: ExtraLink[] = [];
+    for (const l of draft.extra_links) {
+      if (!l.url.trim() && !l.label.trim()) continue; // lege rij: stilzwijgend overslaan
+      const u = normalizeUrl(l.url);
+      if (!u) {
+        toast.error(`De link van ${l.label.trim() || "de extra leverancier"} is geen geldige link`);
+        return;
+      }
+      extraLinks.push({ label: l.label.trim() || urlHost(u), url: u });
+    }
     const patch = {
       kind: draft.category === "arbeid" ? "arbeid" : "product",
       category: draft.category,
       name: draft.name.trim(),
       supplier: draft.supplier.trim() || null,
       order_number: draft.order_number.trim() || null,
+      order_url: orderUrl,
+      extra_links: extraLinks,
       unit: draft.unit,
       gross_price: num(draft.gross_price),
       supplier_discount_pct: num(draft.supplier_discount_pct) / 100,
@@ -198,7 +225,12 @@ export default function SalesCatalogus() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">{p.supplier || "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-muted-foreground">{p.order_number || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        {p.order_number || "—"}
+                        <OrderLinksCell orderUrl={p.order_url} extraLinks={p.extra_links} supplier={p.supplier} />
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{euro(Number(p.gross_price))}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{Number(p.supplier_discount_pct) ? pct(p.supplier_discount_pct) : "—"}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{euro(netCost(p))}</td>
@@ -280,6 +312,50 @@ export default function SalesCatalogus() {
                   <Label>Bestelnummer</Label>
                   <Input value={draft.order_number} onChange={(e) => setDraft({ ...draft, order_number: e.target.value })} />
                 </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Bestellink</Label>
+                <Input
+                  inputMode="url"
+                  value={draft.order_url}
+                  onChange={(e) => setDraft({ ...draft, order_url: e.target.value })}
+                  placeholder="https://…"
+                />
+                {draft.extra_links.map((l, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_2fr_auto] items-center gap-2">
+                    <Input
+                      value={l.label}
+                      onChange={(e) =>
+                        setDraft({ ...draft, extra_links: draft.extra_links.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)) })
+                      }
+                      placeholder="Leverancier"
+                    />
+                    <Input
+                      inputMode="url"
+                      value={l.url}
+                      onChange={(e) =>
+                        setDraft({ ...draft, extra_links: draft.extra_links.map((x, idx) => (idx === i ? { ...x, url: e.target.value } : x)) })
+                      }
+                      placeholder="https://…"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Verwijder deze link"
+                      onClick={() => setDraft({ ...draft, extra_links: draft.extra_links.filter((_, idx) => idx !== i) })}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                {/* Bewust onopvallend: de meeste artikelen hebben maar één leverancier. */}
+                <button
+                  type="button"
+                  onClick={() => setDraft({ ...draft, extra_links: [...draft.extra_links, { label: "", url: "" }] })}
+                  className="justify-self-start text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  + link van een andere leverancier
+                </button>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="grid gap-1.5">
