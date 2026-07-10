@@ -42,7 +42,7 @@ function wordCount(html: string | null | undefined): number {
 // hero_image_url/-alt zitten óók in de lijst zodat de kennisbank-index een foto-forward hero kan tonen
 // (de schone hero-foto zonder ingebakken tekst; valt terug op de cover).
 const LIST_COLS = "slug, title, excerpt, category, category_slug, category_slugs, tags, featured, author_name, reading_minutes, published_at, updated_at, cover_image_url, cover_image_alt, cover_image_width, cover_image_height, hero_image_url, hero_image_alt";
-const FULL_COLS = `${LIST_COLS}, content, seo_title, seo_description, noindex, canonical_url, faq`;
+const FULL_COLS = `${LIST_COLS}, content, seo_title, seo_description, noindex, canonical_url, faq, sources`;
 
 type AuthorEntity = { name?: string; role?: string; url?: string; sameAs?: string[]; bio?: string };
 // deno-lint-ignore no-explicit-any
@@ -51,6 +51,10 @@ function buildDetail(p: any, author?: AuthorEntity | null) {
   const seo_title = clampWords(p.seo_title || p.title, 60);
   const seo_description = clampWords(p.seo_description || p.excerpt, 155);
   const faq = Array.isArray(p.faq) ? p.faq : [];
+  // Bronnen: alleen goedgevormde items met een echte url doorlaten (defensief; de site rendert ze als links).
+  const sources = (Array.isArray(p.sources) ? p.sources : []).filter(
+    (s: { name?: unknown; url?: unknown }) => s && typeof s.name === "string" && typeof s.url === "string" && /^https?:\/\//.test(s.url),
+  );
   const image = p.cover_image_url
     ? { "@type": "ImageObject", url: p.cover_image_url, ...(p.cover_image_width ? { width: p.cover_image_width } : {}), ...(p.cover_image_height ? { height: p.cover_image_height } : {}) }
     : undefined;
@@ -69,6 +73,8 @@ function buildDetail(p: any, author?: AuthorEntity | null) {
     articleSection: p.category || undefined,
     keywords: (p.tags && p.tags.length) ? p.tags.join(", ") : undefined,
     wordCount: wordCount(p.content),
+    // Geverifieerde bronnen als citaties (E-E-A-T-signaal voor zoekmachines en AI-antwoordmachines).
+    ...(sources.length ? { citation: sources.map((s: { name: string; url: string }) => ({ "@type": "CreativeWork", name: s.name, url: s.url })) } : {}),
   };
   const graph: unknown[] = [blogPosting];
   if (faq.length) {
@@ -83,7 +89,7 @@ function buildDetail(p: any, author?: AuthorEntity | null) {
   const authorCard = (author && author.name)
     ? { name: author.name, role: author.role ?? null, url: author.url ?? null, bio: author.bio ?? null, sameAs: Array.isArray(author.sameAs) ? author.sameAs : [] }
     : null;
-  return { ...p, seo_title, seo_description, canonical_url: canonical, faq, author: authorCard, json_ld: { "@context": "https://schema.org", "@graph": graph } };
+  return { ...p, seo_title, seo_description, canonical_url: canonical, faq, sources, author: authorCard, json_ld: { "@context": "https://schema.org", "@graph": graph } };
 }
 
 Deno.serve(async (req) => {

@@ -241,6 +241,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           excerpt: string | null
+          factcheck: Json | null
+          factchecked_at: string | null
           faq: Json
           featured: boolean
           generated_by: string | null
@@ -261,6 +263,7 @@ export type Database = {
           seo_title: string | null
           slug: string
           source_topic_id: string | null
+          sources: Json
           status: string
           tags: string[]
           title: string
@@ -281,6 +284,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           excerpt?: string | null
+          factcheck?: Json | null
+          factchecked_at?: string | null
           faq?: Json
           featured?: boolean
           generated_by?: string | null
@@ -301,6 +306,7 @@ export type Database = {
           seo_title?: string | null
           slug: string
           source_topic_id?: string | null
+          sources?: Json
           status?: string
           tags?: string[]
           title: string
@@ -321,6 +327,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           excerpt?: string | null
+          factcheck?: Json | null
+          factchecked_at?: string | null
           faq?: Json
           featured?: boolean
           generated_by?: string | null
@@ -341,6 +349,7 @@ export type Database = {
           seo_title?: string | null
           slug?: string
           source_topic_id?: string | null
+          sources?: Json
           status?: string
           tags?: string[]
           title?: string
@@ -4586,6 +4595,7 @@ export type Database = {
           p_seo_score?: number
           p_seo_title?: string
           p_slug?: string
+          p_sources?: Json
           p_tags?: string[]
           p_title: string
           p_topic_id: string

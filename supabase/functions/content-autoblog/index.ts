@@ -262,11 +262,13 @@ Deno.serve(async (req) => {
           // zonder onafhankelijke keuring).
           let audit;
           try {
+            const faqTekst = draft.faq.map((f) => `V: ${f.question}\nA: ${f.answer}`).join("\n");
             const auditUser = [
               `ZOEKVRAAG: ${zoekvraag}`,
               `TITEL: ${draft.title}`,
               `BLOG (HTML):\n${draft.content}`,
-            ].join("\n\n");
+              faqTekst ? `FAQ (apart veld):\n${faqTekst}` : null,
+            ].filter(Boolean).join("\n\n");
             const auditRaw = await anthropicMessage({ apiKey, system: BLOG_AUDIT_SYSTEM, user: auditUser, model: auditModel, maxTokens: 1500 });
             audit = validateAuditJson(extractJson<any>(auditRaw));
           } catch (auditErr) {
@@ -283,7 +285,8 @@ Deno.serve(async (req) => {
             p_seo_score: audit.seo_score, p_aeo_score: audit.aeo_score, p_quality_score: audit.quality_score,
             p_meta_variants: draft.meta_variants, p_internal_link_suggestions: draft.internal_link_suggestions,
             p_author_name: (settings.author && settings.author.name) ? settings.author.name : null,
-            p_generated_by: "agent:claude-autoblog@v5",
+            p_generated_by: "agent:claude-autoblog@v6",
+            p_sources: draft.sources,
           });
           if (ingestErr) throw ingestErr;
           const result = ingest as { blog_post_id: string; slug: string; review_state: string };
@@ -352,27 +355,21 @@ Deno.serve(async (req) => {
             missing_experience: audit.missing_experience,
           };
           if (autopublish && passed) {
-            // Publiceren = een UPDATE (identiek aan het handmatige pad); triggert de site-rebuild. Een
-            // publiceer-fout na een geslaagde ingest laat een geldig concept achter: tel het als concept
-            // (met notitie), niet als mislukt onderwerp, zodat de teller klopt en de mens het kan afronden.
-            try {
-              const { error: pubErr } = await sb.from("blog_posts")
-                .update({ status: "gepubliceerd", published_at: new Date().toISOString(), review_state: "approved" })
-                .eq("id", result.blog_post_id);
-              if (pubErr) throw pubErr;
-              await sb.from("content_topics").update({ status: "published" }).eq("id", t.id);
-              published++;
-              results.push({ topic_id: t.id, blog_post_id: result.blog_post_id, slug: result.slug, review_state: result.review_state, action: "published", ...auditInfo });
-            } catch (pubErr) {
-              concepts++;
-              results.push({ topic_id: t.id, blog_post_id: result.blog_post_id, slug: result.slug, review_state: result.review_state, action: "concept", publish_error: pubErr instanceof Error ? pubErr.message : "publiceren mislukt", ...auditInfo });
-            }
+            // Kwaliteit direct op orde → door naar de laatste poort: de feitencontrole. Die publiceert
+            // (na verificatie van cijfers, bronnen en data) of bounct terug met correcties. Er wordt
+            // nergens anders meer gepubliceerd.
+            await sb.rpc("invoke_edge_function", {
+              fn_name: "content-factcheck",
+              body: { blog_post_id: result.blog_post_id, iteration: 1, factcheck_round: 1 },
+            });
+            concepts++;
+            results.push({ topic_id: t.id, blog_post_id: result.blog_post_id, slug: result.slug, review_state: result.review_state, action: "factchecking", ...auditInfo });
           } else if (autopublish) {
             // Zakt de HOGE lat maar auto-publiceren staat aan: start de herschrijf-tot-topkwaliteit-keten (async, eigen
             // tijdsbudget) i.p.v. het concept te laten liggen. De keten verbetert de post tot 'ie de lat haalt en publiceert dan.
             await sb.rpc("invoke_edge_function", {
               fn_name: "content-revise",
-              body: { blog_post_id: result.blog_post_id, iteration: 1, issues: audit.issues, missing_experience: audit.missing_experience },
+              body: { blog_post_id: result.blog_post_id, iteration: 1, issues: audit.issues, missing_experience: audit.missing_experience, factcheck_round: 1 },
             });
             concepts++;
             results.push({ topic_id: t.id, blog_post_id: result.blog_post_id, slug: result.slug, review_state: result.review_state, action: "revising", ...auditInfo });
@@ -397,9 +394,10 @@ Deno.serve(async (req) => {
           .eq("id", settingsRow.id);
       }
 
-      // Vangnet: productie-run eindigde zonder publicatie én zonder lopende revise-keten (die meldt
-      // haar eigen keteneinde via kept_concept). Zonder mail blijft zo'n uitkomst onzichtbaar.
-      if (autopublish && published === 0 && !results.some((r) => r.action === "revising")) {
+      // Vangnet: productie-run eindigde zonder publicatie én zonder lopende keten (revise/factcheck
+      // melden hun eigen keteneinde via kept_concept of het factcheck-rapport). Zonder mail blijft
+      // zo'n uitkomst onzichtbaar.
+      if (autopublish && published === 0 && !results.some((r) => r.action === "revising" || r.action === "factchecking")) {
         await notifyContentEngine(settings, {
           kind: "run_failed",
           reason: `Run afgerond: ${generated} gegenereerd, ${concepts} concept, ${errors} fout — geen publicatie`,

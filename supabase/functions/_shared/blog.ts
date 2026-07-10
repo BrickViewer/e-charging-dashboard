@@ -24,11 +24,12 @@ Schrijf een complete, publicatieklare blog die zowel voor Google (SEO) als voor 
 2. Een heldere definitiezin vroeg in de tekst die het kernbegrip definieert (citeerbaar voor AI).
 3. Body met logische H2-koppen die de zoekvraag en de deelvragen beantwoorden. Begin ONDER ELKE H2 met een direct, op zichzelf staand antwoord van 1 tot 3 zinnen (answer-first) voordat je uitweidt; AI-antwoordmachines citeren juist die eerste zinnen.
 4. Waar zinvol: een vergelijkingstabel (HTML <table>) die opties of scenario's afzet.
-5. Een FAQ met precies 5 vragen en antwoorden die echte zoekvragen van de doelgroep beantwoorden.
+5. Een FAQ met precies 5 vragen en antwoorden die echte zoekvragen van de doelgroep beantwoorden. LET OP: de FAQ hoort UITSLUITEND in het aparte "faq"-veld van de JSON. Zet NOOIT een "Veelgestelde vragen"-kop of FAQ-sectie in de content-HTML zelf; de site rendert het faq-veld als eigen sectie en anders staat alles dubbel op de pagina.
 6. E-E-A-T + INFORMATION GAIN: voeg minstens EEN ding toe dat NIET al op elke andere pagina over dit onderwerp staat: een concreet praktijkvoorbeeld, een KWALITATIEVE eigen praktijkobservatie (geen cijfers), een specifieke afweging, of een concreet gevolg voor een Nederlandse doelgroep (VvE/kantoor/vastgoed). Toon ervaring; wees concreet en eerlijk. Generieke, overal-herhaalde tekst is niet goed genoeg.
 
 Vindbaarheid (SEO + GEO) - maak de tekst citeerbaar voor Google en AI-antwoordmachines:
 - Onderbouw feiten met een concrete BRON EN JAARTAL in dezelfde zin (bv. "volgens [instantie], 2026, ..."). Verzin nooit een bron of cijfer.
+- BRONNEN MET ECHTE URL: zet elke gebruikte externe bron in het "sources"-veld met naam, de ECHTE url uit je web-research (nooit een verzonnen of gegokte url), uitgever en publicatiedatum. Maak bovendien de EERSTE vermelding van elke bron in de lopende tekst een inline link: <a href="[echte url]" target="_blank" rel="noopener noreferrer">[naam van de bron]</a>. Kun je geen echte url vinden, noem de bron dan alleen in tekst en laat hem uit sources weg.
 - Feit-dichtheid: streef naar minstens 1 verifieerbaar feit, jaartal of benoemde entiteit per ~100 woorden; gebruik alleen publiek verifieerbare, gebronde cijfers.
 - Schrijf citeerbare, op zichzelf staande zinnen (een AI moet 1 zin kunnen overnemen zonder omringende context).
 - Toon: informatief, zakelijk en neutraal, NIET promotioneel of verkoperig (Google en AI-antwoordmachines straffen reclametaal af).
@@ -57,7 +58,7 @@ Geef ook eerlijke kwaliteitsscores (0 tot 100):
 - quality_score: algehele redactionele kwaliteit en originaliteit dankzij de visie.
 
 Antwoord UITSLUITEND met geldige JSON, exact dit schema, zonder extra tekst eromheen:
-{"title": string, "content": string, "excerpt": string, "seo_title": string, "seo_description": string, "tags": [string], "category_slugs": [string], "suggested_category": {"name": string, "description": string, "icon": string} | null, "faq": [{"question": string, "answer": string}], "meta_variants": {"titles": [string], "descriptions": [string]}, "internal_link_suggestions": [{"anchor": string, "target_slug": string, "reason": string}], "seo_score": number, "aeo_score": number, "quality_score": number}`;
+{"title": string, "content": string, "excerpt": string, "seo_title": string, "seo_description": string, "tags": [string], "category_slugs": [string], "suggested_category": {"name": string, "description": string, "icon": string} | null, "faq": [{"question": string, "answer": string}], "sources": [{"name": string, "url": string, "publisher": string, "date": string}], "meta_variants": {"titles": [string], "descriptions": [string]}, "internal_link_suggestions": [{"anchor": string, "target_slug": string, "reason": string}], "seo_score": number, "aeo_score": number, "quality_score": number}`;
 
 export const clampScore = (n: any): number | null => {
   const v = Number(n);
@@ -114,6 +115,44 @@ export interface SuggestedCategory {
   icon: string | null;
 }
 
+export interface BlogSource {
+  name: string;
+  url: string;
+  publisher: string | null;
+  date: string | null;
+}
+
+// Alleen echte http(s)-bronnen overleven: de site rendert ze als klikbare links.
+export function validateSources(raw: any): BlogSource[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: BlogSource[] = [];
+  for (const s of raw) {
+    if (!s || typeof s.name !== "string" || !s.name.trim() || typeof s.url !== "string") continue;
+    let u: URL;
+    try { u = new URL(s.url.trim()); } catch { continue; }
+    if (u.protocol !== "http:" && u.protocol !== "https:") continue;
+    if (seen.has(u.href)) continue;
+    seen.add(u.href);
+    out.push({
+      name: s.name.trim().slice(0, 120),
+      url: u.href,
+      publisher: typeof s.publisher === "string" && s.publisher.trim() ? s.publisher.trim().slice(0, 120) : null,
+      date: typeof s.date === "string" && s.date.trim() ? s.date.trim().slice(0, 40) : null,
+    });
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+// De site rendert het faq-veld als eigen sectie; een FAQ-kop die het model tóch in de
+// content-HTML zet, zou alles dubbel op de pagina zetten. Knip zo'n sectie er dus altijd
+// uit (t/m de volgende <h2> of het einde). Modellen luisteren niet altijd naar de prompt.
+export function stripFaqSection(html: string): string {
+  const re = /<h2[^>]*>\s*Veelgestelde\s+vragen[\s\S]*?(?=<h2[^>]*>|$)/gi;
+  return html.replace(re, "").trim();
+}
+
 export interface ValidatedBlog {
   title: string;
   content: string;
@@ -124,6 +163,7 @@ export interface ValidatedBlog {
   category_slugs: string[];
   suggested_category: SuggestedCategory | null;
   faq: Array<{ question: string; answer: string }>;
+  sources: BlogSource[];
   meta_variants: { titles: string[]; descriptions: string[] };
   internal_link_suggestions: Array<{ anchor?: string; target_slug: string; reason?: string }>;
   seo_score: number | null;
@@ -143,7 +183,8 @@ export function validateBlogJson(p: any, validSlugs: Set<string>, validCategoryS
     titles: Array.isArray(mv.titles) ? mv.titles.filter((x: any) => typeof x === "string").slice(0, 3) : [],
     descriptions: Array.isArray(mv.descriptions) ? mv.descriptions.filter((x: any) => typeof x === "string").slice(0, 3) : [],
   };
-  const faq = Array.isArray(p.faq) ? p.faq.filter((f: any) => f && f.question && f.answer).slice(0, 8) : [];
+  const faq = Array.isArray(p.faq) ? p.faq.filter((f: any) => f && f.question && f.answer).slice(0, 5) : [];
+  const sources = validateSources(p.sources);
   const tags = Array.isArray(p.tags) ? p.tags.filter((x: any) => typeof x === "string").slice(0, 8) : [];
   // Categorie-slugs: dedupe, en (indien een geldige-set is meegegeven) filter op bestaande categorieen; max 3.
   const rawCats = Array.isArray(p.category_slugs)
@@ -170,11 +211,11 @@ export function validateBlogJson(p: any, validSlugs: Set<string>, validCategoryS
   }
   return {
     title: p.title.trim(),
-    content: p.content,
+    content: stripFaqSection(p.content),
     excerpt: typeof p.excerpt === "string" ? truncateExcerpt(p.excerpt) : null,
     seo_title: typeof p.seo_title === "string" ? p.seo_title : null,
     seo_description: typeof p.seo_description === "string" ? p.seo_description : null,
-    tags, category_slugs, suggested_category, faq, meta_variants: meta, internal_link_suggestions: links,
+    tags, category_slugs, suggested_category, faq, sources, meta_variants: meta, internal_link_suggestions: links,
     seo_score: clampScore(p.seo_score), aeo_score: clampScore(p.aeo_score), quality_score: clampScore(p.quality_score),
   };
 }
@@ -186,11 +227,11 @@ export function validateBlogJson(p: any, validSlugs: Set<string>, validCategoryS
 // cijfers. Zo dekt de machine het schaal-content-risico van maart-2026 af (ongecontroleerde AI-massa).
 export const BLOG_AUDIT_SYSTEM = `Je bent een STRENGE, ONAFHANKELIJKE SEO/AEO-eindredacteur die een CONCEPT-blog beoordeelt voor een Nederlands B2B-bedrijf in laadinfrastructuur (klanten: vastgoedeigenaren, VvE's, bedrijven, installateurs). Je hebt de blog NIET geschreven. Je taak is kritisch keuren, niet vergoelijken: een hoge score moet verdiend zijn. Beoordeel in het Nederlands.
 
-Je krijgt de ZOEKVRAAG en de volledige blog (titel + HTML-content).
+Je krijgt de ZOEKVRAAG en de volledige blog (titel + HTML-content + de FAQ, die apart wordt aangeleverd omdat de site hem als eigen sectie rendert — de content-HTML hoort GEEN FAQ-sectie te bevatten).
 
 Scoor op drie assen (0-100), streng en onderbouwd:
 - seo_score: dekt de tekst de zoekvraag volledig, met logische H2-koppen, natuurlijk zoekwoordgebruik, échte interne links (<a href="/kennisbank/...">), en genoeg diepgang? Trek fors af bij dunne dekking, ontbrekende deelvragen, of keyword-stuffing.
-- aeo_score: is de tekst citeerbaar voor AI-antwoordmachines? Vereist en controleerbaar: een "In het kort:"-blok bovenaan, een heldere definitiezin vroeg, directe antwoorden, een FAQ met echte doelgroepvragen, en waar zinvol een vergelijkingstabel. Ontbreekt een van deze of is hij zwak, trek dan af.
+- aeo_score: is de tekst citeerbaar voor AI-antwoordmachines? Vereist en controleerbaar: een "In het kort:"-blok bovenaan, een heldere definitiezin vroeg, directe antwoorden, een gevulde FAQ (apart aangeleverd) met echte doelgroepvragen, en waar zinvol een vergelijkingstabel. Ontbreekt een van deze of is hij zwak, trek dan af. Staat er tóch een FAQ-sectie in de content-HTML zelf, dan is dat een issue (dubbel op de pagina).
 - quality_score: redactionele kwaliteit, feitelijke degelijkheid en ORIGINALITEIT. Weeg het zwaarst of de tekst CONCRETE, TOEGEPASTE praktijkervaring en specifieke voorbeelden/afwegingen bevat in plaats van generieke, overal-herhaalde AI-tekst. Generieke, ervaring-loze content = maximaal 60. Straf ongefundeerde claims, vaagheid, clichés en em-dashes.
 
 Toets bovendien expliciet twee dingen (Google's maart-2026-lat + de "wie/hoe/waarom"-blik: is dit gemaakt om de lezer te helpen of alleen om te ranken?):
@@ -253,8 +294,9 @@ Je krijgt:
 Verbeter gericht:
 - Los ELK KRITIEK-punt concreet op en voeg de ONTBREKENDE ERVARING toe (concrete praktijkvoorbeelden, KWALITATIEVE praktijkobservaties, echte afwegingen uit advies/installatie/beheer/facturatie).
 - Verhoog de information gain: minstens EEN concreet, verifieerbaar element dat niet al op elke andere pagina staat; onderbouw feiten met een bron EN jaartal in dezelfde zin. Verzin nooit een bron of cijfer.
-- Behoud en versterk de structuur: "In het kort:"-blok bovenaan, een vroege definitiezin, logische H2-koppen met answer-first (1-3 zinnen direct antwoord onder elke H2), waar zinvol een vergelijkingstabel (<table>), en een FAQ met precies 5 vragen.
-- Behoud de bestaande INTERNE LINKS (<a href="/kennisbank/<slug>">). Verweef de EIGEN PRAKTIJK als kwalitatieve observatie ("uit onze eigen praktijk blijkt dat ...") en trek daar een conclusie uit.
+- Behoud en versterk de structuur: "In het kort:"-blok bovenaan, een vroege definitiezin, logische H2-koppen met answer-first (1-3 zinnen direct antwoord onder elke H2), en waar zinvol een vergelijkingstabel (<table>).
+- De FAQ (precies 5 vragen) hoort UITSLUITEND in het aparte "faq"-veld van de JSON, NOOIT als sectie in de content-HTML (de site rendert het faq-veld zelf; anders staat alles dubbel).
+- Behoud de bestaande INTERNE LINKS (<a href="/kennisbank/<slug>">) én de bestaande BRONLINKS (externe <a href> naar bronnen). Neem de aangeleverde BRONNEN over in het "sources"-veld en vul ze alleen aan met bronnen waarvan je de echte url kent; verzin nooit een url. Verweef de EIGEN PRAKTIJK als kwalitatieve observatie ("uit onze eigen praktijk blijkt dat ...") en trek daar een conclusie uit.
 - Zakelijk, neutraal en behulpzaam, NIET promotioneel. Spreek de lezer aan met "u", korte alinea's, actieve zinnen. Gebruik GEEN gedachtestreepjes (em-dashes). content is geldige HTML, geen markdown, geen <html>/<head>/<body>.
 - excerpt: 1 tot 2 VOLLEDIGE zinnen (maximaal ±250 tekens); wordt letterlijk als ondertitel getoond, dus eindig altijd met een afgeronde zin.
 
@@ -265,4 +307,4 @@ Categorie: kies uit de meegegeven CATEGORIEEN de 1 tot 3 best passende en zet hu
 Blijf bij de zoekvraag en verbeter de bestaande blog; gooi 'm niet weg en verzin geen nieuw onderwerp.
 
 Antwoord UITSLUITEND met geldige JSON, exact dit schema, zonder tekst eromheen:
-{"title": string, "content": string, "excerpt": string, "seo_title": string, "seo_description": string, "tags": [string], "category_slugs": [string], "suggested_category": {"name": string, "description": string, "icon": string} | null, "faq": [{"question": string, "answer": string}], "meta_variants": {"titles": [string], "descriptions": [string]}, "internal_link_suggestions": [{"anchor": string, "target_slug": string, "reason": string}], "seo_score": number, "aeo_score": number, "quality_score": number}`;
+{"title": string, "content": string, "excerpt": string, "seo_title": string, "seo_description": string, "tags": [string], "category_slugs": [string], "suggested_category": {"name": string, "description": string, "icon": string} | null, "faq": [{"question": string, "answer": string}], "sources": [{"name": string, "url": string, "publisher": string, "date": string}], "meta_variants": {"titles": [string], "descriptions": [string]}, "internal_link_suggestions": [{"anchor": string, "target_slug": string, "reason": string}], "seo_score": number, "aeo_score": number, "quality_score": number}`;
