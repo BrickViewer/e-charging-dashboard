@@ -63,7 +63,13 @@ Deno.serve(async (req) => {
 
     // De check zelf duurt minuten (web-search). Antwoord meteen; de run maakt zichzelf
     // af in de achtergrond — de aanroeper (pg_net) verbreekt toch na 5s.
+    // Breadcrumbs in content_engine_events: een gestorven isolate laat zo tóch een spoor na.
+    const ev = async (step: string, detail: Record<string, unknown> = {}) => {
+      try { await sb.from("content_engine_events").insert({ fn: "content-factcheck", step, detail: { blog_post_id: blogPostId, round: factcheckRound, backfill, ...detail } }); } catch { /* nooit blokkeren */ }
+    };
+
     const run = async () => {
+      await ev("run_start");
       const vandaag = new Date().toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
       const bronnen = validateSources(post.sources);
       const faqTekst = (Array.isArray(post.faq) ? post.faq : [])
@@ -78,11 +84,15 @@ Deno.serve(async (req) => {
           : "OPGEGEVEN BRONNEN: geen (controleer de bronvermeldingen in de tekst en lever gevonden urls aan in verified_sources)",
       ].filter(Boolean).join("\n\n");
 
+      const fcT0 = Date.now();
+      await ev("check_start", { model });
       const raw = await anthropicMessage({
         apiKey, system: FACTCHECK_SYSTEM, user, model, maxTokens: 8000,
         tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }],
+        retries: 1,
       });
       const report = validateFactcheckJson(extractJson<any>(raw));
+      await ev("check_ok", { ms: Date.now() - fcT0, verdict: report.verdict, critical: report.critical_count });
 
       // Rapport altijd vastleggen + geverifieerde bronnen mergen (dedup op url).
       const bestaandeUrls = new Set(bronnen.map((s) => s.url));
@@ -116,6 +126,7 @@ Deno.serve(async (req) => {
         if (!post.cover_image_url) {
           await sb.rpc("invoke_edge_function", { fn_name: "blog-cover", body: { blog_post_id: blogPostId } }).catch(() => {});
         }
+        await ev("published");
         return { status: "ok", action: "published", critical: 0, ms: Date.now() - runStart };
       }
 
@@ -130,6 +141,7 @@ Deno.serve(async (req) => {
             factcheck_round: factcheckRound + 1,
           },
         });
+        await ev("bounce_to_revise", { critical: report.critical_count });
         return { status: "ok", action: "revising_facts", round: factcheckRound, critical: report.critical_count };
       }
 
@@ -142,6 +154,7 @@ Deno.serve(async (req) => {
         details: factcheckIssues(report),
         blogPostId,
       }).catch(() => {});
+      await ev("blocked_terminal", { critical: report.critical_count });
       return { status: "ok", action: "blocked_by_factcheck", critical: report.critical_count };
     };
 
@@ -150,6 +163,7 @@ Deno.serve(async (req) => {
       runtime.waitUntil(
         run().catch(async (err) => {
           console.error("content-factcheck faalde:", err instanceof Error ? err.message : err);
+          await sb.from("content_engine_events").insert({ fn: "content-factcheck", step: "run_crashed", detail: { blog_post_id: blogPostId, round: factcheckRound, error: err instanceof Error ? err.message.slice(0, 300) : "onbekende fout" } }).then(undefined, () => {});
           // Een gecrashte check mag een blog niet stil laten hangen: melden.
           await notifyContentEngine(settings, {
             kind: "run_failed",
