@@ -384,7 +384,7 @@ Deno.serve(async (req) => {
           // alleen echt onderscheidende content vanzelf live; generieke posts blijven concept ter review (geen firehose).
           const scored = audit.seo_score !== null && audit.aeo_score !== null && audit.quality_score !== null;
           // HOGE lat: alleen een echt sterke eerste draft publiceert direct. Anders start de herschrijf-keten (content-revise).
-          const passed = scored && audit.verdict === "publish" && audit.has_information_gain
+          const passed = scored
             && (audit.quality_score as number) >= TARGET_Q
             && (audit.seo_score as number) >= TARGET_SA && (audit.aeo_score as number) >= TARGET_SA;
           // Auditsamenvatting voor het runrapport (auditor-scores + poort-signalen + zelf-scores + gebreken + gebruikte eigen data).

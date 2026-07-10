@@ -259,7 +259,10 @@ Deno.serve(async (req) => {
       const scored = q !== null && seo !== null && aeo !== null;
       // Publiceer-lat op de (kwantitatieve) auditor-scores + information gain. GEEN harde verdict-eis: het holistische
       // 'verdict' van de kleine auditor is te ruis-gevoelig en zei bijna nooit 'publish', waardoor niets live ging.
-      const passesHigh = scored && audit.has_information_gain
+      // Scores beslissen; has_information_gain is een verbeterpunt, geen poortwachter — de
+      // auditor gaf die vlag in de praktijk vrijwel nooit, waardoor ELKE blog alle rondes
+      // vol liep (4 dure herschrijvingen). De feitencontrole is toch al de echte poort.
+      const passesHigh = scored
         && (q as number) >= TARGET_Q && (seo as number) >= TARGET_SA && (aeo as number) >= TARGET_SA;
 
       // De kwaliteit is op orde → door naar de laatste poort: de feitencontrole. Die publiceert
