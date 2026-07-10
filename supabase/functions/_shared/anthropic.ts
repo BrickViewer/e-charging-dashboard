@@ -7,6 +7,11 @@ import { resolveSecret } from "./secrets.ts";
 
 export const DEFAULT_MODEL = "claude-opus-4-8";
 
+// Eén poging mag nooit onbegrensd hangen: de edge-wandklok (400 s) is hard, en een
+// isolate die daarop sneuvelt laat niets achter — geen blog, geen log, geen mail.
+// Met een begrensde poging wordt een hangende verbinding een gewone, retrybare fout.
+const REQUEST_TIMEOUT_MS = 120_000;
+
 // Sleutel uit edge-env (ANTHROPIC_API_KEY) of Vault (anthropic_api_key). Alleen op naam; nooit loggen.
 export async function getAnthropicKey(sb: any): Promise<string | null> {
   return await resolveSecret(sb, ["ANTHROPIC_API_KEY"], "anthropic_api_key");
@@ -44,6 +49,7 @@ export async function anthropicMessage(opts: {
           "content-type": "application/json",
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (res.status === 429 || res.status >= 500) {
         lastErr = new Error(`Anthropic HTTP ${res.status}`);
