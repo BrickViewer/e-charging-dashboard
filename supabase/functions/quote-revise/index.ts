@@ -102,6 +102,63 @@ Deno.serve(async (req) => {
     }).select("id, quote_number").single();
     if (insErr) throw insErr;
 
+    // Interne calculatie meekopiëren (kop + regels) — anders raakt de calculatie
+    // stil kwijt bij een nieuwe versie. SharePoint-refs resetten: het nieuwe
+    // offertenummer krijgt bij afronden zijn eigen CALC-bestand.
+    const { data: srcCalc, error: calcErr } = await sb.from("quote_calculations").select("*").eq("quote_id", source.id).maybeSingle();
+    if (calcErr) throw calcErr;
+    if (srcCalc) {
+      const { data: newCalc, error: calcInsErr } = await sb.from("quote_calculations").insert({
+        quote_id: revision.id,
+        organization_id: srcCalc.organization_id,
+        status: srcCalc.status,
+        schema_version: srcCalc.schema_version,
+        hourly_rate: srcCalc.hourly_rate,
+        km_price: srcCalc.km_price,
+        retour_km: srcCalc.retour_km,
+        travel_days: srcCalc.travel_days,
+        stelpost_graafwerk: srcCalc.stelpost_graafwerk,
+        stelpost_note: srcCalc.stelpost_note,
+        summary: srcCalc.summary,
+        material_sell: srcCalc.material_sell,
+        material_cost: srcCalc.material_cost,
+        hours_total: srcCalc.hours_total,
+        labor_sell: srcCalc.labor_sell,
+        travel_sell: srcCalc.travel_sell,
+        total_sell: srcCalc.total_sell,
+        offer_price_rounded: srcCalc.offer_price_rounded,
+        finalized_at: srcCalc.finalized_at,
+      }).select("id").single();
+      if (calcInsErr) throw calcInsErr;
+
+      const { data: srcLines, error: linesErr } = await sb.from("quote_calculation_lines")
+        .select("*").eq("calculation_id", srcCalc.id).order("position");
+      if (linesErr) throw linesErr;
+      if (srcLines && srcLines.length > 0) {
+        const { error: linesInsErr } = await sb.from("quote_calculation_lines").insert(
+          srcLines.map((l: Record<string, unknown>) => ({
+            calculation_id: newCalc.id,
+            organization_id: l.organization_id,
+            line_type: l.line_type,
+            product_id: l.product_id,
+            description: l.description,
+            category: l.category,
+            supplier: l.supplier,
+            order_number: l.order_number,
+            unit: l.unit,
+            qty: l.qty,
+            unit_gross: l.unit_gross,
+            unit_cost: l.unit_cost,
+            unit_sell: l.unit_sell,
+            unit_hours: l.unit_hours,
+            position: l.position,
+            meta: l.meta,
+          })),
+        );
+        if (linesInsErr) throw linesInsErr;
+      }
+    }
+
     if (source.lead_id) {
       const { error: actErr } = await sb.from("lead_activities").insert({
         lead_id: source.lead_id, organization_id: source.organization_id, user_id: auth.userId ?? null,

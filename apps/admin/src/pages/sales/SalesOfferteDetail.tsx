@@ -8,8 +8,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { EmailBodyEditor } from "@/components/sales/EmailBodyEditor";
 import { toast } from "sonner";
-import { ArrowLeft, Building2, Eye, FilePlus2, Loader2, MapPin, Send, Target, Trash2, PenLine, User, UserPlus, XCircle } from "lucide-react";
+import { ArrowLeft, Building2, Calculator, Eye, FilePlus2, Loader2, MapPin, Send, Target, Trash2, PenLine, User, UserPlus, XCircle } from "lucide-react";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, useReviseQuote, lineItemsOf, rejectCategoryLabel, type QuoteRevisionFields, type QuoteRejectFields } from "@/hooks/useQuotes";
+import { useQuoteCalculation } from "@/hooks/useQuoteCalculation";
 import { RejectQuoteDialog } from "@/components/sales/RejectQuoteDialog";
 import { useProjectLocation } from "@/hooks/useProjectLocations";
 import { formatObjectAddress } from "@/lib/objectLabel";
@@ -64,6 +65,10 @@ export default function SalesOfferteDetail() {
   const quote = quoteQ.data;
   const tpl = settingsQ.data?.offerTemplate;
   const admins = adminsQ.data ?? [];
+  // Interne calculatie (indien aanwezig): bron van de prijs + klantregels
+  const calcQ = useQuoteCalculation(id);
+  const calc = calcQ.data?.calc ?? null;
+  const hasFinalizedCalc = calc?.status === "afgerond";
   // Eén prijs i.p.v. losse offerteregels — calculatie gebeurt in Excel.
   const [price, setPrice] = useState("");
   const [email, setEmail] = useState("");
@@ -123,10 +128,11 @@ export default function SalesOfferteDetail() {
 
   useEffect(() => {
     if (quote) {
-      // Begin-prijs afleiden uit bestaande regels (som), anders uit de totaalkolommen.
+      // Begin-prijs: de totaalkolommen zijn leidend (bij een calculatie kan de
+      // handmatig bijgestelde prijs afwijken van de regel-som); regel-som als fallback.
       const liSum = lineItemsOf(quote).reduce((s, i) => s + (Number(i.total) || 0), 0);
       const totalsSum = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
-      const initial = liSum || totalsSum;
+      const initial = totalsSum || liSum;
       // Beheer-only: activatiekosten standaard 18,50 per paal (bewerkbaar) wanneer er nog geen totaal is.
       const beheerOnly = quote.with_installation === false;
       const activationTotal = 18.5 * (Number(quote.num_charge_points) || 0);
@@ -220,9 +226,16 @@ export default function SalesOfferteDetail() {
   const save = async () => {
     if (!quote) return;
     const p = grandTotal;
-    // Eén samenvattende regel (calculatie in Excel); totaal in total_installation_cost zodat
-    // de offertelijst + E-Group-handoff het juiste bedrag tonen.
-    const lineItems = [{ description: withInstallation ? "Levering & installatie" : "Activatie & onboarding beheer", qty: 1, unit_price: p, total: p }];
+    // Zonder calculatie: één samenvattende regel; totaal in total_installation_cost zodat
+    // de offertelijst + E-Group-handoff het juiste bedrag tonen. MET afgeronde calculatie
+    // (en installatie-scope) blijven de calc-regels staan — de calculator is dan de bron.
+    // Zolang de calc-query nog laadt/faalt is de bron onbekend: dan line_items niet
+    // aanraken, anders zou een vroege save de calc-regels stil vernietigen.
+    const calcKnown = !calcQ.isLoading && !calcQ.isError;
+    const keepCalcLines = hasFinalizedCalc && withInstallation;
+    const lineItems = calcKnown && !keepCalcLines
+      ? [{ description: withInstallation ? "Levering & installatie" : "Activatie & onboarding beheer", qty: 1, unit_price: p, total: p }]
+      : null;
     const tariffData = withManagement && (numOr(chargeRate) != null || numOr(idleFee) != null || numOr(idleGrace) != null)
       ? { chargeTariffPerKwh: numOr(chargeRate), idleFeePerMinute: numOr(idleFee), idleGraceMinutes: numOr(idleGrace) }
       : null;
@@ -230,7 +243,7 @@ export default function SalesOfferteDetail() {
       await update.mutateAsync({
         id: quote.id,
         patch: {
-          line_items: lineItems as unknown as never,
+          ...(lineItems ? { line_items: lineItems as unknown as never } : {}),
           total_hardware_cost: 0,
           total_installation_cost: p,
           num_charge_points: numOr(numChargePoints) ?? undefined,
@@ -617,6 +630,38 @@ export default function SalesOfferteDetail() {
               <div className="space-y-1"><Label className="text-xs">Witruimte boven datum (px)</Label><Input inputMode="numeric" value={numVal("dateGapPx")} placeholder="96" disabled={!isConcept} onChange={(e) => setNum("dateGapPx", e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Witruimte boven aanhef (px)</Label><Input inputMode="numeric" value={numVal("aanhefGapPx")} placeholder="84" disabled={!isConcept} onChange={(e) => setNum("aanhefGapPx", e.target.value)} /></div>
               <p className="col-span-2 text-[10px] text-muted-foreground">Standaard 96 / 84 px. Bij lange teksten worden deze automatisch verkleind (tot min. 16 px) zodat het investeringsblok boven de voettekst blijft; een eigen waarde geldt als maximum.</p>
+            </div>
+          </Section>
+
+          {/* Interne calculatie — nooit zichtbaar voor de klant */}
+          <Section title="Interne calculatie" hint="Kostprijs, materialen en uren — alleen intern. Een afgeronde calculatie vult prijs, regels en de leveringstekst voor.">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Calculator className="h-4 w-4 text-primary" />
+                {calc == null ? (
+                  <span className="text-muted-foreground">Nog geen calculatie gemaakt.</span>
+                ) : calc.status === "overgeslagen" ? (
+                  <span className="text-muted-foreground">Calculatie overgeslagen.</span>
+                ) : calc.status === "concept" ? (
+                  <span className="text-muted-foreground">Concept-calculatie — nog niet afgerond.</span>
+                ) : (
+                  <span>
+                    Afgerond: materiaal <strong className="tabular-nums">{euro(Number(calc.material_cost))}</strong> inkoop → totaal{" "}
+                    <strong className="tabular-nums">{euro(Number(calc.total_sell))}</strong>{" "}
+                    <span className="text-primary">(marge materiaal {euro(Number(calc.margin_material ?? 0))})</span>
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {hasFinalizedCalc && calc?.offer_price_rounded != null && numOr(price) != null && Number(calc.offer_price_rounded) !== numOr(price) && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    Prijs wijkt af van calculatie ({euro(Number(calc.offer_price_rounded))})
+                  </span>
+                )}
+                <Button variant="outline" size="sm" onClick={() => navigate(`/sales/offertes/${id}/calculatie`)}>
+                  {calc == null || calc.status === "overgeslagen" ? "Calculatie maken" : isConcept ? "Calculatie openen" : "Calculatie bekijken"}
+                </Button>
+              </div>
             </div>
           </Section>
 

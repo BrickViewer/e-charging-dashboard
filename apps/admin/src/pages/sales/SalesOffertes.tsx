@@ -110,7 +110,8 @@ export default function SalesOffertes() {
         </div>
       )}
 
-      <NewQuoteDialog open={newOpen} onClose={() => setNewOpen(false)} onCreated={(quoteId) => navigate(`/sales/offertes/${quoteId}`)} />
+      {/* Nieuwe offerte start bij de interne calculatie (overslaanbaar) */}
+      <NewQuoteDialog open={newOpen} onClose={() => setNewOpen(false)} onCreated={(quoteId) => navigate(`/sales/offertes/${quoteId}/calculatie`)} />
     </div>
   );
 }

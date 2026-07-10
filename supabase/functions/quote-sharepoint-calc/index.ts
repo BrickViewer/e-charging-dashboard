@@ -4,10 +4,13 @@ import { resolveQuoteDossier } from "../_shared/quoteDossier.ts";
 import { sanitizeName, base64ToBytes } from "../_shared/sharepoint.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 
-// quote-sharepoint-off — maakt server-side (app-only) het dossier + de ongetekende OFF aan.
-// Vervangt de browser/delegated-variant, zodat admins geen Microsoft-Graph-token nodig hebben.
-// Body: { quote_id, off_pdf_base64 }. Idempotent (skip als off_item_id al gezet).
-// Dossier-resolutie gedeeld met quote-sharepoint-calc via _shared/quoteDossier.ts.
+// quote-sharepoint-calc — uploadt de INTERNE calculatie-xlsx naar de dossier-root,
+// naast de OFF: "{offertenummer} CALC {adres}.xlsx". Anders dan de OFF is dit
+// bestand overschrijfbaar: her-afronden van de calculatie ververst hetzelfde
+// bestand (Graph PUT op naam behoudt het item-id). Refs op quote_calculations.
+// Body: { quote_id, calc_xlsx_base64 }.
+
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 const corsHeaders = CORS_INTERNAL;
 function json(body: unknown, status = 200) {
@@ -29,30 +32,29 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const quoteId = String(body.quote_id ?? "").trim();
-    const offPdfBase64 = String(body.off_pdf_base64 ?? "");
-    if (!quoteId || !offPdfBase64) return json({ status: "error", message: "quote_id en off_pdf_base64 verplicht" }, 400);
-
-    // Idempotentie vóór het (relatief dure) dossier-resolve.
-    const { data: existing, error: exErr } = await sb.from("quotes").select("off_item_id").eq("id", quoteId).maybeSingle();
-    if (exErr) throw exErr;
-    if (!existing) return json({ status: "error", message: "Offerte niet gevonden" }, 404);
-    if (existing.off_item_id) return json({ status: "ok", skipped: true });
+    const calcXlsxBase64 = String(body.calc_xlsx_base64 ?? "");
+    if (!quoteId || !calcXlsxBase64) return json({ status: "error", message: "quote_id en calc_xlsx_base64 verplicht" }, 400);
 
     const dossier = await resolveQuoteDossier(sb, quoteId);
     if (!dossier.ok) {
       if (dossier.skipped) return json({ status: "ok", skipped: dossier.skipped });
       return json({ status: "error", message: dossier.error ?? "Dossier-resolutie mislukt" }, dossier.status ?? 500);
     }
-    const { gc, driveId, folderId, folderWebUrl, addrLabel, offNumber } = dossier;
+    const { gc, driveId, folderId, addrLabel, offNumber } = dossier;
 
-    // Upload de ongetekende OFF in de dossier-root. Bestandsnaam = offertenummer (201-01-26).
-    const offName = sanitizeName(`${offNumber} OFF ${addrLabel}`) + ".pdf";
-    const off = await gc.uploadFile(driveId, folderId, offName, base64ToBytes(offPdfBase64));
-    const { error: offErr } = await sb.from("quotes").update({ off_item_id: off.id, off_web_url: off.webUrl }).eq("id", quoteId);
-    if (offErr) throw offErr;
+    const calcName = sanitizeName(`${offNumber} CALC ${addrLabel}`) + ".xlsx";
+    const file = await gc.uploadFile(driveId, folderId, calcName, base64ToBytes(calcXlsxBase64), XLSX_MIME);
 
-    return json({ status: "ok", folder_web_url: folderWebUrl, off_web_url: off.webUrl });
+    // Refs op de calculatie — fouten niet stil negeren (42501-les).
+    const { error: refErr } = await sb.from("quote_calculations").update({
+      calc_item_id: file.id,
+      calc_web_url: file.webUrl,
+      calc_uploaded_at: new Date().toISOString(),
+    }).eq("quote_id", quoteId);
+    if (refErr) throw refErr;
+
+    return json({ status: "ok", calc_web_url: file.webUrl });
   } catch (err) {
-    return json({ status: "error", message: err instanceof Error ? err.message : "SharePoint-dossier mislukt" }, 500);
+    return json({ status: "error", message: err instanceof Error ? err.message : "Calculatie-upload mislukt" }, 500);
   }
 });

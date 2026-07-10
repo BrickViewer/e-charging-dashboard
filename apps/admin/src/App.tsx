@@ -50,6 +50,8 @@ const SalesTasks = lazy(() => import("./pages/sales/SalesTasks"));
 const SalesContacts = lazy(() => import("./pages/sales/SalesContacts"));
 const SalesOffertes = lazy(() => import("./pages/sales/SalesOffertes"));
 const SalesOfferteDetail = lazy(() => import("./pages/sales/SalesOfferteDetail"));
+const SalesOfferteCalculatie = lazy(() => import("./pages/sales/SalesOfferteCalculatie"));
+const SalesCatalogus = lazy(() => import("./pages/sales/SalesCatalogus"));
 
 // Marketing pages — lazy loaded
 const MarketingBlogs = lazy(() => import("./pages/marketing/MarketingBlogs"));
@@ -208,6 +210,8 @@ const App = () => (
                 <Route path="objecten/:id" element={<ObjectRedirect />} />
                 <Route path="offertes" element={<SalesOffertes />} />
                 <Route path="offertes/:id" element={<SalesOfferteDetail />} />
+                <Route path="offertes/:id/calculatie" element={<SalesOfferteCalculatie />} />
+                <Route path="catalogus" element={<SalesCatalogus />} />
                 <Route path="installaties" element={<Navigate to="/sales/onboarding" replace />} />
                 <Route path="onboarding" element={<SalesOnboarding />} />
                 <Route path="configurator" element={<AdminConfiguratorSettings />} />
