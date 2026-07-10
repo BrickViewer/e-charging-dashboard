@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
 
       // ── 1) HERSCHRIJVEN (Sonnet, geen tools) ──
       const finalizeDirective = finalize
-        ? `DEFINITIEVE HUISSTIJL-RONDE: dit is een bestaande, live blog die je op de vaste huisstijl brengt en definitief maakt. Behoud het onderwerp, de kern-feiten en de structuur, maar (1) VERWIJDER elk exact intern/platformcijfer (aantallen laadpunten, locaties, laadsessies, kWh, euro-opbrengsten, bezettings-/groeipercentages van onszelf) en herschrijf het naar een kwalitatieve formulering zonder getal; (2) breng tekst en toon volledig in de huisstijl (In het kort-blok, vroege definitiezin, answer-first H2's, tabel waar zinvol, FAQ met 5 vragen UITSLUITEND in het faq-veld, "u"-vorm, geen em-dashes, zakelijk-neutraal); (3) verbeter waar mogelijk de information gain met publiek gebronde feiten (bron + jaartal). Geef dezelfde JSON terug.`
+        ? `DEFINITIEVE HUISSTIJL-RONDE: dit is een bestaande, live blog die je op de vaste huisstijl brengt en definitief maakt. Behoud het onderwerp, de kern-feiten en de structuur, maar (1) VERWIJDER elk exact intern/platformcijfer (aantallen laadpunten, locaties, laadsessies, kWh, euro-opbrengsten, bezettings-/groeipercentages van onszelf) en herschrijf het naar een kwalitatieve formulering zonder getal; (2) breng tekst en toon volledig in de huisstijl (In het kort-blok, vroege definitiezin, answer-first H2's, tabel waar zinvol, FAQ met 5 vragen UITSLUITEND in het faq-veld, "u"-vorm, geen em-dashes, zakelijk-neutraal); (3) verbeter waar mogelijk de information gain met publiek gebronde feiten (bron + jaartal); (4) houd de totale lengte vergelijkbaar met het origineel (maximaal ~10% langer) — dit is een correctie- en huisstijlronde, geen uitbreiding. Geef dezelfde JSON terug.`
         : null;
       const bestaandeFaq = (Array.isArray(post.faq) ? post.faq : [])
         .map((f: any) => `V: ${f?.question}\nA: ${f?.answer}`).join("\n");
@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
       const rwT0 = Date.now();
       await ev("rewrite_start", { model, prompt_chars: user.length });
       try {
-        const raw0 = await anthropicMessage({ apiKey, system: BLOG_REVISE_SYSTEM, user, model, maxTokens: Math.max(12000, maxTokens), retries: 1 });
+        const raw0 = await anthropicMessage({ apiKey, system: BLOG_REVISE_SYSTEM, user, model, maxTokens: Math.max(20000, maxTokens), retries: 1 });
         await ev("rewrite_ok", { ms: Date.now() - rwT0, chars: raw0.length });
         draft = validateBlogJson(extractJson<any>(raw0), validSlugs, validCategorySlugs);
       } catch (e) {
