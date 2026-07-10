@@ -9,8 +9,12 @@ export const DEFAULT_MODEL = "claude-opus-4-8";
 
 // Eén poging mag nooit onbegrensd hangen: de edge-wandklok (400 s) is hard, en een
 // isolate die daarop sneuvelt laat niets achter — geen blog, geen log, geen mail.
-// Met een begrensde poging wordt een hangende verbinding een gewone, retrybare fout.
-const REQUEST_TIMEOUT_MS = 120_000;
+// Maar een harde totaalduur-cap is dodelijk voor lange generaties (web-search-runs
+// van 3-6 min zijn normaal): die zou elke poging afbreken en de retry-lus over de
+// wandklok duwen. Daarom streamen we en bewaken we STILTE: zolang er bytes
+// binnenkomen leeft de verbinding; pas na 90 s zonder enige chunk breken we af
+// en is het een gewone, retrybare fout.
+const IDLE_TIMEOUT_MS = 90_000;
 
 // Sleutel uit edge-env (ANTHROPIC_API_KEY) of Vault (anthropic_api_key). Alleen op naam; nooit loggen.
 export async function getAnthropicKey(sb: any): Promise<string | null> {
@@ -35,11 +39,19 @@ export async function anthropicMessage(opts: {
     max_tokens: maxTokens,
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],
+    stream: true,
   };
   // Optionele server-tools (bv. web_search); alleen meesturen indien opgegeven zodat andere calls identiek blijven.
   if (opts.tools && opts.tools.length > 0) body.tools = opts.tools;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    // Stilte-bewaking: elke ontvangen chunk schuift de deadline op.
+    const ctrl = new AbortController();
+    let idleTimer = setTimeout(() => ctrl.abort(new Error("Anthropic-stream stil > 90s")), IDLE_TIMEOUT_MS);
+    const touch = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => ctrl.abort(new Error("Anthropic-stream stil > 90s")), IDLE_TIMEOUT_MS);
+    };
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -49,21 +61,42 @@ export async function anthropicMessage(opts: {
           "content-type": "application/json",
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: ctrl.signal,
       });
       if (res.status === 429 || res.status >= 500) {
+        await res.body?.cancel().catch(() => {});
         lastErr = new Error(`Anthropic HTTP ${res.status}`);
       } else if (!res.ok) {
         // Niet-herhaalbare 4xx (bv. ongeldig model of sleutel): meteen falen, niet retryen met backoff.
         const err = new Error(`Anthropic HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
         (err as any).nonRetryable = true;
         throw err;
+      } else if (!res.body) {
+        lastErr = new Error("Anthropic-respons zonder body");
       } else {
-        const data = await res.json();
-        const text = (data.content ?? [])
-          .filter((b: any) => b?.type === "text")
-          .map((b: any) => b.text)
-          .join("");
+        // SSE uitlezen: alleen text_delta's van tekstblokken samenvoegen; een
+        // error-event van de API telt als retrybare fout.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let text = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          touch();
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === "[DONE]") continue;
+            let ev: any;
+            try { ev = JSON.parse(payload); } catch { continue; }
+            if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta") text += ev.delta.text;
+            if (ev?.type === "error") throw new Error(`Anthropic stream-error: ${ev.error?.message ?? "onbekend"}`);
+          }
+        }
         if (!text) throw new Error("Lege respons van Claude");
         return text;
       }
@@ -71,6 +104,8 @@ export async function anthropicMessage(opts: {
       // Permanente fouten (niet-herhaalbare 4xx) meteen doorgooien i.p.v. retryen.
       if (e && (e as { nonRetryable?: boolean }).nonRetryable) throw e;
       lastErr = e;
+    } finally {
+      clearTimeout(idleTimer);
     }
     await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
   }
