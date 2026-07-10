@@ -225,6 +225,20 @@ export function validateBlogJson(p: any, validSlugs: Set<string>, validCategoryS
 // schrijver → manipuleerbaar); deze auditor heeft de blog NIET geschreven en beoordeelt streng. Zijn
 // scores voeden de SQL-poort (content_ingest_draft), en 'revise' blokkeert auto-publiceren ongeacht de
 // cijfers. Zo dekt de machine het schaal-content-risico van maart-2026 af (ongecontroleerde AI-massa).
+// Aparte, KORTE research-call (web-search, compacte output). Bewust gescheiden van het
+// schrijven: lange zoek-plus-schrijf-beurten knipt de API op (stop_reason=pause_turn/
+// tool_use) en dat overleeft een edge-isolate niet. Kort feitenrapport = betrouwbaar
+// (zelfde vorm als de feitencontrole, die aantoonbaar stabiel draait).
+export const BLOG_RESEARCH_SYSTEM = `Je bent een Nederlandse research-assistent voor een B2B-blog over laadinfrastructuur. GEBRUIK web search en lever een COMPACT feitenrapport voor de schrijver, in het Nederlands.
+
+Lever UITSLUITEND beknopte bullets, gegroepeerd onder deze koppen (koppen letterlijk overnemen):
+KERNFEITEN: 5-10 bullets met de belangrijkste actuele feiten/cijfers/bedragen, elk met (bron, datum) erbij.
+REGELGEVING: relevante wet- en regelgeving of subsidies met status per vandaag (van kracht / vervallen / aangekondigd), elk met (bron, datum).
+BRONNEN: elke gebruikte bron als "- naam | echte url | uitgever | datum". Alleen urls die je echt gevonden hebt; nooit gokken.
+INVALSHOEK: 2-3 bullets met wat dit betekent voor vastgoedeigenaren/VvE's/bedrijven.
+
+Geen inleiding, geen blog, geen conclusie. Maximaal ~500 woorden totaal.`;
+
 export const BLOG_AUDIT_SYSTEM = `Je bent een STRENGE, ONAFHANKELIJKE SEO/AEO-eindredacteur die een CONCEPT-blog beoordeelt voor een Nederlands B2B-bedrijf in laadinfrastructuur (klanten: vastgoedeigenaren, VvE's, bedrijven, installateurs). Je hebt de blog NIET geschreven. Je taak is kritisch keuren, niet vergoelijken: een hoge score moet verdiend zijn. Beoordeel in het Nederlands.
 
 Je krijgt de ZOEKVRAAG en de volledige blog (titel + HTML-content + de FAQ, die apart wordt aangeleverd omdat de site hem als eigen sectie rendert — de content-HTML hoort GEEN FAQ-sectie te bevatten).

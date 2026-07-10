@@ -4,7 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { getAnthropicKey, anthropicMessage, extractJson, DEFAULT_MODEL } from "../_shared/anthropic.ts";
-import { BLOG_SYSTEM, BLOG_AUDIT_SYSTEM, INTENT_NL, validateBlogJson, validateAuditJson, applyInternalLinks } from "../_shared/blog.ts";
+import { BLOG_SYSTEM, BLOG_AUDIT_SYSTEM, INTENT_NL, validateBlogJson, validateAuditJson, applyInternalLinks, BLOG_RESEARCH_SYSTEM } from "../_shared/blog.ts";
 import { buildBlogCover } from "../_shared/cover.ts";
 import { fetchProofBlock } from "../_shared/proof.ts";
 import { notifyContentEngine } from "../_shared/content-notify.ts";
@@ -69,6 +69,9 @@ Deno.serve(async (req) => {
     const autopublish = body.publish === true ? true
       : body.publish === false ? false
       : settings.autoblog_autopublish === true;
+    // Verse-isolate-herkansing: een gefaalde run (opgeknipte API-beurt, netwerkfout) krijgt
+    // maximaal 2 herkansingen in een NIEUW isolate met een vol tijdsbudget.
+    const runRetry = Number.isFinite(body.retry) ? Math.max(0, Math.floor(Number(body.retry))) : 0;
 
     // 3) Claude-sleutel (zonder sleutel netjes slapen, geen crash).
     const apiKey = await getAnthropicKey(sb);
@@ -171,8 +174,30 @@ Deno.serve(async (req) => {
           }
           const zoekvraag = kw?.query || t.target_keyword || t.raw_title;
 
-          // De web-research VERVANGT de menselijke visie/transcript. De onderscheidende invalshoek is de
-          // praktijkexpertise van het bedrijf (installatie/beheer/facturatie) + de brief-invalshoek.
+          // STAP 1 - RESEARCH (kort, mét web-search). Bewust gescheiden van het schrijven: een lange
+          // zoek-plus-schrijf-beurt knipt de API op (stop_reason=pause_turn/tool_use) en dat overleeft
+          // een isolate niet. Kort feitenrapport in, volledige blog eruit in een tool-loze tweede stap.
+          const resT0 = Date.now();
+          await ev("research_start", { topic: t.id });
+          const research = await anthropicMessage({
+            apiKey,
+            system: BLOG_RESEARCH_SYSTEM,
+            user: [
+              `DATUM VAN VANDAAG: ${new Date().toISOString().slice(0, 10)}`,
+              t.raw_title ? `ONDERWERP: ${t.raw_title}` : null,
+              t.raw_summary ? `CONTEXT: ${t.raw_summary}` : null,
+              zoekvraag ? `ZOEKVRAAG: ${zoekvraag}` : null,
+              t.suggested_angle ? `INVALSHOEK: ${t.suggested_angle}` : null,
+            ].filter(Boolean).join("\n"),
+            model,
+            maxTokens: 2500,
+            retries: 1,
+            tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+          });
+          await ev("research_ok", { topic: t.id, ms: Date.now() - resT0, chars: research.length });
+
+          // STAP 2 - SCHRIJVEN (geen tools; pure emissie, kan niet worden opgeknipt). De onderscheidende
+          // invalshoek is de praktijkexpertise van het bedrijf (installatie/beheer/facturatie) + de brief.
           const user = [
             t.raw_title ? `BRON-titel: ${t.raw_title}` : null,
             t.raw_summary ? `BRON-samenvatting: ${t.raw_summary}` : null,
@@ -182,7 +207,7 @@ Deno.serve(async (req) => {
             t.background ? `ACHTERGROND: ${t.background}` : null,
             t.suggested_angle ? `INVALSHOEK: ${t.suggested_angle}` : null,
             `VANDAAG IS ${new Date().toISOString().slice(0, 10)}. Behandel dit als peildatum: geef voorrang aan de meest recente feiten, cijfers en regelgeving, en maak in de tekst duidelijk hoe actueel iets is (bv. "per 2026" / "sinds medio 2026").`,
-            `ONDERZOEKSOPDRACHT: Gebruik de web-search-tool om de actuele feiten, cijfers, regelgeving en context over dit onderwerp te verifieren bij betrouwbare, recente bronnen (Nederlandse markt). Baseer de blog op wat je vindt; verzin geen feiten; als iets onbekend blijft, schrijf het algemeen.`,
+            `ONDERZOEKSRESULTATEN (zojuist met web-research geverifieerd; baseer de blog HIEROP, verzin geen feiten; als iets onbekend blijft, schrijf het algemeen):\n${research}`,
             `VISIE: Er is geen opgenomen teamgesprek. Lever de originaliteit en E-E-A-T daarom uit de praktijkexpertise van het bedrijf als leverancier EN beheerder van laadinfrastructuur (advies, installatie, beheer en facturatie voor kantoren, VvE's, bedrijfspanden en parkeerterreinen): geef concrete, praktijkgerichte inzichten en afwegingen die alleen een ervaren partij kan geven. Combineer dit met de INVALSHOEK en de geverifieerde feiten uit je web-research.`,
             slugs.length ? `INTERNE LINKS (gebruik ALLEEN deze; plaats er 3-5 als inline <a href="/kennisbank/<slug>">-links in de lopende tekst):\n${slugs.map((s) => `- /kennisbank/${s.slug} (${s.title})`).join("\n")}` : null,
             `MERKCONTEXT: Het bedrijf levert en beheert laadinfrastructuur voor zakelijke en vastgoedklanten (kantoren, VvE's, bedrijfspanden, parkeerterreinen): advies, installatie, beheer en facturatie van laadpunten.`,
@@ -203,8 +228,8 @@ Deno.serve(async (req) => {
           await ev("generate_start", { topic: t.id, title: String(t.raw_title ?? "").slice(0, 80) });
           try {
             raw0 = await anthropicMessage({
-              apiKey, system: BLOG_SYSTEM, user, model, maxTokens,
-              tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+              apiKey, system: BLOG_SYSTEM, user, model,
+              maxTokens: Math.max(12000, maxTokens),
               retries: 1,
             });
             await ev("generate_ok", { topic: t.id, ms: Date.now() - genT0, chars: raw0.length });
@@ -412,13 +437,24 @@ Deno.serve(async (req) => {
           .eq("id", settingsRow.id);
       }
 
-      // Vangnet: productie-run eindigde zonder publicatie én zonder lopende keten (revise/factcheck
+      // Vangnet 1: er is niets gegenereerd en er waren fouten (opgeknipte API-beurt, netwerk) —
+      // probeer het opnieuw in een VERS isolate met een vol tijdsbudget (max 2 herkansingen).
+      if (generated === 0 && errors > 0 && runRetry < 2) {
+        await ev("run_retry", { next: runRetry + 1 });
+        await sb.rpc("invoke_edge_function", {
+          fn_name: "content-autoblog",
+          body: { retry: runRetry + 1, ...(typeof body.publish === "boolean" ? { publish: body.publish } : {}) },
+        });
+        return { status: "ok", retrying: runRetry + 1, generated, published, concepts, errors, results };
+      }
+
+      // Vangnet 2: productie-run eindigde zonder publicatie én zonder lopende keten (revise/factcheck
       // melden hun eigen keteneinde via kept_concept of het factcheck-rapport). Zonder mail blijft
       // zo'n uitkomst onzichtbaar.
       if (autopublish && published === 0 && !results.some((r) => r.action === "revising" || r.action === "factchecking")) {
         await notifyContentEngine(settings, {
           kind: "run_failed",
-          reason: `Run afgerond: ${generated} gegenereerd, ${concepts} concept, ${errors} fout — geen publicatie`,
+          reason: `Run afgerond: ${generated} gegenereerd, ${concepts} concept, ${errors} fout — geen publicatie${runRetry ? ` (na ${runRetry} herkansing(en))` : ""}`,
           details: results.map((r) => r.reason ?? r.publish_error).filter((d): d is string => typeof d === "string"),
         });
       }
