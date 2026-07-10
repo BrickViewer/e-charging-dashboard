@@ -95,6 +95,12 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Breadcrumbs in content_engine_events: een gestorven isolate laat zo tóch een spoor na.
+      const ev = async (step: string, detail: Record<string, unknown> = {}) => {
+        try { await sb.from("content_engine_events").insert({ fn: "content-revise", step, detail: { blog_post_id: blogPostId, iteration, finalize, ...detail } }); } catch { /* nooit blokkeren */ }
+      };
+      await ev("run_start");
+
       const { data: slugRows } = await sb.from("blog_posts").select("slug, title").eq("status", "gepubliceerd").limit(50);
       const slugs = (slugRows ?? []) as { slug: string; title: string }[];
       const validSlugs = new Set(slugs.map((s) => s.slug));
@@ -146,10 +152,14 @@ Deno.serve(async (req) => {
 
       // EÉN herschrijf-call. Faalt de JSON, dan proberen we het in een VERSE schakel opnieuw (eigen tijdsbudget).
       let draft: ReturnType<typeof validateBlogJson> | null = null;
+      const rwT0 = Date.now();
+      await ev("rewrite_start", { model, prompt_chars: user.length });
       try {
-        const raw0 = await anthropicMessage({ apiKey, system: BLOG_REVISE_SYSTEM, user, model, maxTokens: Math.max(12000, maxTokens) });
+        const raw0 = await anthropicMessage({ apiKey, system: BLOG_REVISE_SYSTEM, user, model, maxTokens: Math.max(12000, maxTokens), retries: 1 });
+        await ev("rewrite_ok", { ms: Date.now() - rwT0, chars: raw0.length });
         draft = validateBlogJson(extractJson<any>(raw0), validSlugs, validCategorySlugs);
       } catch (e) {
+        await ev("rewrite_failed", { ms: Date.now() - rwT0, error: e instanceof Error ? e.message.slice(0, 300) : String(e) });
         // FINALIZE: geen keten. Laat de post ongewijzigd en meld de fout (kan opnieuw ge-finalized worden).
         if (finalize) {
           return { status: "ok", action: "finalize_jsonfail", blog_post_id: blogPostId, reason: e instanceof Error ? e.message.slice(0, 140) : "json", ms: Date.now() - runStart };
@@ -226,6 +236,7 @@ Deno.serve(async (req) => {
       // FINALIZE: klaar. Geen her-audit, geen keten, geen publish-flip. Status + slug + published_at blijven; de
       // content-update triggert de site-rebuild.
       if (finalize) {
+        await ev("finalized", { ms: Date.now() - runStart });
         return { status: "ok", action: "finalized", blog_post_id: blogPostId, slug: post.slug, category_slugs: catSlugs, ms: Date.now() - runStart };
       }
 
@@ -239,6 +250,7 @@ Deno.serve(async (req) => {
       } catch {
         audit = { seo_score: draft.seo_score, aeo_score: draft.aeo_score, quality_score: draft.quality_score, has_information_gain: false, has_first_hand_signal: false, issues: [], missing_experience: [], verdict: "revise" as const };
       }
+      await ev("audit_done", { q: audit.quality_score, seo: audit.seo_score, aeo: audit.aeo_score, verdict: audit.verdict });
       // Auditor-scores gezaghebbend op de post + het onderwerp.
       await sb.from("blog_posts").update({ seo_score: audit.seo_score, aeo_score: audit.aeo_score, quality_score: audit.quality_score }).eq("id", blogPostId);
       if (post.source_topic_id) await sb.from("content_topics").update({ quality_score: audit.quality_score }).eq("id", post.source_topic_id);
@@ -257,6 +269,7 @@ Deno.serve(async (req) => {
           fn_name: "content-factcheck",
           body: { blog_post_id: blogPostId, iteration, factcheck_round: factcheckRound },
         });
+        await ev("handoff_factcheck", { reason, factcheck_round: factcheckRound });
         return { status: "ok", action: "factchecking", reason, blog_post_id: blogPostId, iteration, factcheck_round: factcheckRound, scores: { q, seo, aeo }, ms: Date.now() - runStart };
       };
 
@@ -268,6 +281,7 @@ Deno.serve(async (req) => {
           fn_name: "content-revise",
           body: { blog_post_id: blogPostId, iteration: iteration + 1, issues: audit.issues, missing_experience: audit.missing_experience, factcheck_round: factcheckRound },
         });
+        await ev("handoff_revise", { next: iteration + 1 });
         return { status: "ok", action: "revising", blog_post_id: blogPostId, iteration, next: iteration + 1, scores: { q, seo, aeo }, verdict: audit.verdict, ms: Date.now() - runStart };
       }
 
@@ -282,6 +296,7 @@ Deno.serve(async (req) => {
         reason: `Kwaliteit onder de vloer (${FLOOR}) na ${iteration} revisierondes`,
         blogPostId,
       });
+      await ev("kept_concept", { q, seo, aeo });
       return { status: "ok", action: "kept_concept", blog_post_id: blogPostId, iteration, scores: { q, seo, aeo }, verdict: audit.verdict, ms: Date.now() - runStart };
     };
 
@@ -289,6 +304,7 @@ Deno.serve(async (req) => {
     if (runtime?.waitUntil) {
       runtime.waitUntil(
         run().catch(async (err) => {
+          await sb.from("content_engine_events").insert({ fn: "content-revise", step: "run_crashed", detail: { blog_post_id: blogPostId, iteration, finalize, error: err instanceof Error ? err.message.slice(0, 300) : "onbekende fout" } }).then(undefined, () => {});
           console.error("content-revise achtergrond-run faalde:", err instanceof Error ? err.message : err);
           if (!finalize) {
             await notifyContentEngine(settings, {
