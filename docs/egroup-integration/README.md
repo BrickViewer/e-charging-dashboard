@@ -101,6 +101,12 @@ van waarheid, bij wijzigen de kopie mee-updaten):**
 - `sync-material-status.ts` — materiaalstatus-sync edge function v2 (verify_jwt=false, Contract 3: prep-velden + estimated_hours + materials-replace)
 - Live DB (migratie `order_materials_and_echarging_werkbon_prefill`, zie appendix in `egroup-backend.sql`): tabel `order_materials` (+ RLS), kolom `work_order_materials.position`, RPC `sync_external_order_materials`, werkbon-triggers `trg_work_orders_echarging_prefill` + `trg_work_orders_echarging_materials`, `create_external_order` v2 (estimated_hours)
 - Frontend-tagging: zie `egroup-frontend-prompt.md`; materialen/uren-weergave: zie `egroup-materials-hours-prompt.md` (door E-Group-team uit te voeren)
+- `eportal-gap-migration.sql` — uitvoerbare, idempotente gap-sync (de vier via MCP
+  live-gezette objecten: get_integration_secret, sync_external_order_materials,
+  notify_echarging_scheduled + triggers, create_external_order v2). Toegepast op
+  **e-portal-dev** (`ybucrltqwhiassmdqrww`, 2026-07-13) incl. de drie edge functions
+  en eigen TEST-Vault-secrets (bewust ≠ productie: dev kan nooit succesvol naar
+  productie-e-charging posten). Neem dit bestand op in de e-portal-repo-migraties.
 
 ## Contracten
 
