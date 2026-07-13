@@ -226,6 +226,43 @@ export function useGenerateBlogFromRecording() {
 
 // ---- Content-engine instellingen (feeds, concurrenten, drempels, kill-switch) ----
 
+// ---- Autopiloot-overzicht: status van de volautomatische blogmachine ----
+export type AutopilotConcept = {
+  id: string;
+  title: string;
+  review_state: string | null;
+  quality_score: number | null;
+  seo_score: number | null;
+  aeo_score: number | null;
+  updated_at: string;
+};
+
+export type AutopilotRecent = { id: string; title: string; slug: string; published_at: string | null };
+
+export function useAutopilotOverview() {
+  return useQuery({
+    queryKey: ["content", "autopilot-overview"],
+    queryFn: async () => {
+      const [recent, concepts, pool] = await Promise.all([
+        supabase.from("blog_posts").select("id, title, slug, published_at")
+          .eq("status", "gepubliceerd").order("published_at", { ascending: false }).limit(3),
+        supabase.from("blog_posts").select("id, title, review_state, quality_score, seo_score, aeo_score, updated_at")
+          .eq("status", "concept").like("generated_by", "agent:%").order("updated_at", { ascending: false }),
+        supabase.from("content_topics").select("id", { count: "exact", head: true })
+          .in("status", ["idea", "approved_for_draft"]).is("blog_post_id", null),
+      ]);
+      if (recent.error) throw recent.error;
+      if (concepts.error) throw concepts.error;
+      if (pool.error) throw pool.error;
+      return {
+        recent: (recent.data ?? []) as AutopilotRecent[],
+        concepts: (concepts.data ?? []) as AutopilotConcept[],
+        poolCount: pool.count ?? 0,
+      };
+    },
+  });
+}
+
 export type ContentEngineSettings = {
   discovery_enabled?: boolean;
   generation_enabled?: boolean;

@@ -47,6 +47,11 @@ Deno.serve(async (req) => {
     const missingExp: string[] = Array.isArray(body.missing_experience) ? body.missing_experience.filter((x: unknown) => typeof x === "string") : [];
     // De feitencontrole-ronde reist door de keten mee: een factcheck-bounce start ronde 2, daarna is het einde.
     const factcheckRound = Number.isFinite(body.factcheck_round) ? Math.max(1, Math.floor(Number(body.factcheck_round))) : 1;
+    // Slot-garantie: alleen aanwezig als de keten door een autoblog-run is gestart (die zet 'm op 0).
+    // Bij een definitief keteneinde zonder publicatie proberen we dan (max 2×) een VOLGEND onderwerp,
+    // zodat een publicatieslot niet verloren gaat. De sweep-cron stuurt geen slot_retry mee → géén kick
+    // (anders zou elke her-kick van een gestrand concept extra blogs buiten het schema genereren).
+    const slotRetry = Number.isFinite(body.slot_retry) ? Math.max(0, Math.floor(Number(body.slot_retry))) : null;
 
     // Alleen autoblog-CONCEPTEN herschrijven (idempotent: een reeds gepubliceerde post door een parallelle schakel = klaar).
     // In FINALIZE-modus mag de post juist wél gepubliceerd zijn (we werken hem in place bij).
@@ -81,6 +86,18 @@ Deno.serve(async (req) => {
         try {
           await sb.rpc("invoke_edge_function", { fn_name: "blog-cover", body: { blog_post_id: blogPostId } });
         } catch { /* best-effort */ }
+      };
+
+      // Slot-garantie: bij een definitief keteneinde zonder publicatie een VOLGEND onderwerp
+      // proberen (het gefaalde onderwerp is via zijn blog_post_id al uitgesloten van de selectie).
+      // Respecteert de kill-switch: de nieuwe autoblog-run no-op't als autoblog_enabled=false.
+      const kickNextTopic = async (): Promise<boolean> => {
+        if (slotRetry === null || slotRetry >= 2) return false;
+        try {
+          await sb.rpc("invoke_edge_function", { fn_name: "content-autoblog", body: { slot_retry: slotRetry + 1 } });
+          await ev("slot_retry_next_topic", { next: slotRetry + 1 });
+          return true;
+        } catch { return false; }
       };
 
       // Zoekvraag + context.
@@ -165,18 +182,19 @@ Deno.serve(async (req) => {
           return { status: "ok", action: "finalize_jsonfail", blog_post_id: blogPostId, reason: e instanceof Error ? e.message.slice(0, 140) : "json", ms: Date.now() - runStart };
         }
         if (iteration < MAX) {
-          await sb.rpc("invoke_edge_function", { fn_name: "content-revise", body: { blog_post_id: blogPostId, iteration: iteration + 1, issues, missing_experience: missingExp, factcheck_round: factcheckRound } });
+          await sb.rpc("invoke_edge_function", { fn_name: "content-revise", body: { blog_post_id: blogPostId, iteration: iteration + 1, issues, missing_experience: missingExp, factcheck_round: factcheckRound, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) } });
           return { status: "ok", action: "retry_json", blog_post_id: blogPostId, iteration, reason: e instanceof Error ? e.message.slice(0, 140) : "json", ms: Date.now() - runStart };
         }
-        // Keteneinde zonder publicatie (JSON bleef ongeldig): omslag alsnog + melding.
+        // Keteneinde zonder publicatie (JSON bleef ongeldig): omslag alsnog + melding + volgend onderwerp.
         await kickCoverIfMissing();
+        const retryingJson = await kickNextTopic();
         await notifyContentEngine(settings, {
           kind: "kept_concept",
           title: post.title,
-          reason: `Herschrijven bleef ongeldige JSON opleveren na ${iteration} rondes; concept staat ter review`,
+          reason: `Herschrijven bleef ongeldige JSON opleveren na ${iteration} rondes; concept staat ter review${retryingJson ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
           blogPostId,
         });
-        return { status: "ok", action: "kept_concept_jsonfail", blog_post_id: blogPostId, iteration, ms: Date.now() - runStart };
+        return { status: "ok", action: "kept_concept_jsonfail", blog_post_id: blogPostId, iteration, slot_retrying: retryingJson, ms: Date.now() - runStart };
       }
 
       draft.content = applyInternalLinks(draft.content, draft.internal_link_suggestions, validSlugs);
@@ -270,7 +288,7 @@ Deno.serve(async (req) => {
       const naarFactcheck = async (reason: string) => {
         await sb.rpc("invoke_edge_function", {
           fn_name: "content-factcheck",
-          body: { blog_post_id: blogPostId, iteration, factcheck_round: factcheckRound },
+          body: { blog_post_id: blogPostId, iteration, factcheck_round: factcheckRound, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
         });
         await ev("handoff_factcheck", { reason, factcheck_round: factcheckRound });
         return { status: "ok", action: "factchecking", reason, blog_post_id: blogPostId, iteration, factcheck_round: factcheckRound, scores: { q, seo, aeo }, ms: Date.now() - runStart };
@@ -282,7 +300,7 @@ Deno.serve(async (req) => {
         // Nog niet goed genoeg → volgende schakel met de VERSE kritiek (async, eigen tijdsbudget).
         await sb.rpc("invoke_edge_function", {
           fn_name: "content-revise",
-          body: { blog_post_id: blogPostId, iteration: iteration + 1, issues: audit.issues, missing_experience: audit.missing_experience, factcheck_round: factcheckRound },
+          body: { blog_post_id: blogPostId, iteration: iteration + 1, issues: audit.issues, missing_experience: audit.missing_experience, factcheck_round: factcheckRound, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
         });
         await ev("handoff_revise", { next: iteration + 1 });
         return { status: "ok", action: "revising", blog_post_id: blogPostId, iteration, next: iteration + 1, scores: { q, seo, aeo }, verdict: audit.verdict, ms: Date.now() - runStart };
@@ -290,17 +308,18 @@ Deno.serve(async (req) => {
 
       // MAX bereikt: de best-mogelijke versie boven de vloer gaat óók langs de feitencontrole.
       if (scored && (q as number) >= FLOOR) return await naarFactcheck("floor_after_max");
-      // Keteneinde zonder publicatie: omslag alsnog genereren + melding sturen.
+      // Keteneinde zonder publicatie: omslag alsnog genereren + melding sturen + volgend onderwerp.
       await kickCoverIfMissing();
+      const retrying = await kickNextTopic();
       await notifyContentEngine(settings, {
         kind: "kept_concept",
         title: draft.title ?? post.title,
         scores: { quality: q, seo, aeo },
-        reason: `Kwaliteit onder de vloer (${FLOOR}) na ${iteration} revisierondes`,
+        reason: `Kwaliteit onder de vloer (${FLOOR}) na ${iteration} revisierondes${retrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
         blogPostId,
       });
-      await ev("kept_concept", { q, seo, aeo });
-      return { status: "ok", action: "kept_concept", blog_post_id: blogPostId, iteration, scores: { q, seo, aeo }, verdict: audit.verdict, ms: Date.now() - runStart };
+      await ev("kept_concept", { q, seo, aeo, slot_retrying: retrying });
+      return { status: "ok", action: "kept_concept", blog_post_id: blogPostId, iteration, scores: { q, seo, aeo }, verdict: audit.verdict, slot_retrying: retrying, ms: Date.now() - runStart };
     };
 
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;

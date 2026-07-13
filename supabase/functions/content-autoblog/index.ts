@@ -72,6 +72,11 @@ Deno.serve(async (req) => {
     // Verse-isolate-herkansing: een gefaalde run (opgeknipte API-beurt, netwerkfout) krijgt
     // maximaal 2 herkansingen in een NIEUW isolate met een vol tijdsbudget.
     const runRetry = Number.isFinite(body.retry) ? Math.max(0, Math.floor(Number(body.retry))) : 0;
+    // Slot-garantie: haalt een onderwerp de kwaliteits-/feitenlat definitief niet, dan probeert
+    // de keten (max 2×) een VOLGEND onderwerp voor ditzelfde publicatieslot. De teller reist door
+    // de hele keten mee (revise/factcheck) en start hier op 0; het gefaalde onderwerp heeft dan al
+    // een blog_post_id en wordt door de selectie automatisch overgeslagen.
+    const slotRetry = Number.isFinite(body.slot_retry) ? Math.max(0, Math.floor(Number(body.slot_retry))) : 0;
 
     // 3) Claude-sleutel (zonder sleutel netjes slapen, geen crash).
     const apiKey = await getAnthropicKey(sb);
@@ -404,7 +409,7 @@ Deno.serve(async (req) => {
             // nergens anders meer gepubliceerd.
             await sb.rpc("invoke_edge_function", {
               fn_name: "content-factcheck",
-              body: { blog_post_id: result.blog_post_id, iteration: 1, factcheck_round: 1 },
+              body: { blog_post_id: result.blog_post_id, iteration: 1, factcheck_round: 1, slot_retry: slotRetry },
             });
             concepts++;
             results.push({ topic_id: t.id, blog_post_id: result.blog_post_id, slug: result.slug, review_state: result.review_state, action: "factchecking", ...auditInfo });
@@ -413,7 +418,7 @@ Deno.serve(async (req) => {
             // tijdsbudget) i.p.v. het concept te laten liggen. De keten verbetert de post tot 'ie de lat haalt en publiceert dan.
             await sb.rpc("invoke_edge_function", {
               fn_name: "content-revise",
-              body: { blog_post_id: result.blog_post_id, iteration: 1, issues: audit.issues, missing_experience: audit.missing_experience, factcheck_round: 1 },
+              body: { blog_post_id: result.blog_post_id, iteration: 1, issues: audit.issues, missing_experience: audit.missing_experience, factcheck_round: 1, slot_retry: slotRetry },
             });
             concepts++;
             results.push({ topic_id: t.id, blog_post_id: result.blog_post_id, slug: result.slug, review_state: result.review_state, action: "revising", ...auditInfo });
@@ -445,7 +450,7 @@ Deno.serve(async (req) => {
         await ev("run_retry", { next: runRetry + 1 });
         await sb.rpc("invoke_edge_function", {
           fn_name: "content-autoblog",
-          body: { retry: runRetry + 1, ...(typeof body.publish === "boolean" ? { publish: body.publish } : {}) },
+          body: { retry: runRetry + 1, slot_retry: slotRetry, ...(typeof body.publish === "boolean" ? { publish: body.publish } : {}) },
         });
         return { status: "ok", retrying: runRetry + 1, generated, published, concepts, errors, results };
       }

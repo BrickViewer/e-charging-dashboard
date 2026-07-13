@@ -46,6 +46,8 @@ Deno.serve(async (req) => {
     const factcheckRound = Number.isFinite(body.factcheck_round) ? Math.max(1, Math.floor(Number(body.factcheck_round))) : 1;
     const iteration = Number.isFinite(body.iteration) ? Math.max(1, Math.floor(Number(body.iteration))) : 1;
     const backfill = body.backfill === true;
+    // Slot-garantie: alleen aanwezig als de keten uit een autoblog-run komt (zie content-revise).
+    const slotRetry = Number.isFinite(body.slot_retry) ? Math.max(0, Math.floor(Number(body.slot_retry))) : null;
 
     const { data: post } = await sb.from("blog_posts")
       .select("id, slug, title, content, faq, sources, status, source_topic_id, cover_image_url")
@@ -139,23 +141,34 @@ Deno.serve(async (req) => {
             iteration,
             issues: factcheckIssues(report),
             factcheck_round: factcheckRound + 1,
+            ...(slotRetry !== null ? { slot_retry: slotRetry } : {}),
           },
         });
         await ev("bounce_to_revise", { critical: report.critical_count });
         return { status: "ok", action: "revising_facts", round: factcheckRound, critical: report.critical_count };
       }
 
-      // Terminaal: niet publiceren, mens waarschuwen met het volledige rapport.
+      // Terminaal: niet publiceren, mens waarschuwen met het volledige rapport. Slot-garantie:
+      // uit een autoblog-run proberen we (max 2×) automatisch een volgend onderwerp voor dit slot;
+      // het gefaalde onderwerp is via zijn blog_post_id al uitgesloten van de selectie.
       await sb.from("blog_posts").update({ review_state: "changes_requested" }).eq("id", blogPostId);
+      let slotRetrying = false;
+      if (slotRetry !== null && slotRetry < 2) {
+        try {
+          await sb.rpc("invoke_edge_function", { fn_name: "content-autoblog", body: { slot_retry: slotRetry + 1 } });
+          await ev("slot_retry_next_topic", { next: slotRetry + 1 });
+          slotRetrying = true;
+        } catch { /* best-effort */ }
+      }
       await notifyContentEngine(settings, {
         kind: "kept_concept",
         title: post.title,
-        reason: `Feitencontrole blokkeert publicatie na ${factcheckRound} ronde(s): ${report.critical_count} kritiek punt(en)`,
+        reason: `Feitencontrole blokkeert publicatie na ${factcheckRound} ronde(s): ${report.critical_count} kritiek punt(en)${slotRetrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
         details: factcheckIssues(report),
         blogPostId,
       }).catch(() => {});
-      await ev("blocked_terminal", { critical: report.critical_count });
-      return { status: "ok", action: "blocked_by_factcheck", critical: report.critical_count };
+      await ev("blocked_terminal", { critical: report.critical_count, slot_retrying: slotRetrying });
+      return { status: "ok", action: "blocked_by_factcheck", critical: report.critical_count, slot_retrying: slotRetrying };
     };
 
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
