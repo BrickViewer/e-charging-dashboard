@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Send, Plug, MailPlus, ExternalLink, Clock, ArrowRight, Receipt, UserPlus, PackageOpen } from "lucide-react";
+import { Send, Plug, MailPlus, ExternalLink, Clock, ArrowRight, Receipt, UserPlus, PackageOpen, CalendarCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ONBOARDING_STAGES, STAGES_BY_SCOPE, deriveStage, hasPendingInvite, primaryOrder,
   useOnboardingClients, useOnboardingOrders, useUnlinkedLocations, useLinkLocationToClient, useSendOnboardingInvite,
-  type OnboardingClient, type OnboardingStage,
+  type OnboardingClient, type OnboardingStage, type OnbOrder,
 } from "@/hooks/useOnboarding";
 import { clientScope, scopeFromFlags, SCOPE_LABEL, SCOPE_SHORT, SCOPE_BADGE_CLASS, type QuoteScope } from "@/lib/quoteScope";
 import { OnboardingHandoffDialog } from "@/components/sales/OnboardingHandoffDialog";
@@ -20,7 +20,30 @@ import { OnboardingMaterialsDialog } from "@/components/sales/OnboardingMaterial
 import { CreateClientFromQuoteDialog, type QuoteForClient } from "@/components/sales/CreateClientFromQuoteDialog";
 import { useSignedQuotesAwaitingClient } from "@/hooks/useQuotes";
 import { useStartWorkPreparation } from "@/hooks/useOrderMaterials";
-import { materialsProgressLabel } from "@/services/workPreparation";
+import { materialsTrafficLight } from "@/services/workPreparation";
+
+// Stoplicht op de kaart: rood = niet (alles) besteld, oranje = besteld maar nog
+// niet binnen, groen = alles binnen. Grijs = geen materialen.
+const TRAFFIC_DOT: Record<string, string> = {
+  red: "bg-red-500",
+  amber: "bg-amber-500",
+  green: "bg-emerald-500",
+  muted: "bg-muted-foreground/40",
+};
+
+function MaterialsStatusLine({ order }: { order: OnbOrder | null }) {
+  if (!order?.work_prep_started_at) return null;
+  const light = materialsTrafficLight(order.installation_order_materials ?? []);
+  return (
+    <p className="flex items-center justify-center gap-1.5 text-[11px] tabular-nums text-muted-foreground">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${TRAFFIC_DOT[light.tone]}`} />
+      <span className="truncate">{light.label}</span>
+    </p>
+  );
+}
+
+const planDatum = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" });
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 
@@ -61,9 +84,7 @@ function NextAction({
     case "werkvoorbereiding":
       return (
         <div className="space-y-1.5">
-          <p className="text-center text-[11px] tabular-nums text-muted-foreground">
-            {materialsProgressLabel(order?.installation_order_materials ?? [])}
-          </p>
+          <MaterialsStatusLine order={order} />
           <Button size="sm" className={btn} onClick={() => onMaterials(client)}>
             <PackageOpen className={ico} /> Materialen
           </Button>
@@ -75,6 +96,13 @@ function NextAction({
           <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-center text-[11px] leading-tight text-muted-foreground">
             <Clock className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{order?.egroup_order_number ? `Verstuurd · ${order.egroup_order_number}` : "Verstuurd — wacht op oplevering"}</span>
           </div>
+          {/* Plandatum uit de e-portal (webhook zet scheduled_date bij het inplannen). */}
+          {order?.scheduled_date && (
+            <div className="flex min-h-6 items-center justify-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-center text-[11px] font-medium leading-tight text-primary">
+              <CalendarCheck className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">Ingepland · {planDatum(order.scheduled_date)}</span>
+            </div>
+          )}
+          <MaterialsStatusLine order={order} />
           {/* Ná de handoff nog materialen "binnen" kunnen melden voor de planner. */}
           {order?.work_prep_started_at && (
             <Button size="sm" variant="ghost" className={btn} onClick={() => onMaterials(client)}>

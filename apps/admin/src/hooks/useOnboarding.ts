@@ -48,6 +48,7 @@ export type OnbOrder = {
   external_status: string | null;
   completed_at: string | null;
   invoiced_at: string | null;
+  scheduled_date: string | null;
   work_prep_started_at: string | null;
   materials_expected_at: string | null;
   preparation_notes: string | null;
@@ -99,7 +100,7 @@ export type OnboardingClient = {
 const CLIENT_SELECT =
   "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, contact_phone, created_at, " +
   "payment_onboarding_status, needs_installation, managed, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
-  "installation_orders(id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
+  "installation_orders(id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, scheduled_date, " +
   "work_prep_started_at, materials_expected_at, preparation_notes, materials_synced_at, last_sync_error, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes, " +
   "installation_order_materials(status)), " +
@@ -133,7 +134,7 @@ export function useOnboardingClients() {
 type RawOrderOnly = {
   id: string; quote_id: string | null; status: string | null; egroup_order_id: string | null;
   egroup_order_number: string | null; external_status: string | null; completed_at: string | null;
-  invoiced_at: string | null; work_prep_started_at: string | null; materials_expected_at: string | null;
+  invoiced_at: string | null; scheduled_date: string | null; work_prep_started_at: string | null; materials_expected_at: string | null;
   preparation_notes: string | null; materials_synced_at: string | null; last_sync_error: string | null;
   installation_order_materials: { status: MaterialStatus }[] | null;
   site_street: string | null; site_house_number: string | null;
@@ -149,7 +150,7 @@ type RawOrderOnly = {
 };
 
 const ORDER_ONLY_SELECT =
-  "id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
+  "id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, scheduled_date, " +
   "work_prep_started_at, materials_expected_at, preparation_notes, materials_synced_at, last_sync_error, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes, created_at, " +
   "installation_order_materials(status), " +
@@ -163,7 +164,7 @@ function mapOrderToClient(o: RawOrderOnly): OnboardingClient {
   const order: OnbOrder = {
     id: o.id, quote_id: o.quote_id, status: o.status, egroup_order_id: o.egroup_order_id,
     egroup_order_number: o.egroup_order_number, external_status: o.external_status, completed_at: o.completed_at,
-    invoiced_at: o.invoiced_at, work_prep_started_at: o.work_prep_started_at,
+    invoiced_at: o.invoiced_at, scheduled_date: o.scheduled_date, work_prep_started_at: o.work_prep_started_at,
     materials_expected_at: o.materials_expected_at, preparation_notes: o.preparation_notes,
     materials_synced_at: o.materials_synced_at, last_sync_error: o.last_sync_error,
     installation_order_materials: o.installation_order_materials,

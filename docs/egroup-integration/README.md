@@ -140,17 +140,30 @@ Respons: `{ "order_id": "<uuid>", "order_number": "OPD-00023" }`
 
 > **Facturering:** `billing.e_portal_creates_invoice` staat altijd op `false`. Facturen worden door e-charging verstuurd en beheerd (settlements-flow), niet door de E-Portal. De E-Portal voert alleen de installatie/werkbon uit. `site_contact.phone` valt terug op het algemene klantcontact als het site-snapshot leeg is (zodat het telefoonnummer niet leeg binnenkomt). Dedupliceer op `external_reference` (= `installation_orders.id`) en respecteer de `Idempotency-Key`-header zodat een herhaalde POST geen dubbele opdracht aanmaakt.
 
-**Contract 2 — Completion-callback (E-Group → E-Charging `installation-completion-webhook`)**
+**Contract 2 — Status-/plan-callback (E-Group → E-Charging `installation-completion-webhook`)**
 ```json
 {
   "external_reference": "<installation_orders.id>",
   "egroup_order_id": "<orders.id>",
   "egroup_order_number": "OPD-00023",
   "status": "afgerond",
-  "completed_at": "2026-06-20T14:30:00Z"
+  "completed_at": "2026-06-20T14:30:00Z",
+  "scheduled_date": "2026-07-24"
 }
 ```
-Header `x-echarging-secret`. Respons: `200 {"status":"ok"}`.
+Header `x-echarging-secret`. Respons: `200 {"status":"ok"}`. Drie afzenders in e-portal:
+1. `trg_notify_external_order_status` (orders.status-wijziging) — status + completed_at.
+2. `trg_echarging_scheduled_wo`/`_ol` (**plandatum**, `notify_echarging_scheduled()`): zodra een
+   werkbon of order_line van een e-charging-opdracht een (nieuwe) `scheduled_date` krijgt →
+   `{status:'ingepland', scheduled_date: <vroegste datum>}` → e-charging zet
+   `installation_orders.status='ingepland'` + `scheduled_date` (het bord toont "Ingepland · datum").
+   Datum weghalen wordt niet gemeld (oude datum blijft staan tot een nieuwe planning).
+3. `trg_echarging_completion` → edge `notify-echarging-completion` (**aftekenen**): zodra de
+   werkbon is afgetekend én de werkbon-PDF klaar is → `{status:'afgerond', completed_at,
+   werkbon_pdf_url, technician, customer}` → e-charging zet completed_at → onboarding-kaart
+   schuift automatisch naar Opgeleverd.
+De webhook is idempotent (noop als status, completed_at én scheduled_date al kloppen — de
+plan-triggers kunnen dubbel vuren: werkbon + order_line).
 
 **Contract 3 (v2) — Materiaalstatus-sync (E-Charging `order-material-sync` → E-Group `sync-material-status`)**
 ```json

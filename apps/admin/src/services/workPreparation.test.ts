@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { materialsGate, materialsProgressLabel } from "./workPreparation";
+import { materialsGate, materialsProgressLabel, materialsTrafficLight } from "./workPreparation";
 import type { MaterialStatus } from "./installationHandoff";
 
 const mats = (...statuses: MaterialStatus[]) => statuses.map((status) => ({ status }));
@@ -15,6 +15,38 @@ describe("materialsGate", () => {
 
   it("laat een mix van niet_nodig/besteld/binnen door", () => {
     expect(materialsGate(mats("niet_nodig", "besteld", "binnen"))).toEqual({ ok: true, open: 0, total: 3 });
+  });
+});
+
+describe("materialsTrafficLight", () => {
+  it("is rood zolang er iets te bestellen is", () => {
+    expect(materialsTrafficLight(mats("binnen", "besteld", "te_bestellen", "te_bestellen"))).toEqual({
+      tone: "red",
+      label: "2 te bestellen",
+    });
+  });
+
+  it("is oranje als alles besteld is maar nog niet alles binnen", () => {
+    expect(materialsTrafficLight(mats("besteld", "besteld"))).toEqual({
+      tone: "amber",
+      label: "Besteld · wacht op levering",
+    });
+    expect(materialsTrafficLight(mats("besteld", "binnen", "niet_nodig"))).toEqual({
+      tone: "amber",
+      label: "Besteld · 1/2 binnen",
+    });
+  });
+
+  it("is groen als alle relevante materialen binnen zijn", () => {
+    expect(materialsTrafficLight(mats("binnen", "binnen", "niet_nodig"))).toEqual({
+      tone: "green",
+      label: "Alle materialen binnen",
+    });
+  });
+
+  it("is grijs zonder (relevante) materialen", () => {
+    expect(materialsTrafficLight([])).toEqual({ tone: "muted", label: "Geen materialen" });
+    expect(materialsTrafficLight(mats("niet_nodig"))).toEqual({ tone: "muted", label: "Geen materialen" });
   });
 });
 

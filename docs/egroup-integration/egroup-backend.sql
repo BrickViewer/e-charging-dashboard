@@ -122,3 +122,13 @@ grant execute on function public.get_integration_secret(text) to service_role;
 --     - trg_work_orders_echarging_materials (AFTER INSERT): kopieert
 --       order_materials (status <> 'niet_nodig', op position) naar
 --       work_order_materials, alleen als de werkbon nog geen materialen heeft.
+
+-- 11) Plandatum-terugkoppeling (2026-07-13, migratie echarging_scheduled_date_callback):
+--     notify_echarging_scheduled() — SECDEF, scope e-charging (external_system +
+--     callback-URL + SSRF-allowlist), vuurt bij een nieuwe/gewijzigde
+--     scheduled_date op work_orders of order_lines, en POST naar de callback:
+--     { external_reference, egroup_order_id, egroup_order_number,
+--       status: 'ingepland', scheduled_date: <vroegste datum over werkbonnen/regels> }.
+--     Triggers: trg_echarging_scheduled_wo (work_orders) +
+--     trg_echarging_scheduled_ol (order_lines), AFTER INSERT OR UPDATE OF
+--     scheduled_date. Datum weghalen wordt niet gemeld.

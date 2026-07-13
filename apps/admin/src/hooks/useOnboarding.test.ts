@@ -17,7 +17,7 @@ const base: OnboardingClient = {
 
 const order = (o: Partial<OnbOrder>): OnbOrder => ({
   id: "o", quote_id: null, status: null, egroup_order_id: null, egroup_order_number: null, external_status: null,
-  completed_at: null, invoiced_at: null, work_prep_started_at: null, materials_expected_at: null,
+  completed_at: null, invoiced_at: null, scheduled_date: null, work_prep_started_at: null, materials_expected_at: null,
   preparation_notes: null, materials_synced_at: null, last_sync_error: null,
   site_street: null, site_house_number: null, site_postal: null,
   site_city: null, site_contact_name: null, site_contact_email: null, site_contact_phone: null,

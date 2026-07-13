@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PackageOpen, Send, Wrench } from "lucide-react";
+import { CalendarCheck, PackageOpen, Send, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { useClientOrders, useUpdateOrder, useHandoffOrder, ORDER_STATUSES, type InstallationOrder } from "@/hooks/useInstallations";
 import { useStartWorkPreparation } from "@/hooks/useOrderMaterials";
@@ -90,6 +90,12 @@ export function InstallationOrdersCard({ clientId }: { clientId: string | undefi
               <SelectContent>{ORDER_STATUSES.map((s) => <SelectItem key={s} value={s}>{ORDER_STATUS_LABEL[s]}</SelectItem>)}</SelectContent>
             </Select>
             <span className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString("nl-NL")}</span>
+            {/* Plandatum uit de e-portal (webhook zet scheduled_date bij het inplannen). */}
+            {o.scheduled_date && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+                <CalendarCheck className="h-3.5 w-3.5" /> Ingepland · {new Date(`${o.scheduled_date}T00:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+              </span>
+            )}
             {prepActions(o)}
           </div>
         ))}

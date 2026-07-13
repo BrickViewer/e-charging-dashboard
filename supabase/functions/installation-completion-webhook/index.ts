@@ -56,11 +56,13 @@ Deno.serve(async (req) => {
     if (typeof body.scheduled_date === "string") patch.scheduled_date = body.scheduled_date;
     if (egroupOrderId && !order.egroup_order_id) patch.egroup_order_id = egroupOrderId;
 
-    // Idempotent: niets te doen als status + completed_at al kloppen.
+    // Idempotent: niets te doen als status, completed_at én plandatum al kloppen
+    // (de plan-triggers kunnen dubbel vuren: werkbon + order_line).
     const noop =
       order.external_status === egroupStatus &&
       (!mapped.status || order.status === mapped.status) &&
-      (!mapped.completed || !!order.completed_at);
+      (!mapped.completed || !!order.completed_at) &&
+      (typeof body.scheduled_date !== "string" || order.scheduled_date === body.scheduled_date);
     if (noop) return json({ status: "ok", noop: true });
 
     await sb.from("installation_orders").update(patch).eq("id", order.id);
