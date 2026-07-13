@@ -65,14 +65,23 @@ const margePct = () => waarde("Marge %");
 const arbeidEgroup = () => waarde(/− Arbeid e-group/);
 
 describe("CalcMarginCard", () => {
-  it("toont de som: commerciële prijs − materiaalinkoop − arbeid e-group = marge, met percentage", () => {
+  it("toont de som: commerciële prijs − materiaalinkoop − arbeid e-group − voorrijkosten = marge, met percentage", () => {
     kaart(totalsMetMateriaal, 4050);
     expect(screen.getByText("Commerciële prijs")).toBeInTheDocument();
     expect(screen.getByText("− Materiaal inkoop")).toBeInTheDocument();
     expect(screen.getByText(/− Arbeid e-group/)).toBeInTheDocument();
+    expect(screen.getByText("− Voorrijkosten e-group")).toBeInTheDocument();
     expect(marge()).toHaveTextContent("1.286,25");
     expect(margePct()).toHaveTextContent("31,8%");
     expect(marge()).toHaveClass("text-primary");
+  });
+
+  it("trekt de voorrijkosten van de marge af — die gaan één-op-één naar e-group", () => {
+    // 100 km × € 0,75 × 2 dagen = € 150; marge 4050 − 2763,75 − 150 = 1.136,25
+    const metVoorrij = computeTotals([materiaal(921.25)], { ...header, km_price: 0.75, retour_km: 100, travel_days: 2 });
+    kaart(metVoorrij, 4050);
+    expect(waarde("− Voorrijkosten e-group")).toHaveTextContent("150,00");
+    expect(marge()).toHaveTextContent("1.136,25");
   });
 
   it("trekt de arbeidsinkoop bij e-group van de marge af en toont uren × tarief", () => {

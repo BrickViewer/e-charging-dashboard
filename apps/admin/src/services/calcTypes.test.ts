@@ -112,38 +112,44 @@ describe("roundUpTo", () => {
 
 describe("commercialMargin", () => {
   it("trekt de materiaalinkoop van de commerciële prijs af", () => {
-    const { amount, pct } = commercialMargin(4050, 2763.75, 0);
+    const { amount, pct } = commercialMargin(4050, 2763.75, 0, 0);
     expect(amount).toBe(1286.25);
     expect(formatPercent(pct!)).toBe("31,8%");
   });
 
   it("trekt óók de arbeidsinkoop bij e-group af", () => {
     // Excel-voorbeeld: 8 uur × € 50 inkoop = 400 extra kosten in de marge.
-    const { amount, pct } = commercialMargin(4050, 2763.75, 400);
+    const { amount, pct } = commercialMargin(4050, 2763.75, 400, 0);
     expect(amount).toBe(886.25);
     expect(pct).toBe(886.25 / 4050);
   });
 
-  it("geeft een rauwe fractie terug, niet een afgerond percentage", () => {
-    // Zou commercialMargin zelf afronden, dan rondde Intl daar nog eens overheen.
-    expect(commercialMargin(4050, 2763.75, 0).pct).toBe(1286.25 / 4050);
+  it("trekt óók de voorrijkosten af — die gaan één-op-één naar e-group", () => {
+    // 110 km × € 0,75 × 1 dag = € 82,50; er wordt niets op verdiend.
+    const { amount } = commercialMargin(4050, 2763.75, 400, 82.5);
+    expect(amount).toBe(803.75);
   });
 
-  it("is 100% als er geen materiaal en arbeid in de calculatie zit", () => {
-    const { amount, pct } = commercialMargin(500, 0, 0);
+  it("geeft een rauwe fractie terug, niet een afgerond percentage", () => {
+    // Zou commercialMargin zelf afronden, dan rondde Intl daar nog eens overheen.
+    expect(commercialMargin(4050, 2763.75, 0, 0).pct).toBe(1286.25 / 4050);
+  });
+
+  it("is 100% als er geen materiaal, arbeid en voorrijkosten in de calculatie zitten", () => {
+    const { amount, pct } = commercialMargin(500, 0, 0, 0);
     expect(amount).toBe(500);
     expect(formatPercent(pct!)).toBe("100,0%");
   });
 
   it("wordt negatief als de prijs onder de inkoop ligt", () => {
-    const { amount, pct } = commercialMargin(2000, 2763.75, 0);
+    const { amount, pct } = commercialMargin(2000, 2763.75, 0, 0);
     expect(amount).toBe(-763.75);
     expect(formatPercent(pct!)).toBe("-38,2%");
   });
 
   it("heeft geen percentage zonder commerciële prijs", () => {
-    expect(commercialMargin(0, 0, 0)).toEqual({ amount: 0, pct: null });
-    expect(commercialMargin(0, 500, 0)).toEqual({ amount: -500, pct: null });
+    expect(commercialMargin(0, 0, 0, 0)).toEqual({ amount: 0, pct: null });
+    expect(commercialMargin(0, 500, 0, 0)).toEqual({ amount: -500, pct: null });
   });
 });
 

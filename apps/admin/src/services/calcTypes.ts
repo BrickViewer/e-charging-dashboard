@@ -100,15 +100,16 @@ export interface CommercialMargin {
 
 /**
  * Wat er van een offerte overblijft: commerciële prijs minus de netto
- * materiaalinkoop en de arbeidsinkoop bij e-group (uren × inkooptarief), als
+ * materiaalinkoop, de arbeidsinkoop bij e-group (uren × inkooptarief) én de
+ * voorrijkosten (die worden één-op-één doorbetaald aan e-group), als
  * percentage van de commerciële prijs (zoals `serviceFeePct` in de
  * pricing-engine).
  *
- * De marge op arbeid (verkoop- minus inkooptarief) en de voorrijkosten zitten
- * dus in dit bedrag; het is een brutomarge, geen nettowinst.
+ * De marge op arbeid (verkoop- minus inkooptarief) zit dus in dit bedrag; op
+ * voorrijkosten wordt niets verdiend. Het is een brutomarge, geen nettowinst.
  */
-export function commercialMargin(commercialPrice: number, materialCost: number, laborCost: number): CommercialMargin {
-  const amount = r2(commercialPrice - materialCost - laborCost);
+export function commercialMargin(commercialPrice: number, materialCost: number, laborCost: number, travelCost: number): CommercialMargin {
+  const amount = r2(commercialPrice - materialCost - laborCost - travelCost);
   return { amount, pct: commercialPrice > 0 ? amount / commercialPrice : null };
 }
 

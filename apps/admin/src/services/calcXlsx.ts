@@ -46,8 +46,8 @@ export async function buildCalcXlsx(input: CalcXlsxInput): Promise<Uint8Array> {
   const rTot = cover.addRow(["Totaal calculatie:", input.totals.totalSell]);
   const rPrijs = cover.addRow(["Commerciële prijs installatie:", input.commercialPrice]);
   const rMargeTot = cover.addRow([
-    "Marge (comm. prijs − materiaal inkoop − arbeid inkoop):",
-    commercialMargin(input.commercialPrice, input.totals.materialCost, input.totals.laborCost).amount,
+    "Marge (comm. prijs − materiaal inkoop − arbeid inkoop − voorrijkosten):",
+    commercialMargin(input.commercialPrice, input.totals.materialCost, input.totals.laborCost, input.totals.travelSell).amount,
   ]);
   rTot.font = bold;
   rPrijs.font = bold;

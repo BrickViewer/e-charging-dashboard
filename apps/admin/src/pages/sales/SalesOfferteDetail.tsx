@@ -30,6 +30,8 @@ import { LeadPicker } from "@/components/contacts/LeadPicker";
 import { ObjectPicker } from "@/components/contacts/ObjectPicker";
 import { offerPdfBlob, offerPdfBase64, echargingSignature, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
 import { DEFAULT_LEVERING_TEXT, defaultBeheerIntro } from "@/services/offerTemplate";
+import { commercialMargin } from "@/services/calcTypes";
+import { formatPercent } from "@/services/calculations";
 import { DEFAULT_OFFER_EMAIL, defaultOfferEmail, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -69,6 +71,12 @@ export default function SalesOfferteDetail() {
   const calcQ = useQuoteCalculation(id);
   const calc = calcQ.data?.calc ?? null;
   const hasFinalizedCalc = calc?.status === "afgerond";
+  // Kerncijfers voor de kaart: dezelfde marge-formule als de Marge-kaart in de
+  // calculator, uit de opgeslagen totalen (labor_cost is een generated kolom).
+  const calcPrijs = hasFinalizedCalc ? Number(calc!.offer_price_rounded ?? calc!.total_sell) : null;
+  const calcMarge = calcPrijs == null
+    ? null
+    : commercialMargin(calcPrijs, Number(calc!.material_cost), Number(calc!.labor_cost ?? 0), Number(calc!.travel_sell));
   // Eén prijs i.p.v. losse offerteregels — calculatie gebeurt in Excel.
   const [price, setPrice] = useState("");
   const [email, setEmail] = useState("");
@@ -645,10 +653,22 @@ export default function SalesOfferteDetail() {
                 ) : calc.status === "concept" ? (
                   <span className="text-muted-foreground">Concept-calculatie — nog niet afgerond.</span>
                 ) : (
-                  <span>
-                    Afgerond: materiaal <strong className="tabular-nums">{euro(Number(calc.material_cost))}</strong> inkoop → totaal{" "}
-                    <strong className="tabular-nums">{euro(Number(calc.total_sell))}</strong>{" "}
-                    <span className="text-primary">(marge materiaal {euro(Number(calc.margin_material ?? 0))})</span>
+                  <span className="flex flex-wrap items-baseline gap-x-5 gap-y-0.5">
+                    <span className="text-muted-foreground">
+                      Commerciële prijs <strong className="tabular-nums text-foreground">{euro(calcPrijs ?? 0)}</strong>
+                    </span>
+                    <span className="text-muted-foreground">
+                      Marge{" "}
+                      <strong className={`tabular-nums ${(calcMarge?.amount ?? 0) <= 0 ? "text-destructive" : "text-primary"}`}>
+                        {euro(calcMarge?.amount ?? 0)}
+                      </strong>
+                    </span>
+                    <span className="text-muted-foreground">
+                      Marge %{" "}
+                      <strong className={`tabular-nums ${(calcMarge?.amount ?? 0) <= 0 ? "text-destructive" : "text-primary"}`}>
+                        {calcMarge?.pct == null ? "—" : formatPercent(calcMarge.pct)}
+                      </strong>
+                    </span>
                   </span>
                 )}
               </div>
