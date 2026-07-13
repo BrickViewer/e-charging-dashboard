@@ -2244,6 +2244,86 @@ export type Database = {
         }
         Relationships: []
       }
+      installation_order_materials: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          installation_order_id: string
+          order_number: string | null
+          organization_id: string
+          position: number
+          product_id: string | null
+          qty: number
+          source_line_id: string | null
+          status: string
+          supplier: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          installation_order_id: string
+          order_number?: string | null
+          organization_id: string
+          position?: number
+          product_id?: string | null
+          qty?: number
+          source_line_id?: string | null
+          status?: string
+          supplier?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          installation_order_id?: string
+          order_number?: string | null
+          organization_id?: string
+          position?: number
+          product_id?: string | null
+          qty?: number
+          source_line_id?: string | null
+          status?: string
+          supplier?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installation_order_materials_installation_order_id_fkey"
+            columns: ["installation_order_id"]
+            isOneToOne: false
+            referencedRelation: "installation_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installation_order_materials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installation_order_materials_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installation_order_materials_source_line_id_fkey"
+            columns: ["source_line_id"]
+            isOneToOne: false
+            referencedRelation: "quote_calculation_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       installation_orders: {
         Row: {
           client_id: string | null
@@ -2262,8 +2342,11 @@ export type Database = {
           invoiced_at: string | null
           last_sync_error: string | null
           lead_id: string | null
+          materials_expected_at: string | null
+          materials_synced_at: string | null
           notes: string | null
           organization_id: string
+          preparation_notes: string | null
           quote_id: string | null
           scheduled_date: string | null
           service_category: string
@@ -2277,6 +2360,7 @@ export type Database = {
           site_street: string | null
           status: string
           updated_at: string
+          work_prep_started_at: string | null
         }
         Insert: {
           client_id?: string | null
@@ -2295,8 +2379,11 @@ export type Database = {
           invoiced_at?: string | null
           last_sync_error?: string | null
           lead_id?: string | null
+          materials_expected_at?: string | null
+          materials_synced_at?: string | null
           notes?: string | null
           organization_id: string
+          preparation_notes?: string | null
           quote_id?: string | null
           scheduled_date?: string | null
           service_category?: string
@@ -2310,6 +2397,7 @@ export type Database = {
           site_street?: string | null
           status?: string
           updated_at?: string
+          work_prep_started_at?: string | null
         }
         Update: {
           client_id?: string | null
@@ -2328,8 +2416,11 @@ export type Database = {
           invoiced_at?: string | null
           last_sync_error?: string | null
           lead_id?: string | null
+          materials_expected_at?: string | null
+          materials_synced_at?: string | null
           notes?: string | null
           organization_id?: string
+          preparation_notes?: string | null
           quote_id?: string | null
           scheduled_date?: string | null
           service_category?: string
@@ -2343,6 +2434,7 @@ export type Database = {
           site_street?: string | null
           status?: string
           updated_at?: string
+          work_prep_started_at?: string | null
         }
         Relationships: [
           {
@@ -4987,6 +5079,7 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      start_work_preparation: { Args: { p_order_id: string }; Returns: number }
       unapprove_settlements: {
         Args: { settlement_ids: string[] }
         Returns: {

@@ -53,6 +53,24 @@ export function mapEgroupStatus(
   }
 }
 
+// ── Materiaalstatus-aggregatie (Contract 3) ─────────────────────────────────
+// Werkvoorbereiding houdt per materiaal een bestelstatus bij; de e-portal-
+// planner ziet één fase per opdracht. "Slechtste toestand wint": zolang iets
+// nog besteld moet worden is de opdracht te_bestellen; alles besteld maar nog
+// niet binnen = besteld; pas als elke relevante regel binnen is = binnen.
+// niet_nodig is neutraal; geen (relevante) materialen = niet_nodig (tevens de
+// e-portal-default, dus consistent vóór de eerste sync).
+export const MATERIAL_STATUSES = ["niet_nodig", "te_bestellen", "besteld", "binnen"] as const;
+export type MaterialStatus = (typeof MATERIAL_STATUSES)[number];
+
+export function aggregatePreparationStatus(statuses: readonly MaterialStatus[]): MaterialStatus {
+  const relevant = statuses.filter((s) => s !== "niet_nodig");
+  if (relevant.length === 0) return "niet_nodig";
+  if (relevant.includes("te_bestellen")) return "te_bestellen";
+  if (relevant.includes("besteld")) return "besteld";
+  return "binnen";
+}
+
 // ── Payload-contract (Contract 1) ───────────────────────────────────────────
 export interface HandoffLine {
   description: string;

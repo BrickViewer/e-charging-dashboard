@@ -63,7 +63,14 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
         notes: emptyToNull(form.notes),
       } });
       const res = await handoff.mutateAsync(order.id);
-      if (res.status === "validation_error") { toast.error("Vul het site-adres compleet aan: straat, huisnummer, postcode, plaats"); return; }
+      if (res.status === "validation_error") {
+        toast.error(
+          res.reason === "work_prep"
+            ? (res.message ?? "Werkvoorbereiding is nog niet afgerond — bestel eerst alle materialen")
+            : "Vul het site-adres compleet aan: straat, huisnummer, postcode, plaats",
+        );
+        return;
+      }
       if (res.status === "not_configured") toast.warning("De installateur-koppeling (E-Group) is nog niet geconfigureerd");
       else toast.success(`Opdracht verstuurd naar de installateur${res.egroup_order_number ? ` (${res.egroup_order_number})` : ""}`);
       qc.invalidateQueries({ queryKey: ["onboarding-clients"] });

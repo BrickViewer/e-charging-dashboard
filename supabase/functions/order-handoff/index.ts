@@ -3,7 +3,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { buildHandoffPayload, validateSiteForHandoff } from "../_shared/installationHandoff.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
-import { EgroupApiError, EgroupClient } from "./egroup-api.ts";
+import { EgroupApiError, EgroupClient } from "../_shared/egroup-api.ts";
+import { pushMaterialStatusToEportal } from "../_shared/materialSync.ts";
 import { CORS_STD } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
 import { logoBrightUrl } from "../_shared/email-assets.ts";
@@ -61,8 +62,30 @@ Deno.serve(async (req) => {
     if (!siteCheck.ok) {
       return json({
         status: "validation_error",
+        reason: "site",
         missing: siteCheck.missing,
         message: `Vul eerst het site-adres aan: ${siteCheck.missing.join(", ")}`,
+      });
+    }
+
+    // Werkvoorbereiding-gate: gestart én niets meer op 'te_bestellen'. Verplicht
+    // óók als de lijst leeg is (starten is één klik en seedt uit de calculatie) —
+    // anders is de stap via de klantdetailpagina omzeilbaar. Staat bewust ná de
+    // idempotente short-circuit: een al verstuurde order blokkeert nooit.
+    const { data: openMats } = await sb
+      .from("installation_order_materials")
+      .select("description")
+      .eq("installation_order_id", orderId)
+      .eq("status", "te_bestellen");
+    const openCount = (openMats ?? []).length;
+    if (!order.work_prep_started_at || openCount > 0) {
+      return json({
+        status: "validation_error",
+        reason: "work_prep",
+        missing: (openMats ?? []).map((m: { description: string }) => m.description),
+        message: !order.work_prep_started_at
+          ? "Start eerst de werkvoorbereiding (materialenlijst uit de calculatie)"
+          : `Nog ${openCount} materia${openCount === 1 ? "al" : "len"} te bestellen`,
       });
     }
 
@@ -167,6 +190,15 @@ Deno.serve(async (req) => {
         }
       } catch (mailErr) {
         console.error("order-handoff notificatiemail mislukt", mailErr);
+      }
+
+      // Materiaalstatus direct meegeven aan de planner — anders staat de
+      // opdracht op de e-portal-default 'niet_nodig' tot de eerstvolgende
+      // mutatie. Best-effort: mag de handoff nooit laten falen.
+      try {
+        await pushMaterialStatusToEportal(sb, orderId);
+      } catch (syncErr) {
+        console.error("order-handoff materiaalsync mislukt", syncErr);
       }
 
       return json({ status: "ok", egroup_order_id: result.order_id, egroup_order_number: result.order_number });

@@ -1,11 +1,34 @@
 import { describe, expect, it } from "vitest";
 import {
+  aggregatePreparationStatus,
   buildHandoffPayload,
   deriveServiceSummary,
   mapEgroupStatus,
   splitDutchAddress,
   validateSiteForHandoff,
 } from "./installationHandoff";
+
+describe("aggregatePreparationStatus", () => {
+  it("is niet_nodig zonder materialen of met alleen niet_nodig-regels", () => {
+    expect(aggregatePreparationStatus([])).toBe("niet_nodig");
+    expect(aggregatePreparationStatus(["niet_nodig", "niet_nodig"])).toBe("niet_nodig");
+  });
+
+  it("laat de slechtste toestand winnen: één te_bestellen kleurt de hele opdracht", () => {
+    expect(aggregatePreparationStatus(["binnen", "besteld", "te_bestellen"])).toBe("te_bestellen");
+    expect(aggregatePreparationStatus(["binnen", "binnen", "te_bestellen"])).toBe("te_bestellen");
+  });
+
+  it("is besteld zolang niet alles binnen is", () => {
+    expect(aggregatePreparationStatus(["besteld", "binnen"])).toBe("besteld");
+    expect(aggregatePreparationStatus(["besteld"])).toBe("besteld");
+  });
+
+  it("is pas binnen als elke relevante regel binnen is; niet_nodig telt niet mee", () => {
+    expect(aggregatePreparationStatus(["binnen", "binnen"])).toBe("binnen");
+    expect(aggregatePreparationStatus(["binnen", "niet_nodig"])).toBe("binnen");
+  });
+});
 
 describe("splitDutchAddress", () => {
   it("splitst straat en huisnummer met toevoeging", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Send, Plug, MailPlus, ExternalLink, Clock, ArrowRight, Receipt, UserPlus } from "lucide-react";
+import { Send, Plug, MailPlus, ExternalLink, Clock, ArrowRight, Receipt, UserPlus, PackageOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -16,8 +16,11 @@ import {
 import { clientScope, scopeFromFlags, SCOPE_LABEL, SCOPE_SHORT, SCOPE_BADGE_CLASS, type QuoteScope } from "@/lib/quoteScope";
 import { OnboardingHandoffDialog } from "@/components/sales/OnboardingHandoffDialog";
 import { OnboardingInvoiceDialog } from "@/components/sales/OnboardingInvoiceDialog";
+import { OnboardingMaterialsDialog } from "@/components/sales/OnboardingMaterialsDialog";
 import { CreateClientFromQuoteDialog, type QuoteForClient } from "@/components/sales/CreateClientFromQuoteDialog";
 import { useSignedQuotesAwaitingClient } from "@/hooks/useQuotes";
+import { useStartWorkPreparation } from "@/hooks/useOrderMaterials";
+import { materialsProgressLabel } from "@/services/workPreparation";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 
@@ -28,15 +31,17 @@ const SCOPE_FILTERS: { key: QuoteScope; label: string }[] = [
 ];
 
 function NextAction({
-  client, stage, onLink, onInvite, onHandoff, onInvoice, onCreate, inviting, navigate,
+  client, stage, onLink, onInvite, onInvoice, onCreate, onStartPrep, onMaterials, startingPrep, inviting, navigate,
 }: {
   client: OnboardingClient;
   stage: OnboardingStage;
   onLink: (c: OnboardingClient) => void;
   onInvite: (c: OnboardingClient) => void;
-  onHandoff: (c: OnboardingClient) => void;
   onInvoice: (c: OnboardingClient) => void;
   onCreate: (c: OnboardingClient) => void;
+  onStartPrep: (c: OnboardingClient) => void;
+  onMaterials: (c: OnboardingClient) => void;
+  startingPrep: boolean;
   inviting: boolean;
   navigate: (to: string) => void;
 }) {
@@ -46,11 +51,36 @@ function NextAction({
   const ico = "mr-1.5 h-3.5 w-3.5 shrink-0";
   switch (stage) {
     case "getekend":
-      return <Button size="sm" className={btn} disabled={!order} onClick={() => onHandoff(client)}><Send className={ico} /> Doorsturen</Button>;
+      // Doorsturen kan pas ná de werkvoorbereiding (materialen bestellen) — de
+      // volgende stap is dus de checklist aanmaken uit de calculatie.
+      return (
+        <Button size="sm" className={btn} disabled={!order || startingPrep} onClick={() => onStartPrep(client)}>
+          <PackageOpen className={ico} /> Werkvoorbereiding starten
+        </Button>
+      );
+    case "werkvoorbereiding":
+      return (
+        <div className="space-y-1.5">
+          <p className="text-center text-[11px] tabular-nums text-muted-foreground">
+            {materialsProgressLabel(order?.installation_order_materials ?? [])}
+          </p>
+          <Button size="sm" className={btn} onClick={() => onMaterials(client)}>
+            <PackageOpen className={ico} /> Materialen
+          </Button>
+        </div>
+      );
     case "bij_installateur":
       return (
-        <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-center text-[11px] leading-tight text-muted-foreground">
-          <Clock className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{order?.egroup_order_number ? `Verstuurd · ${order.egroup_order_number}` : "Verstuurd — wacht op oplevering"}</span>
+        <div className="space-y-1.5">
+          <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-center text-[11px] leading-tight text-muted-foreground">
+            <Clock className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{order?.egroup_order_number ? `Verstuurd · ${order.egroup_order_number}` : "Verstuurd — wacht op oplevering"}</span>
+          </div>
+          {/* Ná de handoff nog materialen "binnen" kunnen melden voor de planner. */}
+          {order?.work_prep_started_at && (
+            <Button size="sm" variant="ghost" className={btn} onClick={() => onMaterials(client)}>
+              <PackageOpen className={ico} /> Materialen
+            </Button>
+          )}
         </div>
       );
     case "opgeleverd":
@@ -132,8 +162,10 @@ export default function SalesOnboarding() {
   const { data: orders } = useOnboardingOrders();
   const { data: awaiting } = useSignedQuotesAwaitingClient();
   const sendInvite = useSendOnboardingInvite();
+  const startPrep = useStartWorkPreparation();
   const [linkFor, setLinkFor] = useState<OnboardingClient | null>(null);
   const [handoffFor, setHandoffFor] = useState<OnboardingClient | null>(null);
+  const [materialsFor, setMaterialsFor] = useState<OnboardingClient | null>(null);
   const [invoiceFor, setInvoiceFor] = useState<OnboardingClient | null>(null);
   const [createFor, setCreateFor] = useState<QuoteForClient | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
@@ -155,11 +187,28 @@ export default function SalesOnboarding() {
 
   const byStage = useMemo(() => {
     const map: Record<OnboardingStage, OnboardingClient[]> = {
-      getekend: [], bij_installateur: [], opgeleverd: [], klant_aanmaken: [], locaties_koppelen: [], klant_uitnodigen: [], gegevens: [], archief: [],
+      getekend: [], werkvoorbereiding: [], bij_installateur: [], opgeleverd: [], klant_aanmaken: [], locaties_koppelen: [], klant_uitnodigen: [], gegevens: [], archief: [],
     };
     for (const c of filteredClients) map[deriveStage(c)].push(c);
     return map;
   }, [filteredClients]);
+
+  // De dialog leest de VERSE kaart uit de query-data (statussen/teller bewegen
+  // mee); de state houdt alleen vast wélke kaart open is.
+  const materialsClient = materialsFor ? (filteredClients.find((c) => c.id === materialsFor.id) ?? materialsFor) : null;
+  const materialsOrder = materialsClient ? primaryOrder(materialsClient) : null;
+
+  const onStartPrep = async (c: OnboardingClient) => {
+    const order = primaryOrder(c);
+    if (!order) return;
+    try {
+      const seeded = await startPrep.mutateAsync(order.id);
+      toast.success(seeded > 0 ? `Werkvoorbereiding gestart — ${seeded} materialen uit de calculatie` : "Werkvoorbereiding gestart");
+      setMaterialsFor(c);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Werkvoorbereiding starten mislukt");
+    }
+  };
 
   const onInvite = async (c: OnboardingClient) => {
     setInvitingId(c.id);
@@ -261,8 +310,10 @@ export default function SalesOnboarding() {
                       </div>
                       <NextAction
                         client={c} stage={s.key}
-                        onLink={setLinkFor} onInvite={onInvite} onHandoff={setHandoffFor} onInvoice={setInvoiceFor}
+                        onLink={setLinkFor} onInvite={onInvite} onInvoice={setInvoiceFor}
                         onCreate={(cl) => cl._quoteForClient && setCreateFor(cl._quoteForClient)}
+                        onStartPrep={onStartPrep} onMaterials={setMaterialsFor}
+                        startingPrep={startPrep.isPending}
                         inviting={invitingId === c.id} navigate={navigate}
                       />
                     </div>
@@ -277,6 +328,17 @@ export default function SalesOnboarding() {
       )}
 
       <LinkLocationDialog client={linkFor} onClose={() => setLinkFor(null)} />
+      <OnboardingMaterialsDialog
+        order={materialsOrder}
+        title={materialsClient?.company_name}
+        onClose={() => setMaterialsFor(null)}
+        onSend={() => {
+          // Gate is groen: door naar de bestaande handoff-dialog (adres/contact).
+          const client = materialsClient;
+          setMaterialsFor(null);
+          if (client) setHandoffFor(client);
+        }}
+      />
       <OnboardingHandoffDialog client={handoffFor} onClose={() => setHandoffFor(null)} />
       <OnboardingInvoiceDialog client={invoiceFor} onClose={() => setInvoiceFor(null)} />
       <CreateClientFromQuoteDialog quote={createFor} open={!!createFor} onClose={() => setCreateFor(null)} onCreated={(id) => navigate(`/admin/klanten/${id}`)} />

@@ -44,6 +44,19 @@ export function mapEgroupStatus(
   }
 }
 
+// Materiaalstatus-aggregatie (Contract 3): "slechtste toestand wint";
+// niet_nodig is neutraal, geen relevante materialen = niet_nodig.
+export const MATERIAL_STATUSES = ["niet_nodig", "te_bestellen", "besteld", "binnen"] as const;
+export type MaterialStatus = (typeof MATERIAL_STATUSES)[number];
+
+export function aggregatePreparationStatus(statuses: readonly MaterialStatus[]): MaterialStatus {
+  const relevant = statuses.filter((s) => s !== "niet_nodig");
+  if (relevant.length === 0) return "niet_nodig";
+  if (relevant.includes("te_bestellen")) return "te_bestellen";
+  if (relevant.includes("besteld")) return "besteld";
+  return "binnen";
+}
+
 export const REQUIRED_SITE_FIELDS = ["site_street", "site_house_number", "site_postal", "site_city"] as const;
 
 const SITE_LABELS: Record<string, string> = {

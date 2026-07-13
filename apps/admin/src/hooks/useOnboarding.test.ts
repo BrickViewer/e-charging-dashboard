@@ -9,16 +9,19 @@ import { deriveStage, isDetailsComplete, hasPendingInvite, type OnboardingClient
 
 const base: OnboardingClient = {
   id: "c1", company_name: "Acme", client_number: 101, status: "actief",
-  portal_user_id: null, contact_email: "a@b.nl", contact_name: "Jan", created_at: "2026-01-01",
-  payment_onboarding_status: null, vat_status: null, kvk: null, btw_number: null,
+  portal_user_id: null, contact_email: "a@b.nl", contact_name: "Jan", contact_phone: null, created_at: "2026-01-01",
+  payment_onboarding_status: null, needs_installation: null, managed: null, vat_status: null, kvk: null, btw_number: null,
   billing_address_street: null, billing_address_postal: null, billing_address_city: null,
   installation_orders: null, locations: null, client_invitations: null,
 };
 
 const order = (o: Partial<OnbOrder>): OnbOrder => ({
-  id: "o", status: null, egroup_order_id: null, egroup_order_number: null, external_status: null,
-  completed_at: null, invoiced_at: null, site_street: null, site_house_number: null, site_postal: null,
-  site_city: null, site_contact_name: null, site_contact_email: null, site_contact_phone: null, service_summary: null, ...o,
+  id: "o", quote_id: null, status: null, egroup_order_id: null, egroup_order_number: null, external_status: null,
+  completed_at: null, invoiced_at: null, work_prep_started_at: null, materials_expected_at: null,
+  preparation_notes: null, materials_synced_at: null, last_sync_error: null,
+  site_street: null, site_house_number: null, site_postal: null,
+  site_city: null, site_contact_name: null, site_contact_email: null, site_contact_phone: null,
+  service_summary: null, notes: null, ...o,
 });
 
 // Klant met alle gegevens compleet (particulier: geen KvK/BTW nodig).
@@ -37,6 +40,35 @@ describe("deriveStage", () => {
   });
   it("doorgestuurd (egroup_order_id) → bij_installateur", () => {
     expect(deriveStage({ ...base, installation_orders: [order({ status: "overgedragen", egroup_order_id: "EG1" })] })).toBe("bij_installateur");
+  });
+  it("werkvoorbereiding gestart, nog niet doorgestuurd → werkvoorbereiding", () => {
+    expect(deriveStage({ ...base, installation_orders: [order({ status: "nieuw", work_prep_started_at: "2026-07-14" })] })).toBe("werkvoorbereiding");
+  });
+  it("werkvoorbereiding + doorgestuurd → bij_installateur (geen terugval)", () => {
+    expect(deriveStage({
+      ...base,
+      installation_orders: [order({ status: "overgedragen", work_prep_started_at: "2026-07-14", egroup_order_id: "EG1" })],
+    })).toBe("bij_installateur");
+  });
+  it("werkvoorbereiding + opgeleverd → opgeleverd (geen terugval)", () => {
+    expect(deriveStage({
+      ...base,
+      installation_orders: [order({ status: "afgerond", work_prep_started_at: "2026-07-14", egroup_order_id: "EG1", completed_at: "2026-07-20" })],
+    })).toBe("opgeleverd");
+  });
+  it("order-only: werkvoorbereiding gestart → werkvoorbereiding", () => {
+    expect(deriveStage({
+      ...base, is_order_only: true, managed: false,
+      installation_orders: [order({ status: "nieuw", work_prep_started_at: "2026-07-14" })],
+    })).toBe("werkvoorbereiding");
+  });
+  it("tweede, al verstuurde order trekt de fase niet terug naar werkvoorbereiding", () => {
+    expect(deriveStage({
+      ...base,
+      installation_orders: [
+        order({ id: "o1", status: "overgedragen", work_prep_started_at: "2026-07-01", egroup_order_id: "EG1" }),
+      ],
+    })).toBe("bij_installateur");
   });
   it("opgeleverd (afgerond), niet gefactureerd → opgeleverd", () => {
     expect(deriveStage({ ...base, installation_orders: [order({ status: "afgerond", egroup_order_id: "EG1", completed_at: "2026-06-01" })] })).toBe("opgeleverd");

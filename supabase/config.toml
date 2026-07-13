@@ -107,6 +107,9 @@ verify_jwt = false
 [functions.order-handoff]
 verify_jwt = true
 
+[functions.order-material-sync]
+verify_jwt = true
+
 [functions.password-reset]
 verify_jwt = false
 

@@ -1,21 +1,18 @@
-// ============================================================================
-// E-GROUP PORTAL — edge function `intake-external-order` (verify_jwt=false)
-// Project: natxaneygihzzszabmcv. REFERENTIE-kopie van de live deploy (v5) —
-// de live functie is de bron van waarheid; haal bij twijfel de actuele bron op
-// via MCP `get_edge_function` en werk deze kopie bij.
-// v5: het aanmaken van order + regels + read-only klantspiegel
-// (external_order_mirrors) gebeurt atomair via de SECURITY DEFINER RPC
-// `create_external_order` in de e-portal-DB (idempotent op external_reference).
-// ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// Ontvangt installatie-opdrachten van externe systemen (bv. E-Charging dashboard).
-// E-Charging is de bron van waarheid: klant/contact/locatie-contact/installatieadres
-// worden NIET in de CRM (organizations/persons/projects) opgeslagen, maar als
-// read-only spiegel (external_order_mirrors) gekoppeld aan de order. Het aanmaken
-// van order + regels + spiegel gebeurt atomair via de RPC create_external_order.
-// verify_jwt=false; auth via gedeelde secret-header. Idempotent op external_reference.
+// REFERENTIEKOPIE — draait als edge function `sync-material-status` in het
+// e-portal-project (natxaneygihzzszabmcv); de live deploy is de bron van
+// waarheid. Bij wijzigen: opnieuw deployen via MCP én deze kopie bijwerken.
+//
+// Ontvangt materiaal-bestelstatus-updates van het E-Charging dashboard
+// (Contract 3, zie README.md). E-Charging is de bron van waarheid: elke call
+// bevat de volledige actuele staat (aggregaat over de werkvoorbereidings-
+// checklist) en is daarmee idempotent en laatste-wint. De update raakt ALLE
+// order_lines van de opdracht (order-brede semantiek; e-charging-orders hebben
+// er precies één). Scope strikt op source='e_charging_dashboard' — eigen
+// e-portal-opdrachten zijn onbereikbaar via dit endpoint.
+// verify_jwt=false; auth via gedeelde secret-header (zelfde secret als intake).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,7 +42,7 @@ async function resolveSecret(sb: any, envKey: string, vaultName: string): Promis
   return (data as string | null) ?? null;
 }
 
-const SERVICE_CATEGORIES = ["e_check", "e_charging", "e_make", "e_maintenance"];
+const PREPARATION_STATUSES = ["niet_nodig", "te_bestellen", "besteld", "binnen"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -66,25 +63,43 @@ Deno.serve(async (req) => {
   try {
     const p = await req.json().catch(() => ({}));
 
-    // Lichte validatie aan de rand (de RPC valideert nogmaals binnen de transactie).
     const externalReference = typeof p.external_reference === "string" ? p.external_reference : "";
     if (!externalReference) return json({ status: "error", message: "external_reference vereist" }, 400);
-    if (p.service_category && !SERVICE_CATEGORIES.includes(p.service_category)) {
-      p.service_category = "e_charging";
+    if (!PREPARATION_STATUSES.includes(p.preparation_status)) {
+      return json({ status: "error", message: "preparation_status ongeldig (niet_nodig|te_bestellen|besteld|binnen)" }, 400);
     }
-    const site = p.site ?? {};
-    const customer = p.customer ?? {};
-    if (!site.street || !site.house_number || !site.postal_code || !site.city) {
-      return json({ status: "error", message: "site adres incompleet (street/house_number/postal_code/city)" }, 400);
-    }
-    if (!customer.name) return json({ status: "error", message: "customer.name vereist" }, 400);
+    const expectedAt =
+      typeof p.materials_expected_at === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.materials_expected_at)
+        ? p.materials_expected_at
+        : null;
+    const notes =
+      typeof p.preparation_notes === "string" && p.preparation_notes.trim() ? p.preparation_notes.trim() : null;
 
-    // Atomair: order + regels + spiegel in één transactie. Idempotent op external_reference.
-    const { data, error } = await sb.rpc("create_external_order", { p_payload: p });
-    if (error) return json({ status: "error", message: error.message }, 500);
+    const { data: order, error: findErr } = await sb
+      .from("orders")
+      .select("id, order_number")
+      .eq("external_reference", externalReference)
+      .eq("source", "e_charging_dashboard")
+      .maybeSingle();
+    if (findErr) return json({ status: "error", message: findErr.message }, 500);
+    // Onbekende order is voor e-charging niet fataal (wijst op drift); 404 zodat
+    // de afzender het kan registreren.
+    if (!order) return json({ status: "not_found", message: "Order onbekend" }, 404);
 
-    return json(data);
+    const { data: updated, error: updErr } = await sb
+      .from("order_lines")
+      .update({
+        preparation_status: p.preparation_status,
+        materials_expected_at: expectedAt,
+        preparation_notes: notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("order_id", order.id)
+      .select("id");
+    if (updErr) return json({ status: "error", message: updErr.message }, 500);
+
+    return json({ status: "ok", order_id: order.id, order_number: order.order_number, lines_updated: (updated ?? []).length });
   } catch (err) {
-    return json({ status: "error", message: err instanceof Error ? err.message : "Intake mislukt" }, 500);
+    return json({ status: "error", message: err instanceof Error ? err.message : "Sync mislukt" }, 500);
   }
 });

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { queueMaterialSync } from "@/hooks/useOrderMaterials";
 import type { Database } from "@/integrations/supabase/types";
 
 export type InstallationOrder = Database["public"]["Tables"]["installation_orders"]["Row"];
@@ -13,8 +14,11 @@ export const ORDER_STATUSES = ["nieuw", "overgedragen", "ingepland", "geinstalle
 
 // Resultaat van de order-handoff edge function. status 'not_configured' en
 // 'validation_error' zijn info-paden (geen harde fout): de UI handelt ze apart af.
+// reason onderscheidt de validaties: incompleet adres ('site') vs. werkvoorbereiding
+// niet gestart/afgerond ('work_prep').
 export type HandoffResult = {
   status: "ok" | "not_configured" | "validation_error" | "error";
+  reason?: "site" | "work_prep";
   egroup_order_id?: string;
   egroup_order_number?: string;
   already_sent?: boolean;
@@ -97,9 +101,13 @@ export function useHandoffOrder() {
       if (data?.status === "error") throw new Error(data.message || "Overdracht mislukt");
       return data ?? { status: "error", message: "Lege respons" };
     },
-    onSuccess: () => {
+    onSuccess: (data, orderId) => {
       qc.invalidateQueries({ queryKey: ["installation-orders"] });
       qc.invalidateQueries({ queryKey: ["client-orders"] });
+      // De edge pusht de materiaalstatus zelf al mee bij een verse handoff;
+      // deze best-effort call dekt het already_sent-pad en is verder onschadelijk
+      // (aggregaat, laatste-wint).
+      if (data.status === "ok") queueMaterialSync(orderId);
     },
   });
 }

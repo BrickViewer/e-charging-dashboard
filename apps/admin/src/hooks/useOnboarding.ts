@@ -2,13 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { linkLocationToClient } from "@/services/locations";
 import { type QuoteScope } from "@/lib/quoteScope";
+import type { MaterialStatus } from "@/services/installationHandoff";
 import type { QuoteForClient } from "@/components/sales/CreateClientFromQuoteDialog";
 
 // De onboarding-fase wordt AFGELEID uit de echte status (geen handmatig bijhouden).
-// Pijplijn: getekend → bij installateur → opgeleverd → locaties koppelen →
-// klant uitnodigen → gegevens toevoegen → archief.
+// Pijplijn: getekend → werkvoorbereiding → bij installateur → opgeleverd →
+// locaties koppelen → klant uitnodigen → gegevens toevoegen → archief.
 export type OnboardingStage =
   | "getekend"
+  | "werkvoorbereiding"
   | "bij_installateur"
   | "opgeleverd"
   | "klant_aanmaken"
@@ -18,7 +20,8 @@ export type OnboardingStage =
   | "archief";
 
 export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: string; hint: string }[] = [
-  { key: "getekend", label: "Getekend", color: "#6366f1", hint: "Doorsturen naar installateur" },
+  { key: "getekend", label: "Getekend", color: "#6366f1", hint: "Werkvoorbereiding starten" },
+  { key: "werkvoorbereiding", label: "Werkvoorbereiding", color: "#0ea5e9", hint: "Materialen bestellen" },
   { key: "bij_installateur", label: "Bij installateur", color: "#f59e0b", hint: "Wacht op oplevering" },
   { key: "opgeleverd", label: "Opgeleverd", color: "#06b6d4", hint: "Factureren" },
   { key: "klant_aanmaken", label: "Klant account aanmaken", color: "#a855f7", hint: "Maak het beheer-klantaccount aan" },
@@ -31,8 +34,8 @@ export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: st
 // Welke fases relevant zijn per scope. Installatie+beheer = volledige pijplijn; alleen-installatie stopt na
 // opleveren/factureren (geen portaal/beheer); alleen-beheer slaat de installateur-fases over.
 export const STAGES_BY_SCOPE: Record<QuoteScope, OnboardingStage[]> = {
-  installatie_beheer: ["getekend", "bij_installateur", "opgeleverd", "klant_aanmaken", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
-  alleen_installatie: ["getekend", "bij_installateur", "opgeleverd", "archief"],
+  installatie_beheer: ["getekend", "werkvoorbereiding", "bij_installateur", "opgeleverd", "klant_aanmaken", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
+  alleen_installatie: ["getekend", "werkvoorbereiding", "bij_installateur", "opgeleverd", "archief"],
   alleen_beheer: ["getekend", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
 };
 
@@ -45,6 +48,11 @@ export type OnbOrder = {
   external_status: string | null;
   completed_at: string | null;
   invoiced_at: string | null;
+  work_prep_started_at: string | null;
+  materials_expected_at: string | null;
+  preparation_notes: string | null;
+  materials_synced_at: string | null;
+  last_sync_error: string | null;
   site_street: string | null;
   site_house_number: string | null;
   site_postal: string | null;
@@ -54,6 +62,8 @@ export type OnbOrder = {
   site_contact_phone: string | null;
   service_summary: string | null;
   notes: string | null;
+  /** Alleen de statussen — voedt de voortgangsteller op de kaart. */
+  installation_order_materials?: { status: MaterialStatus }[] | null;
 };
 type OnbLocation = { id: string };
 type OnbInvite = { id: string; status: string | null };
@@ -90,7 +100,9 @@ const CLIENT_SELECT =
   "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, contact_phone, created_at, " +
   "payment_onboarding_status, needs_installation, managed, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
   "installation_orders(id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
-  "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes), " +
+  "work_prep_started_at, materials_expected_at, preparation_notes, materials_synced_at, last_sync_error, " +
+  "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes, " +
+  "installation_order_materials(status)), " +
   "locations(id, archived_at), client_invitations(id, status)";
 
 export function useOnboardingClients() {
@@ -121,7 +133,10 @@ export function useOnboardingClients() {
 type RawOrderOnly = {
   id: string; quote_id: string | null; status: string | null; egroup_order_id: string | null;
   egroup_order_number: string | null; external_status: string | null; completed_at: string | null;
-  invoiced_at: string | null; site_street: string | null; site_house_number: string | null;
+  invoiced_at: string | null; work_prep_started_at: string | null; materials_expected_at: string | null;
+  preparation_notes: string | null; materials_synced_at: string | null; last_sync_error: string | null;
+  installation_order_materials: { status: MaterialStatus }[] | null;
+  site_street: string | null; site_house_number: string | null;
   site_postal: string | null; site_city: string | null; site_contact_name: string | null;
   site_contact_email: string | null; site_contact_phone: string | null; service_summary: string | null;
   notes: string | null; created_at: string;
@@ -135,7 +150,9 @@ type RawOrderOnly = {
 
 const ORDER_ONLY_SELECT =
   "id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, " +
+  "work_prep_started_at, materials_expected_at, preparation_notes, materials_synced_at, last_sync_error, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes, created_at, " +
+  "installation_order_materials(status), " +
   "quotes(quote_number, prospect_company, prospect_contact, prospect_email, company_id, person_id, with_management, with_installation, charge_rate_per_kwh, energy_cost_per_kwh, calculation_snapshot, offer_details), " +
   "leads(company_name, contact_name, contact_email, contact_phone, address_street, postal_code, city)";
 
@@ -146,7 +163,11 @@ function mapOrderToClient(o: RawOrderOnly): OnboardingClient {
   const order: OnbOrder = {
     id: o.id, quote_id: o.quote_id, status: o.status, egroup_order_id: o.egroup_order_id,
     egroup_order_number: o.egroup_order_number, external_status: o.external_status, completed_at: o.completed_at,
-    invoiced_at: o.invoiced_at, site_street: o.site_street, site_house_number: o.site_house_number,
+    invoiced_at: o.invoiced_at, work_prep_started_at: o.work_prep_started_at,
+    materials_expected_at: o.materials_expected_at, preparation_notes: o.preparation_notes,
+    materials_synced_at: o.materials_synced_at, last_sync_error: o.last_sync_error,
+    installation_order_materials: o.installation_order_materials,
+    site_street: o.site_street, site_house_number: o.site_house_number,
     site_postal: o.site_postal, site_city: o.site_city, site_contact_name: o.site_contact_name,
     site_contact_email: o.site_contact_email, site_contact_phone: o.site_contact_phone,
     service_summary: o.service_summary, notes: o.notes,
@@ -205,6 +226,9 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
   const handedOff = orders.some((o) => !!o.egroup_order_id);
   const delivered = orders.some((o) => !!o.completed_at || o.status === "afgerond");
   const invoiced = orders.some((o) => !!o.invoiced_at);
+  // Werkvoorbereiding gestart maar nog niet verstuurd. De !egroup_order_id-check
+  // voorkomt dat een tweede, al verstuurde order de fase terugtrekt.
+  const inWorkPrep = orders.some((o) => !!o.work_prep_started_at && !o.egroup_order_id);
   const hasLocation = (c.locations ?? []).length > 0;
   const managed = c.managed !== false;
   const needsInstall = c.needs_installation !== false;
@@ -215,6 +239,7 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
     if (invoiced) return managed ? "klant_aanmaken" : "archief";
     if (delivered) return "opgeleverd";
     if (handedOff) return "bij_installateur";
+    if (inWorkPrep) return "werkvoorbereiding";
     return "getekend";
   }
 
@@ -223,6 +248,7 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
     if (invoiced) return "archief";
     if (delivered) return "opgeleverd";
     if (handedOff) return "bij_installateur";
+    if (inWorkPrep) return "werkvoorbereiding";
     return "getekend";
   }
 
@@ -235,6 +261,7 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
   if (invoiced) return "locaties_koppelen";
   if (delivered) return "opgeleverd";
   if (handedOff) return "bij_installateur";
+  if (inWorkPrep) return "werkvoorbereiding";
   return "getekend";
 }
 
