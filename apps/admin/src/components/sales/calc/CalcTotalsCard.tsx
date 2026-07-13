@@ -9,20 +9,20 @@ import { formatEuro as euro } from "@/services/calculations";
 
 export function CalcTotalsCard({
   totals,
-  offerPrice,
+  commercialPrice,
   roundStep,
   frozen,
-  onOfferPriceCommit,
+  onCommercialPriceCommit,
   onPickRoundStep,
 }: {
   totals: CalcTotals;
-  offerPrice: number;
+  commercialPrice: number;
   roundStep: number | null;
   frozen: boolean;
-  onOfferPriceCommit: (n: number) => void;
+  onCommercialPriceCommit: (n: number) => void;
   onPickRoundStep: (step: number) => void;
 }) {
-  const onderDeCalculatie = offerPrice < totals.totalSell;
+  const onderDeCalculatie = commercialPrice < totals.totalSell;
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -38,12 +38,12 @@ export function CalcTotalsCard({
         <TotalsRow label="Totaal calculatie" value={euro(totals.totalSell)} strong />
         {totals.stelpost > 0 && <TotalsRow label="Stelpost graafwerk (apart in offerte)" value={euro(totals.stelpost)} muted />}
         <div className="grid gap-1.5 pt-2">
-          <Label className="text-xs">Offerteprijs (afgerond)</Label>
+          <Label className="text-xs">Commerciële prijs (afgerond)</Label>
           <NumField
             className="h-9 text-right text-base font-semibold tabular-nums"
-            value={offerPrice}
+            value={commercialPrice}
             disabled={frozen}
-            onCommit={onOfferPriceCommit}
+            onCommit={onCommercialPriceCommit}
           />
 
           {/* Snel afronden op een rond bedrag. Altijd naar boven, en altijd

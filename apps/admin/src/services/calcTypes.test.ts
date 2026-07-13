@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  commercialMargin,
+  commercialPriceFor,
   computeTotals,
-  GEEN_OFFERPRIJS_KEUZE,
+  GEEN_COMMERCIELE_PRIJS_KEUZE,
   hoursSplit,
-  offerMargin,
-  offerPriceFor,
   r2,
-  restoreOfferChoice,
+  restoreCommercialPriceChoice,
   roundUpTo,
   sectionOfLine,
   sectionSellSubtotal,
@@ -19,6 +19,7 @@ import { formatPercent } from "./calculations";
 
 const header: CalcHeaderDraft = {
   hourly_rate: 60,
+  labor_cost_rate: 50,
   km_price: 0.75,
   retour_km: 110,
   travel_days: 1,
@@ -57,11 +58,13 @@ describe("computeTotals", () => {
     expect(t.marginMaterial).toBe(690.93);
     expect(t.hoursTotal).toBe(8);
     expect(t.laborSell).toBe(480); // 8 × 60 — als in de Excel
+    expect(t.laborCost).toBe(400); // 8 × 50 — inkoop bij e-group, alleen marge
     expect(t.travelSell).toBe(82.5); // 110 × 0.75 × 1 — als in de Excel
+    // De arbeidsinkoop zit NIET in het verkooptotaal
     expect(t.totalSell).toBe(3454.68 + 480 + 82.5);
-    // Stelpost telt NIET mee in de offerteprijs (staat apart in de offerte)
+    // Stelpost telt NIET mee in de commerciële prijs (staat apart in de offerte)
     expect(t.stelpost).toBe(900);
-    expect(t.suggestedOfferPrice).toBe(Math.ceil(t.totalSell));
+    expect(t.suggestedCommercialPrice).toBe(Math.ceil(t.totalSell));
   });
 
   it("telt calculatietijd op productregels mee in de uren", () => {
@@ -69,7 +72,17 @@ describe("computeTotals", () => {
     const t = computeTotals(lines, { ...header, retour_km: 0, stelpost_graafwerk: 0 });
     expect(t.hoursTotal).toBe(3);
     expect(t.laborSell).toBe(180);
+    expect(t.laborCost).toBe(150);
     expect(t.totalSell).toBe(200 + 180);
+  });
+
+  it("het inkooptarief raakt het verkooptotaal en het prijsvoorstel nooit", () => {
+    const lines: CalcLineDraft[] = [line({ line_type: "uren", unit: "uur", qty: 8, unit_hours: 1 })];
+    const goedkoop = computeTotals(lines, { ...header, labor_cost_rate: 10 });
+    const duur = computeTotals(lines, { ...header, labor_cost_rate: 90 });
+    expect(duur.totalSell).toBe(goedkoop.totalSell);
+    expect(duur.suggestedCommercialPrice).toBe(goedkoop.suggestedCommercialPrice);
+    expect(duur.laborCost - goedkoop.laborCost).toBe(8 * 80);
   });
 });
 
@@ -97,71 +110,78 @@ describe("roundUpTo", () => {
   });
 });
 
-describe("offerMargin", () => {
-  it("trekt de materiaalinkoop van de offerteprijs af", () => {
-    const { amount, pct } = offerMargin(4050, 2763.75);
+describe("commercialMargin", () => {
+  it("trekt de materiaalinkoop van de commerciële prijs af", () => {
+    const { amount, pct } = commercialMargin(4050, 2763.75, 0);
     expect(amount).toBe(1286.25);
     expect(formatPercent(pct!)).toBe("31,8%");
   });
 
-  it("geeft een rauwe fractie terug, niet een afgerond percentage", () => {
-    // Zou offerMargin zelf afronden, dan rondde Intl daar nog eens overheen.
-    expect(offerMargin(4050, 2763.75).pct).toBe(1286.25 / 4050);
+  it("trekt óók de arbeidsinkoop bij e-group af", () => {
+    // Excel-voorbeeld: 8 uur × € 50 inkoop = 400 extra kosten in de marge.
+    const { amount, pct } = commercialMargin(4050, 2763.75, 400);
+    expect(amount).toBe(886.25);
+    expect(pct).toBe(886.25 / 4050);
   });
 
-  it("is 100% als er geen materiaal in de calculatie zit", () => {
-    const { amount, pct } = offerMargin(500, 0);
+  it("geeft een rauwe fractie terug, niet een afgerond percentage", () => {
+    // Zou commercialMargin zelf afronden, dan rondde Intl daar nog eens overheen.
+    expect(commercialMargin(4050, 2763.75, 0).pct).toBe(1286.25 / 4050);
+  });
+
+  it("is 100% als er geen materiaal en arbeid in de calculatie zit", () => {
+    const { amount, pct } = commercialMargin(500, 0, 0);
     expect(amount).toBe(500);
     expect(formatPercent(pct!)).toBe("100,0%");
   });
 
   it("wordt negatief als de prijs onder de inkoop ligt", () => {
-    const { amount, pct } = offerMargin(2000, 2763.75);
+    const { amount, pct } = commercialMargin(2000, 2763.75, 0);
     expect(amount).toBe(-763.75);
     expect(formatPercent(pct!)).toBe("-38,2%");
   });
 
-  it("heeft geen percentage zonder offerteprijs", () => {
-    expect(offerMargin(0, 0)).toEqual({ amount: 0, pct: null });
-    expect(offerMargin(0, 500)).toEqual({ amount: -500, pct: null });
+  it("heeft geen percentage zonder commerciële prijs", () => {
+    expect(commercialMargin(0, 0, 0)).toEqual({ amount: 0, pct: null });
+    expect(commercialMargin(0, 500, 0)).toEqual({ amount: -500, pct: null });
   });
 });
 
-describe("offerteprijs volgt de calculatie", () => {
+describe("commerciële prijs volgt de calculatie", () => {
   const totalsVoor = computeTotals([line({ qty: 1, unit_sell: 4017.18 })], { ...header, retour_km: 0, stelpost_graafwerk: 0 });
   const totalsNa = computeTotals([line({ qty: 1, unit_sell: 4500 })], { ...header, retour_km: 0, stelpost_graafwerk: 0 });
 
   it("volgt zonder keuze het voorstel", () => {
-    expect(offerPriceFor(totalsVoor, GEEN_OFFERPRIJS_KEUZE)).toBe(4018);
-    expect(offerPriceFor(totalsNa, GEEN_OFFERPRIJS_KEUZE)).toBe(4500);
+    expect(commercialPriceFor(totalsVoor, GEEN_COMMERCIELE_PRIJS_KEUZE)).toBe(4018);
+    expect(commercialPriceFor(totalsNa, GEEN_COMMERCIELE_PRIJS_KEUZE)).toBe(4500);
   });
 
   it("laat een afrondstap MEEBEWEGEN met de calculatie", () => {
     // De kern van de bug: een pill is een regel, geen bevroren bedrag.
     const keuze = { roundStep: 50, manual: null };
-    expect(offerPriceFor(totalsVoor, keuze)).toBe(4050);
-    expect(offerPriceFor(totalsNa, keuze)).toBe(4500);
+    expect(commercialPriceFor(totalsVoor, keuze)).toBe(4050);
+    expect(commercialPriceFor(totalsNa, keuze)).toBe(4500);
   });
 
   it("laat een handmatig bedrag juist wél staan", () => {
     const keuze = { roundStep: null, manual: 3950 };
-    expect(offerPriceFor(totalsVoor, keuze)).toBe(3950);
-    expect(offerPriceFor(totalsNa, keuze)).toBe(3950);
+    expect(commercialPriceFor(totalsVoor, keuze)).toBe(3950);
+    expect(commercialPriceFor(totalsNa, keuze)).toBe(3950);
   });
 
   describe("terughalen van een opgeslagen prijs", () => {
     it("herkent een afrondstap en herstelt de regel", () => {
-      expect(restoreOfferChoice(totalsVoor, 4050)).toEqual({ roundStep: 50, manual: null });
-      expect(restoreOfferChoice(totalsVoor, 4100)).toEqual({ roundStep: 100, manual: null });
+      expect(restoreCommercialPriceChoice(totalsVoor, 4050)).toEqual({ roundStep: 50, manual: null });
+      expect(restoreCommercialPriceChoice(totalsVoor, 4100)).toEqual({ roundStep: 100, manual: null });
     });
 
     it("ziet het voorstel als 'geen keuze', zodat de prijs blijft volgen", () => {
-      expect(restoreOfferChoice(totalsVoor, 4018)).toEqual(GEEN_OFFERPRIJS_KEUZE);
-      expect(restoreOfferChoice(totalsVoor, null)).toEqual(GEEN_OFFERPRIJS_KEUZE);
+      expect(restoreCommercialPriceChoice(totalsVoor, 4018)).toEqual(GEEN_COMMERCIELE_PRIJS_KEUZE);
+      expect(restoreCommercialPriceChoice(totalsVoor, null)).toEqual(GEEN_COMMERCIELE_PRIJS_KEUZE);
     });
 
     it("houdt een afwijkend bedrag als handmatige keuze", () => {
-      expect(restoreOfferChoice(totalsVoor, 3950)).toEqual({ roundStep: null, manual: 3950 });
+      expect(restoreCommercialPriceChoice(totalsVoor, 3950)).toEqual({ roundStep: null, manual: 3950 });
     });
   });
 });
@@ -263,14 +283,14 @@ describe("calcToLineItems", () => {
       line({ line_type: "uren", description: "Montage", unit: "uur", qty: 8, unit_hours: 1 }),
     ];
     const totals = computeTotals(lines, header);
-    const offerPrice = totals.suggestedOfferPrice; // 4018
-    const items = calcToLineItems(lines, totals, offerPrice);
+    const commercialPrice = totals.suggestedCommercialPrice; // 4018
+    const items = calcToLineItems(lines, totals, commercialPrice);
     expect(items).toHaveLength(2);
     expect(items[0]).toMatchObject({ description: "Zaptec PRO", qty: 3, unit_price: 1151.56 });
     expect(items[1].description).toBe("Installatie & montage");
-    // Som van de klantregels = exact de afgeronde offerteprijs
+    // Som van de klantregels = exact de afgeronde commerciële prijs
     const sum = items.reduce((acc, i) => acc + i.total, 0);
-    expect(Math.round(sum * 100) / 100).toBe(offerPrice);
+    expect(Math.round(sum * 100) / 100).toBe(commercialPrice);
     // Nooit uren of kostprijzen richting klant
     expect(JSON.stringify(items)).not.toContain("921.25");
     expect(JSON.stringify(items)).not.toContain('"8"');
@@ -293,7 +313,7 @@ describe("calcToLineItems", () => {
       line({ description: "Montage", line_type: "uren", category: "arbeid", unit: "uur", qty: 4, unit_hours: 1 }),
     ];
     const totals = computeTotals(lines, header);
-    const prijs = totals.suggestedOfferPrice;
+    const prijs = totals.suggestedCommercialPrice;
     const gesorteerd = calcToLineItems(sortLinesBySection(lines), totals, prijs);
     // Laadpalen staan nu vóór installatiemateriaal, en uren gaan nooit mee.
     expect(gesorteerd.map((i) => i.description)).toEqual(["Zaptec PRO", "Kabel", "Installatie & montage"]);

@@ -21,6 +21,8 @@ export function DefaultsSettingsTab() {
     avg_annual_revenue_per_charge_point: "",
     lead_estimate_source: "computed",
     handoff_notification_email: "",
+    default_labor_cost_rate: "",
+    default_labor_sell_rate: "",
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
 
@@ -31,6 +33,8 @@ export function DefaultsSettingsTab() {
       avg_annual_revenue_per_charge_point: org.avg_annual_revenue_per_charge_point != null ? String(org.avg_annual_revenue_per_charge_point) : "",
       lead_estimate_source: org.lead_estimate_source === "manual" ? "manual" : "computed",
       handoff_notification_email: org.handoff_notification_email ?? "willi-jan.jonkers@e-group.nl",
+      default_labor_cost_rate: String(org.default_labor_cost_rate ?? "50"),
+      default_labor_sell_rate: String(org.default_labor_sell_rate ?? "75"),
     });
   }, [org]);
 
@@ -44,6 +48,8 @@ export function DefaultsSettingsTab() {
       // op de standaard 0,10 bij een ongeldige/lege of negatieve invoer, niet bij 0.
       const feeParsed = parseFloat(defaults.default_echarging_fee_per_kwh);
       const fee = Number.isFinite(feeParsed) && feeParsed >= 0 ? feeParsed : 0.10;
+      const laborCostParsed = parseFloat(defaults.default_labor_cost_rate);
+      const laborSellParsed = parseFloat(defaults.default_labor_sell_rate);
       await updateOrg.mutateAsync({
         id: org.id,
         patch: {
@@ -51,6 +57,8 @@ export function DefaultsSettingsTab() {
           avg_annual_revenue_per_charge_point: Number.isFinite(avgParsed) && avgParsed > 0 ? avgParsed : null,
           lead_estimate_source: defaults.lead_estimate_source === "manual" ? "manual" : "computed",
           handoff_notification_email: defaults.handoff_notification_email.trim() || "willi-jan.jonkers@e-group.nl",
+          default_labor_cost_rate: Number.isFinite(laborCostParsed) && laborCostParsed > 0 ? laborCostParsed : 50,
+          default_labor_sell_rate: Number.isFinite(laborSellParsed) && laborSellParsed > 0 ? laborSellParsed : 75,
         },
       });
       queryClient.invalidateQueries({ queryKey: ["admin-avg-revenue-per-cp"] });
@@ -113,6 +121,26 @@ export function DefaultsSettingsTab() {
               <Label htmlFor="avg-revenue">Vaste waarde per paal/jaar (€)</Label>
               <Input id="avg-revenue" type="number" step="0.01" min="0" value={defaults.avg_annual_revenue_per_charge_point} onChange={e => setDefaults(p => ({ ...p, avg_annual_revenue_per_charge_point: e.target.value }))} placeholder="bijv. 180" />
               <p className="text-[11px] text-muted-foreground mt-1.5">Gebruikt bij modus 'Vaste waarde' en als terugval bij 'Berekend'. Leeg = geen schatting zonder data.</p>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3 rounded-md border border-border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Calculatie — arbeidstarieven</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Startwaarden voor nieuwe calculaties in de offerte-flow; per calculatie aanpasbaar. Het inkooptarief telt alleen mee in de marge, niet in de commerciële prijs.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="labor-cost-rate">Inkooptarief e-group per uur (€)</Label>
+              <Input id="labor-cost-rate" type="number" step="0.01" min="0" value={defaults.default_labor_cost_rate} onChange={e => setDefaults(p => ({ ...p, default_labor_cost_rate: e.target.value }))} />
+              <p className="text-[11px] text-muted-foreground mt-1.5">Wat e-group ons per uur rekent. Standaard 50.</p>
+            </div>
+            <div>
+              <Label htmlFor="labor-sell-rate">Verkooptarief per uur (€)</Label>
+              <Input id="labor-sell-rate" type="number" step="0.01" min="0" value={defaults.default_labor_sell_rate} onChange={e => setDefaults(p => ({ ...p, default_labor_sell_rate: e.target.value }))} />
+              <p className="text-[11px] text-muted-foreground mt-1.5">Wat de klant per uur betaalt (in de calculatie). Standaard 75.</p>
             </div>
           </div>
         </div>

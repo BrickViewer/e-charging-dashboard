@@ -1,12 +1,12 @@
 // Genereert het interne calculatie-Excel (xlsx) voor het SharePoint-dossier.
 // Drie tabbladen naar het model van de oude werk-Excel:
-//   Voorblad    — project/offertenummer, totalen, offerteprijs, stelpost
+//   Voorblad    — project/offertenummer, totalen, commerciële prijs, marge, stelpost
 //   Calculatie  — alle regels met inkoop/verkoop/uren + marge en kostenblokken
 //   Bestellijst — te bestellen materiaal, gegroepeerd per leverancier (netto)
 // exceljs wordt lazy geïmporteerd zodat het niet in de hoofdbundle zit.
 
 import type { CalcHeaderDraft, CalcLineDraft, CalcSummary, CalcTotals } from "./calcTypes";
-import { lineTotals } from "./calcTypes";
+import { commercialMargin, lineTotals } from "./calcTypes";
 
 export interface CalcXlsxInput {
   quoteNumber: string;
@@ -14,7 +14,7 @@ export interface CalcXlsxInput {
   header: CalcHeaderDraft;
   summary: CalcSummary;
   totals: CalcTotals;
-  offerPrice: number;
+  commercialPrice: number;
   lines: CalcLineDraft[];
 }
 
@@ -41,12 +41,17 @@ export async function buildCalcXlsx(input: CalcXlsxInput): Promise<Uint8Array> {
   const rMatIn = cover.addRow(["Materiaal (inkoop netto):", input.totals.materialCost]);
   const rMarge = cover.addRow(["Marge materiaal:", input.totals.marginMaterial]);
   const rMont = cover.addRow([`Montage (${input.totals.hoursTotal} u × € ${input.header.hourly_rate}):`, input.totals.laborSell]);
+  const rArbIn = cover.addRow([`Arbeid inkoop e-group (${input.totals.hoursTotal} u × € ${input.header.labor_cost_rate}):`, input.totals.laborCost]);
   const rVoor = cover.addRow(["Voorrijkosten:", input.totals.travelSell]);
   const rTot = cover.addRow(["Totaal calculatie:", input.totals.totalSell]);
-  const rPrijs = cover.addRow(["Offerteprijs installatie:", input.offerPrice]);
+  const rPrijs = cover.addRow(["Commerciële prijs installatie:", input.commercialPrice]);
+  const rMargeTot = cover.addRow([
+    "Marge (comm. prijs − materiaal inkoop − arbeid inkoop):",
+    commercialMargin(input.commercialPrice, input.totals.materialCost, input.totals.laborCost).amount,
+  ]);
   rTot.font = bold;
   rPrijs.font = bold;
-  for (const row of [rMat, rMatIn, rMarge, rMont, rVoor, rTot, rPrijs]) row.getCell(2).numFmt = EURO_FMT;
+  for (const row of [rMat, rMatIn, rMarge, rMont, rArbIn, rVoor, rTot, rPrijs, rMargeTot]) row.getCell(2).numFmt = EURO_FMT;
   if (input.header.stelpost_graafwerk > 0) {
     const rStel = cover.addRow(["Stelpost graafwerk (apart in offerte):", input.header.stelpost_graafwerk, input.header.stelpost_note || ""]);
     rStel.getCell(2).numFmt = EURO_FMT;

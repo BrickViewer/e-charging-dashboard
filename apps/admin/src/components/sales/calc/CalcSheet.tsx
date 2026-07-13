@@ -160,6 +160,9 @@ export function CalcSheet(props: CalcSheetProps) {
               <span>€</span>
               <NumField className={MICRO} decimals={2} value={header.hourly_rate} disabled={frozen} onCommit={(n) => onHeaderChange({ hourly_rate: n })} />
               <span className="whitespace-nowrap">per uur</span>
+              {/* Inkoop bij e-group — telt alleen mee in de marge-kaart. */}
+              <span className="whitespace-nowrap">· inkoop €</span>
+              <NumField className={MICRO} decimals={2} value={header.labor_cost_rate} disabled={frozen} onCommit={(n) => onHeaderChange({ labor_cost_rate: n })} />
               {/* Deze uren zitten op materiaalregels (een meterkast draagt er 8)
                   en tellen mee in het montagebedrag — anders zie je ze nergens. */}
               {fromProductLines > 0 && (
@@ -243,7 +246,7 @@ export function CalcSheet(props: CalcSheetProps) {
           <div />
         </div>
         <p className="px-4 pb-3 text-[11px] text-muted-foreground">
-          Staat als aparte post op de offerte — telt niet mee in de offerteprijs.
+          Staat als aparte post op de offerte — telt niet mee in de commerciële prijs.
         </p>
       </section>
     </div>

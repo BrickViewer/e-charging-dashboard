@@ -9,8 +9,8 @@ import { r2, type CalcHeaderDraft, type CalcLineDraft, type CalcSummary, type Ca
 
 /** Klantgerichte offerteregels: materiaal op verkoopprijs + één geaggregeerde
     montage-regel (of kortingsregel bij een lager afgerond bedrag), zodat de
-    som altijd exact de afgeronde offerteprijs is. Nooit uren/kostprijzen. */
-export function calcToLineItems(lines: CalcLineDraft[], totals: CalcTotals, offerPrice: number): QuoteLineItem[] {
+    som altijd exact de afgeronde commerciële prijs is. Nooit uren/kostprijzen. */
+export function calcToLineItems(lines: CalcLineDraft[], totals: CalcTotals, commercialPrice: number): QuoteLineItem[] {
   const items: QuoteLineItem[] = lines
     .filter((l) => l.line_type !== "uren")
     .map((l) => ({
@@ -19,7 +19,7 @@ export function calcToLineItems(lines: CalcLineDraft[], totals: CalcTotals, offe
       unit_price: l.unit_sell,
       total: r2(l.qty * l.unit_sell),
     }));
-  const rest = r2(offerPrice - totals.materialSell);
+  const rest = r2(commercialPrice - totals.materialSell);
   if (rest > 0.004) {
     items.push({ description: "Installatie & montage", qty: 1, unit_price: rest, total: rest });
   } else if (rest < -0.004) {
@@ -34,7 +34,7 @@ export interface ApplyCalcInput {
   header: CalcHeaderDraft;
   summary: CalcSummary;
   totals: CalcTotals;
-  offerPrice: number;
+  commercialPrice: number;
 }
 
 export interface ApplyCalcResult {
@@ -52,7 +52,7 @@ export interface ApplyCalcResult {
  * lastDefaultRef-patroon) — handmatige bewerkingen op de detailpagina winnen.
  */
 export async function applyCalcToQuote(input: ApplyCalcInput): Promise<ApplyCalcResult> {
-  const { quoteId, lines, header, summary, totals, offerPrice } = input;
+  const { quoteId, lines, header, summary, totals, commercialPrice } = input;
 
   const { data: fresh, error: freshErr } = await supabase
     .from("quotes")
@@ -74,9 +74,9 @@ export async function applyCalcToQuote(input: ApplyCalcInput): Promise<ApplyCalc
   };
 
   const patch: Record<string, unknown> = {
-    total_installation_cost: offerPrice,
+    total_installation_cost: commercialPrice,
     total_hardware_cost: 0,
-    line_items: calcToLineItems(lines, totals, offerPrice) as unknown,
+    line_items: calcToLineItems(lines, totals, commercialPrice) as unknown,
     offer_details: nextOd as unknown,
   };
 

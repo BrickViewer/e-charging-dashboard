@@ -26,6 +26,8 @@ export interface CalcLineDraft {
 
 export interface CalcHeaderDraft {
   hourly_rate: number;
+  /** Inkooptarief arbeid (e-group) per uur — raakt alleen de marge, nooit totalSell. */
+  labor_cost_rate: number;
   km_price: number;
   retour_km: number;
   travel_days: number;
@@ -47,24 +49,26 @@ export interface CalcTotals {
   marginMaterial: number;
   hoursTotal: number;
   laborSell: number;
+  /** Inkoop van de uren bij e-group (hoursTotal × labor_cost_rate) — alleen marge. */
+  laborCost: number;
   travelSell: number;
   /** Stelpost graafwerk staat APART in de offerte (eigen PDF-veld) en telt
-      dus niet mee in de offerteprijs — zoals op het Excel-voorblad. */
+      dus niet mee in de commerciële prijs — zoals op het Excel-voorblad. */
   stelpost: number;
   totalSell: number;
-  /** Voorstel voor de afgeronde offerteprijs (hele euro's, naar boven). */
-  suggestedOfferPrice: number;
+  /** Voorstel voor de afgeronde commerciële prijs (hele euro's, naar boven). */
+  suggestedCommercialPrice: number;
 }
 
 export const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Stappen waarop de offerteprijs met één klik afgerond kan worden. */
+/** Stappen waarop de commerciële prijs met één klik afgerond kan worden. */
 export const AFROND_STAPPEN = [25, 50, 100] as const;
 
 /**
- * Naar boven afronden op een veelvoud. Altijd omhoog — een offerteprijs onder
- * de calculatie zou marge weggeven, en dat is ook waarom `suggestedOfferPrice`
- * een `ceil` is.
+ * Naar boven afronden op een veelvoud. Altijd omhoog — een commerciële prijs
+ * onder de calculatie zou marge weggeven, en dat is ook waarom
+ * `suggestedCommercialPrice` een `ceil` is.
  */
 export function roundUpTo(amount: number, step: number): number {
   if (step <= 0 || amount <= 0) return Math.max(0, r2(amount));
@@ -72,39 +76,40 @@ export function roundUpTo(amount: number, step: number): number {
 }
 
 /**
- * Hoe de offerteprijs tot stand komt. Een afrondstap is een REGEL en beweegt
- * dus mee als de calculatie verandert; een handmatig bedrag is een bewuste
- * keuze en blijft staan. Geen van beide = het voorstel volgen.
+ * Hoe de commerciële prijs tot stand komt. Een afrondstap is een REGEL en
+ * beweegt dus mee als de calculatie verandert; een handmatig bedrag is een
+ * bewuste keuze en blijft staan. Geen van beide = het voorstel volgen.
  */
-export interface OfferPriceChoice {
+export interface CommercialPriceChoice {
   roundStep: number | null;
   manual: number | null;
 }
 
-export const GEEN_OFFERPRIJS_KEUZE: OfferPriceChoice = { roundStep: null, manual: null };
+export const GEEN_COMMERCIELE_PRIJS_KEUZE: CommercialPriceChoice = { roundStep: null, manual: null };
 
-export function offerPriceFor(totals: CalcTotals, choice: OfferPriceChoice): number {
+export function commercialPriceFor(totals: CalcTotals, choice: CommercialPriceChoice): number {
   if (choice.roundStep) return roundUpTo(totals.totalSell, choice.roundStep);
-  return choice.manual ?? totals.suggestedOfferPrice;
+  return choice.manual ?? totals.suggestedCommercialPrice;
 }
 
-export interface OfferMargin {
+export interface CommercialMargin {
   amount: number;
   /** Fractie (0,318), niet 31,8 — en bewust NIET afgerond: de opmaak doet dat. */
   pct: number | null;
 }
 
 /**
- * Wat er van een offerte overblijft: offerteprijs minus de netto materiaalinkoop,
- * als percentage van de offerteprijs (zoals `serviceFeePct` in de pricing-engine).
+ * Wat er van een offerte overblijft: commerciële prijs minus de netto
+ * materiaalinkoop en de arbeidsinkoop bij e-group (uren × inkooptarief), als
+ * percentage van de commerciële prijs (zoals `serviceFeePct` in de
+ * pricing-engine).
  *
- * Let op: uren hebben in dit rekenmodel geen kostprijs — `hourly_rate` is een
- * verkooptarief. Arbeid en voorrijkosten zitten dus volledig in deze marge. Het
- * is een brutomarge op materiaal, geen winst na loonkosten.
+ * De marge op arbeid (verkoop- minus inkooptarief) en de voorrijkosten zitten
+ * dus in dit bedrag; het is een brutomarge, geen nettowinst.
  */
-export function offerMargin(offerPrice: number, materialCost: number): OfferMargin {
-  const amount = r2(offerPrice - materialCost);
-  return { amount, pct: offerPrice > 0 ? amount / offerPrice : null };
+export function commercialMargin(commercialPrice: number, materialCost: number, laborCost: number): CommercialMargin {
+  const amount = r2(commercialPrice - materialCost - laborCost);
+  return { amount, pct: commercialPrice > 0 ? amount / commercialPrice : null };
 }
 
 /**
@@ -112,8 +117,8 @@ export function offerMargin(offerPrice: number, materialCost: number): OfferMarg
  * niet hoe het gekozen is. Valt het precies op een afrondstap, dan herstellen
  * we die stap — anders blijft de prijs waar hij stond aan de vorige kant.
  */
-export function restoreOfferChoice(totals: CalcTotals, price: number | null): OfferPriceChoice {
-  if (price == null || price === totals.suggestedOfferPrice) return GEEN_OFFERPRIJS_KEUZE;
+export function restoreCommercialPriceChoice(totals: CalcTotals, price: number | null): CommercialPriceChoice {
+  if (price == null || price === totals.suggestedCommercialPrice) return GEEN_COMMERCIELE_PRIJS_KEUZE;
   const step = AFROND_STAPPEN.find((s) => roundUpTo(totals.totalSell, s) === price);
   return step ? { roundStep: step, manual: null } : { roundStep: null, manual: price };
 }
@@ -204,6 +209,7 @@ export function computeTotals(lines: CalcLineDraft[], header: CalcHeaderDraft): 
     }
   }
   const laborSell = r2(hoursTotal * header.hourly_rate);
+  const laborCost = r2(hoursTotal * header.labor_cost_rate);
   const travelSell = r2(header.retour_km * header.km_price * header.travel_days);
   const stelpost = r2(header.stelpost_graafwerk || 0);
   const totalSell = r2(materialSell + laborSell + travelSell);
@@ -213,9 +219,10 @@ export function computeTotals(lines: CalcLineDraft[], header: CalcHeaderDraft): 
     marginMaterial: r2(materialSell - materialCost),
     hoursTotal,
     laborSell,
+    laborCost,
     travelSell,
     stelpost,
     totalSell,
-    suggestedOfferPrice: Math.ceil(totalSell),
+    suggestedCommercialPrice: Math.ceil(totalSell),
   };
 }

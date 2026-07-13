@@ -9,17 +9,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuote } from "@/hooks/useQuotes";
 import { useQuoteCalculation, useSaveQuoteCalculation } from "@/hooks/useQuoteCalculation";
 import { useCatalogProducts, netCost, sellPrice, type CatalogProduct } from "@/hooks/useCatalogProducts";
+import { useOrganization } from "@/hooks/useAdminData";
 import {
+  commercialPriceFor,
   computeTotals,
-  GEEN_OFFERPRIJS_KEUZE,
-  offerPriceFor,
-  restoreOfferChoice,
+  GEEN_COMMERCIELE_PRIJS_KEUZE,
+  restoreCommercialPriceChoice,
   sortLinesBySection,
   type CalcHeaderDraft,
   type CalcLineDraft,
   type CalcSection,
   type CalcSummary,
-  type OfferPriceChoice,
+  type CommercialPriceChoice,
 } from "@/services/calcTypes";
 import { CalcSheet } from "@/components/sales/calc/CalcSheet";
 import { CalcTotalsCard } from "@/components/sales/calc/CalcTotalsCard";
@@ -30,8 +31,11 @@ import { scopeFromFlags, SCOPE_LABEL } from "@/lib/quoteScope";
 import { supabase } from "@/integrations/supabase/client";
 import { calcRetourKm, resolveQuoteAddress } from "@/services/calcDistance";
 
+// Pure terugval — de arbeidstarieven komen normaal uit de org-standaardwaarden
+// (Instellingen → Standaardwaarden).
 const DEFAULT_HEADER: CalcHeaderDraft = {
-  hourly_rate: 60,
+  hourly_rate: 75,
+  labor_cost_rate: 50,
   km_price: 0.75,
   retour_km: 0,
   travel_days: 1,
@@ -45,41 +49,46 @@ export default function SalesOfferteCalculatie() {
   const quote = useQuote(id);
   const calcQuery = useQuoteCalculation(id);
   const catalog = useCatalogProducts();
+  const org = useOrganization();
   const save = useSaveQuoteCalculation();
 
   const [lines, setLines] = useState<CalcLineDraft[]>([]);
   const [header, setHeader] = useState<CalcHeaderDraft>(DEFAULT_HEADER);
   const [summary, setSummary] = useState<CalcSummary>({});
-  const [offerChoice, setOfferChoice] = useState<OfferPriceChoice>(GEEN_OFFERPRIJS_KEUZE);
+  const [priceChoice, setPriceChoice] = useState<CommercialPriceChoice>(GEEN_COMMERCIELE_PRIJS_KEUZE);
   const [busy, setBusy] = useState(false);
   const [kmBusy, setKmBusy] = useState(false);
   const [kmHint, setKmHint] = useState<string | null>(null);
   const seeded = useRef(false);
   const kmAutoDone = useRef(false);
 
-  // Bestaande calculatie in de editor laden (eenmalig)
+  // Calculatie in de editor laden (eenmalig). Wacht óók op de organisatie:
+  // een nieuwe calculatie start met de org-standaardtarieven, en die mogen
+  // niet ná het eerste bewerkbare frame nog onder de gebruiker wijzigen.
   useEffect(() => {
-    if (seeded.current || !calcQuery.data) return;
+    if (seeded.current || !calcQuery.data || org.isLoading) return;
     seeded.current = true;
     const { calc, lines: dbLines } = calcQuery.data;
-    if (!calc) return;
-    setHeader({
-      hourly_rate: Number(calc.hourly_rate),
-      km_price: Number(calc.km_price),
-      retour_km: Number(calc.retour_km),
-      travel_days: Number(calc.travel_days),
-      stelpost_graafwerk: Number(calc.stelpost_graafwerk),
-      stelpost_note: calc.stelpost_note ?? "",
-    });
-    setSummary((calc.summary ?? {}) as CalcSummary);
+    if (!calc) {
+      // Nieuwe calculatie: arbeidstarieven uit Instellingen → Standaardwaarden.
+      setHeader({
+        ...DEFAULT_HEADER,
+        hourly_rate: Number(org.data?.default_labor_sell_rate ?? DEFAULT_HEADER.hourly_rate),
+        labor_cost_rate: Number(org.data?.default_labor_cost_rate ?? DEFAULT_HEADER.labor_cost_rate),
+      });
+      return;
+    }
     const seededHeader: CalcHeaderDraft = {
       hourly_rate: Number(calc.hourly_rate),
+      labor_cost_rate: Number(calc.labor_cost_rate),
       km_price: Number(calc.km_price),
       retour_km: Number(calc.retour_km),
       travel_days: Number(calc.travel_days),
       stelpost_graafwerk: Number(calc.stelpost_graafwerk),
       stelpost_note: calc.stelpost_note ?? "",
     };
+    setHeader(seededHeader);
+    setSummary((calc.summary ?? {}) as CalcSummary);
     const seededLines = dbLines.map((l, i) => ({
       uid: nextUid(),
       id: l.id,
@@ -100,29 +109,29 @@ export default function SalesOfferteCalculatie() {
     setLines(seededLines);
     // Alleen het bedrag is opgeslagen, niet hoe het gekozen is: viel het op een
     // afrondstap, dan gaat die regel weer meebewegen met de calculatie.
-    setOfferChoice(
-      restoreOfferChoice(
+    setPriceChoice(
+      restoreCommercialPriceChoice(
         computeTotals(seededLines, seededHeader),
         calc.offer_price_rounded == null ? null : Number(calc.offer_price_rounded),
       ),
     );
-  }, [calcQuery.data]);
+  }, [calcQuery.data, org.isLoading, org.data]);
 
   const totals = useMemo(() => computeTotals(lines, header), [lines, header]);
   // Wat we opslaan is wat je op het blad ziet: regels gegroepeerd per sectie.
   // Dit bepaalt `position`, de volgorde van de offerteregels en het Excel.
   const orderedLines = useMemo(() => sortLinesBySection(lines), [lines]);
   // Een afrondstap beweegt mee met de calculatie; een handmatig bedrag blijft staan.
-  const effectiveOfferPrice = offerPriceFor(totals, offerChoice);
+  const effectiveCommercialPrice = commercialPriceFor(totals, priceChoice);
   const isConcept = quote.data?.status === "concept";
 
-  const pickRoundStep = (step: number) => setOfferChoice({ roundStep: step, manual: null });
+  const pickRoundStep = (step: number) => setPriceChoice({ roundStep: step, manual: null });
 
   /** NumField commit óók op blur zonder wijziging — dan mag de afrondstap niet
       stilletjes in een bevroren bedrag veranderen. */
-  const commitOfferPrice = (n: number) => {
-    if (n === effectiveOfferPrice) return;
-    setOfferChoice({ roundStep: null, manual: n > 0 ? n : null });
+  const commitCommercialPrice = (n: number) => {
+    if (n === effectiveCommercialPrice) return;
+    setPriceChoice({ roundStep: null, manual: n > 0 ? n : null });
   };
 
   // Kilometers automatisch: rijafstand kantoor (Zaltbommel) ↔ projectadres.
@@ -228,7 +237,7 @@ export default function SalesOfferteCalculatie() {
       header,
       summary: summaryOverride ?? summary,
       totals,
-      offerPriceRounded: status === "overgeslagen" ? null : effectiveOfferPrice,
+      commercialPriceRounded: status === "overgeslagen" ? null : effectiveCommercialPrice,
       lines: status === "overgeslagen" ? [] : orderedLines,
     });
   };
@@ -275,7 +284,7 @@ export default function SalesOfferteCalculatie() {
         header,
         summary,
         totals,
-        offerPrice: effectiveOfferPrice,
+        commercialPrice: effectiveCommercialPrice,
       });
       setSummary(nextSummary);
       await doSave("afgerond", nextSummary);
@@ -291,7 +300,7 @@ export default function SalesOfferteCalculatie() {
           header,
           summary: nextSummary,
           totals,
-          offerPrice: effectiveOfferPrice,
+          commercialPrice: effectiveCommercialPrice,
           lines: orderedLines,
         });
         const { data: up, error: upErr } = await supabase.functions.invoke<{ status: string; skipped?: string; calc_web_url?: string }>(
@@ -312,7 +321,7 @@ export default function SalesOfferteCalculatie() {
     }
   };
 
-  if (quote.isLoading || calcQuery.isLoading) {
+  if (quote.isLoading || calcQuery.isLoading || org.isLoading) {
     return <Skeleton className="h-96 w-full rounded-xl" />;
   }
   if (!quote.data) {
@@ -401,13 +410,13 @@ export default function SalesOfferteCalculatie() {
         <div className="space-y-4">
           <CalcTotalsCard
             totals={totals}
-            offerPrice={effectiveOfferPrice}
-            roundStep={offerChoice.roundStep}
+            commercialPrice={effectiveCommercialPrice}
+            roundStep={priceChoice.roundStep}
             frozen={frozen}
-            onOfferPriceCommit={commitOfferPrice}
+            onCommercialPriceCommit={commitCommercialPrice}
             onPickRoundStep={pickRoundStep}
           />
-          <CalcMarginCard totals={totals} offerPrice={effectiveOfferPrice} />
+          <CalcMarginCard totals={totals} commercialPrice={effectiveCommercialPrice} laborCostRate={header.labor_cost_rate} />
         </div>
       </div>
     </div>

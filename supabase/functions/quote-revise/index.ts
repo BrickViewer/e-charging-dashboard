@@ -114,6 +114,9 @@ Deno.serve(async (req) => {
         status: srcCalc.status,
         schema_version: srcCalc.schema_version,
         hourly_rate: srcCalc.hourly_rate,
+        // labor_cost (generated) niet meesturen; het inkooptarief wel — dat is
+        // een snapshot, net als hourly_rate.
+        labor_cost_rate: srcCalc.labor_cost_rate,
         km_price: srcCalc.km_price,
         retour_km: srcCalc.retour_km,
         travel_days: srcCalc.travel_days,

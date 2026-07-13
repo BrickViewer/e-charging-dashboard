@@ -10,6 +10,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
 const header: CalcHeaderDraft = {
   hourly_rate: 60,
+  labor_cost_rate: 50,
   km_price: 0.75,
   retour_km: 120,
   travel_days: 1,
@@ -149,6 +150,16 @@ describe("CalcSheet", () => {
     expect(within(arbeid).getByDisplayValue("60,00")).toBeInTheDocument();
     expect(within(arbeid).getByText("per uur")).toBeInTheDocument();
     expect(within(arbeid).getByText("€ 720,00")).toBeInTheDocument();
+  });
+
+  it("toont het e-group-inkooptarief op de Arbeid-regel en meldt wijzigingen", () => {
+    const props = renderSheet();
+    const arbeid = row("arbeid");
+    expect(within(arbeid).getByText("· inkoop €")).toBeInTheDocument();
+    const inkoop = within(arbeid).getByDisplayValue("50,00");
+    fireEvent.change(inkoop, { target: { value: "55" } });
+    fireEvent.blur(inkoop); // NumField commit op blur
+    expect(props.onHeaderChange).toHaveBeenCalledWith({ labor_cost_rate: 55 });
   });
 
   describe("uren stappen op de Arbeid-regel", () => {

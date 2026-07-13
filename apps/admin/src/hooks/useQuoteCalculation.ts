@@ -36,7 +36,9 @@ export interface SaveCalculationInput {
   header: CalcHeaderDraft;
   summary: CalcSummary;
   totals: CalcTotals;
-  offerPriceRounded: number | null;
+  /** Gaat naar de DB-kolom `offer_price_rounded` — die naam is historisch,
+      de UI-term is "Commerciële prijs (afgerond)". */
+  commercialPriceRounded: number | null;
   lines: CalcLineDraft[];
 }
 
@@ -56,6 +58,7 @@ export function useSaveQuoteCalculation() {
             organization_id: input.organizationId,
             status: input.status,
             hourly_rate: input.header.hourly_rate,
+            labor_cost_rate: input.header.labor_cost_rate,
             km_price: input.header.km_price,
             retour_km: input.header.retour_km,
             travel_days: input.header.travel_days,
@@ -68,7 +71,7 @@ export function useSaveQuoteCalculation() {
             labor_sell: input.totals.laborSell,
             travel_sell: input.totals.travelSell,
             total_sell: input.totals.totalSell,
-            offer_price_rounded: input.offerPriceRounded,
+            offer_price_rounded: input.commercialPriceRounded,
             finalized_at: input.status === "afgerond" ? new Date().toISOString() : null,
           },
           { onConflict: "quote_id" },

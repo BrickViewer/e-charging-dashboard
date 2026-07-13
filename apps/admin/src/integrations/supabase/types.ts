@@ -1579,6 +1579,30 @@ export type Database = {
           },
         ]
       }
+      content_engine_events: {
+        Row: {
+          at: string
+          detail: Json
+          fn: string
+          id: number
+          step: string
+        }
+        Insert: {
+          at?: string
+          detail?: Json
+          fn: string
+          id?: never
+          step: string
+        }
+        Update: {
+          at?: string
+          detail?: Json
+          fn?: string
+          id?: never
+          step?: string
+        }
+        Relationships: []
+      }
       content_engine_settings: {
         Row: {
           created_at: string
@@ -3106,6 +3130,8 @@ export type Database = {
           default_eflux_cost_dc: number | null
           default_energy_cost_per_kwh: number | null
           default_ere_rate_per_kwh: number | null
+          default_labor_cost_rate: number
+          default_labor_sell_rate: number
           default_revenue_share_pct: number | null
           eflux_master_account_id: string | null
           eflux_provider_id: string | null
@@ -3148,6 +3174,8 @@ export type Database = {
           default_eflux_cost_dc?: number | null
           default_energy_cost_per_kwh?: number | null
           default_ere_rate_per_kwh?: number | null
+          default_labor_cost_rate?: number
+          default_labor_sell_rate?: number
           default_revenue_share_pct?: number | null
           eflux_master_account_id?: string | null
           eflux_provider_id?: string | null
@@ -3190,6 +3218,8 @@ export type Database = {
           default_eflux_cost_dc?: number | null
           default_energy_cost_per_kwh?: number | null
           default_ere_rate_per_kwh?: number | null
+          default_labor_cost_rate?: number
+          default_labor_sell_rate?: number
           default_revenue_share_pct?: number | null
           eflux_master_account_id?: string | null
           eflux_provider_id?: string | null
@@ -3616,6 +3646,8 @@ export type Database = {
           hours_total: number
           id: string
           km_price: number
+          labor_cost: number | null
+          labor_cost_rate: number
           labor_sell: number
           margin_material: number | null
           material_cost: number
@@ -3644,6 +3676,8 @@ export type Database = {
           hours_total?: number
           id?: string
           km_price?: number
+          labor_cost?: number | null
+          labor_cost_rate?: number
           labor_sell?: number
           margin_material?: number | null
           material_cost?: number
@@ -3672,6 +3706,8 @@ export type Database = {
           hours_total?: number
           id?: string
           km_price?: number
+          labor_cost?: number | null
+          labor_cost_rate?: number
           labor_sell?: number
           margin_material?: number | null
           material_cost?: number

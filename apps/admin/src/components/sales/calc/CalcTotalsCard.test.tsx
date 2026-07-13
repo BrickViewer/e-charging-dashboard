@@ -5,6 +5,7 @@ import { computeTotals, type CalcHeaderDraft, type CalcLineDraft } from "@/servi
 
 const header: CalcHeaderDraft = {
   hourly_rate: 60,
+  labor_cost_rate: 50,
   km_price: 0.75,
   retour_km: 110,
   travel_days: 1,
@@ -22,10 +23,10 @@ const totals = computeTotals(lines, header);
 function renderCard(overrides: Partial<React.ComponentProps<typeof CalcTotalsCard>> = {}) {
   const props = {
     totals,
-    offerPrice: totals.suggestedOfferPrice,
+    commercialPrice: totals.suggestedCommercialPrice,
     roundStep: null,
     frozen: false,
-    onOfferPriceCommit: vi.fn(),
+    onCommercialPriceCommit: vi.fn(),
     onPickRoundStep: vi.fn(),
     ...overrides,
   };
@@ -56,7 +57,7 @@ describe("CalcTotalsCard", () => {
     fireEvent.click(pill(50));
     expect(props.onPickRoundStep).toHaveBeenCalledWith(50);
     // Niet het bedrag bevriezen: de stap is de keuze.
-    expect(props.onOfferPriceCommit).not.toHaveBeenCalled();
+    expect(props.onCommercialPriceCommit).not.toHaveBeenCalled();
   });
 
   it("toont per stap welk bedrag eruit komt", () => {
@@ -68,7 +69,7 @@ describe("CalcTotalsCard", () => {
   });
 
   it("markeert de gekozen stap, niet een toevallig gelijk bedrag", () => {
-    renderCard({ roundStep: 50, offerPrice: 4050 });
+    renderCard({ roundStep: 50, commercialPrice: 4050 });
     expect(pill(50)).toHaveAttribute("aria-pressed", "true");
     expect(pill(25)).toHaveAttribute("aria-pressed", "false");
   });
@@ -78,16 +79,16 @@ describe("CalcTotalsCard", () => {
     const veld = screen.getByDisplayValue("4018");
     fireEvent.change(veld, { target: { value: "3950" } });
     fireEvent.blur(veld);
-    expect(props.onOfferPriceCommit).toHaveBeenCalledWith(3950);
+    expect(props.onCommercialPriceCommit).toHaveBeenCalledWith(3950);
   });
 
   it("waarschuwt als de prijs onder de calculatie ligt", () => {
-    renderCard({ offerPrice: 3950 });
+    renderCard({ commercialPrice: 3950 });
     expect(screen.getByText(/ligt onder de calculatie van € 4.017,18/)).toBeInTheDocument();
   });
 
   it("waarschuwt niet bij een prijs op of boven de calculatie", () => {
-    renderCard({ offerPrice: 4018 });
+    renderCard({ commercialPrice: 4018 });
     expect(screen.queryByText(/onder de calculatie/)).not.toBeInTheDocument();
   });
 
