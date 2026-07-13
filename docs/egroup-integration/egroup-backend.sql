@@ -84,3 +84,41 @@ revoke all on function public.get_integration_secret(text) from public;
 revoke all on function public.get_integration_secret(text) from anon;
 revoke all on function public.get_integration_secret(text) from authenticated;
 grant execute on function public.get_integration_secret(text) to service_role;
+
+-- ============================================================================
+-- APPENDIX (2026-07-13) — materialen, uren en werkbon-voorvulling.
+-- NB: de live migratiegeschiedenis van het e-portal-project is leidend; dit
+-- bestand is een referentie. Onderstaande is via MCP toegepast als migratie
+-- `order_materials_and_echarging_werkbon_prefill`. Eerder (niet in dit bestand
+-- gedocumenteerd) zijn ook al live aangelegd: external_order_mirrors, de RPC
+-- create_external_order (intake v5+) en de order_lines-kolommen
+-- preparation_status/preparation_notes/materials_expected_at.
+-- ============================================================================
+
+-- 6) Materialenlijst per order (gevoed door Contract 3, full-state replace).
+--    Kolommen: order_id FK cascade, position, quantity, unit, article_number,
+--    description not null, supplier, status check
+--    (niet_nodig/te_bestellen/besteld/binnen) default 'te_bestellen'.
+--    RLS: "Service role manages" (ALL, service_role) + "View (admin or
+--    assigned)" (SELECT authenticated: is_admin(auth.uid()) or order_id in
+--    (select my_order_ids())) — patroon external_order_mirrors.
+
+-- 7) work_order_materials.position (nullable, additief) — volgorde-behoud bij
+--    de werkbon-kopie.
+
+-- 8) RPC sync_external_order_materials(p_order_id uuid, p_materials jsonb)
+--    returns integer — SECURITY DEFINER, service-role-only; SELECT ... FOR
+--    UPDATE op de order serialiseert gelijktijdige syncs; delete + insert =
+--    atomaire replace; defensief parsen van qty/status.
+
+-- 9) create_external_order v2: order_lines-insert krijgt estimated_hours uit de
+--    payload-line (defensief geparsed; <= 0 wordt null).
+
+-- 10) Werkbon-voorvulling, ALLEEN voor orders met source='e_charging_dashboard'
+--     (eigen opdrachten: nul gedragswijziging):
+--     - trg_work_orders_echarging_prefill (BEFORE INSERT op work_orders):
+--       notes/performed_work alleen-als-leeg uit
+--       orders.notes -> orders.description -> order_lines.work_description.
+--     - trg_work_orders_echarging_materials (AFTER INSERT): kopieert
+--       order_materials (status <> 'niet_nodig', op position) naar
+--       work_order_materials, alleen als de werkbon nog geen materialen heeft.

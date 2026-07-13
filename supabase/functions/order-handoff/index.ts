@@ -113,6 +113,19 @@ Deno.serve(async (req) => {
       return json({ status: "ok", already_sent: true, message: "Verzending is al bezig of afgerond" });
     }
 
+    // Uren/reisafstand uit de interne calculatie (kan legitiem ontbreken of
+    // 'overgeslagen' zijn) — voedt order_lines.estimated_hours bij de planner.
+    let calculation = null;
+    if (order.quote_id) {
+      const { data: calc } = await sb
+        .from("quote_calculations")
+        .select("hours_total, retour_km, travel_days")
+        .eq("quote_id", order.quote_id)
+        .neq("status", "overgeslagen")
+        .maybeSingle();
+      calculation = calc ?? null;
+    }
+
     const callbackUrl = `${supabaseUrl}/functions/v1/installation-completion-webhook`;
     const payload = buildHandoffPayload({
       order,
@@ -120,6 +133,7 @@ Deno.serve(async (req) => {
       company: order.companies,
       lead: order.leads,
       quote: order.quotes,
+      calculation,
       callbackUrl,
     });
 

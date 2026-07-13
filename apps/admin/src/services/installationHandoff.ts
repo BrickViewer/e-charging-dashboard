@@ -77,6 +77,8 @@ export interface HandoffLine {
   qty: number;
   unit_price: number;
   total: number;
+  /** Montage-uren uit de calculatie — landt in e-portal order_lines.estimated_hours (planning). */
+  estimated_hours: number | null;
 }
 
 export interface HandoffPayload {
@@ -124,6 +126,13 @@ export interface HandoffPayload {
     email: string | null;
   };
   order_lines: HandoffLine[];
+  /** Plannings-context uit de calculatie; wordt in e-portal alleen in
+      external_order_mirrors.raw_payload bewaard (uren zelf staan op de order_line). */
+  planning: {
+    hours_total: number | null;
+    retour_km: number | null;
+    travel_days: number | null;
+  } | null;
   totals: {
     hardware_cost: number | null;
     installation_cost: number | null;
@@ -198,12 +207,20 @@ export interface HandoffQuote {
   is_private?: boolean | null;
 }
 
+/** Subset van quote_calculations (via order.quote_id; kan ontbreken of 'overgeslagen' zijn). */
+export interface HandoffCalculation {
+  hours_total?: number | null;
+  retour_km?: number | null;
+  travel_days?: number | null;
+}
+
 export interface BuildHandoffInput {
   order: HandoffOrder;
   client?: HandoffClient | null;
   company?: HandoffCompany | null;
   lead?: HandoffLead | null;
   quote?: HandoffQuote | null;
+  calculation?: HandoffCalculation | null;
   callbackUrl: string;
 }
 
@@ -236,7 +253,7 @@ export function validateSiteForHandoff(order: HandoffOrder): {
 }
 
 export function buildHandoffPayload(input: BuildHandoffInput): HandoffPayload {
-  const { order, client, company, lead, quote, callbackUrl } = input;
+  const { order, client, company, lead, quote, calculation, callbackUrl } = input;
 
   // Klant-NAW: voorkeur klant, terugval bedrijf, dan lead.
   const customerName =
@@ -254,9 +271,13 @@ export function buildHandoffPayload(input: BuildHandoffInput): HandoffPayload {
 
   // Eén samenvattende werkregel: de e-portal toont één rij per order_line, dus niet per
   // quote-regel splitsen (dat gaf dubbele opdrachtregels). Scope staat in notes, kosten in totals.
+  // Uren uit de calculatie: 0 betekent "geen urenregels" en is voor de planner
+  // misleidender dan "onbekend" — dan liever null.
   const workLabel = (order.service_summary ?? "").trim() || "laadinfrastructuur";
+  const hoursTotal =
+    calculation?.hours_total != null && calculation.hours_total > 0 ? calculation.hours_total : null;
   const lines: HandoffLine[] = [
-    { description: `Levering & installatie — ${workLabel}`, qty: 1, unit_price: 0, total: 0 },
+    { description: `Levering & installatie — ${workLabel}`, qty: 1, unit_price: 0, total: 0, estimated_hours: hoursTotal },
   ];
 
   return {
@@ -309,6 +330,13 @@ export function buildHandoffPayload(input: BuildHandoffInput): HandoffPayload {
       email: firstNonEmpty(order.site_contact_email, lead?.contact_email, client?.contact_email),
     },
     order_lines: lines,
+    planning: calculation
+      ? {
+          hours_total: hoursTotal,
+          retour_km: calculation.retour_km ?? null,
+          travel_days: calculation.travel_days ?? null,
+        }
+      : null,
     totals: {
       hardware_cost: quote?.total_hardware_cost ?? null,
       installation_cost: quote?.total_installation_cost ?? null,

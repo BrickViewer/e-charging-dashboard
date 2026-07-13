@@ -163,10 +163,31 @@ describe("buildHandoffPayload", () => {
       qty: 1,
       unit_price: 0,
       total: 0,
+      estimated_hours: null,
     });
+    // Zonder calculatie geen plannings-context.
+    expect(p.planning).toBeNull();
     expect(p.totals).toEqual({ hardware_cost: 9500, installation_cost: 7500, with_management: true });
     // Zonder is_private op de offerte = zakelijk.
     expect(p.customer.organization_type).toBe("bedrijf");
+  });
+
+  it("zet de calculatie-uren op de werkregel én in het planning-blok", () => {
+    const p = buildHandoffPayload({
+      ...base,
+      calculation: { hours_total: 26.5, retour_km: 120, travel_days: 2 },
+    });
+    expect(p.order_lines[0].estimated_hours).toBe(26.5);
+    expect(p.planning).toEqual({ hours_total: 26.5, retour_km: 120, travel_days: 2 });
+  });
+
+  it("behandelt 0 uur als onbekend — misleidender dan geen schatting", () => {
+    const p = buildHandoffPayload({
+      ...base,
+      calculation: { hours_total: 0, retour_km: 0, travel_days: 1 },
+    });
+    expect(p.order_lines[0].estimated_hours).toBeNull();
+    expect(p.planning).toEqual({ hours_total: null, retour_km: 0, travel_days: 1 });
   });
 
   it("geeft organization_type 'particulier' door bij een particuliere (is_private) offerte", () => {
@@ -187,7 +208,7 @@ describe("buildHandoffPayload", () => {
     expect(p.customer.street).toBe("Kerkstraat");
     expect(p.customer.email).toBe("lead@x.nl");
     expect(p.order_lines).toEqual([
-      { description: "Levering & installatie — laadinfrastructuur", qty: 1, unit_price: 0, total: 0 },
+      { description: "Levering & installatie — laadinfrastructuur", qty: 1, unit_price: 0, total: 0, estimated_hours: null },
     ]);
     expect(p.totals.hardware_cost).toBeNull();
   });
@@ -199,7 +220,7 @@ describe("buildHandoffPayload", () => {
       quote: { line_items: [{ description: "Hardware", qty: 3, unit_price: 5 }, { description: "Installatie", qty: 1, unit_price: 5 }] },
     });
     expect(p.order_lines).toEqual([
-      { description: "Levering & installatie — 3 laadpunten", qty: 1, unit_price: 0, total: 0 },
+      { description: "Levering & installatie — 3 laadpunten", qty: 1, unit_price: 0, total: 0, estimated_hours: null },
     ]);
   });
 

@@ -18,7 +18,10 @@ portal, met live statusterugkoppeling. Twee aparte Supabase-projecten:
 3. E-Charging `order-handoff` POST't naar E-Group `intake-external-order` (Contract 1).
    E-Group maakt organisatie + project + order (`service_category='e_charging'`,
    `source='e_charging_dashboard'`, `external_system='e-charging'`, `external_reference`)
-   + order-regels aan, en geeft `{order_id, order_number}` terug.
+   + order-regels aan (incl. `estimated_hours` uit de calculatie — de planner ziet
+   direct hoeveel montage-uren er ingepland moeten worden), en geeft
+   `{order_id, order_number}` terug. De werkomschrijving (offerte-"Levering en
+   installatie") landt in `orders.notes`.
 4. E-Charging bewaart `egroup_order_id/number`, zet status op `overgedragen`, en pusht
    best-effort direct de geaggregeerde materiaalstatus (Contract 3).
 5. Elke statuswijziging van die order in E-Group triggert (`pg_net`) een callback naar
@@ -27,10 +30,20 @@ portal, met live statusterugkoppeling. Twee aparte Supabase-projecten:
 6. Elke materiaal-mutatie ná de handoff (bv. "binnen" melden) triggert vanuit de
    frontend best-effort `order-material-sync` → E-Group `sync-material-status`
    (Contract 3) → de planner ziet `order_lines.preparation_status` (+ verwachte
-   leverdatum en notitie) live meelopen. E-Charging is de bron van waarheid; de
-   sync stuurt het volledige AGGREGAAT en is dus laatste-wint/idempotent — een
-   gemiste push wordt door de eerstvolgende mutatie of de retry-knop hersteld
-   (`installation_orders.last_sync_error` / `materials_synced_at`).
+   leverdatum en notitie) live meelopen, plus de **volledige materialenlijst**
+   (`order_materials`, full-state replace) en `estimated_hours` (alleen-als-leeg —
+   planner-correcties winnen; tevens backfill-pad). E-Charging is de bron van
+   waarheid; de sync stuurt de volledige actuele staat en is dus
+   laatste-wint/idempotent — een gemiste push wordt door de eerstvolgende mutatie
+   of de retry-knop hersteld (`installation_orders.last_sync_error` /
+   `materials_synced_at`).
+7. **Werkbon-voorvulling (automatisch, DB-triggers in e-portal)**: bij het
+   aanmaken van een werkbon op een e-charging-opdracht vult
+   `trg_work_orders_echarging_prefill` `work_orders.notes` + `performed_work`
+   (alleen-als-leeg, prioriteit `orders.notes → description → work_description`)
+   en kopieert `trg_work_orders_echarging_materials` de materialenlijst
+   (`order_materials`, status ≠ niet_nodig, op volgorde) naar
+   `work_order_materials`. Eigen e-portal-opdrachten: nul gedragswijziging.
 
 ## Aggregatieregel materiaalstatus (E-Charging → één fase per opdracht)
 
@@ -85,8 +98,9 @@ van waarheid, bij wijzigen de kopie mee-updaten):**
   live draait v5 met de atomaire SECURITY DEFINER RPC `create_external_order`
   (order + regels + `external_order_mirrors` in één transactie); haal bij twijfel
   de actuele bron op via MCP `get_edge_function`.
-- `sync-material-status.ts` — materiaalstatus-sync edge function (verify_jwt=false, Contract 3)
-- Frontend-tagging: zie `egroup-frontend-prompt.md` (door E-Group-team uit te voeren)
+- `sync-material-status.ts` — materiaalstatus-sync edge function v2 (verify_jwt=false, Contract 3: prep-velden + estimated_hours + materials-replace)
+- Live DB (migratie `order_materials_and_echarging_werkbon_prefill`, zie appendix in `egroup-backend.sql`): tabel `order_materials` (+ RLS), kolom `work_order_materials.position`, RPC `sync_external_order_materials`, werkbon-triggers `trg_work_orders_echarging_prefill` + `trg_work_orders_echarging_materials`, `create_external_order` v2 (estimated_hours)
+- Frontend-tagging: zie `egroup-frontend-prompt.md`; materialen/uren-weergave: zie `egroup-materials-hours-prompt.md` (door E-Group-team uit te voeren)
 
 ## Contracten
 
@@ -105,12 +119,24 @@ van waarheid, bij wijzigen de kopie mee-updaten):**
   "site": { "location_name": "...", "street": "...", "house_number": "...", "postal_code": "...", "city": "...", "country": "NL" },
   "contact": { "name": "...", "email": "...", "phone": "..." },        // back-office/administratie (uit de klant)
   "site_contact": { "name": "...", "phone": "...", "email": "..." },   // contactpersoon op locatie (uit het bewerkbare site-snapshot)
-  "order_lines": [ { "description": "...", "qty": 10, "unit_price": 950, "total": 9500 } ],
+  "order_lines": [
+    { "description": "Levering & installatie — 10 laadpunten - AC 22kW",
+      "qty": 1, "unit_price": 0, "total": 0, "estimated_hours": 26.5 }
+  ],
+  "planning": { "hours_total": 26.5, "retour_km": 120, "travel_days": 2 },
   "totals": { "hardware_cost": 9500, "installation_cost": 4500, "with_management": true },
   "billing": { "invoiced_by": "e_charging", "e_portal_creates_invoice": false }  // facturering door e-charging; E-Portal maakt GEEN klantfactuur
 }
 ```
 Respons: `{ "order_id": "<uuid>", "order_number": "OPD-00023" }`
+
+> **Order_lines**: bewust één samenvattende regel (kosten in `totals`, scope in
+> `notes`); `estimated_hours` = montage-uren uit de interne calculatie (null bij
+> geen/overgeslagen calculatie of 0 uur) → landt in `order_lines.estimated_hours`
+> voor de planner. `planning` is context en wordt alleen in
+> `external_order_mirrors.raw_payload` bewaard. Materialen zitten NIET in
+> Contract 1 — die rijden volledig op Contract 3 (order-handoff pusht direct na
+> een geslaagde intake).
 
 > **Facturering:** `billing.e_portal_creates_invoice` staat altijd op `false`. Facturen worden door e-charging verstuurd en beheerd (settlements-flow), niet door de E-Portal. De E-Portal voert alleen de installatie/werkbon uit. `site_contact.phone` valt terug op het algemene klantcontact als het site-snapshot leeg is (zodat het telefoonnummer niet leeg binnenkomt). Dedupliceer op `external_reference` (= `installation_orders.id`) en respecteer de `Idempotency-Key`-header zodat een herhaalde POST geen dubbele opdracht aanmaakt.
 
@@ -126,20 +152,32 @@ Respons: `{ "order_id": "<uuid>", "order_number": "OPD-00023" }`
 ```
 Header `x-echarging-secret`. Respons: `200 {"status":"ok"}`.
 
-**Contract 3 — Materiaalstatus-sync (E-Charging `order-material-sync` → E-Group `sync-material-status`)**
+**Contract 3 (v2) — Materiaalstatus-sync (E-Charging `order-material-sync` → E-Group `sync-material-status`)**
 ```json
 {
   "external_reference": "<installation_orders.id>",
   "preparation_status": "besteld",            // niet_nodig | te_bestellen | besteld | binnen (aggregaat)
   "materials_expected_at": "2026-07-28",      // of null — verwachte leverdatum voor de planner
-  "preparation_notes": "Meterkast levert week 31"  // of null
+  "preparation_notes": "Meterkast levert week 31",  // of null
+  "estimated_hours": 26.5,                    // of null — montage-uren; alleen-als-leeg toegepast
+  "materials": [                              // optioneel — full-state replace van order_materials
+    { "position": 0, "qty": 3, "unit": "stuk", "article_number": "ZAP-900-00120",
+      "description": "Zaptec GO 2", "supplier": "Libra", "status": "binnen" },
+    { "position": 1, "qty": 24, "unit": "meter", "article_number": null,
+      "description": "YMvK 5x6", "supplier": "Elektramat", "status": "besteld" }
+  ]
 }
 ```
 Header `x-echarging-secret` (zelfde secret als intake). Full-state en laatste-wint:
 elke call bevat de complete actuele staat en is idempotent. E-Group update ALLE
 `order_lines` van de opdracht (order-brede semantiek; e-charging-orders hebben er
-precies één), strikt gescoped op `source='e_charging_dashboard'`.
-Respons: `200 {"status":"ok","order_id":"…","order_number":"OPD-…","lines_updated":1}`;
+precies één), strikt gescoped op `source='e_charging_dashboard'`. `materials`
+vervangt de complete `order_materials`-lijst atomair (RPC
+`sync_external_order_materials`, FOR UPDATE-serialisatie); alle statussen gaan
+mee — de werkbon-kopie filtert `niet_nodig` er zelf uit. `estimated_hours` wordt
+alleen-als-leeg toegepast (planner-correcties winnen; tevens het backfill-pad
+voor oude orders). Beide velden optioneel (v1-payloads blijven werken).
+Respons: `200 {"status":"ok","order_id":"…","order_number":"OPD-…","lines_updated":1,"materials_replaced":2}`;
 onbekende reference → `404 {"status":"not_found"}` (voor E-Charging niet fataal:
 landt in `last_sync_error`).
 
@@ -155,3 +193,14 @@ mutatie; synthetische order + regel → Contract 3 2× gepost (idempotent, `line
 `preparation_status/materials_expected_at/preparation_notes` correct geland; testdata
 verwijderd (0 rijen over). `start_work_preparation` + org-autofill-trigger + freeze-
 onafhankelijkheid geverifieerd in een transactie met rollback op E-Charging.
+
+Verrijking uren/materialen/werkbon (2026-07-13, synthetische order OPD-00144,
+daarna verwijderd): `create_external_order` v2 zette `estimated_hours 26.5` op de
+order_line + `planning` in de mirror, 2e call idempotent; Contract 3 v2 2× gepost →
+`materials_replaced: 4` beide keren (replace, geen duplicaten), `estimated_hours: 99`
+overschreef de bestaande 26.5 NIET (alleen-als-leeg); werkbon-insert → notes +
+performed_work voorgevuld uit `orders.notes` (mét witregels) en 3
+`work_order_materials` gekopieerd (niet_nodig uitgefilterd, positie behouden);
+controle-werkbon op een `source='manual'`-order → géén voorvulling, 0 materialen;
+v1-Contract-3 (zonder materials) → prep-update ok, `order_materials` onaangetast;
+alles opgeruimd (0 rijen over).

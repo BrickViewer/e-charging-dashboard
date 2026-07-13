@@ -68,8 +68,12 @@ Raak de intake-edge-function en de external_*-kolommen niet aan; dit is puur wer
 
 ---
 
-## Alternatief (niet gekozen): backend-trigger
-In plaats van de e-portal-app kan het voorvullen ook in de E-Group-DB via een trigger op `work_orders`
-(bij insert `notes`/`performed_work` defaulten uit `orders.notes` als ze leeg zijn). Dat werkt automatisch
-zonder e-portal-code, maar de witregel-weergave (Prompt 1) blijft hoe dan ook frontend-werk. Op verzoek
-alsnog te implementeren.
+## Update 2026-07-13: backend-trigger is geïmplementeerd
+Het voorvullen gebeurt inmiddels automatisch in de E-Group-DB (migratie
+`order_materials_and_echarging_werkbon_prefill`): `trg_work_orders_echarging_prefill` vult bij het
+aanmaken van een werkbon `notes`/`performed_work` (alleen-als-leeg, prioriteit orders.notes ->
+orders.description -> order_lines.work_description) en `trg_work_orders_echarging_materials` kopieert de
+materialenlijst (`order_materials`, status ≠ niet_nodig) naar `work_order_materials`. Beide strikt
+gescoped op `source='e_charging_dashboard'`. **Stap 1 van Prompt 2 (frontend-voorvullen) is daarmee
+vervallen** — de weergave-stappen (witregels, werkbon-detail, PDF) blijven frontend-werk, evenals het
+tonen van de materialen (zie `egroup-materials-hours-prompt.md`).

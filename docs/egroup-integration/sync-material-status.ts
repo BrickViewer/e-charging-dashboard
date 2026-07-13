@@ -7,11 +7,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //
 // Ontvangt materiaal-bestelstatus-updates van het E-Charging dashboard
 // (Contract 3, zie README.md). E-Charging is de bron van waarheid: elke call
-// bevat de volledige actuele staat (aggregaat over de werkvoorbereidings-
-// checklist) en is daarmee idempotent en laatste-wint. De update raakt ALLE
-// order_lines van de opdracht (order-brede semantiek; e-charging-orders hebben
-// er precies één). Scope strikt op source='e_charging_dashboard' — eigen
-// e-portal-opdrachten zijn onbereikbaar via dit endpoint.
+// bevat de volledige actuele staat (aggregaat + optioneel de complete
+// materialenlijst + geschatte uren) en is daarmee idempotent en laatste-wint.
+// v2: `materials` (full-state replace van order_materials via de atomaire RPC
+// sync_external_order_materials) en `estimated_hours` (alleen-als-leeg op
+// order_lines — planner-correcties winnen; tevens backfill voor oude orders).
+// De update raakt ALLE order_lines van de opdracht (order-brede semantiek;
+// e-charging-orders hebben er precies één). Scope strikt op
+// source='e_charging_dashboard' — eigen e-portal-opdrachten zijn onbereikbaar.
 // verify_jwt=false; auth via gedeelde secret-header (zelfde secret als intake).
 
 const corsHeaders = {
@@ -98,7 +101,42 @@ Deno.serve(async (req) => {
       .select("id");
     if (updErr) return json({ status: "error", message: updErr.message }, 500);
 
-    return json({ status: "ok", order_id: order.id, order_number: order.order_number, lines_updated: (updated ?? []).length });
+    // Geschatte uren uit de calculatie: alleen-als-leeg — een handmatige
+    // correctie van de planner wordt nooit overschreven. Dit is ook het
+    // backfill-pad voor orders die vóór Contract-1-v2 zijn overgedragen.
+    const hours =
+      typeof p.estimated_hours === "number" && isFinite(p.estimated_hours) && p.estimated_hours > 0
+        ? p.estimated_hours
+        : null;
+    if (hours !== null) {
+      const { error: hoursErr } = await sb
+        .from("order_lines")
+        .update({ estimated_hours: hours })
+        .eq("order_id", order.id)
+        .is("estimated_hours", null);
+      if (hoursErr) return json({ status: "error", message: hoursErr.message }, 500);
+    }
+
+    // Materialenlijst: full-state replace via de atomaire RPC (FOR UPDATE
+    // serialiseert gelijktijdige syncs). Optioneel veld — v1-payloads zonder
+    // materials laten order_materials ongemoeid.
+    let materialsReplaced: number | null = null;
+    if (Array.isArray(p.materials)) {
+      const { data: replaced, error: matErr } = await sb.rpc("sync_external_order_materials", {
+        p_order_id: order.id,
+        p_materials: p.materials,
+      });
+      if (matErr) return json({ status: "error", message: matErr.message }, 500);
+      materialsReplaced = (replaced as number | null) ?? 0;
+    }
+
+    return json({
+      status: "ok",
+      order_id: order.id,
+      order_number: order.order_number,
+      lines_updated: (updated ?? []).length,
+      materials_replaced: materialsReplaced,
+    });
   } catch (err) {
     return json({ status: "error", message: err instanceof Error ? err.message : "Sync mislukt" }, 500);
   }

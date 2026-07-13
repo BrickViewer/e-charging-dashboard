@@ -84,7 +84,7 @@ function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
 
 // deno-lint-ignore no-explicit-any
 export function buildHandoffPayload(input: any): any {
-  const { order, client, company, lead, quote, callbackUrl } = input;
+  const { order, client, company, lead, quote, calculation, callbackUrl } = input;
 
   const customerName = firstNonEmpty(client?.company_name, company?.name, lead?.company_name) ?? "Onbekend";
   const customerStreetFull = firstNonEmpty(client?.billing_address_street, company?.address_street);
@@ -95,8 +95,13 @@ export function buildHandoffPayload(input: any): any {
   const siteStreetFull = firstNonEmpty([siteStreet, siteHouse].filter(Boolean).join(" "), lead?.address_street);
 
   // Eén samenvattende werkregel (e-portal toont één rij per order_line). Scope in notes, kosten in totals.
+  // Uren uit de calculatie (0 = "geen urenregels" → null, misleidender dan onbekend).
   const workLabel = (order.service_summary ?? "").trim() || "laadinfrastructuur";
-  const lines = [{ description: `Levering & installatie — ${workLabel}`, qty: 1, unit_price: 0, total: 0 }];
+  const hoursTotal =
+    calculation?.hours_total != null && Number(calculation.hours_total) > 0 ? Number(calculation.hours_total) : null;
+  const lines = [
+    { description: `Levering & installatie — ${workLabel}`, qty: 1, unit_price: 0, total: 0, estimated_hours: hoursTotal },
+  ];
 
   return {
     external_reference: order.id,
@@ -147,6 +152,14 @@ export function buildHandoffPayload(input: any): any {
       email: firstNonEmpty(order.site_contact_email, lead?.contact_email, client?.contact_email),
     },
     order_lines: lines,
+    // Plannings-context uit de calculatie (alleen bewaard in raw_payload).
+    planning: calculation
+      ? {
+          hours_total: hoursTotal,
+          retour_km: calculation.retour_km != null ? Number(calculation.retour_km) : null,
+          travel_days: calculation.travel_days != null ? Number(calculation.travel_days) : null,
+        }
+      : null,
     totals: {
       hardware_cost: quote?.total_hardware_cost ?? null,
       installation_cost: quote?.total_installation_cost ?? null,
