@@ -12,6 +12,7 @@ import { useOrganization } from "@/hooks/useAdminData";
 import { useLeadOptions, useTeamProfiles } from "@/hooks/useLeads";
 import { useAllTasks, useAddTask, useToggleTask, useDeleteTask, useUpdateTask, type TaskWithLead } from "@/hooks/useTasks";
 import { TaskDetailSheet } from "@/components/sales/TaskDetailSheet";
+import { InlineDueDate } from "@/components/sales/InlineDueDate";
 import {
   PRIORITY_CHIP_CLASSES, PRIORITY_LABELS, bucketOf, checklistProgress, compareTasks, normalizePriority,
   parseChecklist, toDateStr, type TaskBucket, type TaskPriority,
@@ -273,12 +274,10 @@ export default function SalesTasks() {
                       </button>
                     )}
                     <span onClick={(e) => e.stopPropagation()} className="flex items-center">
-                      <Input
-                        type="date"
-                        value={t.due_date?.slice(0, 10) ?? ""}
-                        onChange={(e) => updateTask.mutate({ id: t.id, patch: { due_date: e.target.value || null }, leadId: t.lead_id })}
-                        className={`h-7 w-[125px] border-0 bg-transparent px-1 text-[11px] tabular-nums shadow-none focus-visible:ring-1 ${isOverdue ? "font-medium text-red-600" : "text-muted-foreground"}`}
-                        aria-label="Vervaldatum"
+                      <InlineDueDate
+                        value={t.due_date}
+                        overdue={isOverdue}
+                        onChange={(v) => updateTask.mutate({ id: t.id, patch: { due_date: v }, leadId: t.lead_id })}
                       />
                     </span>
                     <span onClick={(e) => e.stopPropagation()} className="flex items-center">

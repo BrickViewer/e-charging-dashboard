@@ -47,6 +47,7 @@ import {
   useConvertLeadToClient, type LeadStage, type LeadWithTasks,
 } from "@/hooks/useLeads";
 import { useLeadTasks, useAddTask, useToggleTask, useDeleteTask, useUpdateTask } from "@/hooks/useTasks";
+import { InlineDueDate } from "@/components/sales/InlineDueDate";
 import { PRIORITY_CHIP_CLASSES, PRIORITY_LABELS, checklistProgress, normalizePriority, parseChecklist } from "@/services/tasks";
 import { scopeFromFlags, SCOPES, SCOPE_LABEL } from "@/lib/quoteScope";
 import { useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
@@ -636,7 +637,11 @@ export function LeadDetailSheet({
                                 {profiles.map((p) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || p.user_id.slice(0, 8)}</SelectItem>)}
                               </SelectContent>
                             </Select>
-                            <Input type="date" className="h-6 w-[140px] border-0 bg-transparent px-1 text-[11px] text-muted-foreground shadow-none focus-visible:ring-0" value={t.due_date ?? ""} onChange={(e) => updateTask.mutate({ id: t.id, patch: { due_date: e.target.value || null }, leadId: lead.id })} />
+                            <InlineDueDate
+                              value={t.due_date}
+                              className="h-6 w-[140px] focus-visible:ring-0"
+                              onChange={(v) => updateTask.mutate({ id: t.id, patch: { due_date: v }, leadId: lead.id })}
+                            />
                           </div>
                         </div>
                         );
