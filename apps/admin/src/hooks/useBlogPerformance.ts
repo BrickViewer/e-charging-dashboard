@@ -66,6 +66,50 @@ export function useRefreshGsc() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["blog-performance-overview"] });
+      qc.invalidateQueries({ queryKey: ["blog-gsc-last-run"] });
+    },
+  });
+}
+
+// Laatste run van de GSC-ophaal (cron of handmatig). De edge logt elke run naar content_engine_events;
+// pg_net bewaart cron-responses maar kort, dus dit is de enige blijvende bron van "draait het, en wat kwam er binnen".
+export type GscRunDetail = {
+  days?: number;
+  start?: string;
+  end?: string;
+  metric_rows?: number;
+  query_rows?: number;
+  kennisbank_pages?: number;
+  total_page_rows?: number;
+  site_clicks?: number;
+  site_impressions?: number;
+  message?: string;
+};
+
+export type GscLastRun = {
+  at: string;
+  ok: boolean;
+  detail: GscRunDetail;
+};
+
+export function useGscLastRun() {
+  return useQuery({
+    queryKey: ["blog-gsc-last-run"],
+    queryFn: async (): Promise<GscLastRun | null> => {
+      const { data, error } = await supabase
+        .from("content_engine_events")
+        .select("at, step, detail")
+        .eq("fn", "blog-search-console")
+        .order("at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        at: data.at,
+        ok: data.step === "run_ok",
+        detail: (data.detail as GscRunDetail) ?? {},
+      };
     },
   });
 }

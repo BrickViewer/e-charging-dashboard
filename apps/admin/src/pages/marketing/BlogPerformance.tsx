@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KpiTile } from "@/components/admin/KpiTile";
 import {
-  useBlogPerformance, useRefreshGsc, type BlogPerformanceRow,
+  useBlogPerformance, useRefreshGsc, useGscLastRun, type BlogPerformanceRow, type GscLastRun,
   useBlogIndexStatus, useRefreshIndexStatus, useIndexNowPing, type BlogIndexRow,
 } from "@/hooks/useBlogPerformance";
 
@@ -14,6 +14,8 @@ const eur = (n: number) => "€ " + n.toLocaleString("nl-NL", { minimumFractionD
 const int = (n: number) => n.toLocaleString("nl-NL");
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—";
+const fmtDateTime = (iso: string) =>
+  new Date(iso).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 type SortKey = "clicks_all" | "impressions_all" | "avg_position" | "leads_count" | "revenue";
 const revenueOf = (r: BlogPerformanceRow) => r.won_oneoff_value + r.realized_recurring;
@@ -21,6 +23,7 @@ const revenueOf = (r: BlogPerformanceRow) => r.won_oneoff_value + r.realized_rec
 export default function BlogPerformance() {
   const q = useBlogPerformance();
   const refresh = useRefreshGsc();
+  const lastRun = useGscLastRun();
   const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>("clicks_all");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
@@ -92,15 +95,7 @@ export default function BlogPerformance() {
         <KpiTile label="Toegeschreven omzet" value={eur(totals.revenue)} subtitle="getekend + terugkerend" icon={<Euro className="h-5 w-5" />} accent="green" />
       </div>
 
-      {noGsc && (
-        <div className="flex items-start gap-3 rounded-xl border border-dashed bg-muted/30 p-3.5 text-sm text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            Nog geen Google-zoekdata voor de blogs. Google moet de (nieuwe) artikelen eerst indexeren en laten ranken; de
-            cijfers vullen zich de komende weken vanzelf. De dagelijkse ophaal draait al.
-          </div>
-        </div>
-      )}
+      {!lastRun.isLoading && <RunStatusBox run={lastRun.data ?? null} noGsc={noGsc} noLeads={totals.leads === 0} />}
 
       {q.isLoading ? (
         <Skeleton className="h-72 w-full rounded-xl" />
@@ -156,18 +151,73 @@ export default function BlogPerformance() {
   );
 }
 
-// Coverage-state -> leesbare badge. "Submitted and indexed" = goed; "Crawled/Discovered - currently not indexed" of
-// "URL is unknown to Google" = nog niet geïndexeerd (normaal voor een jong domein).
-function coverageBadge(cov: string | null) {
-  const c = (cov ?? "").toLowerCase();
-  const indexed = c.includes("indexed") && !c.includes("not indexed");
-  const unknown = c.includes("unknown");
+// Wat leverde de laatste (dagelijkse of handmatige) Search Console-ophaal op? De edge logt elke run;
+// zo is altijd zichtbaar dát de pipeline draait en waaróm de blogcijfers eventueel nog 0 zijn.
+function RunStatusBox({ run, noGsc, noLeads }: { run: GscLastRun | null; noGsc: boolean; noLeads: boolean }) {
+  if (!run) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-dashed bg-muted/30 p-3.5 text-sm text-muted-foreground">
+        <Info className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          Nog geen Search Console-ophaal geregistreerd. De automatische ophaal draait elke ochtend; je kunt hem ook direct
+          starten met <b>Search Console ophalen</b> hierboven.
+        </div>
+      </div>
+    );
+  }
+
+  if (!run.ok) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-sm">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <div>
+          <span className="font-medium text-destructive">Laatste Search Console-ophaal ({fmtDateTime(run.at)}) is mislukt.</span>
+          <div className="mt-0.5 text-muted-foreground">{run.detail.message ?? "Onbekende fout"} — probeer <b>Search Console ophalen</b> of check de GSC-koppeling.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const d = run.detail;
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-dashed bg-muted/30 p-3.5 text-sm text-muted-foreground">
+      <Info className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="space-y-1">
+        <div>
+          Laatste ophaal <span className="font-medium text-foreground">{fmtDateTime(run.at)}</span>
+          {d.start && d.end && <> · periode {fmtDate(d.start)} – {fmtDate(d.end)}</>}
+          {" · "}<span className="font-medium text-foreground">{int(d.metric_rows ?? 0)}</span> blog-datapunten
+          {" · "}site-breed <span className="font-medium text-foreground">{int(d.site_impressions ?? 0)}</span> impressies
+          {" en "}<span className="font-medium text-foreground">{int(d.site_clicks ?? 0)}</span> clicks
+        </div>
+        {noGsc && (
+          <div>
+            De koppeling werkt — site-breed komt er al zoekdata binnen — maar de blogartikelen zelf hebben nog geen
+            vertoningen: Google moet ze nog indexeren en laten ranken. De cijfers vullen automatisch zodra dat gebeurt.
+          </div>
+        )}
+        {noLeads && (
+          <div>
+            De kolommen Leads/Omzet vullen pas wanneer het offerteformulier op de website de eerst bezochte pagina
+            meestuurt — de instructie hiervoor ligt klaar voor de websitebouwer.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Geïndexeerd of niet bepalen we op het taal-onafhankelijke verdict (PASS = staat in Google); de
+// coverage_state komt gelokaliseerd (nl-NL) terug en dient alleen als leesbaar label.
+function coverageBadge(r: BlogIndexRow) {
+  const indexed = r.verdict === "PASS";
+  const unknown = /onbekend|unknown/i.test(r.coverage_state ?? "");
   const cls = indexed
     ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
     : unknown
     ? "bg-muted text-muted-foreground"
     : "bg-amber-500/15 text-amber-600 dark:text-amber-500";
-  const label = cov ?? "—";
+  const label = r.coverage_state ?? r.verdict ?? "—";
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }
 
@@ -203,7 +253,7 @@ function IndexStatusSection() {
     });
 
   const lastChecked = rows[0]?.checked_at ? fmtDate(rows[0].checked_at) : null;
-  const indexedCount = rows.filter((r) => (r.coverage_state ?? "").toLowerCase().includes("indexed") && !(r.coverage_state ?? "").toLowerCase().includes("not indexed")).length;
+  const indexedCount = rows.filter((r) => r.verdict === "PASS").length;
 
   return (
     <section className="space-y-3 pt-2">
@@ -263,7 +313,7 @@ function IndexStatusSection() {
                       {r.url.replace("https://www.e-charging.nl", "") || "/"}
                     </a>
                   </td>
-                  <td className="px-4 py-2.5">{coverageBadge(r.coverage_state)}</td>
+                  <td className="px-4 py-2.5">{coverageBadge(r)}</td>
                   <td className="px-4 py-2.5 text-muted-foreground tabular-nums">{r.last_crawl_time ? fmtDate(r.last_crawl_time) : "—"}</td>
                 </tr>
               ))}

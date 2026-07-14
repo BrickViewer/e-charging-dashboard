@@ -176,7 +176,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const indexed = rows.filter((r) => (r.coverage_state ?? "").toLowerCase().includes("indexed") && !(r.coverage_state ?? "").toLowerCase().includes("not indexed")).length;
+    // verdict is taal-onafhankelijk (PASS/NEUTRAL/FAIL); coverage_state komt gelokaliseerd terug (nl-NL).
+    const indexed = rows.filter((r) => r.verdict === "PASS").length;
     return json({
       status: "ok", site, checked: rows.length, indexed, not_indexed: rows.length - indexed,
       sitemap: sitemapInfo, sitemap_submit: sitemapSubmit, results,

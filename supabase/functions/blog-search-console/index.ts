@@ -77,6 +77,13 @@ function chunk<T>(arr: T[], n: number): T[][] {
   return out;
 }
 
+// Run-log naar content_engine_events: pg_net bewaart cron-responses maar kort, dus dit is de enige
+// blijvende plek waar te zien is of de dagelijkse ophaal draaide en wat hij opleverde. Best-effort.
+async function logRun(sb: any, step: "run_ok" | "run_error", detail: Record<string, unknown>) {
+  const { error } = await sb.from("content_engine_events").insert({ fn: "blog-search-console", step, detail });
+  if (error) console.error("run-log insert:", error.message);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") return json({ status: "error", message: "Method not allowed" }, 405);
@@ -86,17 +93,24 @@ Deno.serve(async (req) => {
   if (!supabaseUrl || !serviceKey) return json({ status: "error", message: "Serverconfiguratie ontbreekt" }, 500);
   const sb = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
+  let days = 5;
   try {
     const auth = await requireAdminOrInternal(req, sb as any, cors, { allowInternal: true, allowMarketing: true });
     if (!auth.ok) return auth.response;
 
     const body = await req.json().catch(() => ({} as any));
-    const days = Number.isFinite(body.days) ? Math.max(1, Math.min(480, Number(body.days))) : 5;
+    days = Number.isFinite(body.days) ? Math.max(1, Math.min(480, Number(body.days))) : 5;
 
     const saRaw = await resolveSecret(sb, ["GSC_SERVICE_ACCOUNT"], "gsc_service_account");
-    if (!saRaw) return json({ status: "no_key", message: "Stel eerst de GSC-service-account in (Vault: gsc_service_account)." });
+    if (!saRaw) {
+      await logRun(sb, "run_error", { days, message: "GSC-service-account ontbreekt (Vault: gsc_service_account)" });
+      return json({ status: "no_key", message: "Stel eerst de GSC-service-account in (Vault: gsc_service_account)." });
+    }
     let sa: any;
-    try { sa = JSON.parse(saRaw); } catch { return json({ status: "error", message: "GSC-service-account is geen geldige JSON" }, 500); }
+    try { sa = JSON.parse(saRaw); } catch {
+      await logRun(sb, "run_error", { days, message: "GSC-service-account is geen geldige JSON" });
+      return json({ status: "error", message: "GSC-service-account is geen geldige JSON" }, 500);
+    }
 
     const token = await getAccessToken(sa);
 
@@ -106,6 +120,7 @@ Deno.serve(async (req) => {
     const prefer = ["sc-domain:e-charging.nl", "https://www.e-charging.nl/", "https://e-charging.nl/"];
     const site = prefer.find((p) => sites.includes(p)) ?? sites.find((s) => s.includes("e-charging.nl")) ?? null;
     if (!site) {
+      await logRun(sb, "run_error", { days, message: "Geen e-charging.nl-property voor dit serviceaccount", sites });
       return json({
         status: "no_access",
         message: "Geen e-charging.nl-property gevonden voor dit serviceaccount. Voeg het serviceaccount-e-mailadres toe als gebruiker in Search Console (stap 6 van de gids).",
@@ -123,6 +138,10 @@ Deno.serve(async (req) => {
     // 1) Per dag per pagina -> blog_metrics.
     const rows1 = await gscQuery(token, site, { startDate, endDate, dimensions: ["date", "page"], rowLimit: 25000, dataState: "all" });
     const allPages = [...new Set(rows1.map((r: any) => r.keys?.[1]).filter(Boolean))];
+    // Site-brede totalen (alle pagina's, vóór het kennisbank-filter): bewijst dat de GSC-koppeling
+    // data levert, ook zolang de blogartikelen zelf nog niet ranken.
+    const siteClicks = rows1.reduce((a: number, r: any) => a + Math.round(r.clicks ?? 0), 0);
+    const siteImpressions = rows1.reduce((a: number, r: any) => a + Math.round(r.impressions ?? 0), 0);
     const metricRows = rows1
       .filter((r: any) => (r.keys?.[1] ?? "").includes("/kennisbank/"))
       .map((r: any) => {
@@ -172,12 +191,21 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
+    await logRun(sb, "run_ok", {
+      days, start: startDate, end: endDate,
+      metric_rows: metricUpserts, query_rows: queryRows.length, kennisbank_pages: perPage.size,
+      total_page_rows: rows1.length, site_clicks: siteClicks, site_impressions: siteImpressions,
+    });
+
     return json({
       status: "ok", site, days, start: startDate, end: endDate,
       blog_metric_rows: metricUpserts, query_rows: queryRows.length, kennisbank_pages: perPage.size,
+      site_clicks: siteClicks, site_impressions: siteImpressions,
       diag: { total_page_rows: rows1.length, distinct_pages: allPages.length, sample_pages: allPages.slice(0, 15) },
     });
   } catch (err) {
-    return json({ status: "error", message: err instanceof Error ? err.message : "GSC-ophaal mislukt" }, 500);
+    const message = err instanceof Error ? err.message : "GSC-ophaal mislukt";
+    await logRun(sb, "run_error", { days, message });
+    return json({ status: "error", message }, 500);
   }
 });
