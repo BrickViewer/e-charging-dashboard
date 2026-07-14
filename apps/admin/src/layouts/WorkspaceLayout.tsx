@@ -160,9 +160,15 @@ export default function WorkspaceLayout() {
 
       {/* Brand + werkblad-switcher */}
       <div className="relative px-5 py-6 border-b border-foreground/[0.06]">
-        {/* Beide logo-SVG's hebben (sinds de viewBox-crop van full-color) dezelfde
-            5:1-verhouding — vaste hoogte rendert dus in beide thema's identiek. */}
-        <img src={logo} alt="E-Charging" className="h-8 w-auto max-w-[168px]" />
+        {/* LET OP: logo-full-color.svg is GEDEELD met de offerte-PDF (height-gemaat)
+            en heeft een 2× zo hoog canvas als logo-bright (beeldmerk exact gecentreerd,
+            transparante rand boven/onder) — verander dat asset dus nooit. Hier lossen we
+            het lokaal op: vaste-hoogte-band + breedte-gemaat logo; het lichte logo steekt
+            met zijn transparante rand onzichtbaar uit de band, het beeldmerk zelf valt in
+            beide thema's exact in de 32px-band → identieke maat én layouthoogte. */}
+        <div className="flex h-8 items-center">
+          <img src={logo} alt="E-Charging" className="w-40 max-w-none" />
+        </div>
         {accessible.length > 1 ? (
           (() => {
             const idx = Math.max(0, accessible.indexOf(workspace));
@@ -261,7 +267,10 @@ export default function WorkspaceLayout() {
       {/* Mobile header */}
       <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card">
         <div>
-          <img src={logo} alt="E-Charging" className="h-7 w-auto max-w-[148px]" />
+          {/* Zelfde constructie als de desktop-sidebar (zie comment daar). */}
+          <div className="flex h-7 items-center">
+            <img src={logo} alt="E-Charging" className="w-[140px] max-w-none" />
+          </div>
           <p className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground mt-1">
             {activeWorkspace.label}
           </p>
