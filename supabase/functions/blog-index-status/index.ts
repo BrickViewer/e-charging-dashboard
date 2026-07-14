@@ -64,6 +64,13 @@ function slugOf(url: string): string | null {
   return m && m[1] !== "categorie" ? decodeURIComponent(m[1]) : null;
 }
 
+// Run-log naar content_engine_events: de wekelijkse cron-run (incl. sitemap-indiening) is anders
+// onzichtbaar omdat pg_net na 5s opgeeft terwijl de inspectie-loop doordraait. Best-effort.
+async function logRun(sb: any, step: "run_ok" | "run_error", detail: Record<string, unknown>) {
+  const { error } = await sb.from("content_engine_events").insert({ fn: "blog-index-status", step, detail });
+  if (error) console.error("run-log insert:", error.message);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") return json({ status: "error", message: "Method not allowed" }, 405);
@@ -81,9 +88,15 @@ Deno.serve(async (req) => {
     const doSubmitSitemap = body.submit_sitemap === true;
 
     const saRaw = await resolveSecret(sb, ["GSC_SERVICE_ACCOUNT"], "gsc_service_account");
-    if (!saRaw) return json({ status: "no_key", message: "Stel eerst de GSC-service-account in (Vault: gsc_service_account)." });
+    if (!saRaw) {
+      await logRun(sb, "run_error", { message: "GSC-service-account ontbreekt (Vault: gsc_service_account)" });
+      return json({ status: "no_key", message: "Stel eerst de GSC-service-account in (Vault: gsc_service_account)." });
+    }
     let sa: any;
-    try { sa = JSON.parse(saRaw); } catch { return json({ status: "error", message: "GSC-service-account is geen geldige JSON" }, 500); }
+    try { sa = JSON.parse(saRaw); } catch {
+      await logRun(sb, "run_error", { message: "GSC-service-account is geen geldige JSON" });
+      return json({ status: "error", message: "GSC-service-account is geen geldige JSON" }, 500);
+    }
 
     const token = await getAccessToken(sa);
 
@@ -93,6 +106,7 @@ Deno.serve(async (req) => {
     const prefer = ["sc-domain:e-charging.nl", "https://www.e-charging.nl/", "https://e-charging.nl/"];
     const site = prefer.find((p) => sites.includes(p)) ?? sites.find((s) => s.includes("e-charging.nl")) ?? null;
     if (!site) {
+      await logRun(sb, "run_error", { message: "Geen e-charging.nl-property voor dit serviceaccount", sites });
       return json({ status: "no_access", message: "Geen e-charging.nl-property gevonden voor dit serviceaccount.", sites });
     }
 
@@ -169,6 +183,7 @@ Deno.serve(async (req) => {
     }
 
     if (needsOwner) {
+      await logRun(sb, "run_error", { message: "URL Inspection gaf 403: serviceaccount is geen OWNER van de property", checked: rows.length });
       return json({
         status: "needs_owner",
         message: "De URL Inspection API gaf 403. Het GSC-serviceaccount moet OWNER zijn van de property. Voeg het serviceaccount-e-mailadres in Search Console toe met de rol 'Eigenaar' (Instellingen -> Gebruikers en machtigingen) en probeer opnieuw.",
@@ -178,11 +193,18 @@ Deno.serve(async (req) => {
 
     // verdict is taal-onafhankelijk (PASS/NEUTRAL/FAIL); coverage_state komt gelokaliseerd terug (nl-NL).
     const indexed = rows.filter((r) => r.verdict === "PASS").length;
+    await logRun(sb, "run_ok", {
+      checked: rows.length, indexed,
+      sitemap_submitted: sitemapSubmit ? sitemapSubmit.ok === true : null,
+      sitemap_last_submitted: sitemapInfo?.lastSubmitted ?? null,
+    });
     return json({
       status: "ok", site, checked: rows.length, indexed, not_indexed: rows.length - indexed,
       sitemap: sitemapInfo, sitemap_submit: sitemapSubmit, results,
     });
   } catch (err) {
-    return json({ status: "error", message: err instanceof Error ? err.message : "Index-status mislukt" }, 500);
+    const message = err instanceof Error ? err.message : "Index-status mislukt";
+    await logRun(sb, "run_error", { message });
+    return json({ status: "error", message }, 500);
   }
 });

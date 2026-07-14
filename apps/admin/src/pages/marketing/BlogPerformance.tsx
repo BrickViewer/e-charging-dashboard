@@ -282,9 +282,10 @@ function IndexStatusSection() {
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
           Google heeft <b>geen API</b> om per pagina "Verzoek om indexering" te doen — dat blijft een handmatige knop in
-          Search Console. Wat hier wél automatisch kan: de <b>indexstatus uitlezen</b>, de <b>sitemap (her)indienen</b> (Google's
-          bulk-manier) en <b>bij Bing/AI aanmelden</b> via IndexNow. Voor een nieuw domein is "nog niet geïndexeerd" normaal;
-          het vult zich in de komende weken.
+          Search Console. Wat wél automatisch kan, loopt inmiddels vanzelf: <b>elke maandagochtend</b> wordt de indexstatus
+          ververst, de sitemap opnieuw bij Google ingediend en alles bij Bing/AI aangemeld via IndexNow; bij publicatie van
+          een nieuwe blog gaat er direct een IndexNow-ping uit. De knoppen hierboven doen hetzelfde tussendoor. Voor een
+          nieuw domein is "nog niet geïndexeerd" normaal; het vult zich in de komende weken.
         </div>
       </div>
 
