@@ -96,9 +96,10 @@ Deno.serve(async (req) => {
         .order("version", { ascending: false }).limit(1).maybeSingle();
       const offerTemplate = normalizeSettings(settingsRow?.settings).offerTemplate;
 
-      // Profiel van de ingelogde ondertekenaar: fallback voor naam/functie als er nog geen voorgevulde is.
+      // Profiel van de ingelogde ondertekenaar: fallback voor de naam als er nog geen voorgevulde is.
+      // Bewust geen functietitel: interne functies horen niet op offertes/contracten.
       const { data: signerProfile } = await sb.from("profiles")
-        .select("full_name, signer_title").eq("user_id", auth.userId).maybeSingle();
+        .select("full_name").eq("user_id", auth.userId).maybeSingle();
 
       const summary = {
         quoteNumber: quote.quote_number,
@@ -121,11 +122,9 @@ Deno.serve(async (req) => {
         offerTemplate,
         // Voorgevulde interne handtekening (read-only) + klantgegevens.
         internalSignerName: quote.internal_signer_name ?? null,
-        internalSignerFunction: quote.internal_signer_function ?? null,
         internalSignatureDataUrl: quote.internal_signature_data_url ?? null,
         // Fallbacks + volledige e-mailcontext voor de ondertekenaar.
         signerProfileName: signerProfile?.full_name ?? null,
-        signerProfileFunction: signerProfile?.signer_title ?? null,
         recipientEmail: quote.prospect_email ?? null,
       };
       return json({ status: "ok", quote: summary });
@@ -137,11 +136,10 @@ Deno.serve(async (req) => {
       // Ter plekke getekende handtekening (optioneel) opslaan zodat de bron-van-waarheid klopt.
       const drawnSig = typeof body.signature_data_url === "string" && body.signature_data_url ? body.signature_data_url : null;
       const now = new Date().toISOString();
-      const { data: prof } = await sb.from("profiles").select("full_name, signer_title").eq("user_id", auth.userId).maybeSingle();
+      const { data: prof } = await sb.from("profiles").select("full_name").eq("user_id", auth.userId).maybeSingle();
       const patch: Record<string, string | null> = { internal_signed_at: now };
       if (drawnSig) patch.internal_signature_data_url = drawnSig;
       if (!quote.internal_signer_name) patch.internal_signer_name = prof?.full_name ?? null;
-      if (!quote.internal_signer_function) patch.internal_signer_function = prof?.signer_title ?? null;
       if (!quote.internal_signer_user_id) patch.internal_signer_user_id = auth.userId;
       await sb.from("quote_internal_signings").update({ status: "signed", signed_at: now }).eq("id", signing.id);
       await sb.from("quotes").update(patch).eq("id", quote.id);

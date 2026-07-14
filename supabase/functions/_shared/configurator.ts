@@ -93,7 +93,8 @@ export const defaultOfferTemplate: OfferTemplate = {
   betaalBijStartPct: 0,
   betaalNaWerkPct: 50,
   echargingSignerName: "Willi-Jan Jonkers",
-  echargingSignerFunction: "Directeur",
+  // Bewust leeg: interne functietitels horen niet op offertes/contracten.
+  echargingSignerFunction: "",
   defaultObjectTemplate: "",
   defaultBetreftTemplate: "Offerte laadinfrastructuur",
   defaultAanhef: "heer/mevrouw",

@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       if (!roles.includes("admin") && !roles.includes("superadmin")) {
         return json({ status: "error", message: "Alleen admin/superadmin kan namens E-Charging tekenen" }, 403);
       }
-      const { data: prof } = await serviceClient.from("profiles").select("full_name, signer_title, signature_data_url").eq("user_id", auth.userId).maybeSingle();
+      const { data: prof } = await serviceClient.from("profiles").select("full_name, signature_data_url").eq("user_id", auth.userId).maybeSingle();
       // Ter plekke getekende handtekening heeft voorrang op de opgeslagen; minstens een van beide vereist.
       const drawnSig = typeof body.internal_signature_data_url === "string" && body.internal_signature_data_url ? body.internal_signature_data_url : null;
       const sig = drawnSig ?? prof?.signature_data_url ?? null;
@@ -63,7 +63,6 @@ Deno.serve(async (req) => {
       await serviceClient.from("quotes").update({
         internal_signer_user_id: auth.userId,
         internal_signer_name: prof?.full_name ?? null,
-        internal_signer_function: prof?.signer_title ?? null,
         internal_signature_data_url: sig,
         internal_signed_at: new Date().toISOString(),
       }).eq("id", quoteId);

@@ -62,9 +62,10 @@ export const offerTemplateSchema = z.object({
   betaalBijOpdrachtPct: z.number().min(0).max(100).default(50),
   betaalBijStartPct: z.number().min(0).max(100).default(0),
   betaalNaWerkPct: z.number().min(0).max(100).default(50),
-  // Ondertekenaar namens E-Charging.
+  // Ondertekenaar namens E-Charging. Functietitel bewust leeg: interne functies
+  // horen niet op offertes/contracten (key blijft voor compat met opgeslagen JSON).
   echargingSignerName: z.string().default("Willi-Jan Jonkers"),
-  echargingSignerFunction: z.string().default("Directeur"),
+  echargingSignerFunction: z.string().default(""),
   // Tekstsjablonen voor de briefkoppen.
   defaultObjectTemplate: z.string().default(""),
   defaultBetreftTemplate: z.string().default("Offerte laadinfrastructuur"),

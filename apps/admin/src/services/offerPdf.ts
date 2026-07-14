@@ -21,22 +21,21 @@ export interface OfferSignature {
   signerName?: string; // klant-naam (rechts); leeg bij interne/preview-render
   signatureDataUrl?: string; // PNG data-URL van het klant-handtekening-canvas
   date?: string | null; // ISO; default vandaag
-  // E-Charging mede-ondertekening (links).
+  // E-Charging mede-ondertekening (links). Bewust GEEN functietitel: interne
+  // functies horen niet op offertes/contracten.
   echargingSignatureDataUrl?: string | null;
   echargingSignerName?: string | null;
-  echargingSignerFunction?: string | null;
 }
 
 // Bouwt het E-Charging-handtekeningblok voor preview én PDF uit de gekozen ondertekenaar.
-// De NAAM (+ functie) gaat ALTIJD mee; de handtekening-afbeelding alleen als die er is — zo
+// De NAAM gaat ALTIJD mee; de handtekening-afbeelding alleen als die er is — zo
 // toont een ondertekenaar zonder opgeslagen handtekening tóch zijn naam i.p.v. de settings-
 // default. Levert undefined alleen als er geen naam is (dan valt de template terug op de default).
-export function echargingSignature(input: { name?: string | null; func?: string | null; signatureDataUrl?: string | null }): OfferSignature | undefined {
+export function echargingSignature(input: { name?: string | null; signatureDataUrl?: string | null }): OfferSignature | undefined {
   const name = (input.name ?? "").trim();
   if (!name) return undefined;
   return {
     echargingSignerName: name,
-    echargingSignerFunction: input.func ?? null,
     echargingSignatureDataUrl: input.signatureDataUrl ?? null,
   };
 }
@@ -143,7 +142,6 @@ function toTemplateSignature(signature?: OfferSignature): OfferTemplateSignature
     date: signature.signatureDataUrl ? (signature.date ?? new Date().toISOString()) : (signature.date ?? null),
     echargingSignatureDataUrl: signature.echargingSignatureDataUrl ?? null,
     echargingSignerName: signature.echargingSignerName ?? null,
-    echargingSignerFunction: signature.echargingSignerFunction ?? null,
   };
 }
 

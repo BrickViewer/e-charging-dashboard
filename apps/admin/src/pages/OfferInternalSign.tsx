@@ -34,10 +34,8 @@ type QuoteSummary = {
   offerDetails?: OfferDetails | null;
   offerTemplate?: OfferTemplateValues | null;
   internalSignerName?: string | null;
-  internalSignerFunction?: string | null;
   internalSignatureDataUrl?: string | null;
   signerProfileName?: string | null;
-  signerProfileFunction?: string | null;
   recipientEmail?: string | null;
 };
 
@@ -65,7 +63,6 @@ const toPdfData = (q: QuoteSummary): OfferPdfData => ({
 const echargingSig = (q: QuoteSummary, sig: string | null) => ({
   echargingSignatureDataUrl: sig,
   echargingSignerName: q.internalSignerName ?? q.signerProfileName ?? null,
-  echargingSignerFunction: q.internalSignerFunction ?? q.signerProfileFunction ?? null,
 });
 
 export default function OfferInternalSign() {

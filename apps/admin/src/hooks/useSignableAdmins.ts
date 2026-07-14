@@ -4,19 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 export type SignableAdmin = {
   userId: string;
   fullName: string;
-  signerTitle: string | null;
   signatureDataUrl: string | null;
   hasSignature: boolean;
 };
 
 // Lijst van interne ondertekenaars: alleen admin/superadmin. Bevat de opgeslagen
-// handtekening (intern zichtbaar; verschijnt sowieso op de offerte) + functie.
+// handtekening (intern zichtbaar; verschijnt sowieso op de offerte). Bewust GEEN
+// functietitel — interne functies horen niet op offertes/contracten.
 export function useSignableAdmins() {
   return useQuery({
     queryKey: ["signable-admins"],
     queryFn: async (): Promise<SignableAdmin[]> => {
       const [{ data: profiles, error: pErr }, { data: roles, error: rErr }] = await Promise.all([
-        supabase.from("profiles").select("user_id, full_name, signature_data_url, signer_title"),
+        supabase.from("profiles").select("user_id, full_name, signature_data_url"),
         supabase.from("user_roles").select("user_id, role"),
       ]);
       if (pErr) throw pErr;
@@ -29,7 +29,6 @@ export function useSignableAdmins() {
         .map((p) => ({
           userId: p.user_id,
           fullName: p.full_name ?? "Onbekend",
-          signerTitle: p.signer_title ?? null,
           signatureDataUrl: p.signature_data_url ?? null,
           hasSignature: !!p.signature_data_url,
         }))

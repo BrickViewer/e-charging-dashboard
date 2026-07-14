@@ -322,7 +322,6 @@ export default function SalesOfferteDetail() {
   const echargingFromQuote = (): OfferSignature => ({
     echargingSignatureDataUrl: quote?.internal_signature_data_url ?? null,
     echargingSignerName: quote?.internal_signer_name ?? null,
-    echargingSignerFunction: quote?.internal_signer_function ?? null,
   });
 
   // SharePoint-dossier bijwerken met de (getekende) OFF — best-effort, NA de verzending.
@@ -352,7 +351,6 @@ export default function SalesOfferteDetail() {
       const pdfBase64 = await offerPdfBase64(pdfData(), {
         echargingSignatureDataUrl: selfSig,
         echargingSignerName: selfAdmin.fullName,
-        echargingSignerFunction: selfAdmin.signerTitle,
       });
       setBusy("Versturen…");
       await send.mutateAsync({ quoteId: quote.id, email: email.trim(), pdfBase64, internalSelfSign: true, internalSignatureDataUrl: drawnSelfSig });
@@ -376,7 +374,7 @@ export default function SalesOfferteDetail() {
       // opgeslagen) → de SharePoint-OFF is consistent met de preview en de snapshot die
       // quote-request-signoff wegschrijft. Geen default "Willi-Jan Jonkers" meer.
       const offPdfBase64 = await offerPdfBase64(pdfData(), echargingSignature({
-        name: selectedAdmin.fullName, func: selectedAdmin.signerTitle, signatureDataUrl: selectedAdmin.signatureDataUrl,
+        name: selectedAdmin.fullName, signatureDataUrl: selectedAdmin.signatureDataUrl,
       }));
       setBusy("Versturen…");
       await requestSignoff.mutateAsync({ quoteId: quote.id });
@@ -467,13 +465,13 @@ export default function SalesOfferteDetail() {
     );
   }
 
-  // In concept: toon de gekozen interne ondertekenaar (naam + functie + handtekening) live in de
+  // In concept: toon de gekozen interne ondertekenaar (naam + handtekening) live in de
   // preview — naam altijd, handtekening indien opgeslagen. Valt terug op de ingelogde gebruiker
   // wanneer er nog niets gekozen is. Verzonden/getekend gebruikt de snapshot uit de quote.
   const effectiveSigner = selectedAdmin ?? selfAdmin;
   const previewSignature: OfferSignature | undefined = isConcept
-    ? echargingSignature({ name: effectiveSigner?.fullName, func: effectiveSigner?.signerTitle, signatureDataUrl: effectiveSigner?.signatureDataUrl })
-    : echargingSignature({ name: quote?.internal_signer_name, func: quote?.internal_signer_function, signatureDataUrl: quote?.internal_signature_data_url });
+    ? echargingSignature({ name: effectiveSigner?.fullName, signatureDataUrl: effectiveSigner?.signatureDataUrl })
+    : echargingSignature({ name: quote?.internal_signer_name, signatureDataUrl: quote?.internal_signature_data_url });
 
   return (
     <div className="animate-fade-in">

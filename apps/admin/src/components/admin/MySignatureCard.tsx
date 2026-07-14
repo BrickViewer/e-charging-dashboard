@@ -41,7 +41,6 @@ export function MySignatureCard() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"draw" | "upload">("draw");
   const [signature, setSignature] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
@@ -50,7 +49,7 @@ export function MySignatureCard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("signature_data_url, signer_title, full_name")
+        .select("signature_data_url, full_name")
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
@@ -61,7 +60,6 @@ export function MySignatureCard() {
   useEffect(() => {
     if (profile) {
       setSignature(profile.signature_data_url ?? null);
-      setTitle(profile.signer_title ?? "");
     }
   }, [profile]);
 
@@ -78,9 +76,10 @@ export function MySignatureCard() {
     if (!user?.id) return;
     setSaving(true);
     try {
+      // Bewust geen signer_title meer: interne functietitels horen niet op offertes.
       const { error } = await supabase
         .from("profiles")
-        .update({ signature_data_url: signature, signer_title: title.trim() || null })
+        .update({ signature_data_url: signature })
         .eq("user_id", user.id);
       if (error) throw error;
       toast.success("Handtekening opgeslagen");
@@ -108,11 +107,6 @@ export function MySignatureCard() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Laden…</div>
         ) : (
           <>
-            <div className="space-y-1.5 max-w-xs">
-              <Label htmlFor="signer-title">Functie (op de offerte)</Label>
-              <Input id="signer-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="bv. Directeur" />
-            </div>
-
             <div className="flex gap-2">
               <Button type="button" variant={mode === "draw" ? "default" : "outline"} size="sm" onClick={() => setMode("draw")}>
                 <PenLine className="w-4 h-4 mr-1" /> Tekenen

@@ -40,7 +40,6 @@ type QuoteSummary = {
   // Interne (E-Charging) mede-ondertekening — al gezet voordat de klant tekent.
   internalSignatureDataUrl?: string | null;
   internalSignerName?: string | null;
-  internalSignerFunction?: string | null;
 };
 type Resp = { status: string; message?: string; quote?: QuoteSummary };
 
@@ -73,7 +72,6 @@ const toPdfData = (q: QuoteSummary): OfferPdfData => ({
 const echargingSig = (q: QuoteSummary): Partial<OfferSignature> => ({
   echargingSignatureDataUrl: q.internalSignatureDataUrl ?? null,
   echargingSignerName: q.internalSignerName ?? null,
-  echargingSignerFunction: q.internalSignerFunction ?? null,
 });
 
 export default function OfferAccept() {

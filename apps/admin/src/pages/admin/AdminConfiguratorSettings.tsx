@@ -695,7 +695,6 @@ export default function AdminConfiguratorSettings() {
               </CardHeader>
               <CardContent className="grid gap-5 md:grid-cols-2">
                 <TextField label="Ondertekenaar (naam)" value={settings.offerTemplate.echargingSignerName} onChange={(v) => setOffer({ echargingSignerName: v })} />
-                <TextField label="Ondertekenaar (functie)" value={settings.offerTemplate.echargingSignerFunction} onChange={(v) => setOffer({ echargingSignerFunction: v })} />
                 <TextField label="Standaard 'Locatie'" value={settings.offerTemplate.defaultObjectTemplate} onChange={(v) => setOffer({ defaultObjectTemplate: v })} />
                 <TextField label="Standaard 'Betreft'" value={settings.offerTemplate.defaultBetreftTemplate} onChange={(v) => setOffer({ defaultBetreftTemplate: v })} />
                 <TextField label="Standaard aanhef" value={settings.offerTemplate.defaultAanhef} onChange={(v) => setOffer({ defaultAanhef: v })} />
