@@ -21,8 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
-  Building2, Euro, ExternalLink, FileText, MapPin, MessageSquare, MoreHorizontal,
-  Pencil, Plus, Tag, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
+  Building2, Euro, ExternalLink, FileText, ListChecks, MapPin, MessageSquare, MoreHorizontal,
+  Pencil, Plus, Repeat, Tag, Trash2, Trophy, UserPlus, WandSparkles, XCircle, Zap,
 } from "lucide-react";
 import { useCreateQuoteFromLead, useLeadQuotes, rejectCategoryLabel } from "@/hooks/useQuotes";
 import { useQuoteRequest } from "@/hooks/useQuoteRequest";
@@ -43,9 +43,11 @@ import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { CompanyFields } from "@/components/contacts/CompanyFields";
 import { PersonFields } from "@/components/contacts/PersonFields";
 import {
-  useLeadTasks, useLeadActivities, useUpdateLead, useDeleteLead, useAddTask, useToggleTask,
-  useDeleteTask, useUpdateTask, useConvertLeadToClient, type LeadStage, type LeadWithTasks,
+  useLeadActivities, useUpdateLead, useDeleteLead,
+  useConvertLeadToClient, type LeadStage, type LeadWithTasks,
 } from "@/hooks/useLeads";
+import { useLeadTasks, useAddTask, useToggleTask, useDeleteTask, useUpdateTask } from "@/hooks/useTasks";
+import { PRIORITY_CHIP_CLASSES, PRIORITY_LABELS, checklistProgress, normalizePriority, parseChecklist } from "@/services/tasks";
 import { scopeFromFlags, SCOPES, SCOPE_LABEL } from "@/lib/quoteScope";
 import { useAvgRevenuePerChargePoint } from "@/hooks/useAdminData";
 import { leadMgmtYearEstimate, leadQuoteValue } from "@/lib/leadEstimate";
@@ -597,11 +599,28 @@ export function LeadDetailSheet({
                 <div className="space-y-1.5">
                   {tasks.isLoading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />) : (
                     <>
-                      {(tasks.data ?? []).map((t) => (
+                      {(tasks.data ?? []).map((t) => {
+                        const taskPriority = normalizePriority(t.priority);
+                        const taskProgress = checklistProgress(parseChecklist(t.checklist));
+                        return (
                         <div key={t.id} className="group rounded-lg border p-2">
                           <div className="flex items-center gap-2">
                             <Checkbox checked={t.done} onCheckedChange={(c) => toggleTask.mutate({ id: t.id, done: !!c, leadId: lead.id })} />
                             <span className={`flex-1 text-sm ${t.done ? "text-muted-foreground line-through" : "text-foreground"}`}>{t.title}</span>
+                            {taskPriority !== "medium" && (
+                              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${PRIORITY_CHIP_CLASSES[taskPriority]}`}>{PRIORITY_LABELS[taskPriority]}</span>
+                            )}
+                            {t.recurrence && <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Terugkerende taak" />}
+                            {taskProgress.total > 0 && (
+                              <span className="flex items-center gap-0.5 text-[10px] tabular-nums text-muted-foreground"><ListChecks className="h-3 w-3" />{taskProgress.done}/{taskProgress.total}</span>
+                            )}
+                            <button
+                              className="text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
+                              onClick={() => navigate(`/sales/taken?task=${t.id}`)}
+                              title="Openen in takenoverzicht"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </button>
                             <button className="text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100" onClick={() => deleteTask.mutate({ id: t.id, leadId: lead.id })}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -620,7 +639,8 @@ export function LeadDetailSheet({
                             <Input type="date" className="h-6 w-[140px] border-0 bg-transparent px-1 text-[11px] text-muted-foreground shadow-none focus-visible:ring-0" value={t.due_date ?? ""} onChange={(e) => updateTask.mutate({ id: t.id, patch: { due_date: e.target.value || null }, leadId: lead.id })} />
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                       {tasks.data?.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Nog geen to-do's.</p>}
                     </>
                   )}

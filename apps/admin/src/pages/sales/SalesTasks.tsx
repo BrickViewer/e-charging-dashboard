@@ -1,24 +1,23 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ListChecks, Plus, AlertTriangle, CheckCircle2, Building2, Trash2 } from "lucide-react";
+import { ListChecks, Plus, AlertTriangle, CheckCircle2, Building2, Trash2, Repeat } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useAdminData";
+import { useLeadOptions, useTeamProfiles } from "@/hooks/useLeads";
+import { useAllTasks, useAddTask, useToggleTask, useDeleteTask, useUpdateTask, type TaskWithLead } from "@/hooks/useTasks";
+import { TaskDetailSheet } from "@/components/sales/TaskDetailSheet";
 import {
-  useAllTasks, useAddTask, useToggleTask, useDeleteTask, useUpdateTask, useTeamProfiles, useLeadOptions,
-  type TaskWithLead,
-} from "@/hooks/useLeads";
+  PRIORITY_CHIP_CLASSES, PRIORITY_LABELS, bucketOf, checklistProgress, compareTasks, normalizePriority,
+  parseChecklist, toDateStr, type TaskBucket, type TaskPriority,
+} from "@/services/tasks";
 
-// Datum-buckets (date-only string-vergelijking; due_date is een `date`-kolom 'YYYY-MM-DD').
-const pad = (n: number) => String(n).padStart(2, "0");
-const toStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-type Bucket = "overdue" | "today" | "week" | "later" | "none";
-const BUCKETS: { key: Bucket; label: string }[] = [
+const BUCKETS: { key: TaskBucket; label: string }[] = [
   { key: "overdue", label: "Te laat" },
   { key: "today", label: "Vandaag" },
   { key: "week", label: "Deze week" },
@@ -66,29 +65,41 @@ export default function SalesTasks() {
   );
   const ownerName = (id: string | null) => profiles.find((p) => p.user_id === id)?.full_name ?? null;
 
+  // Detail-sheet: id vasthouden en de taak vers uit de cache lezen (blijft up-to-date na mutaties).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedTask = useMemo(
+    () => (selectedId ? allTasks.find((t) => t.id === selectedId) ?? null : null),
+    [selectedId, allTasks],
+  );
+
+  // Deep-link ?task=<id> → open detail; verwijder ALLEEN de task-param (filters blijven).
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const tid = searchParams.get("task");
+    if (!tid) return;
+    setSelectedId(tid);
+    const next = new URLSearchParams(searchParams);
+    next.delete("task");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // Nieuwe taak
   const [title, setTitle] = useState("");
   const [newAssignee, setNewAssignee] = useState("self"); // self | none | <user_id>
   const [newDue, setNewDue] = useState("");
   const [newLead, setNewLead] = useState("none");
+  const [newPriority, setNewPriority] = useState<TaskPriority>("medium");
 
   // Filters
   const [assigneeFilter, setAssigneeFilter] = useState("me"); // me | all | none | <user_id>
   const [statusFilter, setStatusFilter] = useState("open"); // open | done | all
   const [dueFilter, setDueFilter] = useState("all"); // all | overdue | today | week | none
+  const [priorityFilter, setPriorityFilter] = useState("all"); // all | high | medium | low
 
   const now = new Date();
-  const todayStr = toStr(now);
+  const todayStr = toDateStr(now);
   const weekEnd = new Date(now); weekEnd.setDate(weekEnd.getDate() + 7);
-  const weekEndStr = toStr(weekEnd);
-  const bucketOf = (due: string | null): Bucket => {
-    if (!due) return "none";
-    const dd = due.slice(0, 10);
-    if (dd < todayStr) return "overdue";
-    if (dd === todayStr) return "today";
-    if (dd <= weekEndStr) return "week";
-    return "later";
-  };
+  const weekEndStr = toDateStr(weekEnd);
 
   const createTask = () => {
     const t = title.trim();
@@ -99,13 +110,14 @@ export default function SalesTasks() {
       title: t,
       assignedTo: newAssignee === "self" ? myId : newAssignee === "none" ? null : newAssignee,
       dueDate: newDue || null,
+      priority: newPriority,
     });
-    setTitle(""); setNewDue("");
+    setTitle(""); setNewDue(""); setNewPriority("medium");
   };
 
   // KPI's (op de volledige set)
   const myOpen = allTasks.filter((t) => !t.done && t.assigned_to === myId).length;
-  const overdue = allTasks.filter((t) => !t.done && bucketOf(t.due_date) === "overdue").length;
+  const overdue = allTasks.filter((t) => !t.done && bucketOf(t.due_date, todayStr, weekEndStr) === "overdue").length;
   const totalOpen = allTasks.filter((t) => !t.done).length;
 
   const filtered = allTasks.filter((t) => {
@@ -114,12 +126,14 @@ export default function SalesTasks() {
     if (assigneeFilter === "me" && t.assigned_to !== myId) return false;
     else if (assigneeFilter === "none" && t.assigned_to) return false;
     else if (assigneeFilter !== "me" && assigneeFilter !== "all" && assigneeFilter !== "none" && t.assigned_to !== assigneeFilter) return false;
-    if (dueFilter !== "all" && bucketOf(t.due_date) !== dueFilter) return false;
+    if (dueFilter !== "all" && bucketOf(t.due_date, todayStr, weekEndStr) !== dueFilter) return false;
+    if (priorityFilter !== "all" && normalizePriority(t.priority) !== priorityFilter) return false;
     return true;
   });
 
-  const grouped: Record<Bucket, TaskWithLead[]> = { overdue: [], today: [], week: [], later: [], none: [] };
-  for (const t of filtered) grouped[bucketOf(t.due_date)].push(t);
+  const grouped: Record<TaskBucket, TaskWithLead[]> = { overdue: [], today: [], week: [], later: [], none: [] };
+  for (const t of filtered) grouped[bucketOf(t.due_date, todayStr, weekEndStr)].push(t);
+  for (const key of Object.keys(grouped) as TaskBucket[]) grouped[key].sort(compareTasks);
 
   const isLoading = tasksQ.isLoading || profilesQ.isLoading;
 
@@ -127,7 +141,7 @@ export default function SalesTasks() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-semibold">Taken</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Alles wat er nog moet gebeuren — toegewezen aan het team.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Alles wat er nog moet gebeuren — voor jezelf of toegewezen aan het team.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -156,6 +170,12 @@ export default function SalesTasks() {
             <SelectContent>
               <SelectItem value="none">Geen lead</SelectItem>
               {leadOptions.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={newPriority} onValueChange={(v) => setNewPriority(v as TaskPriority)}>
+            <SelectTrigger className="h-8 w-full text-xs sm:w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(["high", "medium", "low"] as const).map((p) => <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>)}
             </SelectContent>
           </Select>
           <Input type="date" className="h-8 w-full text-xs sm:w-[160px]" value={newDue} onChange={(e) => setNewDue(e.target.value)} />
@@ -191,6 +211,13 @@ export default function SalesTasks() {
             <SelectItem value="none">Geen datum</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-full sm:w-[150px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Alle prioriteiten</SelectItem>
+            {(["high", "medium", "low"] as const).map((p) => <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Lijst */}
@@ -210,32 +237,67 @@ export default function SalesTasks() {
                 {b.label} <span className="font-normal text-muted-foreground">· {grouped[b.key].length}</span>
               </p>
               {grouped[b.key].map((t) => {
-                const isOverdue = !t.done && bucketOf(t.due_date) === "overdue";
+                const isOverdue = !t.done && bucketOf(t.due_date, todayStr, weekEndStr) === "overdue";
+                const priority = normalizePriority(t.priority);
+                const progress = checklistProgress(parseChecklist(t.checklist));
                 return (
-                  <div key={t.id} className="group flex items-center gap-3 rounded-lg border bg-card p-2.5">
-                    <Checkbox checked={t.done} onCheckedChange={(c) => toggleTask.mutate({ id: t.id, done: !!c, leadId: t.lead_id })} />
-                    <span className={`flex-1 text-sm ${t.done ? "text-muted-foreground line-through" : "text-foreground"}`}>{t.title}</span>
+                  <div
+                    key={t.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedId(t.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(t.id); } }}
+                    className="group flex cursor-pointer items-center gap-3 rounded-lg border bg-card p-2.5 transition-colors hover:bg-muted/40"
+                  >
+                    <span onClick={(e) => e.stopPropagation()} className="flex items-center">
+                      <Checkbox checked={t.done} onCheckedChange={(c) => toggleTask.mutate({ id: t.id, done: !!c, leadId: t.lead_id })} />
+                    </span>
+                    <span className={`flex-1 truncate text-sm ${t.done ? "text-muted-foreground line-through" : "text-foreground"}`}>{t.title}</span>
+                    {priority !== "medium" && (
+                      <span className={`hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline-block ${PRIORITY_CHIP_CLASSES[priority]}`}>
+                        {PRIORITY_LABELS[priority]}
+                      </span>
+                    )}
+                    {t.recurrence && <Repeat className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Terugkerende taak" />}
+                    {progress.total > 0 && (
+                      <span className="hidden items-center gap-1 text-[11px] tabular-nums text-muted-foreground sm:flex">
+                        <ListChecks className="h-3 w-3" />{progress.done}/{progress.total}
+                      </span>
+                    )}
                     {t.lead_id && t.leads?.company_name && (
-                      <button onClick={() => navigate(`/sales/leads?lead=${t.lead_id}`)} className="hidden items-center gap-1 text-xs text-primary hover:underline sm:flex">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/sales/leads?lead=${t.lead_id}`); }}
+                        className="hidden items-center gap-1 text-xs text-primary hover:underline lg:flex"
+                      >
                         <Building2 className="h-3 w-3" />{t.leads.company_name}
                       </button>
                     )}
-                    {t.due_date && (
-                      <span className={`text-[11px] tabular-nums ${isOverdue ? "font-medium text-red-600" : "text-muted-foreground"}`}>
-                        {new Date(t.due_date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
-                      </span>
-                    )}
-                    <Select value={t.assigned_to ?? "none"} onValueChange={(v) => updateTask.mutate({ id: t.id, patch: { assigned_to: v === "none" ? null : v }, leadId: t.lead_id })}>
-                      <SelectTrigger className="h-7 w-auto gap-1.5 border-0 bg-transparent px-1 text-xs shadow-none focus:ring-0">
-                        {t.assigned_to ? <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{initials(ownerName(t.assigned_to))}</AvatarFallback></Avatar> : null}
-                        <span className="hidden text-muted-foreground sm:inline">{ownerName(t.assigned_to) ?? "Niemand"}</span>
-                      </SelectTrigger>
-                      <SelectContent align="end">
-                        <SelectItem value="none">Niemand</SelectItem>
-                        {profiles.map((p) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || p.user_id.slice(0, 8)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <button className="text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100" onClick={() => deleteTask.mutate({ id: t.id, leadId: t.lead_id })}>
+                    <span onClick={(e) => e.stopPropagation()} className="flex items-center">
+                      <Input
+                        type="date"
+                        value={t.due_date?.slice(0, 10) ?? ""}
+                        onChange={(e) => updateTask.mutate({ id: t.id, patch: { due_date: e.target.value || null }, leadId: t.lead_id })}
+                        className={`h-7 w-[125px] border-0 bg-transparent px-1 text-[11px] tabular-nums shadow-none focus-visible:ring-1 ${isOverdue ? "font-medium text-red-600" : "text-muted-foreground"}`}
+                        aria-label="Vervaldatum"
+                      />
+                    </span>
+                    <span onClick={(e) => e.stopPropagation()} className="flex items-center">
+                      <Select value={t.assigned_to ?? "none"} onValueChange={(v) => updateTask.mutate({ id: t.id, patch: { assigned_to: v === "none" ? null : v }, leadId: t.lead_id })}>
+                        <SelectTrigger className="h-7 w-auto gap-1.5 border-0 bg-transparent px-1 text-xs shadow-none focus:ring-0">
+                          {t.assigned_to ? <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{initials(ownerName(t.assigned_to))}</AvatarFallback></Avatar> : null}
+                          <span className="hidden text-muted-foreground sm:inline">{ownerName(t.assigned_to) ?? "Niemand"}</span>
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem value="none">Niemand</SelectItem>
+                          {profiles.map((p) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || p.user_id.slice(0, 8)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </span>
+                    <button
+                      className="text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); deleteTask.mutate({ id: t.id, leadId: t.lead_id }); }}
+                      aria-label="Taak verwijderen"
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -245,6 +307,14 @@ export default function SalesTasks() {
           ))}
         </div>
       )}
+
+      <TaskDetailSheet
+        task={selectedTask}
+        open={!!selectedId}
+        onOpenChange={(o) => { if (!o) setSelectedId(null); }}
+        profiles={profiles}
+        leadOptions={leadOptions}
+      />
     </div>
   );
 }

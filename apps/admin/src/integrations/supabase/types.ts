@@ -2802,42 +2802,63 @@ export type Database = {
       lead_tasks: {
         Row: {
           assigned_to: string | null
+          checklist: Json
           completed_at: string | null
           created_at: string
           created_by: string | null
+          description: string | null
           done: boolean
           due_date: string | null
           id: string
           lead_id: string | null
           organization_id: string
+          parent_task_id: string | null
           position: number
+          priority: string
+          recurred_at: string | null
+          recurrence: string | null
           title: string
+          updated_at: string
         }
         Insert: {
           assigned_to?: string | null
+          checklist?: Json
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          description?: string | null
           done?: boolean
           due_date?: string | null
           id?: string
           lead_id?: string | null
           organization_id: string
+          parent_task_id?: string | null
           position?: number
+          priority?: string
+          recurred_at?: string | null
+          recurrence?: string | null
           title: string
+          updated_at?: string
         }
         Update: {
           assigned_to?: string | null
+          checklist?: Json
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          description?: string | null
           done?: boolean
           due_date?: string | null
           id?: string
           lead_id?: string | null
           organization_id?: string
+          parent_task_id?: string | null
           position?: number
+          priority?: string
+          recurred_at?: string | null
+          recurrence?: string | null
           title?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -2859,6 +2880,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "lead_tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -4978,6 +5006,10 @@ export type Database = {
       invoke_edge_function: {
         Args: { body?: Json; fn_name: string }
         Returns: number
+      }
+      lead_task_next_due: {
+        Args: { p_base: string; p_recurrence: string; p_today?: string }
+        Returns: string
       }
       mark_ere_arranged: {
         Args: { p_client_id: string }

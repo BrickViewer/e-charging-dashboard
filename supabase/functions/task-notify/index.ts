@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     if (!taskId) return json({ status: "error", message: "task_id ontbreekt" }, 400);
 
     const { data: task } = await sb.from("lead_tasks")
-      .select("id, title, due_date, assigned_to, lead_id").eq("id", taskId).maybeSingle();
+      .select("id, title, description, priority, due_date, assigned_to, lead_id").eq("id", taskId).maybeSingle();
     if (!task || !task.assigned_to) return json({ status: "ignored" });
 
     const { data: userRes } = await sb.auth.admin.getUserById(task.assigned_to);
@@ -46,12 +46,17 @@ Deno.serve(async (req) => {
     const appUrl = (Deno.env.get("PUBLIC_APP_URL") ?? "https://dashboard.e-charging.nl").replace(/\/+$/, "");
     const tasksUrl = `${appUrl}/sales/taken`;
     const due = task.due_date ? new Date(task.due_date as string).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }) : null;
+    // Alleen hoge prioriteit expliciet benoemen; normaal/laag is ruis in een toewijzingsmail.
+    const isHigh = task.priority === "high";
+    const description = ((task.description as string | null) ?? "").trim();
 
     const lines = [
       `Er is een taak aan je toegewezen:`,
       `Taak: ${task.title}`,
+      isHigh ? `Prioriteit: Hoog` : null,
       due ? `Deadline: ${due}` : null,
       company ? `Lead: ${company}` : null,
+      description ? `\n${description}` : null,
       `Bekijk je taken: ${tasksUrl}`,
     ].filter(Boolean) as string[];
     const text = `Hoi ${name},\n\n${lines.join("\n")}\n\nGroet, E-Charging`;
@@ -60,8 +65,10 @@ Deno.serve(async (req) => {
       <p>Er is een taak aan je toegewezen:</p>
       <p style="padding:12px 14px;background:#f3f4f6;border-radius:8px">
         <strong>${esc(task.title as string)}</strong>
+        ${isHigh ? `<br/><span style="color:#dc2626;font-weight:600">Prioriteit: Hoog</span>` : ""}
         ${due ? `<br/>Deadline: ${esc(due)}` : ""}
         ${company ? `<br/>Lead: ${esc(company)}` : ""}
+        ${description ? `<br/><br/><span style="color:#374151">${esc(description)}</span>` : ""}
       </p>
       <p><a href="${tasksUrl}" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;border-radius:8px;text-decoration:none">Bekijk je taken</a></p>
       <p style="color:#6b7280">Groet, E-Charging</p>

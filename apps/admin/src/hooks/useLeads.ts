@@ -6,7 +6,6 @@ export type Lead = Database["public"]["Tables"]["leads"]["Row"];
 export type LeadInsert = Database["public"]["Tables"]["leads"]["Insert"];
 export type LeadUpdate = Database["public"]["Tables"]["leads"]["Update"];
 export type LeadStage = Database["public"]["Tables"]["lead_stages"]["Row"];
-export type LeadTask = Database["public"]["Tables"]["lead_tasks"]["Row"];
 export type LeadActivity = Database["public"]["Tables"]["lead_activities"]["Row"];
 export type LeadStageTask = Database["public"]["Tables"]["lead_stage_tasks"]["Row"];
 
@@ -30,7 +29,7 @@ export type LeadWithTasks = Lead & {
   quotes?: LeadQuoteMini[];
   lead_tag_links?: { tag_id: string; lead_tags: LeadTagMini | null }[];
 };
-export type TaskWithLead = LeadTask & { leads: { company_name: string | null } | null };
+// Taak-types en -hooks zijn verhuisd naar hooks/useTasks.ts.
 
 // Lijst-view: server-side afgeleide levenscyclus + facturatie-status (leads_list_v).
 export type LeadListRow = Database["public"]["Views"]["leads_list_v"]["Row"];
@@ -67,7 +66,7 @@ export function primaryQuote(lead: LeadWithTasks): LeadQuoteMini | null {
   return [...pool].sort((a, b) => (key(b) > key(a) ? 1 : key(b) < key(a) ? -1 : 0))[0];
 }
 
-async function currentUserId(): Promise<string | null> {
+export async function currentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
   return data.user?.id ?? null;
 }
@@ -273,41 +272,6 @@ export function useLeadsForClient(clientId: string | undefined) {
   });
 }
 
-export function useLeadTasks(leadId: string | undefined) {
-  return useQuery({
-    queryKey: ["lead-tasks", leadId],
-    enabled: !!leadId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("lead_tasks")
-        .select("*")
-        .eq("lead_id", leadId!)
-        .order("done", { ascending: true })
-        .order("position", { ascending: true })
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as LeadTask[];
-    },
-  });
-}
-
-// Alle taken (over leads heen) voor het centrale Taken-overzicht; los = leads null.
-export function useAllTasks() {
-  return useQuery({
-    queryKey: ["all-tasks"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("lead_tasks")
-        .select("*, leads(company_name)")
-        .order("done", { ascending: true })
-        .order("due_date", { ascending: true, nullsFirst: false })
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as unknown as TaskWithLead[];
-    },
-  });
-}
-
 export function useLeadActivities(leadId: string | undefined) {
   return useQuery({
     queryKey: ["lead-activities", leadId],
@@ -434,101 +398,6 @@ export function useReorderLeads() {
       if (ctx?.prev) qc.setQueryData(["leads", "open"], ctx.prev);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["leads"] }),
-  });
-}
-
-// ---- Taak-mutaties ----------------------------------------------------------
-
-export function useAddTask() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ leadId, organizationId, title, dueDate, assignedTo }: { leadId?: string | null; organizationId: string; title: string; dueDate?: string | null; assignedTo?: string | null }) => {
-      const uid = await currentUserId();
-      const payload = {
-        lead_id: leadId ?? null,
-        organization_id: organizationId,
-        title,
-        due_date: dueDate ?? null,
-        assigned_to: assignedTo ?? null,
-        created_by: uid,
-      };
-      const { error } = await supabase.from("lead_tasks").insert(payload as unknown as Database["public"]["Tables"]["lead_tasks"]["Insert"]);
-      if (error) throw error;
-    },
-    onSuccess: (_d, { leadId }) => {
-      if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
-      qc.invalidateQueries({ queryKey: ["leads"] });
-      qc.invalidateQueries({ queryKey: ["all-tasks"] });
-    },
-  });
-}
-
-// Bewerk een taak (titel/datum/toegewezene). Toewijzen aan een ander triggert de e-mailmelding (DB-trigger).
-export function useUpdateTask() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: { title?: string; due_date?: string | null; assigned_to?: string | null }; leadId?: string | null }) => {
-      const { error } = await supabase.from("lead_tasks").update(patch).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: (_d, { leadId }) => {
-      if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
-      qc.invalidateQueries({ queryKey: ["leads"] });
-      qc.invalidateQueries({ queryKey: ["all-tasks"] });
-    },
-  });
-}
-
-export function useToggleTask() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, done }: { id: string; done: boolean; leadId?: string | null }) => {
-      const { error } = await supabase
-        .from("lead_tasks")
-        .update({ done, completed_at: done ? new Date().toISOString() : null })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    // Optimistisch afvinken in de lead-takenlijst + embedded board-taken (voorkomt KPI-flikker).
-    onMutate: async ({ id, done, leadId }) => {
-      const prevLeads = qc.getQueryData<LeadWithTasks[]>(["leads", "open"]);
-      let prevTasks: LeadTask[] | undefined;
-      if (leadId) {
-        await qc.cancelQueries({ queryKey: ["lead-tasks", leadId] });
-        prevTasks = qc.getQueryData<LeadTask[]>(["lead-tasks", leadId]);
-        qc.setQueryData<LeadTask[]>(["lead-tasks", leadId], (old) =>
-          (old ?? []).map((t) => (t.id === id ? { ...t, done } : t)),
-        );
-      }
-      qc.setQueryData<LeadWithTasks[]>(["leads", "open"], (old) =>
-        (old ?? []).map((l) => ({ ...l, lead_tasks: (l.lead_tasks ?? []).map((t) => (t.id === id ? { ...t, done } : t)) })),
-      );
-      return { prevTasks, prevLeads, leadId };
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.leadId && ctx.prevTasks) qc.setQueryData(["lead-tasks", ctx.leadId], ctx.prevTasks);
-      if (ctx?.prevLeads) qc.setQueryData(["leads", "open"], ctx.prevLeads);
-    },
-    onSettled: (_d, _e, { leadId }) => {
-      if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
-      qc.invalidateQueries({ queryKey: ["leads"] });
-      qc.invalidateQueries({ queryKey: ["all-tasks"] });
-    },
-  });
-}
-
-export function useDeleteTask() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id }: { id: string; leadId?: string | null }) => {
-      const { error } = await supabase.from("lead_tasks").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: (_d, { leadId }) => {
-      if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
-      qc.invalidateQueries({ queryKey: ["leads"] });
-      qc.invalidateQueries({ queryKey: ["all-tasks"] });
-    },
   });
 }
 
