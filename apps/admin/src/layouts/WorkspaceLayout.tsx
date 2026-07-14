@@ -160,7 +160,10 @@ export default function WorkspaceLayout() {
 
       {/* Brand + werkblad-switcher */}
       <div className="relative px-5 py-6 border-b border-foreground/[0.06]">
-        <img src={logo} alt="E-Charging" className="h-8 w-auto max-w-[168px]" />
+        {/* Op BREEDTE gemaat (zoals ClientLayout): de twee logo-SVG's verschillen in
+            canvasverhouding (full-color 2000×800, bright 2000×400) — op vaste hoogte
+            rendert het lichte logo half zo breed. */}
+        <img src={logo} alt="E-Charging" className="w-40 h-auto" />
         {accessible.length > 1 ? (
           (() => {
             const idx = Math.max(0, accessible.indexOf(workspace));
@@ -259,7 +262,7 @@ export default function WorkspaceLayout() {
       {/* Mobile header */}
       <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card">
         <div>
-          <img src={logo} alt="E-Charging" className="h-7 w-auto max-w-[148px]" />
+          <img src={logo} alt="E-Charging" className="w-[140px] h-auto" />
           <p className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground mt-1">
             {activeWorkspace.label}
           </p>
