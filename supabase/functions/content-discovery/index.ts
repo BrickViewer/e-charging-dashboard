@@ -3,11 +3,28 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
+import { getAnthropicKey, anthropicMessage, extractJson } from "../_shared/anthropic.ts";
 
 // Content-discovery: haalt RSS/nieuws-feeds + concurrent-sitemaps op en zet nieuwe,
 // nieuwe (niet-uitgemolken) onderwerpen in content_topics via de RPC content_ingest_source
-// (dedup + noviteit in SQL). No-op zolang settings.discovery_enabled=false (tenzij {force:true}).
+// (dedup + noviteit in SQL), en scoort de pool daarna op BRAND FIT (laag 1 van de branche-
+// poort: een goedkope Haiku-batchcall; onder de drempel → status 'rejected'). No-op zolang
+// settings.discovery_enabled=false (tenzij {force:true}).
 // Cron-baar via invoke_edge_function (internal-secret). Schrijft NOOIT auto naar gepubliceerd.
+
+// Strikte rubric: de doelgroep van e-Charging is gebouwgebonden laadinfrastructuur. Op 15 juli
+// won "heavy duty laadplein" de selectie en op 13 juli een Bentley-persbericht — precies wat
+// deze poort tegenhoudt vóórdat er ook maar één dure schrijf-call draait.
+const BRAND_FIT_SYSTEM = `Je beoordeelt blogonderwerp-kandidaten voor een Nederlands B2B-bedrijf in laadinfrastructuur (advies, installatie, beheer en facturatie van laadpunten). Beoordeel per kandidaat hoe goed het onderwerp past bij de DOELGROEP.
+
+DOELGROEP (past WEL): VvE's en appartementencomplexen; kantoren en bedrijfspanden; vastgoedeigenaren en verhuurders; parkeerterreinen; plus netcongestie, subsidies, wet- en regelgeving en kosten/terugverdientijd in zo'n gebouwgebonden laadcontext in Nederland.
+
+PAST NIET (score 0.0-0.3): zwaar transport en logistiek (laadpleinen voor vrachtwagens, heavy duty); publieke snellaadcorridors en laden onderweg; autonieuws, EV-modellen en productlanceringen; consumenten-autotests; laadpassen voor particulieren onderweg; algemene duurzaamheid zonder directe laadinfrastructuur-hoek (zonnepanelen, warmtepompen, ESG).
+
+Scoor: 1.0 = kern van de doelgroep; ~0.5 = alleen met een duidelijke herkadering relevant; 0.0-0.3 = buiten de branche. Geef per kandidaat één korte zin als reden.
+
+Antwoord UITSLUITEND met geldige JSON, exact dit schema, zonder tekst eromheen:
+{"scores": [{"i": number, "fit": number, "reason": string}]}`;
 
 const cors = CORS_INTERNAL;
 function json(body: unknown, status = 200) {
@@ -84,12 +101,13 @@ function titleFromUrl(u: string): string {
 }
 
 Deno.serve(async (req: Request) => {
+  const t0 = Date.now();
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") return json({ status: "error", message: "Method not allowed" }, 405);
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   try {
-    const auth = await requireAdminOrInternal(req, sb, cors);
+    const auth = await requireAdminOrInternal(req, sb as any, cors);
     if (!auth.ok) return auth.response;
 
     let body: Record<string, unknown> = {};
@@ -144,6 +162,61 @@ Deno.serve(async (req: Request) => {
     // Koppel de nieuwe onderwerpen aan de zoekvragen van de doelgroep (Laag B; gratis, in SQL).
     await sb.rpc("content_match_topics_to_keywords", {});
 
+    // BRAND-FIT-POORT (laag 1): score ongescoorde open onderwerpen in batches van ~25 met één
+    // goedkope Haiku-call per batch. Onder de drempel → status 'rejected' (valt daarmee uit de
+    // selectie, de brief-flow én het noviteits-corpus). Nieuwste eerst: de batch van vandaag gaat
+    // altijd voor; de rest van de pool wordt achterstevoren bijgewerkt (backfill = zelfde codepad).
+    // Volledig best-effort: zonder sleutel of bij een mislukte batch blijft brand_fit NULL en
+    // herstelt een volgende run het. Handmatig toegevoegde onderwerpen worden nooit auto-afgekeurd.
+    let scoredCount = 0, rejectedCount = 0;
+    try {
+      const apiKey = await getAnthropicKey(sb);
+      if (apiKey) {
+        const fitThreshold = typeof settings.brand_fit_threshold === "number" ? settings.brand_fit_threshold : 0.4;
+        const scoreModel = typeof settings.audit_model === "string" ? settings.audit_model : "claude-haiku-4-5-20251001";
+        const { data: unscored } = await sb.from("content_topics")
+          .select("id, raw_title, raw_summary, source_name, generated_by, created_by")
+          .in("status", ["idea", "approved_for_draft"]).is("blog_post_id", null).is("brand_fit", null)
+          .order("created_at", { ascending: false }).limit(120);
+        const pool = (unscored ?? []) as any[];
+        for (let i = 0; i < pool.length; i += 25) {
+          // Tijdbudget-guard: de feeds hierboven kunnen al ~1 min gekost hebben en de edge heeft
+          // een harde wandklok. De rest van de pool schuift gewoon naar de volgende run.
+          if (Date.now() - t0 > 100_000) break;
+          const batch = pool.slice(i, i + 25);
+          const user = batch.map((t, j) =>
+            `${j}. ${String(t.raw_title ?? "").slice(0, 160)}${t.raw_summary ? ` — ${String(t.raw_summary).slice(0, 200)}` : ""} (bron: ${t.source_name ?? "onbekend"})`,
+          ).join("\n");
+          let parsed: any;
+          try {
+            parsed = extractJson<any>(await anthropicMessage({ apiKey, system: BRAND_FIT_SYSTEM, user, model: scoreModel, maxTokens: 4000, retries: 1 }));
+          } catch { continue; }
+          for (const s of (Array.isArray(parsed?.scores) ? parsed.scores : [])) {
+            const t = batch[Number(s?.i)];
+            const fit = Number(s?.fit);
+            if (!t || !Number.isFinite(fit)) continue;
+            const clamped = Math.max(0, Math.min(1, fit));
+            const reason = typeof s?.reason === "string" && s.reason.trim() ? s.reason.trim().slice(0, 300) : null;
+            const isHuman = t.generated_by === "human" || !!t.created_by;
+            const reject = clamped < fitThreshold && !isHuman;
+            const { error: updErr } = await sb.from("content_topics").update({
+              brand_fit: clamped,
+              brand_fit_reason: reason,
+              ...(reject ? { status: "rejected", rejected_reason: `Buiten de branche (fit ${clamped.toFixed(2)}): ${reason ?? "past niet bij de doelgroep"}`.slice(0, 300) } : {}),
+            }).eq("id", t.id);
+            if (updErr) continue;
+            scoredCount++;
+            if (reject) rejectedCount++;
+          }
+        }
+        if (scoredCount > 0) {
+          await sb.from("content_engine_events")
+            .insert({ fn: "content-discovery", step: "brand_fit_scored", detail: { scored: scoredCount, rejected: rejectedCount, remaining: Math.max(0, pool.length - scoredCount) } })
+            .then(undefined, () => {});
+        }
+      }
+    } catch { /* scoring is best-effort; ingest is al gelukt */ }
+
     // Leg het tijdstip van deze run vast zodat de UI "Laatst opgehaald" kan tonen (ook bij 0 nieuwe).
     if (settingsRow?.id) {
       await sb.from("content_engine_settings")
@@ -151,7 +224,7 @@ Deno.serve(async (req: Request) => {
         .eq("id", settingsRow.id);
     }
 
-    return json({ status: "ok", fetched, created, skipped, errors, feeds: feeds.length, competitors: competitors.length });
+    return json({ status: "ok", fetched, created, skipped, errors, brand_fit_scored: scoredCount, brand_fit_rejected: rejectedCount, feeds: feeds.length, competitors: competitors.length });
   } catch (e) {
     return json({ status: "error", message: (e as Error).message }, 500);
   }

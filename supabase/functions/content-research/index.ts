@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
     const { data: newsRows } = await sb.from("content_topics")
       .select("raw_title, raw_summary, source_name, seo_opportunity, created_at")
       .in("source_type", ["rss", "competitor"])
+      .neq("status", "rejected") // off-brand afgekeurd nieuws (brand-fit-poort) niet als grondslag
       .gte("created_at", since)
       .order("seo_opportunity", { ascending: false, nullsFirst: false })
       .limit(20);

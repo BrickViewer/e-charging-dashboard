@@ -5,17 +5,22 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { getAnthropicKey, anthropicMessage, extractJson, DEFAULT_MODEL } from "../_shared/anthropic.ts";
 import { BLOG_REVISE_SYSTEM, BLOG_AUDIT_SYSTEM, validateBlogJson, validateAuditJson, applyInternalLinks, validateSources } from "../_shared/blog.ts";
+import { FACTCHECK_FIX_SYSTEM, validateFixJson } from "../_shared/factcheck.ts";
 import { fetchProofBlock } from "../_shared/proof.ts";
 import { notifyContentEngine } from "../_shared/content-notify.ts";
 
 // content-revise: één schakel in de HERSCHRIJF-TOT-TOPKWALITEIT-keten. Neemt een autoblog-CONCEPT + de auditor-kritiek,
 // herschrijft het gericht (Sonnet, GEEN web-search → snel), her-audit (Haiku), en geeft het bij een voldoende
 // door aan content-factcheck — DE enige plek die publiceert, ná feitencontrole. Anders < MAX → zichzelf
-// re-invoken met de nieuwe kritiek; anders (geplateaud) → factcheck als het boven de vloer zit, anders concept.
+// re-invoken met de nieuwe kritiek; anders (geplateaud) → factcheck als het boven de vloer zit, anders archiveren.
 // De run zelf draait in de achtergrond (EdgeRuntime.waitUntil): de aanroeper (pg_net) verbreekt na 5s en
 // zonder waitUntil kon een iteratie stil sterven — geen blog, geen log, geen mail.
 // verify_jwt=false; intern (cron/keten) of admin/marketing.
-// Body: { blog_post_id, iteration?, issues?, missing_experience?, factcheck_round?, finalize? }.
+// Body: { blog_post_id, iteration?, issues?, missing_experience?, factcheck_round?, finalize?,
+//         surgical?, corrections?, surgical_retry?, infra_retry? }.
+// SURGICAL-modus (aangeroepen door content-factcheck bij een FAIL met concrete correcties): past
+// UITSLUITEND de correctielijst toe op de bestaande HTML (geen full rewrite, geen audit, geen
+// revise_count) en geeft direct terug aan content-factcheck voor de her-check.
 
 const cors = CORS_INTERNAL;
 const json = (b: unknown, s = 200) =>
@@ -52,11 +57,19 @@ Deno.serve(async (req) => {
     // zodat een publicatieslot niet verloren gaat. De sweep-cron stuurt geen slot_retry mee → géén kick
     // (anders zou elke her-kick van een gestrand concept extra blogs buiten het schema genereren).
     const slotRetry = Number.isFinite(body.slot_retry) ? Math.max(0, Math.floor(Number(body.slot_retry))) : null;
+    // SURGICAL-modus: alleen de correcties uit de feitencontrole toepassen (zie kop-comment).
+    const surgical = body.surgical === true;
+    const corrections: string[] = Array.isArray(body.corrections) ? body.corrections.filter((x: unknown) => typeof x === "string") : [];
+    const surgicalRetry = Number.isFinite(body.surgical_retry) ? Math.max(0, Math.floor(Number(body.surgical_retry))) : 0;
+    // Infra-herkansingen: een API-storing (429/5xx/Overloaded/stream-abort) mag géén revisie-
+    // iteratie kosten — die teller is voor inhoudelijke rondes (op 13 juli verbrandde een
+    // Overloaded-storing 3 van de 4 iteraties in 50 seconden).
+    const infraRetry = Number.isFinite(body.infra_retry) ? Math.max(0, Math.floor(Number(body.infra_retry))) : 0;
 
     // Alleen autoblog-CONCEPTEN herschrijven (idempotent: een reeds gepubliceerde post door een parallelle schakel = klaar).
     // In FINALIZE-modus mag de post juist wél gepubliceerd zijn (we werken hem in place bij).
     const { data: post } = await sb.from("blog_posts")
-      .select("id, slug, title, content, faq, sources, category, category_slug, category_slugs, source_topic_id, status, revise_count, cover_image_url")
+      .select("id, slug, title, content, faq, sources, category, category_slug, category_slugs, source_topic_id, status, revise_count, cover_image_url, generated_by, factcheck")
       .eq("id", blogPostId).maybeSingle();
     if (!post) return json({ status: "not_found", message: "Post niet gevonden" });
     if (!finalize && post.status === "gepubliceerd") return json({ status: "already_published", blog_post_id: blogPostId });
@@ -100,6 +113,16 @@ Deno.serve(async (req) => {
         } catch { return false; }
       };
 
+      // Terminaal keteneinde = ARCHIVEREN (alleen machine-blogs): gefaalde concepten horen niet
+      // als losse concepten te blijven slingeren in de review-lijst. Terugzetten kan via de editor.
+      const isAgentPost = typeof post.generated_by === "string" && post.generated_by.startsWith("agent:");
+      const archiveTerminal = async (reason: string) => {
+        if (!isAgentPost) return;
+        await sb.from("blog_posts")
+          .update({ status: "gearchiveerd", review_state: "changes_requested", archived_reason: reason })
+          .eq("id", blogPostId);
+      };
+
       // Zoekvraag + context.
       let zoekvraag = post.title;
       if (post.source_topic_id) {
@@ -116,7 +139,74 @@ Deno.serve(async (req) => {
       const ev = async (step: string, detail: Record<string, unknown> = {}) => {
         try { await sb.from("content_engine_events").insert({ fn: "content-revise", step, detail: { blog_post_id: blogPostId, iteration, finalize, ...detail } }); } catch { /* nooit blokkeren */ }
       };
-      await ev("run_start");
+      await ev("run_start", surgical ? { surgical: true } : {});
+
+      // ── SURGICAL-MODUS: alleen de feitencorrecties toepassen, dan terug naar de feitencontrole ──
+      // Geen full rewrite, geen her-audit, geen revise_count: een lokale ingreep convergeert
+      // (correcties → 0 criticals) waar een blinde rewrite zonder web nieuwe fouten introduceerde.
+      if (surgical) {
+        const naarFactcheckSurgical = async () => {
+          await sb.rpc("invoke_edge_function", {
+            fn_name: "content-factcheck",
+            body: { blog_post_id: blogPostId, iteration, factcheck_round: factcheckRound, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
+          });
+        };
+        if (corrections.length === 0) {
+          // Niets te corrigeren (hoort niet voor te komen): direct her-checken.
+          await naarFactcheckSurgical();
+          return { status: "ok", action: "surgical_noop", blog_post_id: blogPostId, factcheck_round: factcheckRound };
+        }
+        const faqTekst = (Array.isArray(post.faq) ? post.faq : [])
+          .map((f: any) => `V: ${f?.question}\nA: ${f?.answer}`).join("\n");
+        const fixUser = [
+          `TITEL: ${post.title}`,
+          `CONTENT (HTML):\n${post.content}`,
+          faqTekst ? `FAQ:\n${faqTekst}` : null,
+          `CORRECTIELIJST (pas UITSLUITEND deze punten toe):\n${corrections.map((c) => `- ${c}`).join("\n")}`,
+        ].filter(Boolean).join("\n\n");
+        await ev("surgical_start", { corrections: corrections.length, retry: surgicalRetry, factcheck_round: factcheckRound });
+        try {
+          const raw = await anthropicMessage({ apiKey, system: FACTCHECK_FIX_SYSTEM, user: fixUser, model, maxTokens: 16000, retries: 1 });
+          const fix = validateFixJson(extractJson<any>(raw), String(post.content ?? ""));
+          // Dode bronlinks deterministisch wegfilteren o.b.v. het laatste factcheck-rapport (geen LLM nodig).
+          const deadUrls = new Set<string>(
+            (Array.isArray((post.factcheck as any)?.sources_check) ? (post.factcheck as any).sources_check : [])
+              .filter((s: any) => s?.status === "dood" && typeof s?.url === "string").map((s: any) => s.url),
+          );
+          const bronnen = validateSources(post.sources).filter((s) => !deadUrls.has(s.url));
+          await sb.from("blog_posts").update({
+            content: fix.content,
+            ...(fix.faq ? { faq: fix.faq } : {}),
+            sources: bronnen,
+          }).eq("id", blogPostId);
+          await naarFactcheckSurgical();
+          await ev("surgical_ok", { changes: fix.changes.length, factcheck_round: factcheckRound });
+          return { status: "ok", action: "surgical_fixed", blog_post_id: blogPostId, factcheck_round: factcheckRound, changes: fix.changes, ms: Date.now() - runStart };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message.slice(0, 300) : String(e);
+          await ev("surgical_failed", { error: msg, retry: surgicalRetry });
+          if (surgicalRetry < 1) {
+            // Eén herkansing in een vers isolate (vol tijdsbudget).
+            await sb.rpc("invoke_edge_function", {
+              fn_name: "content-revise",
+              body: { blog_post_id: blogPostId, surgical: true, corrections, iteration, factcheck_round: factcheckRound, surgical_retry: surgicalRetry + 1, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
+            });
+            return { status: "ok", action: "surgical_retry", blog_post_id: blogPostId };
+          }
+          // Terminaal: archiveren + melding + volgend onderwerp voor dit slot.
+          await kickCoverIfMissing();
+          const retrying = await kickNextTopic();
+          const reason = `Chirurgische feitencorrectie bleef falen (${msg})`;
+          await archiveTerminal(reason);
+          await notifyContentEngine(settings, {
+            kind: "kept_concept",
+            title: post.title,
+            reason: `${reason}${retrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
+            blogPostId,
+          }).catch(() => {});
+          return { status: "ok", action: "kept_concept_surgicalfail", blog_post_id: blogPostId, slot_retrying: retrying };
+        }
+      }
 
       const { data: slugRows } = await sb.from("blog_posts").select("slug, title").eq("status", "gepubliceerd").limit(50);
       const slugs = (slugRows ?? []) as { slug: string; title: string }[];
@@ -176,22 +266,33 @@ Deno.serve(async (req) => {
         await ev("rewrite_ok", { ms: Date.now() - rwT0, chars: raw0.length });
         draft = validateBlogJson(extractJson<any>(raw0), validSlugs, validCategorySlugs);
       } catch (e) {
-        await ev("rewrite_failed", { ms: Date.now() - rwT0, error: e instanceof Error ? e.message.slice(0, 300) : String(e) });
+        const foutMsg = e instanceof Error ? e.message : String(e);
+        await ev("rewrite_failed", { ms: Date.now() - rwT0, error: foutMsg.slice(0, 300) });
         // FINALIZE: geen keten. Laat de post ongewijzigd en meld de fout (kan opnieuw ge-finalized worden).
         if (finalize) {
-          return { status: "ok", action: "finalize_jsonfail", blog_post_id: blogPostId, reason: e instanceof Error ? e.message.slice(0, 140) : "json", ms: Date.now() - runStart };
+          return { status: "ok", action: "finalize_jsonfail", blog_post_id: blogPostId, reason: foutMsg.slice(0, 140), ms: Date.now() - runStart };
+        }
+        // INFRA-storing (API overbelast, 5xx, afgebroken stream): herkansing met ZELFDE iteration —
+        // alleen inhoudelijke rondes mogen de teller verhogen. Max 2 herkansingen per iteratie.
+        const isInfra = /HTTP (429|5\d\d)|Overloaded|stil > 90s|stream-error|eindigde voortijdig|Lege respons/i.test(foutMsg);
+        if (isInfra && infraRetry < 2) {
+          await sb.rpc("invoke_edge_function", { fn_name: "content-revise", body: { blog_post_id: blogPostId, iteration, issues, missing_experience: missingExp, factcheck_round: factcheckRound, infra_retry: infraRetry + 1, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) } });
+          await ev("infra_retry", { next: infraRetry + 1 });
+          return { status: "ok", action: "retry_infra", blog_post_id: blogPostId, iteration, infra_retry: infraRetry + 1, ms: Date.now() - runStart };
         }
         if (iteration < MAX) {
           await sb.rpc("invoke_edge_function", { fn_name: "content-revise", body: { blog_post_id: blogPostId, iteration: iteration + 1, issues, missing_experience: missingExp, factcheck_round: factcheckRound, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) } });
-          return { status: "ok", action: "retry_json", blog_post_id: blogPostId, iteration, reason: e instanceof Error ? e.message.slice(0, 140) : "json", ms: Date.now() - runStart };
+          return { status: "ok", action: "retry_json", blog_post_id: blogPostId, iteration, reason: foutMsg.slice(0, 140), ms: Date.now() - runStart };
         }
-        // Keteneinde zonder publicatie (JSON bleef ongeldig): omslag alsnog + melding + volgend onderwerp.
+        // Keteneinde zonder publicatie (JSON bleef ongeldig): omslag alsnog + archiveren + melding + volgend onderwerp.
         await kickCoverIfMissing();
         const retryingJson = await kickNextTopic();
+        const jsonReason = `Herschrijven bleef ongeldige JSON opleveren na ${iteration} rondes`;
+        await archiveTerminal(jsonReason);
         await notifyContentEngine(settings, {
           kind: "kept_concept",
           title: post.title,
-          reason: `Herschrijven bleef ongeldige JSON opleveren na ${iteration} rondes; concept staat ter review${retryingJson ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
+          reason: `${jsonReason}; de blog is gearchiveerd${retryingJson ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
           blogPostId,
         });
         return { status: "ok", action: "kept_concept_jsonfail", blog_post_id: blogPostId, iteration, slot_retrying: retryingJson, ms: Date.now() - runStart };
@@ -308,17 +409,19 @@ Deno.serve(async (req) => {
 
       // MAX bereikt: de best-mogelijke versie boven de vloer gaat óók langs de feitencontrole.
       if (scored && (q as number) >= FLOOR) return await naarFactcheck("floor_after_max");
-      // Keteneinde zonder publicatie: omslag alsnog genereren + melding sturen + volgend onderwerp.
+      // Keteneinde zonder publicatie: omslag alsnog genereren + archiveren + melding + volgend onderwerp.
       await kickCoverIfMissing();
       const retrying = await kickNextTopic();
+      const vloerReason = `Kwaliteit onder de vloer (${FLOOR}) na ${iteration} revisierondes`;
+      await archiveTerminal(vloerReason);
       await notifyContentEngine(settings, {
         kind: "kept_concept",
         title: draft.title ?? post.title,
         scores: { quality: q, seo, aeo },
-        reason: `Kwaliteit onder de vloer (${FLOOR}) na ${iteration} revisierondes${retrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
+        reason: `${vloerReason}; de blog is gearchiveerd${retrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
         blogPostId,
       });
-      await ev("kept_concept", { q, seo, aeo, slot_retrying: retrying });
+      await ev("kept_concept", { q, seo, aeo, slot_retrying: retrying, archived: isAgentPost });
       return { status: "ok", action: "kept_concept", blog_post_id: blogPostId, iteration, scores: { q, seo, aeo }, verdict: audit.verdict, slot_retrying: retrying, ms: Date.now() - runStart };
     };
 

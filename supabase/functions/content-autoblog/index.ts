@@ -4,7 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { getAnthropicKey, anthropicMessage, extractJson, DEFAULT_MODEL } from "../_shared/anthropic.ts";
-import { BLOG_SYSTEM, BLOG_AUDIT_SYSTEM, INTENT_NL, validateBlogJson, validateAuditJson, applyInternalLinks, BLOG_RESEARCH_SYSTEM } from "../_shared/blog.ts";
+import { BLOG_SYSTEM, BLOG_AUDIT_SYSTEM, INTENT_NL, validateBlogJson, validateAuditJson, applyInternalLinks, BLOG_RESEARCH_SYSTEM, parseBrancheCheck } from "../_shared/blog.ts";
 import { buildBlogCover } from "../_shared/cover.ts";
 import { fetchProofBlock } from "../_shared/proof.ts";
 import { notifyContentEngine } from "../_shared/content-notify.ts";
@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
         ? `AUTEUR: ${settings.author.name}${settings.author.role ? `, ${settings.author.role}` : ""}. Schrijf vanuit eigen ervaring en eerste-hands praktijkdata van het team; benoem concrete praktijkvoorbeelden en wees specifiek (E-E-A-T).`
         : `Schrijf vanuit eigen ervaring en eerste-hands praktijkdata van het team; benoem concrete praktijkvoorbeelden en wees specifiek (E-E-A-T).`;
 
-      let generated = 0, published = 0, concepts = 0, errors = 0;
+      let generated = 0, published = 0, concepts = 0, errors = 0, offBrand = 0;
       const results: any[] = [];
 
       // 6) Per onderwerp: onderzoek + schrijf + poort + (eventueel) publiceer. Fouten isoleren per onderwerp.
@@ -203,6 +203,22 @@ Deno.serve(async (req) => {
           });
           await ev("research_ok", { topic: t.id, ms: Date.now() - resT0, chars: research.length });
 
+          // WAAKHOND (laag 3 van de brand-fit-poort): het research-rapport begint met een verplichte
+          // BRANCHECHECK. "niet-passend" → topic afkeuren en NIET schrijven (de Bentley-blog van 13 juli
+          // ontstond doordat een off-brand bron geforceerd werd verbouwd). Een gepind topic (mens koos
+          // bewust) wordt nooit stil afgekeurd: dan schrijven we door met de herkader-invalshoek.
+          const brancheCheck = parseBrancheCheck(research);
+          if (brancheCheck.verdict === "niet-passend" && !pinnedTopicId) {
+            await sb.from("content_topics").update({
+              status: "rejected",
+              rejected_reason: `Off-brand (waakhond): ${brancheCheck.toelichting ?? "buiten de doelgroep"}`.slice(0, 300),
+            }).eq("id", t.id);
+            offBrand++;
+            await ev("off_brand_topic", { topic: t.id, reason: brancheCheck.toelichting });
+            results.push({ topic_id: t.id, action: "off_brand_rejected", reason: brancheCheck.toelichting });
+            continue;
+          }
+
           // STAP 2 - SCHRIJVEN (geen tools; pure emissie, kan niet worden opgeknipt). De onderscheidende
           // invalshoek is de praktijkexpertise van het bedrijf (installatie/beheer/facturatie) + de brief.
           const user = [
@@ -213,6 +229,9 @@ Deno.serve(async (req) => {
             t.conversation_question ? `GESPREKSVRAAG: ${t.conversation_question}` : null,
             t.background ? `ACHTERGROND: ${t.background}` : null,
             t.suggested_angle ? `INVALSHOEK: ${t.suggested_angle}` : null,
+            brancheCheck.verdict !== "passend" && brancheCheck.toelichting
+              ? `DOELGROEP-HERKADERING (verplicht: dit is de invalshoek die het onderwerp relevant maakt voor onze doelgroep — schrijf de blog vanuit déze hoek): ${brancheCheck.toelichting}`
+              : null,
             `VANDAAG IS ${new Date().toISOString().slice(0, 10)}. Behandel dit als peildatum: geef voorrang aan de meest recente feiten, cijfers en regelgeving, en maak in de tekst duidelijk hoe actueel iets is (bv. "per 2026" / "sinds medio 2026").`,
             `ONDERZOEKSRESULTATEN (zojuist met web-research geverifieerd; baseer de blog HIEROP, verzin geen feiten; als iets onbekend blijft, schrijf het algemeen):\n${research}`,
             `VISIE: Er is geen opgenomen teamgesprek. Lever de originaliteit en E-E-A-T daarom uit de praktijkexpertise van het bedrijf als leverancier EN beheerder van laadinfrastructuur (advies, installatie, beheer en facturatie voor kantoren, VvE's, bedrijfspanden en parkeerterreinen): geef concrete, praktijkgerichte inzichten en afwegingen die alleen een ervaren partij kan geven. Combineer dit met de INVALSHOEK en de geverifieerde feiten uit je web-research.`,
@@ -444,9 +463,24 @@ Deno.serve(async (req) => {
           .eq("id", settingsRow.id);
       }
 
+      // Slot-garantie bij een off-brand afkeuring: alle geselecteerde topics bleken buiten de
+      // branche te vallen (waakhond) → pak direct een VOLGEND onderwerp voor dit slot (max 2×;
+      // de afgekeurde topics zijn via status='rejected' al uitgesloten van de selectie).
+      let slotRetrying = false;
+      if (generated === 0 && offBrand > 0 && !pinnedTopicId && slotRetry < 2) {
+        try {
+          await sb.rpc("invoke_edge_function", {
+            fn_name: "content-autoblog",
+            body: { slot_retry: slotRetry + 1, ...(typeof body.publish === "boolean" ? { publish: body.publish } : {}) },
+          });
+          await ev("slot_retry_next_topic", { next: slotRetry + 1, reason: "off_brand" });
+          slotRetrying = true;
+        } catch { /* best-effort */ }
+      }
+
       // Vangnet 1: er is niets gegenereerd en er waren fouten (opgeknipte API-beurt, netwerk) —
       // probeer het opnieuw in een VERS isolate met een vol tijdsbudget (max 2 herkansingen).
-      if (generated === 0 && errors > 0 && runRetry < 2) {
+      if (!slotRetrying && generated === 0 && errors > 0 && runRetry < 2) {
         await ev("run_retry", { next: runRetry + 1 });
         await sb.rpc("invoke_edge_function", {
           fn_name: "content-autoblog",
@@ -458,7 +492,7 @@ Deno.serve(async (req) => {
       // Vangnet 2: productie-run eindigde zonder publicatie én zonder lopende keten (revise/factcheck
       // melden hun eigen keteneinde via kept_concept of het factcheck-rapport). Zonder mail blijft
       // zo'n uitkomst onzichtbaar.
-      if (autopublish && published === 0 && !results.some((r) => r.action === "revising" || r.action === "factchecking")) {
+      if (autopublish && published === 0 && !slotRetrying && !results.some((r) => r.action === "revising" || r.action === "factchecking")) {
         await notifyContentEngine(settings, {
           kind: "run_failed",
           reason: `Run afgerond: ${generated} gegenereerd, ${concepts} concept, ${errors} fout — geen publicatie${runRetry ? ` (na ${runRetry} herkansing(en))` : ""}`,
@@ -466,8 +500,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      await ev("run_done", { generated, published, concepts, errors, actions: results.map((r) => r.action) });
-      return { status: "ok", generated, published, concepts, errors, results };
+      await ev("run_done", { generated, published, concepts, errors, off_brand: offBrand, actions: results.map((r) => r.action) });
+      return { status: "ok", generated, published, concepts, errors, off_brand: offBrand, results };
     };
 
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;

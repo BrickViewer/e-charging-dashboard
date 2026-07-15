@@ -56,6 +56,8 @@ export default function ContentPipeline() {
   const recent = overview.data?.recent ?? [];
   const concepts = overview.data?.concepts ?? [];
   const poolCount = overview.data?.poolCount ?? 0;
+  const offBrand = overview.data?.offBrand ?? [];
+  const archivedCount = overview.data?.archivedCount ?? 0;
 
   const quickAdd = async () => {
     const title = quickTitle.trim();
@@ -123,13 +125,14 @@ export default function ContentPipeline() {
         </ul>
       </section>
 
-      {/* VANGNET: concepten die de lat niet haalden */}
+      {/* VANGNET: concepten die nog in de keten zitten of op review wachten */}
       {concepts.length > 0 && (
         <section className="rounded-xl border border-amber-300/60 bg-amber-50/50 p-4 dark:bg-amber-950/10">
-          <h2 className="text-base font-bold text-foreground">Haalde de kwaliteitslat niet ({concepts.length})</h2>
+          <h2 className="text-base font-bold text-foreground">Nog niet gepubliceerd ({concepts.length})</h2>
           <p className="mb-2 text-[11px] text-muted-foreground">
-            De machine heeft voor deze slots al automatisch een ander onderwerp geprobeerd. Deze concepten kun je
-            zelf verbeteren en publiceren — of gewoon verwijderen in de editor.
+            Deze concepten zijn nog onderweg in de kwaliteitsketen of wachten op jouw review. Definitief afgekeurde
+            blogs verschijnen hier niet meer: die worden gearchiveerd (mét rapport) en zijn terug te vinden onder
+            Blogs → filter Gearchiveerd.
           </p>
           <ul className="divide-y">
             {concepts.map((c) => (
@@ -147,6 +150,29 @@ export default function ContentPipeline() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {/* BRANCHE-POORT: wat de machine buiten de deur hield (controle + drempel-tuning) */}
+      {(offBrand.length > 0 || archivedCount > 0) && (
+        <section className="rounded-xl border bg-card p-4">
+          <h2 className="text-base font-bold text-foreground">Automatisch afgekeurd</h2>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            {archivedCount > 0 && (
+              <>Definitief afgekeurde blogs (laatste 14 dagen): <span className="font-medium text-foreground">{archivedCount}</span> — zie Blogs → filter Gearchiveerd. </>
+            )}
+            {offBrand.length > 0 && <>Onderwerpen buiten de branche (laatste 7 dagen):</>}
+          </p>
+          {offBrand.length > 0 && (
+            <ul className="divide-y">
+              {offBrand.map((t) => (
+                <li key={t.id} className="py-2">
+                  <p className="truncate text-sm font-medium text-foreground">{t.raw_title}</p>
+                  {t.rejected_reason && <p className="text-[11px] text-muted-foreground">{t.rejected_reason}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 

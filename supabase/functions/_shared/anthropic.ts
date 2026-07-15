@@ -32,11 +32,13 @@ export async function anthropicMessage(opts: {
   tools?: unknown[];
 }): Promise<string> {
   const model = opts.model || DEFAULT_MODEL;
-  const maxTokens = opts.maxTokens ?? 16000;
   const retries = opts.retries ?? 3;
+  // Tokenbudget PER POGING: een beurt die op max_tokens sneuvelde, faalt met identiek budget
+  // deterministisch opnieuw (dat was de doodsoorzaak van de feitencontrole op 15 juli). Bij
+  // zo'n afbreking escaleren we het budget ×1,5 (cap 32k) voor de volgende poging.
+  let budget = opts.maxTokens ?? 16000;
   const body: Record<string, unknown> = {
     model,
-    max_tokens: maxTokens,
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],
     stream: true,
@@ -45,6 +47,7 @@ export async function anthropicMessage(opts: {
   if (opts.tools && opts.tools.length > 0) body.tools = opts.tools;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    body.max_tokens = budget;
     // Stilte-bewaking: elke ontvangen chunk schuift de deadline op.
     const ctrl = new AbortController();
     let idleTimer = setTimeout(() => ctrl.abort(new Error("Anthropic-stream stil > 90s")), IDLE_TIMEOUT_MS);
@@ -100,9 +103,12 @@ export async function anthropicMessage(opts: {
           }
         }
         // Een afgebroken beurt (pause_turn bij lange tool-runs, max_tokens) levert
-        // onvolledige tekst — dat mag NOOIT als geldig antwoord doorgaan. Retrybaar.
+        // onvolledige tekst — dat mag NOOIT als geldig antwoord doorgaan. Retrybaar;
+        // bij max_tokens met verhoogd budget (zie de catch hieronder).
         if (stopReason && stopReason !== "end_turn" && stopReason !== "stop_sequence") {
-          throw new Error(`Anthropic-stream eindigde voortijdig (stop_reason=${stopReason})`);
+          const err = new Error(`Anthropic-stream eindigde voortijdig (stop_reason=${stopReason})`);
+          if (stopReason === "max_tokens") (err as any).maxTokensHit = true;
+          throw err;
         }
         if (!text) throw new Error("Lege respons van Claude");
         return text;
@@ -110,6 +116,7 @@ export async function anthropicMessage(opts: {
     } catch (e) {
       // Permanente fouten (niet-herhaalbare 4xx) meteen doorgooien i.p.v. retryen.
       if (e && (e as { nonRetryable?: boolean }).nonRetryable) throw e;
+      if (e && (e as { maxTokensHit?: boolean }).maxTokensHit) budget = Math.min(Math.ceil(budget * 1.5), 32000);
       lastErr = e;
     } finally {
       clearTimeout(idleTimer);
@@ -120,11 +127,48 @@ export async function anthropicMessage(opts: {
 }
 
 // Robuuste JSON-extractie: strip ```json-fences en pak het buitenste { ... }.
+// Faalt het parsen, dan één herkansing met ge-sanitize-de control-characters: modellen
+// lekken soms een rauwe newline/tab in een lange HTML-string ("Bad control character in
+// string literal") en dat mag geen hele revisie-iteratie kosten.
 export function extractJson<T>(raw: string): T {
   let s = raw.trim();
   s = s.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   const a = s.indexOf("{");
   const b = s.lastIndexOf("}");
   if (a >= 0 && b > a) s = s.slice(a, b + 1);
-  return JSON.parse(s) as T;
+  try {
+    return JSON.parse(s) as T;
+  } catch (e) {
+    const cleaned = sanitizeJsonControlChars(s);
+    if (cleaned === s) throw e;
+    return JSON.parse(cleaned) as T;
+  }
+}
+
+// Escapet rauwe control-characters BINNEN string-literals (newline→\n, tab→\t, rest strippen);
+// buiten literals blijft alles ongemoeid. Kleine state-machine, geen dependency.
+function sanitizeJsonControlChars(s: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (const ch of s) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (inString) {
+      if (escaped) { out += ch; escaped = false; continue; }
+      if (ch === "\\") { out += ch; escaped = true; continue; }
+      if (ch === '"') { out += ch; inString = false; continue; }
+      if (code < 0x20) {
+        if (ch === "\n") out += "\\n";
+        else if (ch === "\t") out += "\\t";
+        else if (ch === "\r") out += "\\r";
+        // overige control-characters: strippen
+        continue;
+      }
+      out += ch;
+    } else {
+      if (ch === '"') inString = true;
+      out += ch;
+    }
+  }
+  return out;
 }

@@ -239,17 +239,30 @@ export type AutopilotConcept = {
 
 export type AutopilotRecent = { id: string; title: string; slug: string; published_at: string | null };
 
+export type OffBrandTopic = { id: string; raw_title: string; rejected_reason: string | null; updated_at: string };
+
 export function useAutopilotOverview() {
   return useQuery({
     queryKey: ["content", "autopilot-overview"],
     queryFn: async () => {
-      const [recent, concepts, pool] = await Promise.all([
+      const week = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const twoWeeks = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      const [recent, concepts, pool, offBrand, archived] = await Promise.all([
         supabase.from("blog_posts").select("id, title, slug, published_at")
           .eq("status", "gepubliceerd").order("published_at", { ascending: false }).limit(3),
         supabase.from("blog_posts").select("id, title, review_state, quality_score, seo_score, aeo_score, updated_at")
           .eq("status", "concept").like("generated_by", "agent:%").order("updated_at", { ascending: false }),
         supabase.from("content_topics").select("id", { count: "exact", head: true })
           .in("status", ["idea", "approved_for_draft"]).is("blog_post_id", null),
+        // Door de branche-poort afgekeurde onderwerpen (laatste 7 dagen): zichtbaar ter controle/tuning.
+        supabase.from("content_topics").select("id, raw_title, rejected_reason, updated_at")
+          .eq("status", "rejected")
+          .or("rejected_reason.ilike.%branche%,rejected_reason.ilike.%off-brand%")
+          .gte("updated_at", week)
+          .order("updated_at", { ascending: false }).limit(6),
+        // Definitief afgekeurde machine-blogs (gearchiveerd, laatste 14 dagen).
+        supabase.from("blog_posts").select("id", { count: "exact", head: true })
+          .eq("status", "gearchiveerd").like("generated_by", "agent:%").gte("updated_at", twoWeeks),
       ]);
       if (recent.error) throw recent.error;
       if (concepts.error) throw concepts.error;
@@ -258,6 +271,8 @@ export function useAutopilotOverview() {
         recent: (recent.data ?? []) as AutopilotRecent[],
         concepts: (concepts.data ?? []) as AutopilotConcept[],
         poolCount: pool.count ?? 0,
+        offBrand: (offBrand.data ?? []) as OffBrandTopic[],
+        archivedCount: archived.count ?? 0,
       };
     },
   });

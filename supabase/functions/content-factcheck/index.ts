@@ -4,7 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { getAnthropicKey, anthropicMessage, extractJson } from "../_shared/anthropic.ts";
-import { FACTCHECK_SYSTEM, factcheckIssues, validateFactcheckJson } from "../_shared/factcheck.ts";
+import { FACTCHECK_SYSTEM, factcheckCorrections, factcheckIssues, validateFactcheckJson } from "../_shared/factcheck.ts";
 import { validateSources, type BlogSource } from "../_shared/blog.ts";
 import { notifyContentEngine } from "../_shared/content-notify.ts";
 
@@ -12,20 +12,22 @@ import { notifyContentEngine } from "../_shared/content-notify.ts";
 // wil publiceren komt HIER langs; deze functie is de enige plek die status op
 // "gepubliceerd" zet. Een onafhankelijke Claude-call mét web-search verifieert cijfers,
 // bronnen, data en juridische claims:
-//   PASS                        → publiceren (+rapport in blog_posts.factcheck)
-//   FAIL, factcheck_round < 2   → terug naar content-revise met concrete correcties
-//   FAIL, terminaal             → concept + rapport-mail naar het notificatie-adres
-// Body: { blog_post_id, factcheck_round?, iteration?, backfill? }
+//   PASS                          → publiceren (+rapport in blog_posts.factcheck)
+//   FAIL, factcheck_round < MAX   → CHIRURGISCHE fix (content-revise surgical-modus) met de
+//                                   concrete correcties uit het rapport; alleen als er géén
+//                                   enkele correctie is: eenmalig de oude full-rewrite-bounce
+//   FAIL, terminaal               → archiveren + rapport-mail naar het notificatie-adres
+// Body: { blog_post_id, factcheck_round?, iteration?, backfill?, crash_retry? }
 //   backfill=true: alleen rapporteren + bronnen aanvullen, NOOIT status wijzigen
 //   (voor bestaande, al gepubliceerde blogs). Mail alleen bij critical-punten.
+//   crash_retry: een gecrashte run (max_tokens, netwerk) krijgt één herkansing in een
+//   vers isolate voordat hij opgeeft — een blog met topscores mag niet stranden op infra.
 // Aangeroepen door content-autoblog/content-revise via invoke_edge_function
 // (x-internal-secret) of door een beheerder. verify_jwt = false.
 
 const cors = CORS_INTERNAL;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-
-const MAX_FACTCHECK_ROUNDS = 2;
 
 Deno.serve(async (req) => {
   const runStart = Date.now();
@@ -46,11 +48,12 @@ Deno.serve(async (req) => {
     const factcheckRound = Number.isFinite(body.factcheck_round) ? Math.max(1, Math.floor(Number(body.factcheck_round))) : 1;
     const iteration = Number.isFinite(body.iteration) ? Math.max(1, Math.floor(Number(body.iteration))) : 1;
     const backfill = body.backfill === true;
+    const crashRetry = Number.isFinite(body.crash_retry) ? Math.max(0, Math.floor(Number(body.crash_retry))) : 0;
     // Slot-garantie: alleen aanwezig als de keten uit een autoblog-run komt (zie content-revise).
     const slotRetry = Number.isFinite(body.slot_retry) ? Math.max(0, Math.floor(Number(body.slot_retry))) : null;
 
     const { data: post } = await sb.from("blog_posts")
-      .select("id, slug, title, content, faq, sources, status, source_topic_id, cover_image_url")
+      .select("id, slug, title, content, faq, sources, status, source_topic_id, cover_image_url, generated_by")
       .eq("id", blogPostId).maybeSingle();
     if (!post) return json({ status: "not_found", message: "Post niet gevonden" });
     // Idempotent: al gepubliceerd en geen backfill → klaar (parallelle schakel was eerder).
@@ -59,6 +62,8 @@ Deno.serve(async (req) => {
     const { data: settingsRow } = await sb.from("content_engine_settings").select("id, settings").eq("is_active", true).limit(1).maybeSingle();
     const settings = (settingsRow?.settings ?? {}) as any;
     const model = typeof settings.factcheck_model === "string" ? settings.factcheck_model : "claude-sonnet-5";
+    // Drie rondes: check → chirurgische fix → check → fix → check → terminaal.
+    const MAX_FACTCHECK_ROUNDS = Number.isFinite(settings.factcheck_max_rounds) ? Math.max(1, Number(settings.factcheck_max_rounds)) : 3;
 
     const apiKey = await getAnthropicKey(sb);
     if (!apiKey) return json({ status: "no_key", message: "ANTHROPIC_API_KEY ontbreekt" });
@@ -88,8 +93,11 @@ Deno.serve(async (req) => {
 
       const fcT0 = Date.now();
       await ev("check_start", { model });
+      // 16k budget: het JSON-rapport zelf is fors (claims + correcties + bronnen) en de
+      // web-search-resultaatblokken tellen mee als output. Een max_tokens-afbreking
+      // escaleert bovendien het budget in anthropicMessage (×1,5).
       const raw = await anthropicMessage({
-        apiKey, system: FACTCHECK_SYSTEM, user, model, maxTokens: 8000,
+        apiKey, system: FACTCHECK_SYSTEM, user, model, maxTokens: 16000,
         tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }],
         retries: 1,
       });
@@ -126,14 +134,35 @@ Deno.serve(async (req) => {
         }).eq("id", blogPostId);
         if (post.source_topic_id) await sb.from("content_topics").update({ status: "published" }).eq("id", post.source_topic_id);
         if (!post.cover_image_url) {
-          await sb.rpc("invoke_edge_function", { fn_name: "blog-cover", body: { blog_post_id: blogPostId } }).catch(() => {});
+          // try/catch i.p.v. .catch(): een Postgrest-builder is een thenable zonder catch-methode.
+          try { await sb.rpc("invoke_edge_function", { fn_name: "blog-cover", body: { blog_post_id: blogPostId } }); } catch { /* best-effort */ }
         }
         await ev("published");
         return { status: "ok", action: "published", critical: 0, ms: Date.now() - runStart };
       }
 
       if (factcheckRound < MAX_FACTCHECK_ROUNDS) {
-        // Corrigeerbaar: terug de herschrijf-keten in, met de feitenfouten als verplichte punten.
+        // Corrigeerbaar: CHIRURGISCHE fix (content-revise surgical-modus) met de concrete
+        // correcties uit het rapport — lokale ingrepen convergeren waar een full rewrite
+        // zonder web-toegang nieuwe onverifieerde claims introduceerde. Alleen als het
+        // rapport géén enkele concrete correctie bevat (zeldzaam): eenmalig de oude
+        // full-rewrite-bounce met de issues.
+        const corrections = factcheckCorrections(report);
+        if (corrections.length > 0) {
+          await sb.rpc("invoke_edge_function", {
+            fn_name: "content-revise",
+            body: {
+              blog_post_id: blogPostId,
+              surgical: true,
+              corrections,
+              iteration,
+              factcheck_round: factcheckRound + 1,
+              ...(slotRetry !== null ? { slot_retry: slotRetry } : {}),
+            },
+          });
+          await ev("surgical_bounce", { critical: report.critical_count, fixable: report.fixable_count, corrections: corrections.length });
+          return { status: "ok", action: "surgical_fix", round: factcheckRound, critical: report.critical_count };
+        }
         await sb.rpc("invoke_edge_function", {
           fn_name: "content-revise",
           body: {
@@ -148,10 +177,17 @@ Deno.serve(async (req) => {
         return { status: "ok", action: "revising_facts", round: factcheckRound, critical: report.critical_count };
       }
 
-      // Terminaal: niet publiceren, mens waarschuwen met het volledige rapport. Slot-garantie:
+      // Terminaal: niet publiceren, ARCHIVEREN (machine-blogs horen niet als los concept te
+      // blijven slingeren — de gebruiker zag er 3 naast elkaar) en de mens waarschuwen met het
+      // volledige rapport. Terugzetten + zelf publiceren kan altijd via de editor. Slot-garantie:
       // uit een autoblog-run proberen we (max 2×) automatisch een volgend onderwerp voor dit slot;
       // het gefaalde onderwerp is via zijn blog_post_id al uitgesloten van de selectie.
-      await sb.from("blog_posts").update({ review_state: "changes_requested" }).eq("id", blogPostId);
+      const isAgentPost = typeof post.generated_by === "string" && post.generated_by.startsWith("agent:");
+      const terminalReason = `Feitencontrole blokkeert publicatie na ${factcheckRound} ronde(s): ${report.critical_count} kritiek punt(en)`;
+      await sb.from("blog_posts").update({
+        review_state: "changes_requested",
+        ...(isAgentPost ? { status: "gearchiveerd", archived_reason: terminalReason } : {}),
+      }).eq("id", blogPostId);
       let slotRetrying = false;
       if (slotRetry !== null && slotRetry < 2) {
         try {
@@ -163,11 +199,11 @@ Deno.serve(async (req) => {
       await notifyContentEngine(settings, {
         kind: "kept_concept",
         title: post.title,
-        reason: `Feitencontrole blokkeert publicatie na ${factcheckRound} ronde(s): ${report.critical_count} kritiek punt(en)${slotRetrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
+        reason: `${terminalReason}${slotRetrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
         details: factcheckIssues(report),
         blogPostId,
       }).catch(() => {});
-      await ev("blocked_terminal", { critical: report.critical_count, slot_retrying: slotRetrying });
+      await ev("blocked_terminal", { critical: report.critical_count, slot_retrying: slotRetrying, archived: isAgentPost });
       return { status: "ok", action: "blocked_by_factcheck", critical: report.critical_count, slot_retrying: slotRetrying };
     };
 
@@ -176,6 +212,23 @@ Deno.serve(async (req) => {
       runtime.waitUntil(
         run().catch(async (err) => {
           console.error("content-factcheck faalde:", err instanceof Error ? err.message : err);
+          // Eén herkansing in een VERS isolate (vol tijdsbudget; anthropicMessage escaleert
+          // bovendien het tokenbudget): een blog met topscores strandde op 15 juli op een
+          // max_tokens-crash omdat de keten hier ophield.
+          if (crashRetry < 1) {
+            try {
+              await sb.rpc("invoke_edge_function", {
+                fn_name: "content-factcheck",
+                body: {
+                  blog_post_id: blogPostId, factcheck_round: factcheckRound, iteration, backfill,
+                  crash_retry: crashRetry + 1,
+                  ...(slotRetry !== null ? { slot_retry: slotRetry } : {}),
+                },
+              });
+              await sb.from("content_engine_events").insert({ fn: "content-factcheck", step: "crash_retry", detail: { blog_post_id: blogPostId, round: factcheckRound, next: crashRetry + 1, error: err instanceof Error ? err.message.slice(0, 300) : "onbekende fout" } }).then(undefined, () => {});
+              return;
+            } catch { /* herkansing zelf mislukt → val door naar melden */ }
+          }
           await sb.from("content_engine_events").insert({ fn: "content-factcheck", step: "run_crashed", detail: { blog_post_id: blogPostId, round: factcheckRound, error: err instanceof Error ? err.message.slice(0, 300) : "onbekende fout" } }).then(undefined, () => {});
           // Een gecrashte check mag een blog niet stil laten hangen: melden.
           await notifyContentEngine(settings, {

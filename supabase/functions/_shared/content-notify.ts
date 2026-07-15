@@ -27,9 +27,9 @@ function escapeHtml(s: string): string {
 
 const HEADLINE: Record<ContentNotifyKind, { badge: string; subject: string; intro: string }> = {
   kept_concept: {
-    badge: "Blog in review",
-    subject: "Autoblog: blog bleef in review — actie nodig",
-    intro: "De autoblog-run heeft een blog geschreven, maar die haalde na het maximale aantal revisierondes de kwaliteitsvloer niet. De blog staat als concept ter review en gaat NIET vanzelf live.",
+    badge: "Blog gearchiveerd",
+    subject: "Autoblog: blog definitief afgekeurd en gearchiveerd",
+    intro: "De autoblog-keten heeft een blog geschreven, maar die kwam definitief niet door de kwaliteits- of feitenpoort. De blog is gearchiveerd (mét het volledige rapport); waar mogelijk heeft de machine automatisch een volgend onderwerp voor dit slot gepakt. Terugzetten en zelf publiceren kan via de blog-editor.",
   },
   empty_pool: {
     badge: "Geen onderwerpen",

@@ -4,7 +4,7 @@
 // stellige juridische claims zonder basis) blokkeert publicatie als "critical".
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { clampScore } from "./blog.ts";
+import { clampScore, stripFaqSection } from "./blog.ts";
 import type { BlogSource } from "./blog.ts";
 import { validateSources } from "./blog.ts";
 
@@ -30,6 +30,8 @@ Lever bovendien voor elke bron die je tijdens het controleren hebt geverifieerd 
 
 Geef per incorrect/unverifiable punt een concrete, direct bruikbare correctie (hoe de zin feitelijk juist zou worden, of "verwijder deze claim").
 
+Houd het rapport COMPACT (het moet binnen het antwoordbudget passen): rapporteer maximaal de 12 belangrijkste claims (prioriteer incorrect en critical; bundel identieke punten), houd elke correction beknopt (maximaal ~40 woorden, bij voorkeur één vervangzin), maximaal 8 verified_sources, en citeer nooit hele passages uit bronnen.
+
 Antwoord UITSLUITEND met geldige JSON, exact dit schema, zonder tekst eromheen:
 {"claims": [{"claim": string, "verdict": "correct" | "incorrect" | "unverifiable", "severity": "critical" | "minor", "evidence_url": string, "correction": string}], "sources_check": [{"name": string, "url": string, "status": "bevestigd" | "dood" | "onjuist_toegeschreven"}], "date_issues": [string], "brand_risk": [string], "verified_sources": [{"name": string, "url": string, "publisher": string, "date": string}], "confidence": number, "verdict": "pass" | "fail"}`;
 
@@ -50,6 +52,7 @@ export interface FactcheckReport {
   confidence: number | null;
   verdict: "pass" | "fail";
   critical_count: number;
+  fixable_count: number;
 }
 
 const asStr = (v: any, max = 500): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -57,7 +60,7 @@ const asStr = (v: any, max = 500): string | null => (typeof v === "string" && v.
 export function validateFactcheckJson(p: any): FactcheckReport {
   const claims: FactcheckClaim[] = (Array.isArray(p?.claims) ? p.claims : [])
     .filter((c: any) => c && typeof c.claim === "string")
-    .slice(0, 40)
+    .slice(0, 15)
     .map((c: any) => ({
       claim: c.claim.trim().slice(0, 500),
       verdict: c.verdict === "correct" ? "correct" : c.verdict === "incorrect" ? "incorrect" : "unverifiable",
@@ -75,27 +78,34 @@ export function validateFactcheckJson(p: any): FactcheckReport {
     }));
   const asList = (x: any) => (Array.isArray(x) ? x.filter((s: any) => typeof s === "string" && s.trim()).slice(0, 10) : []);
 
-  // Alles wat aantoonbaar mis is telt als blokkade: incorrecte critical-claims,
-  // verkeerd toegeschreven bronnen, en gemelde merkrisico's.
-  const criticalClaims = claims.filter((c) => c.severity === "critical" && c.verdict !== "correct").length;
-  const badSources = sources_check.filter((s: { status: string }) => s.status === "onjuist_toegeschreven").length;
+  // Blokkade UITSLUITEND op aantoonbaar onjuiste kritieke claims — precies wat de prompt
+  // belooft ("een blog zonder critical-punten krijgt pass, ook met minors"). Verkeerd
+  // toegeschreven/dode bronnen, datumpunten en merkrisico's zijn FIXABLE: ze gaan als
+  // concrete correcties de chirurgische fix-stap in, maar vellen het verdict niet meer.
+  // (De oude telling liet blogs met nul feitenfouten terminaal stranden op 15 juli.)
+  const critical_count = claims.filter((c) => c.severity === "critical" && c.verdict !== "correct").length;
+  const badSources = sources_check.filter((s: { status: string }) => s.status !== "bevestigd").length;
   const brand_risk = asList(p?.brand_risk);
-  const critical_count = criticalClaims + badSources + brand_risk.length;
+  const date_issues = asList(p?.date_issues);
+  const fixable_count = badSources + brand_risk.length + date_issues.length
+    + claims.filter((c) => c.severity !== "critical" && c.verdict !== "correct").length;
 
-  // Fail-safe: het verdict van het model telt, maar critical-punten overrulen een
-  // (te) mild "pass" altijd. Onverwachte JSON → fail (nooit per ongeluk publiceren).
+  // Fail-safe: het model-verdict blijft leidend naar beneden (model zegt fail → fail) en
+  // critical-claims overrulen een (te) mild "pass". Onverwachte JSON → fail (nooit per
+  // ongeluk publiceren).
   const modelPass = p?.verdict === "pass";
   const verdict: "pass" | "fail" = modelPass && critical_count === 0 ? "pass" : "fail";
 
   return {
     claims,
     sources_check,
-    date_issues: asList(p?.date_issues),
+    date_issues,
     brand_risk,
     verified_sources: validateSources(p?.verified_sources),
     confidence: clampScore(p?.confidence),
     verdict,
     critical_count,
+    fixable_count,
   };
 }
 
@@ -114,4 +124,66 @@ export function factcheckIssues(report: FactcheckReport): string[] {
   for (const d of report.date_issues) out.push(`Datumprobleem: ${d}`);
   for (const b of report.brand_risk) out.push(`MERKRISICO (verplicht corrigeren): ${b}`);
   return out.slice(0, 15);
+}
+
+/** Correctielijst voor de CHIRURGISCHE fix-stap: elk punt is een concrete, lokale ingreep.
+ *  Ook correct-bevonden claims met een waarschuwende correctie (bv. "let op: verifieer of een
+ *  VvE kwalificeert") blijven bewust weg: alleen punten die echt iets wijzigen. Max ~12. */
+export function factcheckCorrections(report: FactcheckReport): string[] {
+  const out: string[] = [];
+  for (const c of report.claims) {
+    if (c.verdict === "correct") continue;
+    out.push(`CLAIM: "${c.claim}" → ${c.correction ?? "verwijder deze claim of verzwak hem met een voorbehoud ('naar verwachting', 'nog niet definitief')"}`);
+  }
+  for (const s of report.sources_check) {
+    if (s.status === "onjuist_toegeschreven") out.push(`BRON: "${s.name}" (${s.url}) zegt niet wat de blog beweert → herschrijf de betreffende zin naar wat de bron werkelijk zegt, of verwijder de bronverwijzing daar.`);
+    if (s.status === "dood") out.push(`BRON: "${s.name}" (${s.url}) is onbereikbaar → verwijder de link (laat de bron desnoods alleen bij naam staan).`);
+  }
+  for (const d of report.date_issues) out.push(`DATUM: ${d}`);
+  for (const b of report.brand_risk) out.push(`MERKRISICO: ${b} → herschrijf of verwijder de betreffende passage.`);
+  return out.slice(0, 12);
+}
+
+// ── CHIRURGISCHE CORRECTIE ─────────────────────────────────────────────────────
+// Gebruikt door content-revise (surgical-modus): past UITSLUITEND de correcties uit het
+// factcheck-rapport toe op de bestaande HTML, zonder full rewrite. Een full rewrite zonder
+// web-toegang introduceerde aantoonbaar nieuwe onverifieerde claims (15 juli: criticals
+// 8→5→3, nooit 0); een lokale ingreep convergeert wél.
+export const FACTCHECK_FIX_SYSTEM = `Je bent een uiterst precieze CORRECTOR voor een Nederlandse B2B-blog over laadinfrastructuur. Je krijgt een blog (titel + HTML-content + FAQ) en een CORRECTIELIJST uit een feitencontrole.
+
+IJZEREN REGELS:
+- Pas UITSLUITEND de punten uit de CORRECTIELIJST toe. Wijzig de betreffende zin(nen) minimaal en laat ALLE overige tekst LETTERLIJK ongemoeid: koppen, alinea's, tabellen, links, opsommingen, lengte en structuur blijven identiek.
+- Verzin GEEN nieuwe feiten, cijfers, bronnen of urls. Is er voor een punt geen concrete correctie gegeven, verwijder de claim dan of verzwak hem met een voorbehoud ("naar verwachting", "nog niet definitief", "bronnen noemen verschillende datums").
+- Raakt een correctie een FAQ-antwoord, corrigeer dan ook dat antwoord; geef anders de FAQ ongewijzigd terug.
+- Geen herformuleringen "voor de leesbaarheid", geen stijlverbeteringen, geen nieuwe zinnen buiten de correcties.
+
+Antwoord UITSLUITEND met geldige JSON, exact dit schema, zonder tekst eromheen:
+{"content": string, "faq": [{"question": string, "answer": string}] | null, "changes": [string]}
+- content: de volledige gecorrigeerde HTML.
+- faq: de volledige FAQ als er iets in wijzigde, anders null.
+- changes: per toegepast punt één korte zin wat je hebt aangepast.`;
+
+export interface FactcheckFix {
+  content: string;
+  faq: Array<{ question: string; answer: string }> | null;
+  changes: string[];
+}
+
+/** Valideert de output van de chirurgische fix. De lengte-guard weigert output die >30% korter
+ *  is dan het origineel: dat duidt op een stiekeme full rewrite of een afgekapte emissie. */
+export function validateFixJson(p: any, originalContent: string): FactcheckFix {
+  if (!p || typeof p.content !== "string" || !p.content.trim()) {
+    throw new Error("Ongeldige fix-JSON: content ontbreekt");
+  }
+  const content = stripFaqSection(p.content);
+  if (content.length < originalContent.length * 0.7) {
+    throw new Error(`Fix-output verdacht kort (${content.length} vs ${originalContent.length} tekens) — geweigerd`);
+  }
+  const faq = Array.isArray(p.faq)
+    ? p.faq.filter((f: any) => f && typeof f.question === "string" && typeof f.answer === "string").slice(0, 5)
+    : null;
+  const changes = Array.isArray(p.changes)
+    ? p.changes.filter((s: any) => typeof s === "string" && s.trim()).slice(0, 15)
+    : [];
+  return { content, faq: faq && faq.length ? faq : null, changes };
 }

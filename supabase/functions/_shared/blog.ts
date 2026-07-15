@@ -43,6 +43,8 @@ Categorie:
 - Kies uit de meegegeven CATEGORIEEN de 1 tot 3 die het best passen en zet hun slugs in category_slugs (meest passende eerst; deze eerste is de primaire categorie). Kies liever een bestaande categorie dan een nieuwe.
 - Alleen als het onderwerp echt in GEEN enkele bestaande categorie past en het een terugkerend, breder thema is, mag je een nieuwe voorstellen via suggested_category {name, description, icon} (icon = een passende lucide-icoonnaam zoals "Zap", "Leaf", "Building2"). Laat suggested_category anders weg.
 
+DOELGROEP-GRENS: schrijf uitsluitend voor de doelgroep uit de MERKCONTEXT (VvE's, kantoren/bedrijfspanden, vastgoedeigenaren/verhuurders, parkeerterreinen). Valt de BRON zelf buiten die doelgroep (zwaar transport, snellaadcorridors, autonieuws, EV-modellen), gebruik hem dan hoogstens als aanleiding voor een doelgroep-relevante invalshoek — verbouw NOOIT een off-target bron geforceerd tot het onderwerp van de blog.
+
 Stijl (huisstijl - alle blogs lezen als een familie):
 - Zakelijk, helder, behulpzaam. Geen marketingclichés, geen overdrijving, geen holle superlatieven.
 - Actieve, directe zinnen; korte alinea's; de lezer aangesproken met "u". Consistente NL-spelling.
@@ -231,13 +233,32 @@ export function validateBlogJson(p: any, validSlugs: Set<string>, validCategoryS
 // (zelfde vorm als de feitencontrole, die aantoonbaar stabiel draait).
 export const BLOG_RESEARCH_SYSTEM = `Je bent een Nederlandse research-assistent voor een B2B-blog over laadinfrastructuur. GEBRUIK web search en lever een COMPACT feitenrapport voor de schrijver, in het Nederlands.
 
-Lever UITSLUITEND beknopte bullets, gegroepeerd onder deze koppen (koppen letterlijk overnemen):
+DOELGROEP van de blog: VvE's/appartementencomplexen, kantoren/bedrijfspanden, vastgoedeigenaren/verhuurders en parkeerterreinen in Nederland (advies, installatie, beheer en facturatie van laadpunten). NADRUKKELIJK NIET de markt: zwaar transport/logistiek (laadpleinen voor vrachtwagens/heavy duty), publieke snellaadcorridors, autonieuws/EV-modellen/productlanceringen, consumenten-autotests, en laadpassen voor particulieren onderweg.
+
+Lever UITSLUITEND beknopte bullets, gegroepeerd onder deze koppen (koppen letterlijk overnemen), en begin ALTIJD met de BRANCHECHECK-regel:
+BRANCHECHECK: exact één van deze drie vormen — "passend", "herkaderbaar: <één zin met een invalshoek die het onderwerp relevant maakt voor de doelgroep>", of "niet-passend: <één zin waarom dit buiten de doelgroep valt>". Kies "niet-passend" als het onderwerp alleen geforceerd (met een kunstgreep) aan de doelgroep te koppelen is.
 KERNFEITEN: 5-10 bullets met de belangrijkste actuele feiten/cijfers/bedragen, elk met (bron, datum) erbij.
 REGELGEVING: relevante wet- en regelgeving of subsidies met status per vandaag (van kracht / vervallen / aangekondigd), elk met (bron, datum).
 BRONNEN: elke gebruikte bron als "- naam | echte url | uitgever | datum". Alleen urls die je echt gevonden hebt; nooit gokken.
 INVALSHOEK: 2-3 bullets met wat dit betekent voor vastgoedeigenaren/VvE's/bedrijven.
 
 Geen inleiding, geen blog, geen conclusie. Maximaal ~500 woorden totaal.`;
+
+// Parseert de verplichte BRANCHECHECK-regel uit het research-rapport. Ontbreekt de regel
+// (model luistert niet), dan fail-open naar "passend": de brand-fit-poort bij discovery en
+// de selectie-RPC zijn de structurele lagen; deze waakhond is de laatste verdedigingslinie.
+export interface BrancheCheck {
+  verdict: "passend" | "herkaderbaar" | "niet-passend";
+  toelichting: string | null;
+}
+export function parseBrancheCheck(research: string): BrancheCheck {
+  const m = research.match(/BRANCHECHECK\s*:\s*(passend|herkaderbaar|niet[- ]passend)\s*:?\s*([^\n]*)/i);
+  if (!m) return { verdict: "passend", toelichting: null };
+  const raw = m[1].toLowerCase().replace(" ", "-");
+  const verdict = raw === "herkaderbaar" ? "herkaderbaar" : raw === "niet-passend" ? "niet-passend" : "passend";
+  const toelichting = m[2]?.trim() ? m[2].trim().slice(0, 300) : null;
+  return { verdict, toelichting };
+}
 
 export const BLOG_AUDIT_SYSTEM = `Je bent een STRENGE, ONAFHANKELIJKE SEO/AEO-eindredacteur die een CONCEPT-blog beoordeelt voor een Nederlands B2B-bedrijf in laadinfrastructuur (klanten: vastgoedeigenaren, VvE's, bedrijven, installateurs). Je hebt de blog NIET geschreven. Je taak is kritisch keuren, niet vergoelijken: een hoge score moet verdiend zijn. Beoordeel in het Nederlands.
 
@@ -253,6 +274,8 @@ Toets bovendien expliciet twee dingen (Google's maart-2026-lat + de "wie/hoe/waa
 - has_first_hand_signal: spreekt er echte, TOEGEPASTE praktijkervaring uit als KWALITATIEVE observatie ("uit onze eigen praktijk blijkt dat ...", concrete operationele details, echte afwegingen) i.p.v. een generieke web-samenvatting => anders false.
 
 HARDE CONTROLE - geen exacte platformcijfers: de blog mag GEEN concrete interne cijfers van het bedrijf zelf noemen (aantal laadpunten, aantal locaties, aantal laadsessies, kWh-hoeveelheden, euro-opbrengsten, bezettings-/groeipercentages gepresenteerd als eigen data). Vind je zoiets, dan is dat een ERNSTIG issue: zet het in issues, trek quality_score fors af en zet verdict op "revise". Publiek gebronde marktcijfers (met bron+jaartal) zijn wel toegestaan.
+
+HARDE CONTROLE - doelgroep: valt het onderwerp of de gekozen invalshoek buiten de doelgroep (bv. zwaar transport/logistiek, laadpleinen voor vrachtwagens, publieke snellaadcorridors, autonieuws/EV-modellen, consumenten-autotests), dan is dat een ERNSTIG issue: benoem het in issues en zet verdict op "revise".
 
 Geef daarnaast:
 - issues: korte, concrete lijst van tekortkomingen (welke sectie is generiek, welke claim is zwak, wat mist er feitelijk, en of er verboden interne cijfers in staan).
