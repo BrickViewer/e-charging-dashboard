@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Minus, AlertTriangle, AlertCircle, RefreshCw } from "lucide-react";
-import { useEfluxInvoices } from "@/hooks/useAdminData";
+import { useEfluxInvoices, useMonthlyFinancialOverview } from "@/hooks/useAdminData";
 import { formatEuro } from "@/services/calculations";
 import { monthFullLabel } from "@/lib/period";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
@@ -11,17 +11,31 @@ import { PeriodStepper } from "@/components/portal/PeriodStepper";
 // Tab 3 — ruwe eFlux-facturen (read-only). cpo-credit = vergoeding aan ons, cpo-usage = platformkosten.
 export function EfluxInvoicesTab() {
   const { data, isLoading, isError, refetch } = useEfluxInvoices();
+  const { data: overview } = useMonthlyFinancialOverview();
 
   const years = useMemo(() => {
     const set = new Set<number>((data ?? []).map((r) => r.year ?? 0).filter(Boolean));
+    // Ook jaren met sessies maar zonder gesyncte factuur meenemen, anders is een
+    // volledig ontbrekende jaargang nooit zichtbaar.
+    (overview ?? []).forEach((r) => { if (r.year) set.add(r.year); });
     return Array.from(set).sort((a, b) => a - b);
-  }, [data]);
+  }, [data, overview]);
   const [yearIdx, setYearIdx] = useState<number | null>(null);
   const idx = yearIdx ?? Math.max(0, years.length - 1);
   const year = years[idx];
   const rows = useMemo(
     () => (data ?? []).filter((r) => r.year === year),
     [data, year],
+  );
+
+  // Afgesloten maanden met sessie-omzet maar zonder gesyncte creditfactuur: het overzicht
+  // zou anders stilzwijgend €0 tonen. recon_status 'geen_factuur' = precies dat geval.
+  const missingInvoiceMonths = useMemo(
+    () =>
+      (overview ?? [])
+        .filter((r) => r.year === year && r.recon_status === "geen_factuur")
+        .sort((a, b) => a.month - b.month),
+    [overview, year],
   );
 
   if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
@@ -59,6 +73,23 @@ export function EfluxInvoicesTab() {
           <PeriodStepper label={`Heel ${year}`} index={idx} count={years.length} onIndexChange={setYearIdx} />
         )}
       </div>
+
+      {missingInvoiceMonths.length > 0 && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-[hsl(var(--status-amber)/0.3)] bg-[hsl(var(--status-amber)/0.08)] px-4 py-3 text-sm"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-[hsl(var(--status-amber))]" />
+          <div>
+            <p className="font-medium text-foreground">eFlux-creditfactuur ontbreekt of is niet gesynct</p>
+            <p className="mt-0.5 text-muted-foreground">
+              Voor {missingInvoiceMonths.map((r) => monthFullLabel(r.year, r.month)).join(", ")} zijn er wél
+              laadsessies, maar geen gesyncte creditfactuur van eFlux. Het maandoverzicht toont deze maand(en)
+              als "verwacht" tot de factuur binnen is — controleer de eFlux-sync als dit blijft staan.
+            </p>
+          </div>
+        </div>
+      )}
 
       <Card className="portal-card">
         <CardContent className="p-0">

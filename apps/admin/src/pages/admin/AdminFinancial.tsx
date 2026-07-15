@@ -20,7 +20,8 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { settlementVat, settlementNetToTransfer, settlementNetExcl } from "@/services/calculations";
+import { settlementNetExcl } from "@/services/calculations";
+import { customerCashflow, vatInfo, inclAmount, inclAbs } from "@/services/financialModel";
 import { approveSettlement, unapproveSettlement, markSettlementEfluxReimbursed, markSettlementPaid, markSettlementInvoiceSent, markSettlementInvoicePaid } from "@/services/settlements";
 import type { AdminSettlement } from "@/types/db";
 import { getCurrentMonth, monthFullLabel, monthShortLabel } from "@/lib/period";
@@ -47,23 +48,8 @@ type PaymentPipelineSummary = {
 const fmt = (v: number) =>
   `€${v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const periodLabel = monthFullLabel;
-// Bruto vergoeding = client_payout. Blijft de bron voor de teken-routing (positief =
-// uitbetalen, negatief = incasso); de netto (na activatie) klemt op ≥ 0.
-const customerCashflow = (settlement: AdminSettlement) => Number(settlement.client_payout || 0);
-// Netto / BTW / incl NA verrekening van de activatiekosten (gedeelde bron, zoals de factuur).
-// Positieve maand → netto over te boeken (activatie verrekend); negatieve maand (incasso) →
-// de rauwe BTW-splitsing behouden (daar geldt geen activatie, en het bedrag moet negatief blijven).
-const vatInfo = (s: AdminSettlement) => {
-  const payout = Number(s.client_payout || 0);
-  const rate = Number(s.vat_rate ?? 0.21);
-  const activationCost = Number(s.activation_cost || 0);
-  if (payout < 0) return settlementVat({ clientPayout: payout, vatRate: rate });
-  const net = settlementNetExcl({ clientPayout: payout, activationCost, vatRate: rate });
-  const inclVat = settlementNetToTransfer({ clientPayout: payout, activationCost, vatRate: rate });
-  return { vatRate: rate, net, vatAmount: Math.round((inclVat - net) * 100) / 100, inclVat };
-};
-const inclAmount = (s: AdminSettlement) => vatInfo(s).inclVat;          // incl. BTW, netto over te boeken
-const inclAbs = (s: AdminSettlement) => Math.abs(inclAmount(s));
+// customerCashflow / vatInfo / inclAmount / inclAbs staan in services/financialModel.ts,
+// zodat de Afrekeningen-tab en het Maandoverzicht exact dezelfde afreken-math delen.
 
 function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
   const { data: settlements, isLoading, isError, refetch } = useAllSettlements();
