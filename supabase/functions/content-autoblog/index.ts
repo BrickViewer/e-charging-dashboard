@@ -229,7 +229,10 @@ Deno.serve(async (req) => {
             t.conversation_question ? `GESPREKSVRAAG: ${t.conversation_question}` : null,
             t.background ? `ACHTERGROND: ${t.background}` : null,
             t.suggested_angle ? `INVALSHOEK: ${t.suggested_angle}` : null,
-            brancheCheck.verdict !== "passend" && brancheCheck.toelichting
+            // Alleen bij "herkaderbaar": de toelichting is dan een invalshoek. Bij een gepind
+            // "niet-passend" topic is de toelichting een AFKEURREDEN — die niet als verplichte
+            // invalshoek injecteren (zou de schrijver de verkeerde kant op sturen).
+            brancheCheck.verdict === "herkaderbaar" && brancheCheck.toelichting
               ? `DOELGROEP-HERKADERING (verplicht: dit is de invalshoek die het onderwerp relevant maakt voor onze doelgroep — schrijf de blog vanuit déze hoek): ${brancheCheck.toelichting}`
               : null,
             `VANDAAG IS ${new Date().toISOString().slice(0, 10)}. Behandel dit als peildatum: geef voorrang aan de meest recente feiten, cijfers en regelgeving, en maak in de tekst duidelijk hoe actueel iets is (bv. "per 2026" / "sinds medio 2026").`,
@@ -468,14 +471,16 @@ Deno.serve(async (req) => {
       // de afgekeurde topics zijn via status='rejected' al uitgesloten van de selectie).
       let slotRetrying = false;
       if (generated === 0 && offBrand > 0 && !pinnedTopicId && slotRetry < 2) {
-        try {
-          await sb.rpc("invoke_edge_function", {
-            fn_name: "content-autoblog",
-            body: { slot_retry: slotRetry + 1, ...(typeof body.publish === "boolean" ? { publish: body.publish } : {}) },
-          });
+        // Op `error` checken, niet try/catch: een PostgrestBuilder reject nooit (hij
+        // resolvet met { error }) — anders onderdrukt een gefaalde kick stil de vangnetten.
+        const { error: kickErr } = await sb.rpc("invoke_edge_function", {
+          fn_name: "content-autoblog",
+          body: { slot_retry: slotRetry + 1, ...(typeof body.publish === "boolean" ? { publish: body.publish } : {}) },
+        });
+        if (!kickErr) {
           await ev("slot_retry_next_topic", { next: slotRetry + 1, reason: "off_brand" });
           slotRetrying = true;
-        } catch { /* best-effort */ }
+        }
       }
 
       // Vangnet 1: er is niets gegenereerd en er waren fouten (opgeknipte API-beurt, netwerk) —

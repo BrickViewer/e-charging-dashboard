@@ -106,11 +106,13 @@ Deno.serve(async (req) => {
       // Respecteert de kill-switch: de nieuwe autoblog-run no-op't als autoblog_enabled=false.
       const kickNextTopic = async (): Promise<boolean> => {
         if (slotRetry === null || slotRetry >= 2) return false;
-        try {
-          await sb.rpc("invoke_edge_function", { fn_name: "content-autoblog", body: { slot_retry: slotRetry + 1 } });
-          await ev("slot_retry_next_topic", { next: slotRetry + 1 });
-          return true;
-        } catch { return false; }
+        // Op `error` checken, niet try/catch: een PostgrestBuilder reject nooit (hij resolvet
+        // met { error }) — anders claimt de mail "machine pakt volgend onderwerp" terwijl de
+        // kick feitelijk faalde.
+        const { error: kickErr } = await sb.rpc("invoke_edge_function", { fn_name: "content-autoblog", body: { slot_retry: slotRetry + 1 } });
+        if (kickErr) return false;
+        await ev("slot_retry_next_topic", { next: slotRetry + 1 });
+        return true;
       };
 
       // Terminaal keteneinde = ARCHIVEREN (alleen machine-blogs): gefaalde concepten horen niet
@@ -174,9 +176,13 @@ Deno.serve(async (req) => {
               .filter((s: any) => s?.status === "dood" && typeof s?.url === "string").map((s: any) => s.url),
           );
           const bronnen = validateSources(post.sources).filter((s) => !deadUrls.has(s.url));
+          // FAQ-guard: het fix-model moet de VOLLEDIGE FAQ terugkaatsen; een gedeeltelijke
+          // (bv. alleen het gecorrigeerde item) mag nooit de complete set van 5 overschrijven.
+          const bestaandeFaqLen = Array.isArray(post.faq) ? post.faq.length : 0;
+          const faqUpdate = fix.faq && fix.faq.length >= bestaandeFaqLen ? { faq: fix.faq } : {};
           await sb.from("blog_posts").update({
             content: fix.content,
-            ...(fix.faq ? { faq: fix.faq } : {}),
+            ...faqUpdate,
             sources: bronnen,
           }).eq("id", blogPostId);
           await naarFactcheckSurgical();
@@ -186,12 +192,13 @@ Deno.serve(async (req) => {
           const msg = e instanceof Error ? e.message.slice(0, 300) : String(e);
           await ev("surgical_failed", { error: msg, retry: surgicalRetry });
           if (surgicalRetry < 1) {
-            // Eén herkansing in een vers isolate (vol tijdsbudget).
-            await sb.rpc("invoke_edge_function", {
+            // Eén herkansing in een vers isolate (vol tijdsbudget). Op `error` checken:
+            // een gefaalde re-invoke mag niet stil doorgaan alsof de herkansing gepland staat.
+            const { error: retryErr } = await sb.rpc("invoke_edge_function", {
               fn_name: "content-revise",
               body: { blog_post_id: blogPostId, surgical: true, corrections, iteration, factcheck_round: factcheckRound, surgical_retry: surgicalRetry + 1, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
             });
-            return { status: "ok", action: "surgical_retry", blog_post_id: blogPostId };
+            if (!retryErr) return { status: "ok", action: "surgical_retry", blog_post_id: blogPostId };
           }
           // Terminaal: archiveren + melding + volgend onderwerp voor dit slot.
           await kickCoverIfMissing();
@@ -292,7 +299,7 @@ Deno.serve(async (req) => {
         await notifyContentEngine(settings, {
           kind: "kept_concept",
           title: post.title,
-          reason: `${jsonReason}; de blog is gearchiveerd${retryingJson ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
+          reason: `${jsonReason}${isAgentPost ? "; de blog is gearchiveerd" : "; het concept staat ter review"}${retryingJson ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
           blogPostId,
         });
         return { status: "ok", action: "kept_concept_jsonfail", blog_post_id: blogPostId, iteration, slot_retrying: retryingJson, ms: Date.now() - runStart };
@@ -418,7 +425,7 @@ Deno.serve(async (req) => {
         kind: "kept_concept",
         title: draft.title ?? post.title,
         scores: { quality: q, seo, aeo },
-        reason: `${vloerReason}; de blog is gearchiveerd${retrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
+        reason: `${vloerReason}${isAgentPost ? "; de blog is gearchiveerd" : "; het concept staat ter review"}${retrying ? " — de machine pakt automatisch een volgend onderwerp voor dit slot" : ""}`,
         blogPostId,
       });
       await ev("kept_concept", { q, seo, aeo, slot_retrying: retrying, archived: isAgentPost });

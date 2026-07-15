@@ -216,18 +216,21 @@ Deno.serve(async (req) => {
           // bovendien het tokenbudget): een blog met topscores strandde op 15 juli op een
           // max_tokens-crash omdat de keten hier ophield.
           if (crashRetry < 1) {
-            try {
-              await sb.rpc("invoke_edge_function", {
-                fn_name: "content-factcheck",
-                body: {
-                  blog_post_id: blogPostId, factcheck_round: factcheckRound, iteration, backfill,
-                  crash_retry: crashRetry + 1,
-                  ...(slotRetry !== null ? { slot_retry: slotRetry } : {}),
-                },
-              });
+            // Op `error` checken, niet try/catch: een PostgrestBuilder reject nooit (hij
+            // resolvet met { error }) — anders return't dit pad terwijl er niets gepland is.
+            const { error: retryErr } = await sb.rpc("invoke_edge_function", {
+              fn_name: "content-factcheck",
+              body: {
+                blog_post_id: blogPostId, factcheck_round: factcheckRound, iteration, backfill,
+                crash_retry: crashRetry + 1,
+                ...(slotRetry !== null ? { slot_retry: slotRetry } : {}),
+              },
+            });
+            if (!retryErr) {
               await sb.from("content_engine_events").insert({ fn: "content-factcheck", step: "crash_retry", detail: { blog_post_id: blogPostId, round: factcheckRound, next: crashRetry + 1, error: err instanceof Error ? err.message.slice(0, 300) : "onbekende fout" } }).then(undefined, () => {});
               return;
-            } catch { /* herkansing zelf mislukt → val door naar melden */ }
+            }
+            // Herkansing zelf mislukt → val door naar melden.
           }
           await sb.from("content_engine_events").insert({ fn: "content-factcheck", step: "run_crashed", detail: { blog_post_id: blogPostId, round: factcheckRound, error: err instanceof Error ? err.message.slice(0, 300) : "onbekende fout" } }).then(undefined, () => {});
           // Een gecrashte check mag een blog niet stil laten hangen: melden.
