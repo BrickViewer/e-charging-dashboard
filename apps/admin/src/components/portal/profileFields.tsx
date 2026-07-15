@@ -1,7 +1,7 @@
 // Herbruikbare portaal-veldcomponenten voor de onboarding-wizard (en potentieel het
 // "Mijn gegevens"-formulier). De ERE-/BTW-copy komt uit lib/portalProfile zodat er geen drift ontstaat.
 
-import { useId, type HTMLAttributes } from "react";
+import { useId, useState, type HTMLAttributes } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -149,6 +149,14 @@ export function CountryCodeField({
   );
 }
 
+// BTW-status via twee FEITENVRAGEN i.p.v. een conclusie (commissionairs-handboek p.4:
+// "vraag naar feiten, niet naar een conclusie"). De klant weet niet zelf of hij een
+// self-billing factuur of een betaalspecificatie hoort te krijgen — dat leiden wij af:
+//   geen btw-nummer            → private (betaalspecificatie, geen ondernemer)
+//   btw-nummer + KOR            → kor     (betaalspecificatie, KOR van toepassing)
+//   btw-nummer, geen KOR        → vat_liable (self-billing factuur, 21%)
+// Het externe contract blijft een VatStatusChoice, zodat wizard/gegevensformulier
+// ongewijzigd blijven. Tussenstand (btw=ja, KOR nog niet beantwoord) → "" (onvolledig).
 export function VatStatusField({
   value,
   onChange,
@@ -158,34 +166,66 @@ export function VatStatusField({
   onChange: (value: VatStatusChoice) => void;
   error?: string;
 }) {
+  const deriveHasBtw = (v: VatStatusChoice): "yes" | "no" | "" =>
+    v === "vat_liable" || v === "kor" ? "yes" : v === "private" ? "no" : "";
+  const [hasBtw, setHasBtw] = useState<"yes" | "no" | "">(() => deriveHasBtw(value));
+  const kor: "yes" | "no" | "" = value === "kor" ? "yes" : value === "vat_liable" ? "no" : "";
+
+  const onBtwChange = (v: string) => {
+    setHasBtw(v as "yes" | "no");
+    if (v === "no") onChange("private");
+    // btw-nummer → wacht op het KOR-antwoord voordat de status vaststaat.
+    else onChange(value === "kor" || value === "vat_liable" ? value : "");
+  };
+  const onKorChange = (v: string) => onChange(v === "yes" ? "kor" : "vat_liable");
+
   return (
-    <div className="space-y-2 rounded-md border border-border/80 px-3 py-3">
-      <Label className="text-sm text-foreground">
-        BTW-status <span className="text-destructive">*</span>
-      </Label>
-      <RadioGroup value={value} onValueChange={(v) => onChange(v as VatStatusChoice)} className="gap-2.5">
-        <label className="flex items-start gap-2.5 cursor-pointer">
-          <RadioGroupItem value="vat_liable" className="mt-0.5" />
-          <span className="text-sm">
-            Ik ben BTW-ondernemer
-            <span className="block text-xs text-muted-foreground">21% BTW op de vergoeding; KvK- en BTW-nummer verplicht</span>
-          </span>
-        </label>
-        <label className="flex items-start gap-2.5 cursor-pointer">
-          <RadioGroupItem value="kor" className="mt-0.5" />
-          <span className="text-sm">
-            Ik val onder de kleineondernemersregeling (KOR)
-            <span className="block text-xs text-muted-foreground">Geen BTW op de vergoeding; KvK-nummer verplicht</span>
-          </span>
-        </label>
-        <label className="flex items-start gap-2.5 cursor-pointer">
-          <RadioGroupItem value="private" className="mt-0.5" />
-          <span className="text-sm">
-            Ik ontvang de vergoeding als particulier
-            <span className="block text-xs text-muted-foreground">Geen BTW; geen KvK- of BTW-nummer nodig</span>
-          </span>
-        </label>
-      </RadioGroup>
+    <div className="space-y-3 rounded-md border border-border/80 px-3 py-3">
+      <div className="space-y-2">
+        <Label className="text-sm text-foreground">
+          Heeft u een btw-nummer? <span className="text-destructive">*</span>
+        </Label>
+        <RadioGroup value={hasBtw} onValueChange={onBtwChange} className="gap-2.5">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <RadioGroupItem value="yes" className="mt-0.5" />
+            <span className="text-sm">
+              Ja, ik heb een btw-nummer
+              <span className="block text-xs text-muted-foreground">U bent ondernemer voor de omzetbelasting</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <RadioGroupItem value="no" className="mt-0.5" />
+            <span className="text-sm">
+              Nee, ik heb geen btw-nummer
+              <span className="block text-xs text-muted-foreground">U ontvangt het geld als particulier; geen KvK- of BTW-nummer nodig</span>
+            </span>
+          </label>
+        </RadioGroup>
+      </div>
+
+      {hasBtw === "yes" && (
+        <div className="space-y-2 border-t border-border/60 pt-3">
+          <Label className="text-sm text-foreground">
+            Past u de kleineondernemersregeling (KOR) toe? <span className="text-destructive">*</span>
+          </Label>
+          <RadioGroup value={kor} onValueChange={onKorChange} className="gap-2.5">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <RadioGroupItem value="no" className="mt-0.5" />
+              <span className="text-sm">
+                Nee, ik reken btw
+                <span className="block text-xs text-muted-foreground">21% BTW; KvK- en BTW-nummer verplicht</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <RadioGroupItem value="yes" className="mt-0.5" />
+              <span className="text-sm">
+                Ja, ik pas de KOR toe
+                <span className="block text-xs text-muted-foreground">Geen BTW; KvK-nummer verplicht</span>
+              </span>
+            </label>
+          </RadioGroup>
+        </div>
+      )}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );

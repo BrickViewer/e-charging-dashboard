@@ -8,7 +8,6 @@ import { CheckCircle, Clock, Euro, Calendar, Download, Truck } from "lucide-reac
 import { useState, useMemo, Fragment, type ReactNode } from "react";
 import type { PortalSettlement } from "@/types/db";
 import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
-import { settlementNetExcl } from "@/services/calculations";
 import { getPortalSessions, getAmsterdamMonthBounds } from "@/services/sessions";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 import { useDemoDatasetOptional } from "@/contexts/demoDatasetContextValue";
@@ -203,10 +202,9 @@ export default function ClientFinancial() {
                 {filtered.map((s, i) => {
                   const showYear = i === 0 || filtered[i - 1].year !== s.year;
                   const v = statusVisual(s);
-                  // Netto (excl-equivalent) dat overeenkomt met "Netto over te boeken" op de factuur —
-                  // klopt voor élke BTW-status (particulier/KOR incl. de 21% activatie-BTW).
+                  // Het volledige stroombedrag (excl. btw). Activatiekosten lopen via een aparte
+                  // factuur (extern programma) en worden hier niet meer gesaldeerd.
                   const payout = Number(s.client_payout || 0);
-                  const netExcl = settlementNetExcl({ clientPayout: payout, activationCost: Number(s.activation_cost || 0), vatRate: Number(s.vat_rate ?? 0.21) });
                   return (
                     <Fragment key={s.id}>
                       {showYear && (
@@ -230,21 +228,9 @@ export default function ClientFinancial() {
                         <div className="flex items-center gap-3 flex-shrink-0">
                           <div className="text-right">
                             <p className="text-base font-semibold text-primary tabular-nums leading-tight">
-                              {fmt(Number(s.client_payout || 0))}
+                              {fmt(payout)}
                             </p>
-                            {Number(s.activation_cost || 0) > 0 ? (
-                              <>
-                                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">vergoeding · excl. btw</p>
-                                <p className="text-[11px] text-muted-foreground tabular-nums leading-tight mt-1">
-                                  − {fmt(payout - netExcl)} activatie
-                                </p>
-                                <p className="text-xs font-semibold text-foreground tabular-nums leading-tight mt-0.5">
-                                  {fmt(netExcl)} netto · excl. btw
-                                </p>
-                              </>
-                            ) : (
-                              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">excl. btw</p>
-                            )}
+                            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">excl. btw</p>
                           </div>
                           {payout >= 0 && (
                             <Button

@@ -31,6 +31,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { CashKpi } from "@/components/admin/financial/CashKpi";
 import { ReconciliationOverview } from "@/components/admin/financial/ReconciliationOverview";
 import { EfluxInvoicesTab } from "@/components/admin/financial/EfluxInvoicesTab";
+import { SampleDocumentsCard } from "@/components/admin/financial/SampleDocumentsCard";
 
 type RecomputeBody = { year?: number; month?: number };
 type RecomputeResult = { computed?: number; skipped?: number; errors?: number };
@@ -870,6 +871,7 @@ export default function AdminFinancial() {
           <TabsTrigger value="overzicht">Maandoverzicht</TabsTrigger>
           <TabsTrigger value="afrekeningen">Afrekeningen</TabsTrigger>
           <TabsTrigger value="facturen">eFlux-facturen</TabsTrigger>
+          <TabsTrigger value="voorbeelden">Voorbeelden</TabsTrigger>
         </TabsList>
         <TabsContent value="overzicht" className="mt-5">
           <ReconciliationOverview onOpenMonth={openMonth} />
@@ -879,6 +881,9 @@ export default function AdminFinancial() {
         </TabsContent>
         <TabsContent value="facturen" className="mt-5">
           <EfluxInvoicesTab />
+        </TabsContent>
+        <TabsContent value="voorbeelden" className="mt-5">
+          <SampleDocumentsCard />
         </TabsContent>
       </Tabs>
     </div>

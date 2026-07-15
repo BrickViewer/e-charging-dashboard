@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Loader2, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { formatEuro, formatNumber, settlementVat, settlementNetToTransfer } from "@/services/calculations";
+import { formatEuro, formatNumber, settlementVat } from "@/services/calculations";
 import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
 import { FeeWaiverControl } from "@/components/admin/financial/FeeWaiverControl";
 import { toast } from "sonner";
@@ -38,11 +38,11 @@ export function ClientSettlementCard({
   const echargingRevenue = Number(s.echarging_revenue || 0);
   const clientPayout = Number(s.client_payout || 0);
   const vat = settlementVat({ clientPayout, vatRate: Number(s.vat_rate ?? 0.21) });
-  // Verrekende activatiekosten (altijd 21% output-BTW) + netto over te boeken — gedeelde bron.
+  // Activatiekosten lopen via een APARTE factuur (extern programma) — niet meer gesaldeerd op
+  // onze afrekening. Alleen informatief tonen; de afrekening betaalt het volledige stroombedrag.
   const activationCost = Number(s.activation_cost || 0);
-  const activation = settlementVat({ clientPayout: activationCost, vatRate: 0.21 });
-  const hasActivation = activation.net > 0;
-  const netToTransfer = settlementNetToTransfer({ clientPayout, activationCost, vatRate: Number(s.vat_rate ?? 0.21) });
+  const hasActivation = activationCost > 0;
+  const overToTransfer = vat.inclVat; // vol stroombedrag incl. BTW
   const isLive = s.status === "live";
   const isCalculated = s.status === "calculated";
   const efluxReimbursed = Boolean(s.eflux_reimbursed_at);
@@ -181,20 +181,20 @@ export function ClientSettlementCard({
               <span className="font-semibold text-foreground tabular-nums whitespace-nowrap">{formatEuro(vat.vatAmount)}</span>
             </div>
           )}
-          {hasActivation && (
-            <div className="flex justify-between gap-3">
-              <span>Activatiekosten <span className="text-muted-foreground/70">(verrekend, incl. BTW)</span></span>
-              <span className="font-semibold text-foreground tabular-nums whitespace-nowrap">- {formatEuro(activation.inclVat)}</span>
-            </div>
-          )}
           <div className="flex justify-between gap-3 border-t border-border/40 pt-1.5 text-foreground font-semibold">
-            <span>{hasActivation ? "Netto over te boeken" : "Over te boeken"} <span className="text-muted-foreground/70 font-normal">(incl. BTW)</span></span>
-            <span className="text-primary tabular-nums whitespace-nowrap">{formatEuro(netToTransfer)}</span>
+            <span>Over te boeken <span className="text-muted-foreground/70 font-normal">(incl. BTW)</span></span>
+            <span className="text-primary tabular-nums whitespace-nowrap">{formatEuro(overToTransfer)}</span>
           </div>
           <div className="flex justify-between gap-3">
-            <span>Naar E-Charging <span className="text-muted-foreground/70">(service-fee)</span></span>
+            <span>Naar E-Charging <span className="text-muted-foreground/70">(brutomarge)</span></span>
             <span className="font-semibold text-foreground tabular-nums whitespace-nowrap">{formatEuro(echargingRevenue)}</span>
           </div>
+          {hasActivation && (
+            <div className="flex justify-between gap-3 text-muted-foreground/80 pt-1 border-t border-border/40">
+              <span>Activatiekosten <span className="text-muted-foreground/70">(aparte factuur — extern)</span></span>
+              <span className="tabular-nums whitespace-nowrap">{formatEuro(activationCost)} excl.</span>
+            </div>
+          )}
           {s.eflux_reimbursed_at && (
             <div className="text-muted-foreground/80 pt-1 border-t border-border/40">
               e-Flux heeft uitbetaald op {format(new Date(s.eflux_reimbursed_at), "d MMM yyyy", { locale: nl })}

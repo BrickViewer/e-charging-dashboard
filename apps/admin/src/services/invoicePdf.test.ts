@@ -107,12 +107,12 @@ describe("buildSelfBillingInvoicePdf", () => {
 });
 
 describe("isBetaalspecificatie", () => {
-  it("particulier ('private') → betaalspecificatie (geen self-billing btw-factuur)", () => {
+  it("particulier én KOR → betaalspecificatie (E-Charging → klant, geen self-billing btw-factuur)", () => {
     expect(isBetaalspecificatie("private")).toBe(true);
+    expect(isBetaalspecificatie("kor")).toBe(true);
   });
-  it("ondernemer/KOR/onbekend → factuur (self-billing)", () => {
+  it("BTW-ondernemer/onbekend → self-billing factuur", () => {
     expect(isBetaalspecificatie("vat_liable")).toBe(false);
-    expect(isBetaalspecificatie("kor")).toBe(false);
     expect(isBetaalspecificatie(null)).toBe(false);
     expect(isBetaalspecificatie(undefined)).toBe(false);
   });

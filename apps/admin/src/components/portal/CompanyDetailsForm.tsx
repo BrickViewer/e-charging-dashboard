@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { usePostcodeLookup } from "@/hooks/usePostcodeLookup";
@@ -17,6 +16,8 @@ import { evaluatePassword } from "@/lib/passwordStrength";
 import { PasswordStrengthMeter, usePasswordStrength } from "@/components/PasswordStrengthMeter";
 // Gedeelde copy-constanten (bewuste uitzondering op de duplicatie om copy-drift te voorkomen).
 import { accountHolderHelp, ERE_OPTIN_DISCLAIMER, ERE_RECEIVED_NOTICE, invoiceNameHelp } from "@/lib/portalProfile";
+// Gedeelde BTW-status-feitenvragen (btw-nummer? KOR?) — zelfde component als de onboarding-wizard.
+import { VatStatusField } from "@/components/portal/profileFields";
 import { cn } from "@/lib/utils";
 import {
   changePortalLoginEmail,
@@ -643,41 +644,15 @@ export function CompanyDetailsForm({ client, paymentDetails }: CompanyDetailsFor
                 <InfoItem label="Klantnummer" value={client.client_number ? `#${client.client_number}` : "Nog niet bekend"} />
               </dl>
 
-              {/* BTW-status: bepaalt de BTW-behandeling op de vergoedingsfactuur
-                  én welke velden hieronder verplicht zijn. E-Charging bevestigt
-                  de keuze voordat er wordt uitbetaald. */}
-              <div className="space-y-2 rounded-md border border-border/80 px-3 py-3">
-                <Label className="text-sm text-foreground">
-                  BTW-status <span className="text-destructive">*</span>
-                </Label>
-                <RadioGroup
+              {/* BTW-status via twee feitenvragen (btw-nummer? KOR?) — bepaalt de BTW-behandeling
+                  op het afrekeningsdocument én welke velden hieronder verplicht zijn. E-Charging
+                  bevestigt de afgeleide status voordat er wordt uitbetaald. */}
+              <div className="space-y-2">
+                <VatStatusField
                   value={companyForm.vatStatus}
-                  onValueChange={(value) => updateCompany("vatStatus", value as VatStatusChoice)}
-                  className="gap-2.5"
-                >
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <RadioGroupItem value="vat_liable" className="mt-0.5" />
-                    <span className="text-sm">
-                      Ik ben BTW-ondernemer
-                      <span className="block text-xs text-muted-foreground">21% BTW op de vergoeding; KvK- en BTW-nummer verplicht</span>
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <RadioGroupItem value="kor" className="mt-0.5" />
-                    <span className="text-sm">
-                      Ik val onder de kleineondernemersregeling (KOR)
-                      <span className="block text-xs text-muted-foreground">Geen BTW op de vergoeding; KvK-nummer verplicht</span>
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <RadioGroupItem value="private" className="mt-0.5" />
-                    <span className="text-sm">
-                      Ik ontvang de vergoeding als particulier
-                      <span className="block text-xs text-muted-foreground">Geen BTW; geen KvK- of BTW-nummer nodig</span>
-                    </span>
-                  </label>
-                </RadioGroup>
-                {companyErrors.vatStatus && <p className="text-xs text-destructive">{companyErrors.vatStatus}</p>}
+                  onChange={(value) => updateCompany("vatStatus", value)}
+                  error={companyErrors.vatStatus}
+                />
                 {client.vat_status && !client.vat_status_confirmed_at && (
                   <p className="text-xs text-[hsl(var(--status-amber))]">
                     In afwachting van bevestiging door E-Charging — tot die tijd kan er nog niet worden uitbetaald.

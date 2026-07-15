@@ -183,16 +183,41 @@ describe("validateSelfBillingInvoiceData — BTW-status en consistentie", () => 
 });
 
 describe("INVOICE_NUMBER_RE", () => {
-  it("accepteert de nieuwe reeks en legacy-nummers", () => {
-    expect(INVOICE_NUMBER_RE.test("ECF-2026-00001")).toBe(true);
-    expect(INVOICE_NUMBER_RE.test("EC-202605-102")).toBe(true);
+  it("accepteert de klantnummer-reeksen S-/B- en legacy-nummers", () => {
+    expect(INVOICE_NUMBER_RE.test("S-2026-06-102")).toBe(true);   // self-billing factuur
+    expect(INVOICE_NUMBER_RE.test("B-2026-06-903")).toBe(true);   // betaalspecificatie
+    expect(INVOICE_NUMBER_RE.test("S-2026-06-9")).toBe(true);     // kort klantnummer
+    expect(INVOICE_NUMBER_RE.test("ECF-2026-00001")).toBe(true);  // legacy
+    expect(INVOICE_NUMBER_RE.test("EC-202605-102")).toBe(true);   // legacy
     expect(INVOICE_NUMBER_RE.test("EC-202604-102")).toBe(true);
   });
 
   it("weigert ongeldige formaten", () => {
     expect(INVOICE_NUMBER_RE.test("EC-2026-1")).toBe(false);
     expect(INVOICE_NUMBER_RE.test("ECF-26-00001")).toBe(false);
+    expect(INVOICE_NUMBER_RE.test("S-2026-6-102")).toBe(false);   // maand niet 2-cijferig
+    expect(INVOICE_NUMBER_RE.test("A-2026-06-1")).toBe(false);    // geen A-reeks (activatie is extern)
     expect(INVOICE_NUMBER_RE.test("")).toBe(false);
     expect(INVOICE_NUMBER_RE.test("FACTUUR-1")).toBe(false);
+  });
+
+  it("controleert prefix ↔ status-consistentie", () => {
+    // S- hoort bij vat_liable; B- bij kor/private.
+    const base = {
+      settlement: { invoice_number: "S-2026-06-102", vat_status: "kor", vat_rate: 0, client_payout: 100 },
+      client: {
+        company_name: "Test", billing_address_street: "Straat 1", billing_address_postal: "1000AA",
+        billing_address_city: "Amsterdam", country: "Nederland", client_number: 102,
+        kvk: "90000001", vat_status: "kor", vat_status_confirmed_at: "2026-01-01",
+      },
+      org: {
+        name: "E-Charging", kvk: "30241843", btw_number: "NL8213.92.402.B01", iban: "NL33RABO0143928449",
+        address_street: "Dwarsweg 8", address_postal: "5301KT", address_city: "Zaltbommel", country: "Nederland",
+      },
+      paymentDetails: { payout_iban: "NL91ABNA0417164300", payout_account_holder_name: "Test" },
+    };
+    const r = validateSelfBillingInvoiceData(base);
+    expect(r.ok).toBe(false);
+    expect(r.missing.map((m) => m.field)).toContain("invoice_number");
   });
 });

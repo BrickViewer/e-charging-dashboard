@@ -19,8 +19,10 @@ export interface InvoiceValidationResult {
   missing: InvoiceValidationIssue[];
 }
 
-// Legacy-afgeleide nummers (EC-JJJJMM-klantnr) blijven geldig; nieuwe reeks is ECF-YYYY-NNNNN.
-export const INVOICE_NUMBER_RE = /^(ECF-\d{4}-\d{5}|EC-\d{6}-\d+)$/;
+// Documentnummers. Actueel (commissionairs-handboek): S-JJJJ-MM-<klantnr> (self-billing
+// factuur, vat_liable) en B-JJJJ-MM-<klantnr> (betaalspecificatie, kor/private). Legacy
+// ECF-JJJJ-NNNNN en EC-JJJJMM-klantnr blijven geldig.
+export const INVOICE_NUMBER_RE = /^(S-\d{4}-\d{2}-\d+|B-\d{4}-\d{2}-\d+|ECF-\d{4}-\d{5}|EC-\d{6}-\d+)$/;
 
 // Org-KVK placeholder die nooit op een factuur mag belanden.
 export const ORG_KVK_PLACEHOLDER = "12345678";
@@ -119,9 +121,18 @@ export function validateSelfBillingInvoiceData(input: InvoiceValidationInput): I
   if (empty(org?.btw_number)) add("org_btw_number", "BTW-identificatienummer E-Charging", "organisatie");
   if (empty(org?.iban)) add("org_iban", "IBAN E-Charging", "organisatie");
 
-  // ── Afrekening: definitief, opgeslagen factuurnummer (toegekend bij goedkeuring)
-  if (empty(settlement.invoice_number) || !INVOICE_NUMBER_RE.test((settlement.invoice_number ?? "").trim())) {
-    add("invoice_number", "Factuurnummer (wordt toegekend bij goedkeuring)", "afrekening");
+  // ── Afrekening: definitief, opgeslagen documentnummer (toegekend bij goedkeuring)
+  const nr = (settlement.invoice_number ?? "").trim();
+  if (empty(settlement.invoice_number) || !INVOICE_NUMBER_RE.test(nr)) {
+    add("invoice_number", "Documentnummer (wordt toegekend bij goedkeuring)", "afrekening");
+  } else if (vs !== null) {
+    // Prefix ↔ status: S- hoort bij een self-billing factuur (vat_liable), B- bij een
+    // betaalspecificatie (kor/private). Legacy ECF-/EC- dragen geen typebetekenis → overslaan.
+    if (nr.startsWith("S-") && vs !== "vat_liable") {
+      add("invoice_number", "Documentnummer (S-) hoort bij een BTW-ondernemer, maar de status is dat niet", "afrekening");
+    } else if (nr.startsWith("B-") && vs === "vat_liable") {
+      add("invoice_number", "Documentnummer (B-) hoort bij een betaalspecificatie, maar de leverancier is BTW-ondernemer", "afrekening");
+    }
   }
 
   // ── Consistentie BTW-status ↔ BTW-tarief van de afrekening
