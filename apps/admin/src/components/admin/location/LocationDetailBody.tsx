@@ -43,6 +43,7 @@ import { nl } from "date-fns/locale";
 import { ConnectivityIndicator } from "@/components/admin/ConnectivityIndicator";
 import { KpiTile } from "@/components/admin/KpiTile";
 import { linkLocationToClient, unlinkLocation, setLocationServiceFee } from "@/services/locations";
+import { supabase } from "@/integrations/supabase/client";
 import type { AdminLocationDetail, AdminSession, ClientWithRelations } from "@/types/db";
 import { cn } from "@/lib/utils";
 
@@ -153,10 +154,26 @@ export function LocationDetailBody({
       const assigned = result?.reassigned_sessions ?? 0;
       const retained = result?.retained_final_sessions ?? 0;
       const wasTransfer = !!result?.previous_client_id;
+      // Koppelen/overdragen WIST de openstaande afrekeningen van de betrokken klant(en)
+      // voor de geraakte maanden (park_location) — de sessie-samenstelling verandert. Meteen
+      // de aggregator draaien zodat ze direct herrekend worden i.p.v. te verdwijnen tot de
+      // nachtrun. Best-effort: faalt dit, dan is de koppeling al gelukt; de klant klikt anders
+      // "Herbereken" in Financieel.
+      let recomputeFailed = false;
+      try {
+        const { error: aggErr } = await supabase.functions.invoke("aggregate-settlements", { body: {} });
+        if (aggErr) recomputeFailed = true;
+      } catch {
+        recomputeFailed = true;
+      }
       toast.success(
         `${wasTransfer ? "Locatie overgedragen" : "Locatie gekoppeld"}: ${assigned} sessie(s) ${wasTransfer ? "meegegaan" : "toegewezen"}` +
-          (retained > 0 ? `, ${retained} afgerekende sessie(s) behouden bij vorige eigenaar` : ""),
+          (retained > 0 ? `, ${retained} afgerekende sessie(s) behouden bij vorige eigenaar` : "") +
+          (recomputeFailed ? "" : " — afrekeningen worden opnieuw berekend"),
       );
+      if (recomputeFailed) {
+        toast.warning("Afrekeningen konden niet direct worden herberekend — klik Herbereken in Financieel.");
+      }
       queryClient.invalidateQueries({ queryKey: ["admin-location", locationId] });
       queryClient.invalidateQueries({ queryKey: ["admin-location-sessions", locationId] });
       queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
