@@ -3,22 +3,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
-  Banknote, ArrowRight, Wallet, Landmark, Percent, AlertCircle, AlertTriangle,
-  RefreshCw, ChevronDown, ChevronRight, ExternalLink, CheckCircle2, Clock, Unlink,
+  AlertCircle, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, ExternalLink,
+  CheckCircle2, Clock,
 } from "lucide-react";
-import { CashKpi } from "./CashKpi";
 import { ReconStatusIndicator } from "./ReconStatusIndicator";
 import { useMonthlyFinancialOverview, useAllSettlements } from "@/hooks/useAdminData";
 import { formatEuro } from "@/services/calculations";
-import { buildMonthlyFinancials, sumFinancials, type MonthFinancials } from "@/services/financialModel";
+import { buildMonthlyFinancials, sumFinancials, type MonthFinancials, type FinancialsTotals } from "@/services/financialModel";
 import type { AdminSettlement } from "@/types/db";
 import { getCurrentMonth, monthFullLabel } from "@/lib/period";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
 import { Link } from "react-router-dom";
 
-// Tab 1 — CFO-cockpit. Per maand de sluitende geldstroom:
-//   Ontvangen van eFlux  →  Toegewezen (uit te keren + fee) + Nog niet toegewezen  →  marge,
-// plus de uitbetaalstatus (is alles uitbetaald?). Klik een maand voor de volledige waterfall.
+// Tab 1 — CFO-cockpit, compacte variant. Slanke kop-strook (jaar) + de maandtabel als hero:
+// per rij vertellen twee mini-balken "is het toegewezen?" en "is het uitbetaald?". Klik een
+// maand voor de volledige waterfall; het pijltje opent de afrekeningen van die maand.
 export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: string) => void }) {
   const ov = useMonthlyFinancialOverview();
   const st = useAllSettlements();
@@ -45,7 +44,6 @@ export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: stri
 
   if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
 
-  // Laadfout — bied een retry i.p.v. stilzwijgend een leeg overzicht met €0-totalen.
   if (isError) {
     return (
       <div
@@ -64,55 +62,25 @@ export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: stri
     );
   }
 
-  const verwachtSuffix = tot.ontvangenVerwacht > 0.005 ? ` · ${formatEuro(tot.ontvangenVerwacht)} verwacht` : "";
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Maandoverzicht & reconciliatie</h2>
           <p className="text-sm text-muted-foreground">
-            Wat eFlux ons betaalt, verdeeld over{" "}
-            <span className="font-medium text-foreground">klanten + onze fee</span> en{" "}
-            <span className="font-medium text-foreground">nog niet toegewezen</span> — met de uitbetaalstatus.
+            Wat eFlux betaalt, verdeeld over klanten + fee — en wat nog niet is toegewezen of uitbetaald.
           </p>
         </div>
         <PeriodStepper label={`Heel ${year}`} index={idx} count={years.length} onIndexChange={setYearIdx} />
       </div>
 
-      {/* Jaar-KPI's — consistente BTW-basis (aangegeven in het bijschrift van elke tegel) */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        <CashKpi label="Ontvangen van eFlux" value={formatEuro(tot.ontvangenActueel)} subtitle={`vergoeding incl. BTW${verwachtSuffix}`} icon={<Banknote className="h-4 w-4" />} accent="primary" />
-        <CashKpi label="Nog niet toegewezen" value={formatEuro(tot.unassignedExcl)} subtitle="koppel klant · excl. BTW" icon={<Unlink className="h-4 w-4" />} accent={tot.unassignedExcl > 0.005 ? "amber" : "muted"} />
-        <CashKpi label="Uit te keren aan klanten" value={formatEuro(tot.payoutTotal)} subtitle="bruto, excl. BTW" icon={<ArrowRight className="h-4 w-4" />} accent="muted" />
-        <CashKpi label="Onze fee" value={formatEuro(tot.feeTotal)} subtitle="service-fee, excl. BTW" icon={<Percent className="h-4 w-4" />} accent="primary" />
-        <CashKpi label="eFlux-kosten" value={formatEuro(tot.usageIncl)} subtitle="platform incl. BTW" icon={<Wallet className="h-4 w-4" />} accent="amber" />
-        <CashKpi label="Onze marge" value={formatEuro(tot.margeExcl)} subtitle="fee − kosten, excl. BTW" icon={<Landmark className="h-4 w-4" />} accent="muted" changePositive={tot.margeExcl >= 0} />
-      </div>
+      {/* Slanke kop-strook: 3 kerncijfers (jaar) */}
+      <HeadlineStrip tot={tot} />
 
-      {/* Actiepunt — ongekoppelde eFlux-vergoeding; maak het koppelen vindbaar */}
-      {tot.unassignedExcl > 0.005 && (
-        <Link
-          to="/admin/locaties"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[hsl(var(--status-amber)/0.3)] bg-[hsl(var(--status-amber)/0.08)] px-4 py-3 transition-colors hover:bg-[hsl(var(--status-amber)/0.14)]"
-        >
-          <div className="flex items-center gap-2 text-sm text-foreground">
-            <AlertTriangle className="h-4 w-4 flex-shrink-0 text-[hsl(var(--status-amber))]" />
-            <span>
-              <span className="font-medium">{formatEuro(tot.unassignedExcl)}</span> eFlux-vergoeding is nog niet
-              toegewezen aan een klant — koppel de bijbehorende locaties aan een klant.
-            </span>
-          </div>
-          <span className="inline-flex items-center gap-1 text-sm font-medium text-[hsl(var(--status-amber))]">
-            Naar locaties <ChevronRight className="h-4 w-4" />
-          </span>
-        </Link>
-      )}
+      {/* Eén regel: is alles uitbetaald? (jaar) */}
+      <YearPayoutLine tot={tot} />
 
-      {/* Uitbetaalstatus — beantwoordt "hebben we alles uitbetaald?" */}
-      <PayoutStatusBar tot={tot} />
-
-      {/* Per-maand tabel — klik een rij voor de volledige waterfall */}
+      {/* De maandtabel is de hero */}
       <Card className="portal-card">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -120,32 +88,30 @@ export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: stri
               <thead>
                 <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
                   <th className="p-3 text-left font-medium">Maand</th>
-                  <th className="p-3 text-right font-medium">Ontvangen eFlux</th>
+                  <th className="p-3 text-right font-medium">Ontvangen</th>
+                  <th className="p-3 text-left font-medium">Toewijzing</th>
+                  <th className="p-3 text-left font-medium">Uitbetaling</th>
                   <th className="p-3 text-left font-medium">Reconciliatie</th>
-                  <th className="p-3 text-right font-medium">Nog niet toegewezen</th>
-                  <th className="p-3 text-right font-medium">Uitbetaald</th>
-                  <th className="p-3 text-right font-medium">Openstaand</th>
-                  <th className="p-3 text-right font-medium">Onze marge</th>
+                  <th className="p-3 text-right font-medium">Marge</th>
                   <th className="p-3 text-right font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {months.map((m) => {
                   const ym = `${m.year}-${String(m.month).padStart(2, "0")}`;
-                  const isOpen = expanded === ym;
                   return (
                     <MonthRow
                       key={ym}
                       m={m}
                       ym={ym}
-                      isOpen={isOpen}
-                      onToggle={() => setExpanded(isOpen ? null : ym)}
+                      isOpen={expanded === ym}
+                      onToggle={() => setExpanded(expanded === ym ? null : ym)}
                       onOpenMonth={onOpenMonth}
                     />
                   );
                 })}
                 {months.length === 0 && (
-                  <tr><td colSpan={8} className="p-12 text-center text-muted-foreground">Geen data voor {year}.</td></tr>
+                  <tr><td colSpan={7} className="p-12 text-center text-muted-foreground">Geen data voor {year}.</td></tr>
                 )}
               </tbody>
             </table>
@@ -153,81 +119,134 @@ export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: stri
         </CardContent>
       </Card>
 
-      {/* Sluitende toelichting + BTW-basis-legenda */}
-      <div className="space-y-1.5 text-xs text-muted-foreground">
-        <p>
-          <span className="font-medium text-foreground">Sluit per maand:</span> ontvangen van eFlux (excl. BTW) ={" "}
-          toegewezen aan klanten (uit te keren + onze fee) + nog niet toegewezen. "Nog niet toegewezen" is de
-          vergoeding van sessies zonder gekoppelde klant — koppel de locatie aan een klant zodat die omzet wordt
-          uitgekeerd en fee oplevert. "Onze marge" = onze fee − eFlux-platformkosten (ongekoppeld telt niet mee).
-        </p>
-        <p>
-          De reconciliatie vergelijkt de eFlux-creditfactuur met onze sessie-omzet × 1,21 (op de cent). Een ⚠️
-          is meestal maandgrens-timing dat in de buurmaand saldeert. Bedragen zijn incl. BTW waar het om
-          eFlux/uitbetalingen gaat en excl. BTW bij omzet/fee/marge. Reconciliatie is op bedrijfsniveau; per
-          klant controleer je in de tab Afrekeningen.
-        </p>
-      </div>
+      <p className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Sluit:</span> ontvangen van eFlux (excl. BTW) = toegewezen
+        aan klanten (uit te keren + fee) + nog niet toegewezen. Reconciliatie vergelijkt de eFlux-creditfactuur met
+        onze sessie-omzet × 1,21. Bedragen incl. BTW bij eFlux/uitbetalingen, excl. BTW bij omzet/fee/marge.
+      </p>
     </div>
   );
 }
 
-// Compacte uitbetaalstatus-balk: uitbetaald vs openstaand (goedgekeurd, nog niet betaald)
-// vs nog niet goedgekeurd. Het directe antwoord op "is alles uitbetaald?".
-function PayoutStatusBar({ tot }: { tot: ReturnType<typeof sumFinancials> }) {
-  const paid = tot.uitbetaaldIncl;
-  const open = tot.openstaandIncl;
-  const pending = tot.nogNietGoedgekeurdIncl;
-  const total = paid + open + pending;
-  const pct = (v: number) => (total > 0 ? `${(v / total) * 100}%` : "0%");
+// --- Kop-strook -------------------------------------------------------------
 
+function HeadlineStrip({ tot }: { tot: FinancialsTotals }) {
+  const verwacht = tot.ontvangenVerwacht > 0.005 ? `+${formatEuro(tot.ontvangenVerwacht)} verwacht` : "incl. BTW";
   return (
     <Card className="portal-card">
-      <CardContent className="p-5 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
-          <p className="cockpit-section-label">Uitbetaalstatus aan klanten</p>
-          <p className="text-xs text-muted-foreground">netto over te boeken · incl. BTW</p>
-        </div>
-
-        {total > 0 ? (
-          <>
-            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-              <div className="bg-primary" style={{ width: pct(paid) }} title={`Uitbetaald ${formatEuro(paid)}`} />
-              <div className="bg-[hsl(var(--status-amber))]" style={{ width: pct(open) }} title={`Openstaand ${formatEuro(open)}`} />
-              <div className="bg-muted-foreground/30" style={{ width: pct(pending) }} title={`Nog niet goedgekeurd ${formatEuro(pending)}`} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <StatusFigure color="text-primary" dot="bg-primary" label="Uitbetaald" value={paid} hint={paid > 0 ? "geld is de deur uit" : "nog niets uitbetaald"} />
-              <StatusFigure color="text-[hsl(var(--status-amber))]" dot="bg-[hsl(var(--status-amber))]" label="Openstaand" value={open} hint="goedgekeurd, nog te betalen/factureren" />
-              <StatusFigure color="text-muted-foreground" dot="bg-muted-foreground/30" label="Nog niet goedgekeurd" value={pending} hint="live/berekend — nog niet in de betaalflow" />
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">Geen afrekeningen aan klanten in dit jaar (alle sessie-omzet is nog niet toegewezen).</p>
-        )}
+      <CardContent className="grid grid-cols-1 divide-y divide-border p-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <StripStat label="Ontvangen van eFlux" value={formatEuro(tot.ontvangenActueel)} sub={verwacht} />
+        <StripStat
+          label="Nog niet toegewezen"
+          value={formatEuro(tot.unassignedExcl)}
+          amber={tot.unassignedExcl > 0.005}
+          action={tot.unassignedExcl > 0.005
+            ? <Link to="/admin/locaties" className="inline-flex items-center gap-0.5 font-medium text-[hsl(var(--status-amber))] hover:underline">koppel locaties <ChevronRight className="h-3.5 w-3.5" /></Link>
+            : undefined}
+        />
+        <StripStat
+          label="Onze marge"
+          value={formatEuro(tot.margeExcl)}
+          red={tot.margeExcl < 0}
+          sub="fee − eFlux-kosten"
+        />
       </CardContent>
     </Card>
   );
 }
 
-function StatusFigure({ color, dot, label, value, hint }: { color: string; dot: string; label: string; value: number; hint: string }) {
+function StripStat({
+  label, value, sub, action, amber, red,
+}: {
+  label: string; value: string; sub?: string; action?: React.ReactNode; amber?: boolean; red?: boolean;
+}) {
+  const valueColor = red ? "text-[hsl(var(--status-red))]" : amber ? "text-[hsl(var(--status-amber))]" : "text-foreground";
   return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-1.5">
-        <span className={`h-2 w-2 rounded-full ${dot}`} />
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
-      <p className={`mt-0.5 text-lg font-semibold tabular-nums leading-none ${color}`}>{formatEuro(value)}</p>
-      <p className="mt-1 text-[11px] leading-tight text-muted-foreground/70">{hint}</p>
+    <div className="p-5">
+      <p className="cockpit-section-label flex items-center gap-1.5">
+        {amber && <AlertTriangle className="h-3.5 w-3.5 text-[hsl(var(--status-amber))]" />}
+        {label}
+      </p>
+      <p className={`mt-1.5 text-2xl font-semibold tabular-nums leading-none ${valueColor}`}>{value}</p>
+      <p className="mt-1.5 text-xs text-muted-foreground">{action ?? sub}</p>
     </div>
   );
 }
+
+// --- Uitbetaal-regel (jaar) -------------------------------------------------
+
+function YearPayoutLine({ tot }: { tot: FinancialsTotals }) {
+  const paid = tot.uitbetaaldIncl;
+  const open = tot.openstaandIncl;
+  const pending = tot.nogNietGoedgekeurdIncl;
+  const total = paid + open + pending;
+
+  if (total < 0.005) {
+    return (
+      <p className="px-1 text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">Uitbetaald aan klanten:</span> nog geen afrekeningen aan klanten in {""}
+        dit jaar.
+      </p>
+    );
+  }
+
+  // Zonder betaal-/open-activiteit geen lege balk (die was juist de eyesore): alleen de tekst.
+  const showBar = paid + open > 0.005;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 text-sm">
+      <span className="font-medium text-foreground">Uitbetaald aan klanten:</span>
+      {showBar && (
+        <div className="flex h-2 w-40 overflow-hidden rounded-full bg-muted">
+          <div className="bg-primary" style={{ width: `${(paid / total) * 100}%` }} title={`Uitbetaald ${formatEuro(paid)}`} />
+          <div className="bg-[hsl(var(--status-amber))]" style={{ width: `${(open / total) * 100}%` }} title={`Openstaand ${formatEuro(open)}`} />
+          <div className="bg-muted-foreground/30" style={{ width: `${(pending / total) * 100}%` }} title={`Nog niet goedgekeurd ${formatEuro(pending)}`} />
+        </div>
+      )}
+      <span className="text-muted-foreground">
+        <span className="text-primary">{formatEuro(paid)}</span> uitbetaald ·{" "}
+        <span className="text-[hsl(var(--status-amber))]">{formatEuro(open)}</span> open ·{" "}
+        {formatEuro(pending)} nog niet goedgekeurd
+      </span>
+    </div>
+  );
+}
+
+// --- Micro-balk -------------------------------------------------------------
+
+type Segment = { value: number; className: string; title: string };
+
+function MicroSplitBar({ segments, className = "h-1.5" }: { segments: Segment[]; className?: string }) {
+  const total = segments.reduce((a, s) => a + Math.max(0, s.value), 0);
+  if (total < 0.005) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className={`flex ${className} w-full overflow-hidden rounded-full bg-muted`}>
+      {segments.map((s, i) =>
+        s.value > 0.005 ? (
+          <div key={i} className={s.className} style={{ width: `${(s.value / total) * 100}%` }} title={s.title} />
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+// --- Maandrij ---------------------------------------------------------------
 
 function MonthRow({
   m, ym, isOpen, onToggle, onOpenMonth,
 }: {
   m: MonthFinancials; ym: string; isOpen: boolean; onToggle: () => void; onOpenMonth: (ym: string) => void;
 }) {
+  const assignSegments: Segment[] = [
+    { value: m.assignedExcl, className: "bg-primary", title: `Toegewezen ${formatEuro(m.assignedExcl)}` },
+    { value: m.unassignedExcl, className: "bg-[hsl(var(--status-amber))]", title: `Nog niet toegewezen ${formatEuro(m.unassignedExcl)}` },
+  ];
+  const payoutSegments: Segment[] = [
+    { value: m.uitbetaaldIncl, className: "bg-primary", title: `Uitbetaald ${formatEuro(m.uitbetaaldIncl)}` },
+    { value: m.openstaandIncl, className: "bg-[hsl(var(--status-amber))]", title: `Openstaand ${formatEuro(m.openstaandIncl)}` },
+    { value: m.nogNietGoedgekeurdIncl, className: "bg-muted-foreground/30", title: `Nog niet goedgekeurd ${formatEuro(m.nogNietGoedgekeurdIncl)}` },
+  ];
+  const payoutTotal = m.uitbetaaldIncl + m.openstaandIncl + m.nogNietGoedgekeurdIncl;
+
   return (
     <>
       <tr
@@ -247,22 +266,29 @@ function MonthRow({
             <span className="block text-[11px] font-normal text-muted-foreground">{formatEuro(m.ontvangenVerwacht)} verwacht</span>
           )}
         </td>
+        {/* Toewijzing: is de vergoeding aan klanten toegewezen? */}
+        <td className="p-3">
+          <div className="flex min-w-[9rem] items-center gap-2">
+            <MicroSplitBar segments={assignSegments} />
+            {m.unassignedExcl > 0.005 ? (
+              <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-xs font-medium text-[hsl(var(--status-amber))]">
+                <AlertTriangle className="h-3 w-3" /> {formatEuro(m.unassignedExcl)}
+              </span>
+            ) : m.assignedExcl > 0.005 ? (
+              <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+            ) : (
+              <span className="flex-shrink-0 text-xs text-muted-foreground">—</span>
+            )}
+          </div>
+        </td>
+        {/* Uitbetaling: is het aan klanten uitbetaald? */}
+        <td className="p-3">
+          <div className="flex min-w-[7rem] items-center gap-2">
+            <MicroSplitBar segments={payoutSegments} />
+            <PayoutGlyph paid={m.uitbetaaldIncl} open={m.openstaandIncl} pending={m.nogNietGoedgekeurdIncl} total={payoutTotal} />
+          </div>
+        </td>
         <td className="p-3"><ReconStatusIndicator status={m.reconStatus} diff={m.reconDiffIncl} /></td>
-        <td className="p-3 text-right tabular-nums">
-          {m.unassignedExcl > 0.005 ? (
-            <span className="inline-flex items-center gap-1 font-medium text-[hsl(var(--status-amber))]">
-              <AlertTriangle className="h-3.5 w-3.5" /> {formatEuro(m.unassignedExcl)}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">{formatEuro(0)}</span>
-          )}
-        </td>
-        <td className="p-3 text-right tabular-nums">
-          {m.uitbetaaldIncl > 0.005 ? <span className="text-primary">{formatEuro(m.uitbetaaldIncl)}</span> : <span className="text-muted-foreground">—</span>}
-        </td>
-        <td className="p-3 text-right tabular-nums">
-          {m.openstaandIncl > 0.005 ? <span className="text-[hsl(var(--status-amber))]">{formatEuro(m.openstaandIncl)}</span> : <span className="text-muted-foreground">—</span>}
-        </td>
         <td className={`p-3 text-right tabular-nums ${m.margeExcl < 0 ? "text-[hsl(var(--status-red))]" : ""}`}>{formatEuro(m.margeExcl)}</td>
         <td className="p-3 text-right">
           <Button
@@ -278,8 +304,8 @@ function MonthRow({
       </tr>
       {isOpen && (
         <tr className="border-b border-border bg-muted/20">
-          <td colSpan={8} className="p-0">
-            <MonthWaterfall m={m} ym={ym} onOpenMonth={onOpenMonth} />
+          <td colSpan={7} className="p-0">
+            <MonthRowDetail m={m} ym={ym} onOpenMonth={onOpenMonth} />
           </td>
         </tr>
       )}
@@ -287,47 +313,50 @@ function MonthRow({
   );
 }
 
-// De volledige, sluitende waterfall van één maand.
-function MonthWaterfall({ m, ym, onOpenMonth }: { m: MonthFinancials; ym: string; onOpenMonth: (ym: string) => void }) {
+function PayoutGlyph({ paid, open, pending, total }: { paid: number; open: number; pending: number; total: number }) {
+  if (total < 0.005) return <span className="flex-shrink-0 text-xs text-muted-foreground">—</span>;
+  if (open < 0.005 && pending < 0.005 && paid > 0.005)
+    return <span className="flex-shrink-0" title="Volledig uitbetaald"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /></span>;
+  return <span className="flex-shrink-0" title="Nog niet volledig uitbetaald"><Clock className="h-3.5 w-3.5 text-muted-foreground" /></span>;
+}
+
+// --- Lean uitklap -----------------------------------------------------------
+
+function MonthRowDetail({ m, ym, onOpenMonth }: { m: MonthFinancials; ym: string; onOpenMonth: (ym: string) => void }) {
+  const payoutSegments: Segment[] = [
+    { value: m.uitbetaaldIncl, className: "bg-primary", title: `Uitbetaald ${formatEuro(m.uitbetaaldIncl)}` },
+    { value: m.openstaandIncl, className: "bg-[hsl(var(--status-amber))]", title: `Openstaand ${formatEuro(m.openstaandIncl)} — te betalen ${formatEuro(m.teBetalenBankIncl)}, te factureren ${formatEuro(m.factuurTeSturenIncl)}, factuur open ${formatEuro(m.factuurOpenIncl)}` },
+    { value: m.nogNietGoedgekeurdIncl, className: "bg-muted-foreground/30", title: `Nog niet goedgekeurd ${formatEuro(m.nogNietGoedgekeurdIncl)}` },
+  ];
   return (
     <div className="grid gap-6 p-5 lg:grid-cols-2">
-      {/* Links: geldstroom in → bestemming → marge */}
+      {/* Geldstroom */}
       <div className="space-y-1.5 text-sm">
-        <WLine label="Ontvangen van eFlux" sub="cpo-credit, incl. BTW" value={formatEuro(m.creditIncl)} strong />
-        {m.factuurOntbreekt && (
-          <WLine label="Verwacht (factuur nog niet binnen)" sub="sessie-omzet × 1,21" value={formatEuro(m.ontvangenVerwacht)} muted />
-        )}
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Geldstroom</p>
+        <Row label="Ontvangen van eFlux" sub="incl. BTW" value={formatEuro(m.creditIncl)} strong />
+        {m.factuurOntbreekt && <Row label="Verwacht (factuur nog niet binnen)" value={formatEuro(m.ontvangenVerwacht)} muted />}
+        <Row label="→ Toegewezen aan klanten" sub="excl. BTW" value={formatEuro(m.assignedExcl)} indent />
+        <p className="pl-6 text-[11px] text-muted-foreground/80">
+          uit te keren {formatEuro(m.payoutTotal)} · onze fee {formatEuro(m.feeTotal)}
+        </p>
+        <Row label="→ Nog niet toegewezen" value={formatEuro(m.unassignedExcl)} indent amber={m.unassignedExcl > 0.005} />
         <div className="my-1 border-t border-dashed border-border" />
-        <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Bestemming (excl. BTW)</p>
-        <WLine label="Toegewezen aan klanten" value={formatEuro(m.assignedExcl)} indent />
-        <WLine label="↳ Uit te keren aan klanten" value={formatEuro(m.payoutTotal)} indent2 muted />
-        <WLine label="↳ Onze fee" value={formatEuro(m.feeTotal)} indent2 muted />
-        <WLine
-          label="Nog niet toegewezen"
-          sub="sessies zonder gekoppelde klant"
-          value={formatEuro(m.unassignedExcl)}
-          indent
-          amber={m.unassignedExcl > 0.005}
-        />
-        <div className="my-1 border-t border-dashed border-border" />
-        <WLine label="Sessie-omzet (excl. BTW)" sub="= toegewezen + nog niet toegewezen" value={formatEuro(m.sessionsReimbExcl)} />
-        <div className="my-1 border-t border-dashed border-border" />
-        <WLine label="− eFlux-platformkosten" sub="cpo-usage, excl. BTW" value={formatEuro(m.usageExcl)} muted />
-        <WLine label="Onze marge" sub="fee − platformkosten" value={formatEuro(m.margeExcl)} strong red={m.margeExcl < 0} />
+        <Row label="Onze marge" sub="fee − eFlux-kosten" value={formatEuro(m.margeExcl)} strong red={m.margeExcl < 0} />
       </div>
 
-      {/* Rechts: uitbetaalstatus van deze maand */}
-      <div className="space-y-1.5 text-sm">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Uitbetaalstatus (incl. BTW)</p>
-        <WLine label="Uitbetaald" sub="betaald / factuur voldaan" value={formatEuro(m.uitbetaaldIncl)} primary={m.uitbetaaldIncl > 0.005} />
-        <WLine label="Te betalen via bank" sub="goedgekeurd, positief" value={formatEuro(m.teBetalenBankIncl)} amber={m.teBetalenBankIncl > 0.005} />
-        <WLine label="Factuur te sturen" sub="goedgekeurd, incasso" value={formatEuro(m.factuurTeSturenIncl)} amber={m.factuurTeSturenIncl > 0.005} />
-        <WLine label="Factuur open" sub="verstuurd, nog niet voldaan" value={formatEuro(m.factuurOpenIncl)} amber={m.factuurOpenIncl > 0.005} />
-        <WLine label="Nog niet goedgekeurd" sub="live / berekend" value={formatEuro(m.nogNietGoedgekeurdIncl)} muted />
-        <div className="pt-2 text-xs text-muted-foreground">
+      {/* Uitbetaling */}
+      <div className="space-y-2 text-sm">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Uitbetaling · incl. BTW</p>
+        <MicroSplitBar segments={payoutSegments} className="h-2.5" />
+        <p className="text-muted-foreground">
+          <span className="text-primary">{formatEuro(m.uitbetaaldIncl)}</span> uitbetaald ·{" "}
+          <span className="text-[hsl(var(--status-amber))]">{formatEuro(m.openstaandIncl)}</span> open ·{" "}
+          {formatEuro(m.nogNietGoedgekeurdIncl)} nog niet goedgekeurd
+        </p>
+        <p className="text-xs text-muted-foreground">
           {m.settlementsFinal}/{m.settlementsTotal} afrekening(en) goedgekeurd of verder in deze maand.
-        </div>
-        <Button variant="outline" size="sm" className="mt-2" onClick={() => onOpenMonth(ym)}>
+        </p>
+        <Button variant="outline" size="sm" onClick={() => onOpenMonth(ym)}>
           <ExternalLink className="mr-2 h-3.5 w-3.5" />
           Open afrekeningen van {monthFullLabel(m.year, m.month)}
         </Button>
@@ -336,23 +365,14 @@ function MonthWaterfall({ m, ym, onOpenMonth }: { m: MonthFinancials; ym: string
   );
 }
 
-function WLine({
-  label, sub, value, strong, muted, indent, indent2, amber, red, primary,
+function Row({
+  label, sub, value, strong, muted, indent, amber, red,
 }: {
-  label: string; sub?: string; value: string;
-  strong?: boolean; muted?: boolean; indent?: boolean; indent2?: boolean; amber?: boolean; red?: boolean; primary?: boolean;
+  label: string; sub?: string; value: string; strong?: boolean; muted?: boolean; indent?: boolean; amber?: boolean; red?: boolean;
 }) {
-  const valueColor = red
-    ? "text-[hsl(var(--status-red))]"
-    : amber
-    ? "text-[hsl(var(--status-amber))]"
-    : primary
-    ? "text-primary"
-    : muted
-    ? "text-muted-foreground"
-    : "text-foreground";
+  const valueColor = red ? "text-[hsl(var(--status-red))]" : amber ? "text-[hsl(var(--status-amber))]" : muted ? "text-muted-foreground" : "text-foreground";
   return (
-    <div className={`flex items-baseline justify-between gap-4 ${indent2 ? "pl-6" : indent ? "pl-3" : ""}`}>
+    <div className={`flex items-baseline justify-between gap-4 ${indent ? "pl-3" : ""}`}>
       <div className="min-w-0">
         <span className={strong ? "font-semibold text-foreground" : muted ? "text-muted-foreground" : "text-foreground"}>{label}</span>
         {sub && <span className="ml-2 text-[11px] text-muted-foreground/70">{sub}</span>}
