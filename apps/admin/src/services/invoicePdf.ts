@@ -415,7 +415,8 @@ export async function buildSelfBillingInvoicePdf(
     [isPrivate ? "SPECIFICATIENR" : "FACTUURNR", `#${invoiceNr}`],
     ["DATUM", todayStr],
     ["PERIODE", `${fmtDate(settlement.period_start)} – ${fmtDate(settlement.period_end)}`],
-    ["BETAALTERMIJN", "30 dagen"],
+    // Handboek: "Wordt binnen 14 dagen overgemaakt" (E-Charging betaalt de eigenaar).
+    ["BETAALTERMIJN", "14 dagen"],
   ];
   const colW = W / meta.length;
   meta.forEach(([label, value], i) => {
