@@ -233,7 +233,10 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
   // historische jaren volledig opvraagbaar blijven (future-proof, schaalt mee).
   const chartData = useMemo(() => {
     if (!settlements?.length) return [];
-    const rows = (settlements as AdminSettlement[]).filter((s) => s.year === selectedTrendYear);
+    // Omzet = alleen afrekeningen die aan een echt (niet-verwijderd) klantaccount hangen;
+    // lopend én goedgekeurd tellen mee, verwijderde profielen niet.
+    const rows = (settlements as AdminSettlement[])
+      .filter((s) => s.year === selectedTrendYear && s.clients?.status !== "verwijderd");
     const out: { period: string; gross: number; net: number; echarging: number; client: number; kwh: number; count: number }[] = [];
     for (let m = 1; m <= 12; m++) {
       const ms = rows.filter((s) => s.month === m);

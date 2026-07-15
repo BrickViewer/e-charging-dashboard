@@ -245,9 +245,22 @@ export function LocationDetailBody({
       const result = await unlinkLocation(locationId, previousClientId);
       const detached = result?.reassigned_sessions ?? 0;
       const retained = result?.retained_final_sessions ?? 0;
+      // Ontkoppelen WIST de openstaande afrekeningen van de vorige eigenaar (park_location).
+      // Meteen herberekenen zodat zijn Financieel-tab niet leeg blijft tot de nachtrun.
+      let recomputeFailed = false;
+      try {
+        const { error: aggErr } = await supabase.functions.invoke("aggregate-settlements", { body: {} });
+        if (aggErr) recomputeFailed = true;
+      } catch {
+        recomputeFailed = true;
+      }
       toast.success(
-        `Locatie ontkoppeld: ${detached} sessies losgekoppeld, ${retained} afgerekende sessies behouden`,
+        `Locatie ontkoppeld: ${detached} sessies losgekoppeld, ${retained} afgerekende sessies behouden` +
+          (recomputeFailed ? "" : " — afrekeningen worden opnieuw berekend"),
       );
+      if (recomputeFailed) {
+        toast.warning("Afrekeningen konden niet direct worden herberekend — klik Herbereken in Financieel.");
+      }
       queryClient.invalidateQueries({ queryKey: ["admin-location", locationId] });
       queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
       queryClient.invalidateQueries({ queryKey: ["admin-clients"] });

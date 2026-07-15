@@ -68,6 +68,7 @@ export type AdminSettlement = Settlement & {
     | "payment_onboarding_status"
     | "kvk"
     | "btw_number"
+    | "status"
   > | null;
 };
 

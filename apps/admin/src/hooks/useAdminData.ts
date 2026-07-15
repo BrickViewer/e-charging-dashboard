@@ -140,7 +140,8 @@ export function useAllSettlements() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("settlements")
-        .select("*, clients(client_number, company_name, payment_onboarding_status, kvk, btw_number)")
+        // status: nodig om afrekeningen op verwijderde klanten uit de omzet-trend te filteren.
+        .select("*, clients(client_number, company_name, payment_onboarding_status, kvk, btw_number, status)")
         .order("year", { ascending: false })
         .order("month", { ascending: false });
       if (error) throw error;
