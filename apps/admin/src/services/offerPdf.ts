@@ -41,6 +41,9 @@ export function echargingSignature(input: { name?: string | null; signatureDataU
 }
 
 const COVER_URL = "/offer-cover.jpg";
+// Contract-voorblad ("Contract" + "Wij beheren uw laadpalen"): alleen voor het particuliere
+// alleen-beheer-contract; offertes en verstuurde v1-documenten houden het "Offerte"-voorblad.
+const CONTRACT_COVER_URL = "/contract-cover.jpg";
 
 // Outfit als webfont registreren (zodat html2canvas de tekst in Outfit rendert).
 let fontsReady: Promise<void> | null = null;
@@ -124,12 +127,14 @@ export async function awaitNodeImages(el: HTMLElement): Promise<void> {
 }
 
 // Logo-raster + cover één keer laden + cachen — de live preview hergebruikt dit (geen refetch per toetsaanslag).
-let assetsReady: Promise<{ logoUrl: string | null; coverUrl: string | null }> | null = null;
-function ensureAssets(): Promise<{ logoUrl: string | null; coverUrl: string | null }> {
+let assetsReady: Promise<{ logoUrl: string | null; coverUrl: string | null; contractCoverUrl: string | null }> | null = null;
+function ensureAssets(): Promise<{ logoUrl: string | null; coverUrl: string | null; contractCoverUrl: string | null }> {
   if (assetsReady) return assetsReady;
   assetsReady = (async () => {
-    const [logoDataUrl, coverUrl] = await Promise.all([rasterizeLogo(logoUrl), preloadCover(COVER_URL)]);
-    return { logoUrl: logoDataUrl, coverUrl };
+    const [logoDataUrl, coverUrl, contractCoverUrl] = await Promise.all([
+      rasterizeLogo(logoUrl), preloadCover(COVER_URL), preloadCover(CONTRACT_COVER_URL),
+    ]);
+    return { logoUrl: logoDataUrl, coverUrl, contractCoverUrl };
   })();
   return assetsReady;
 }

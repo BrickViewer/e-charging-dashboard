@@ -640,7 +640,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       // grootste deel daarvan thuis"); ERE 4.000 × € 0,10 = € 400; jaarbedragen zijn altijd hele
       // euro's (4.000 × 5-cent-veelvoud).
       const markRate = afname != null ? Math.round((afname - 0.05) * 20) / 20 : 0.35;
-      if (markRate >= 0.3) {
+      // Op het CONTRACTBLAD is de casus bewust vervallen (gebruikerskeuze 2026-07-16: het
+      // contract eindigt met de slogan i.p.v. het voorbeeld); install+beheer toont hem wel.
+      if (markRate >= 0.3 && !contractV2) {
         const eur0 = (n: number) => `€ ${int0(n)}`;
         const vergoedingJr = 4000 * markRate;
         const overJr = vergoedingJr - 1000; // stroomkosten: 4.000 × € 0,25
@@ -681,15 +683,14 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       const concrete = afname != null
         ? ` Bij het afgesproken laadtarief van ${money2(m.laadkosten as number)} per kWh komt dat neer op een afnameprijs van ${money2(afname)} per kWh.`
         : "";
-      if (privV2 && !contractV2) {
-        // Particulier installatie+beheer: de vergoeding + het voorbeeld staan in de INTRO
-        // (gebruikerskeuze; de eerdere prijsregels zijn vervallen). De kop sluit de pagina als
-        // gecentreerd statement: tag "centerRest" → buildOfferPages centreert hem exact tussen
-        // het laatste punt en de footer-streep (mt 64 = fallback; −12px optische correctie).
-        // Op het CONTRACTBLAD (alleen-beheer) is de kop bewust vervallen (gebruikerskeuze
-        // 2026-07-16, ná eerdere herplaatsing — daar eindigt het blad op punt 05).
+      if (privV2) {
+        // Particulier: de vergoeding staat in de INTRO (gebruikerskeuze; de eerdere prijsregels
+        // zijn vervallen). De kop sluit de pagina als gecentreerd statement: tag "centerRest" →
+        // buildOfferPages centreert hem exact tussen het laatste punt en de footer-streep
+        // (mt 64 = fallback; −12px optische correctie). Ook op het contractblad (gebruikerskeuze
+        // 2026-07-16: slogan terug onder de opsomming, in plaats van de Mark-casus).
         blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 64), keep: true, tag: "centerRest" });
-      } else if (!privV2) {
+      } else {
         blocks.push(bP(
           `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +
           `De stroom die uw laadpalen leveren nemen wij van u af en verkopen wij op eigen naam door. ` +
@@ -720,16 +721,18 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   // bij "Prijsstelling" (brk verhuist mee).
   const heeftOverleg = !!(m.overlegNaam || m.overlegDatum);
   if (contractV2) {
-    // Contract (voorwaarden + ondertekening op één pagina): "Uitgangspunten" bundelt de
-    // overleg-referentie én de BTW-regel (beide zijn uitgangspunten — de losse "Prijsstelling"-
-    // kop vervalt om ruimte te maken); daarna "Storingen" als eigen sectie mét de portaal-
-    // introzin (gebruikerskeuze 2026-07-16). Toeslagen op twee regels en derden/materialen als
-    // één alinea (inhoudelijk verbatim); labelkolom 400px zodat de lange toeslag-regel niet omslaat.
-    blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
-    if (heeftOverleg) blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
-    blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", heeftOverleg ? 5 : 8));
-    blocks.push(bSec("Storingen", 16, HEAD));
-    blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
+    // Contract (voorwaarden + ondertekening op één pagina): "Uitgangspunten" alleen bij
+    // ingevuld overleg; de btw-status staat ín de storingen-introzin, direct boven de
+    // tarieven waar hij over gaat (gebruikerskeuze 2026-07-16 — losse "Prijsstelling"-kop en
+    // losse btw-regel vervallen; overige contractbedragen labelen hun btw al expliciet).
+    // Toeslagen op twee regels en derden/materialen als één alinea (inhoudelijk verbatim);
+    // labelkolom 400px zodat de lange toeslag-regel niet omslaat.
+    if (heeftOverleg) {
+      blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
+      blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
+    }
+    blocks.push({ ...bSec("Storingen", heeftOverleg ? 16 : 0, HEAD), brk: !heeftOverleg });
+    blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven; genoemde bedragen zijn exclusief btw.", 8));
     const rowC = (l: string, r: string) => `<div style="display:flex"><div style="width:400px">${l}</div><div>${r}</div></div>`;
     blocks.push(bRaw(rowC("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 8));
     blocks.push(bRaw(rowC("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
@@ -886,11 +889,15 @@ function paginateLetter(blocks: Block[], heights: number[]): Block[][] {
 // als nodig — zo schuift langere/kortere "Levering en installatie"-tekst netjes door.
 export function buildOfferPages(
   data: OfferTemplateData,
-  assets: { logoUrl: string | null; coverUrl: string | null },
+  assets: { logoUrl: string | null; coverUrl: string | null; contractCoverUrl?: string | null },
   signature?: OfferTemplateSignature,
 ): HTMLElement[] {
   const m = resolve(data);
-  const cover = coverPage(m, assets.logoUrl, assets.coverUrl);
+  // Contract-voorblad ("Contract"-titel) alleen voor het particuliere alleen-beheer-contract;
+  // offertes én verstuurde v1-documenten houden het "Offerte"-voorblad. Fallback op de
+  // offerte-cover wanneer de contract-cover niet is meegegeven/geladen.
+  const isContract = m.isPrivate && m.textVersion >= 2 && m.withManagement && !m.withInstallation;
+  const cover = coverPage(m, assets.logoUrl, (isContract ? assets.contractCoverUrl : null) ?? assets.coverUrl);
   const blocks = letterBlocks(m, signature);
 
   const measure = document.createElement("div");

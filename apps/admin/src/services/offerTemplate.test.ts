@@ -203,13 +203,13 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("levert elke kWh die u thuis laadt u geld op");
     expect(html).not.toContain("Declareren bij uw werkgever");
     expect(html).toContain("beheren die volledig voor u");
-    // Volledige beheermodule-inhoud aanwezig: vergoeding, Mark-casus, punten en slotkop
+    // Beheermodule-inhoud: vergoeding + punten + slogan; de Mark-casus is op het contract
+    // bewust vervallen (gebruikerskeuze — de slogan sluit het blad, install+beheer houdt de casus)
     expect(html).toContain("Voor de vergoeding van uw stroom ontvangt u elke maand");
-    expect(html).toContain("Bijvoorbeeld: Mark rijdt");
-    expect(html).toContain("Zijn vergoeding is € 0,35 per geladen kWh"); // tarief 0,50 → 0,40 − 0,05
+    expect(html).not.toContain("Bijvoorbeeld: Mark");
     expect(html).toContain("Uw voordelen op een rij:");
     expect(html).toContain("Laden via de zaak? Automatisch geregeld");
-    expect(html).not.toContain("werkt</span>"); // slotkop vervallen op het contractblad (gebruikerskeuze)
+    expect(html).toContain("werkt</span>"); // slogan "Een laadpaal die voor u werkt" als gecentreerd slot
     // Geen instellingen-lijst; de tarief-instelregel leeft in de voorwaarden
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
@@ -217,15 +217,15 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // Ingang v2 = ondertekening, ook bij alleen-beheer (geen vaste ingangsdatum meer)
     expect(html).toContain("gaat in op de dag van ondertekening");
     expect(html).not.toContain("ingangsdatum van de overeenkomst is gesteld");
-    // Voorwaarden + ondertekening samengevoegd. "Uitgangspunten" bundelt overleg (indien
-    // ingevuld) + de BTW-regel en staat er dus ALTIJD; de losse Prijsstelling-kop vervalt.
-    // "Storingen" is een eigen kop mét de portaal-introzin (gebruikerskeuze); het vragen-blok
-    // en "Onze aanpak" blijven vervallen (gebruikerskeuze: vragen-blok mag weg bij ruimtegebrek).
-    expect(html).toContain("Uitgangspunten");
-    expect(html).toContain("Genoemde netto bedragen zijn exclusief BTW.");
+    // Voorwaarden + ondertekening samengevoegd. "Uitgangspunten" alleen bij ingevuld overleg
+    // (testdata heeft geen overleg → afwezig); de btw-status zit ín de storingen-introzin,
+    // direct boven de tarieven (gebruikerskeuze). Losse Prijsstelling-kop en btw-regel weg;
+    // het vragen-blok en "Onze aanpak" blijven vervallen (gebruikerskeuze).
+    expect(html).not.toContain("Uitgangspunten");
+    expect(html).not.toContain("Genoemde netto bedragen");
     expect(html).not.toContain("Prijsstelling");
     expect(html).toContain("Storingen");
-    expect(html).toContain("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;");
+    expect(html).toContain("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven; genoemde bedragen zijn exclusief btw.");
     expect(html).toContain("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag");
     expect(html).not.toContain("Voor zaterdagen");
     expect(html).not.toContain("Onze aanpak");
@@ -245,6 +245,20 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("ontzorgd wordt volgens het E-Charging concept");
     expect(html).toContain("afgesproken instellingen");
     expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingang geldt ook zakelijk alleen-beheer
+  });
+
+  it("voorblad: contract gebruikt de Contract-cover; offertes en v1 de Offerte-cover", () => {
+    const assets = { logoUrl: null, coverUrl: "/offer-cover.jpg", contractCoverUrl: "/contract-cover.jpg" };
+    const htmlWith = (d: OfferTemplateData) => buildOfferPages(d, assets).map((p) => p.innerHTML).join("\n");
+    const contract = htmlWith(privData(undefined, { withInstallation: false }));
+    expect(contract).toContain("/contract-cover.jpg");
+    const offerte = htmlWith(privData());
+    expect(offerte).toContain("/offer-cover.jpg");
+    expect(offerte).not.toContain("/contract-cover.jpg");
+    // Verstuurde (v1-)documenten behouden hun oorspronkelijke Offerte-voorblad
+    const v1 = htmlWith(privData(1, { withInstallation: false }));
+    expect(v1).toContain("/offer-cover.jpg");
+    expect(v1).not.toContain("/contract-cover.jpg");
   });
 
   it("Uitgangspunten/Overleg alleen tonen bij ingevuld overleg (geldt voor elke offerte)", () => {
