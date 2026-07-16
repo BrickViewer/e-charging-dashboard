@@ -711,21 +711,34 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
     blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
   }
-  blocks.push({ ...bSec("Prijsstelling", heeftOverleg ? 19 : 0, HEAD), brk: !heeftOverleg });
+  blocks.push({ ...bSec(contractV2 ? "Prijsstelling en storingen" : "Prijsstelling", heeftOverleg ? (contractV2 ? 16 : 19) : 0, HEAD), brk: !heeftOverleg });
   blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", 8));
   if (m.withInstallation) blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
   if (m.withManagement) {
-    blocks.push(bSec("Storingen", 19, HEAD));
-    blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
-    blocks.push(bRaw(row2("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 6));
-    blocks.push(bRaw(row2("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
-    blocks.push(bRaw(row2("Voor werktijden tussen 17.00 uur en 08.00 uur", "75 % toeslag."), 12));
-    blocks.push(bRaw(row2("Voor zaterdagen", "75 % toeslag."), 1));
-    blocks.push(bRaw(row2("Zon en feestdagen", "125 % toeslag."), 1));
-    blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend.", 16));
-    blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
+    if (contractV2) {
+      // Contract (voorwaarden + ondertekening op één pagina): tarieven direct onder de
+      // gecombineerde kop, toeslagen op twee regels en de derden-/materialenzinnen als één
+      // doorlopende alinea — alles inhoudelijk verbatim, alleen strakker gezet. De labelkolom
+      // is 400px zodat de lange toeslag-regel niet omslaat (alle rijen gelijk uitgelijnd).
+      const rowC = (l: string, r: string) => `<div style="display:flex"><div style="width:400px">${l}</div><div>${r}</div></div>`;
+      blocks.push(bRaw(rowC("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 8));
+      blocks.push(bRaw(rowC("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
+      blocks.push(bRaw(rowC("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag", "75 % toeslag."), 8));
+      blocks.push(bRaw(rowC("Zon- en feestdagen", "125 % toeslag."), 1));
+      blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend. De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
+    } else {
+      blocks.push(bSec("Storingen", 19, HEAD));
+      blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
+      blocks.push(bRaw(row2("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 6));
+      blocks.push(bRaw(row2("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
+      blocks.push(bRaw(row2("Voor werktijden tussen 17.00 uur en 08.00 uur", "75 % toeslag."), 12));
+      blocks.push(bRaw(row2("Voor zaterdagen", "75 % toeslag."), 1));
+      blocks.push(bRaw(row2("Zon en feestdagen", "125 % toeslag."), 1));
+      blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend.", 16));
+      blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
+    }
   }
-  blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 19, HEAD));
+  blocks.push(bSec("Onze voorwaarden bij deze aanbieding", contractV2 ? 16 : 19, HEAD));
   blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
   if (m.withInstallation) {
     blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.toeslagWerkuur)} gehanteerd worden:`));
@@ -742,7 +755,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       ? "Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule"
       : (privV2 && afname != null)
         ? "Vergoeding, activatiekosten, ingangsdatum, contractduur en opzegging beheermodule"
-        : "Activatiekosten, ingangsdatum, contractduur en opzegging beheermodule", 19, HEAD));
+        : "Activatiekosten, ingangsdatum, contractduur en opzegging beheermodule", contractV2 ? 16 : 19, HEAD));
     blocks.push(m.withInstallation
       ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
       : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
@@ -780,7 +793,8 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   const ecName = (signature?.echargingSignerName || m.signerName || "").trim();
   const sigDate = signature?.date ? fmtDateShort(signature.date) : "";
   const dots = "………………….…………";
-  blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", 0, HEAD), brk: true });
+  // Contract: aansprakelijkheid + ondertekening vloeien onder de voorwaarden op dezelfde pagina.
+  blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", contractV2 ? 24 : 0, HEAD), brk: !contractV2 });
   blocks.push(bFb(esc(AANSPRAKELIJKHEID), 9));
   if (m.withInstallation) {
     if (m.textVersion <= 1) {
@@ -805,10 +819,14 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // richting is expliciet: wij betalen de klant, de klant hoeft niets op te maken of te betalen.
     : `Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte ${m.isPrivate ? "betaalspecificatie" : "self-billing factuur"}; wij betalen u voor de geleverde stroom.`));
   blocks.push(bFb("Betalingen binnen 14 dagen na factuurdatum."));
-  blocks.push(bSec("Onze aanpak", 24, HEAD));
-  blocks.push(bP(esc(AANPAK), 9));
-  blocks.push(bRaw(`<div style="text-align:center"><div>Heeft u nog vragen of opmerkingen naar aanleiding van deze aanbieding?</div><div style="margin-top:4px">Neem dan gerust contact met ons op.</div></div>`, 40));
-  blocks.push(bRaw(`<div style="display:flex;gap:40px"><div style="flex:1"><div>Met vriendelijke groet,</div><div style="height:72px;display:flex;align-items:flex-end">${ecSigImg}</div><div style="font-weight:600">${esc(ecName) || "Naam ondertekenaar"}</div><div style="margin-top:2px">E-Charging B.V.</div></div><div style="flex:1"><div>Voor akkoord getekend,</div><div style="height:72px;display:flex;align-items:flex-end">${sigImg}</div><div>Dhr./Mevr: ${esc(signature?.signerName) || dots}</div><div style="margin-top:6px">d.d. ${esc(sigDate) || dots}</div></div></div>`, 44));
+  if (!contractV2) {
+    // "Onze aanpak" (realisatie-aansturing) + het vragen-blok zijn offerte-taal; op het
+    // beheer-contract bewust vervallen (gebruikerskeuze 2026-07-16 — contact staat in de footer).
+    blocks.push(bSec("Onze aanpak", 24, HEAD));
+    blocks.push(bP(esc(AANPAK), 9));
+    blocks.push(bRaw(`<div style="text-align:center"><div>Heeft u nog vragen of opmerkingen naar aanleiding van deze aanbieding?</div><div style="margin-top:4px">Neem dan gerust contact met ons op.</div></div>`, 40));
+  }
+  blocks.push(bRaw(`<div style="display:flex;gap:40px"><div style="flex:1"><div>Met vriendelijke groet,</div><div style="height:72px;display:flex;align-items:flex-end">${ecSigImg}</div><div style="font-weight:600">${esc(ecName) || "Naam ondertekenaar"}</div><div style="margin-top:2px">E-Charging B.V.</div></div><div style="flex:1"><div>Voor akkoord getekend,</div><div style="height:72px;display:flex;align-items:flex-end">${sigImg}</div><div>Dhr./Mevr: ${esc(signature?.signerName) || dots}</div><div style="margin-top:6px">d.d. ${esc(sigDate) || dots}</div></div></div>`, contractV2 ? 24 : 44));
 
   return blocks;
 }

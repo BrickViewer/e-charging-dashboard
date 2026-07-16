@@ -119,6 +119,12 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("Betalingen levering en installatie: 50% bij opdracht en 50% na werkzaamheden.");
     expect(html).not.toContain("% bij start werkzaamheden");
     expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingangsdatum (alle klanttypen)
+    // Install+beheer behoudt de losse voorwaarden-structuur en de offerte-slotblokken
+    expect(html).toContain("Prijsstelling");
+    expect(html).toContain("Storingen");
+    expect(html).not.toContain("Prijsstelling en storingen");
+    expect(html).toContain("Onze aanpak");
+    expect(html).toContain("Heeft u nog vragen");
     const kopIdx = html.indexOf("werkt</span>");
     expect(kopIdx).toBeGreaterThan(-1);
     const ereIdx = html.indexOf("rechtstreeks aan");
@@ -203,6 +209,18 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("ingangsdatum van de overeenkomst is gesteld");
     // Geen overleg ingevuld in de testdata → sectie Uitgangspunten geheel verborgen
     expect(html).not.toContain("Uitgangspunten");
+    // Voorwaarden + ondertekening samengevoegd: gecombineerde kop, compacte toeslagen,
+    // offerte-taal ("Onze aanpak", vragen-blok) vervallen; juridische kern blijft integraal
+    expect(html).toContain("Prijsstelling en storingen");
+    expect(html).toContain("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag");
+    expect(html).not.toContain("Voor zaterdagen");
+    expect(html).not.toContain("Storingsmeldingen vanuit het portaal");
+    expect(html).not.toContain("Onze aanpak");
+    expect(html).not.toContain("Heeft u nog vragen");
+    expect(html).toContain("Iedere aansprakelijkheid van E-Charging B.V.");
+    expect(html).toContain("Betalingen binnen 14 dagen na factuurdatum.");
+    expect(html).toContain("coördinatievergoeding worden berekend. De gebruikte materialen"); // derden+materialen als één alinea
+    expect(html).toContain("Voor akkoord getekend,");
   });
 
   it("alleen-beheer zakelijk: hero + begeleidende tekst + instellingen-pagina blijven (geen contractblad)", () => {
