@@ -50,9 +50,12 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("afnameprijs");
     expect(html).toContain("€ 0,40"); // concrete afnameprijs: laadtarief 0,50 − marge 0,10
     expect(html).toContain("u hoeft ons nooit iets te betalen");
-    // Zakelijk behoudt de zakelijke kop + AI-optimalisatiepunt (particulier-variant lekt niet).
+    // Zakelijk behoudt de zakelijke kop + AI-optimalisatiepunt (particulier-variant lekt niet)
+    // én de tarief-instellingen-lijst (die bij particulier bewust ontbreekt).
     expect(html).toContain("inkomstenbron");
     expect(html).toContain("Doorlopende optimalisatie van rendement");
+    expect(html).toContain("afgesproken instellingen");
+    expect(html).toContain("Blokkeertarief");
   });
 });
 
@@ -80,6 +83,15 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("afnameprijs");
     expect(html).not.toContain("op eigen naam");
     expect(html).not.toContain("U betaalt ons nooit iets");
+    // Kop "Een laadpaal die voor u werkt" staat VÓÓR de prijs-alinea (sectiekop van het
+    // vergoedingsblok); "werkt" staat in een groene g()-span → uniek als "werkt</span>".
+    const kopIdx = html.indexOf("werkt</span>");
+    expect(kopIdx).toBeGreaterThan(-1);
+    expect(kopIdx).toBeLessThan(html.indexOf("levert u geld op"));
+    // Particulier = enkel stroomvergoeding: nooit een instellingen-lijst of blokkeer-/starttarief
+    expect(html).not.toContain("afgesproken instellingen");
+    expect(html).not.toContain("Blokkeertarief");
+    expect(html).not.toContain("Starttarief");
     // Handboek-taalregels blijven gelden
     expect(html).not.toMatch(/service-?fee|\bfee\b/i);
     expect(html).not.toContain("inhouding");
@@ -98,6 +110,12 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("levert elke kWh die u thuis laadt u geld op");
     expect(html).toContain("Declareren bij uw werkgever is nooit meer nodig");
     expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
+    // Zelfde slot als installatie+beheer: kop vóór prijs-alinea, geen instellingen-lijst op pagina 1
+    const kopIdx = html.indexOf("werkt</span>");
+    expect(kopIdx).toBeGreaterThan(-1);
+    expect(kopIdx).toBeLessThan(html.indexOf("Uw laadpaal wordt ingesteld"));
+    expect(html).not.toContain("afgesproken instellingen");
+    expect(html).not.toContain("Blokkeertarief");
   });
 
   it("v1 + particulier: verstuurde offerte rendert de OUDE teksten, geen laadpas-variant", () => {

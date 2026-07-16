@@ -574,7 +574,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       .forEach((para, i) => blocks.push(bP(esc(para).replace(/\n/g, "<br/>"), i === 0 ? 18 : 14)));
     // Tarief-instellingen op pagina 1 (gestapeld: label boven, bedrag eronder). Data-gedreven; mEur toont
     // "€ 0,00" (geel) bij nog niet ingevulde tarieven. Bij installatie+beheer staat dit blok op pagina 2.
-    if (m.tariffLines.length) {
+    // Particulier (v2): NIET tonen — enkel een stroomvergoeding; het laadtarief staat in de prijs-alinea
+    // op de beheermodule-pagina.
+    if (m.tariffLines.length && !privV2) {
       blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 24));
       m.tariffLines.forEach((l, i) => blocks.push(bRaw(
         `<div>${esc(l.label)}:</div><div>${l.text ? esc(l.text) : `${mEur(l.amount)} ${esc(l.unit)}`}</div>`, i === 0 ? 10 : 8)));
@@ -605,19 +607,24 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         ? ` Bij het afgesproken laadtarief van ${money2(m.laadkosten as number)} per kWh komt dat neer op een afnameprijs van ${money2(afname)} per kWh.`
         : "";
       if (privV2) {
-        // Particulier: prijs gepositioneerd als instelling + netto-ontvangst (gebruikerskeuze) —
+        // Particulier: de kop "Een laadpaal die voor u werkt" is de sectiekop van het
+        // vergoedingsblok en staat VÓÓR de prijs-alinea (keep: nooit als wees onderaan een
+        // pagina). Prijs gepositioneerd als instelling + netto-ontvangst (gebruikerskeuze) —
         // beide getallen zonder het verschil te benoemen, zoals de handboek-tabel zelf. Alleen
         // bij een dynamisch/onbekend laadtarief valt de alinea terug op de prijsformule.
+        // Particulier heeft ENKEL een stroomvergoeding (nooit blokkeer-/starttarief), dus de
+        // "afgesproken instellingen"-lijst verschijnt hier bewust niet.
+        blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 26), keep: true });
         if (afname != null) {
           const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
           blocks.push(bP(
             `Elke kWh die u thuis laadt, levert u geld op. ` +
             `${ingesteld} op ${money2(m.laadkosten as number)} per kWh (excl. BTW). ` +
-            `U ontvangt elke maand netto ${money2(afname)} per geladen kWh op uw rekening.`, 24));
+            `U ontvangt elke maand netto ${money2(afname)} per geladen kWh op uw rekening.`, 12));
         } else {
           blocks.push(bP(
             `Elke kWh die u thuis laadt, levert u geld op. ` +
-            `U ontvangt elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh op uw rekening.`, 24));
+            `U ontvangt elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh op uw rekening.`, 12));
         }
       } else {
         blocks.push(bP(
@@ -628,9 +635,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       }
     }
     // De eenmalige activatie-/onboardingkosten tonen we alleen onder de voorwaarden (zie hieronder), niet hier.
-    // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij installatie+beheer; bij alleen-beheer
-    // staat dit blok (gestapeld) al op pagina 1.
-    if (m.withInstallation) {
+    // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij ZAKELIJK installatie+beheer; bij
+    // alleen-beheer staat dit blok (gestapeld) al op pagina 1. Particulier (v2) heeft de kop al vóór de
+    // prijs-alinea en toont nooit een instellingen-lijst (enkel stroomvergoeding).
+    if (m.withInstallation && !privV2) {
       blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
       if (m.tariffLines.length) {
         blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
