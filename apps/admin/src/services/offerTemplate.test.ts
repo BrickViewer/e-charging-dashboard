@@ -207,14 +207,17 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // Ingang v2 = ondertekening, ook bij alleen-beheer (geen vaste ingangsdatum meer)
     expect(html).toContain("gaat in op de dag van ondertekening");
     expect(html).not.toContain("ingangsdatum van de overeenkomst is gesteld");
-    // Geen overleg ingevuld in de testdata → sectie Uitgangspunten geheel verborgen
-    expect(html).not.toContain("Uitgangspunten");
-    // Voorwaarden + ondertekening samengevoegd: gecombineerde kop, compacte toeslagen,
-    // offerte-taal ("Onze aanpak", vragen-blok) vervallen; juridische kern blijft integraal
-    expect(html).toContain("Prijsstelling en storingen");
+    // Voorwaarden + ondertekening samengevoegd. "Uitgangspunten" bundelt overleg (indien
+    // ingevuld) + de BTW-regel en staat er dus ALTIJD; de losse Prijsstelling-kop vervalt.
+    // "Storingen" is een eigen kop mét de portaal-introzin (gebruikerskeuze); het vragen-blok
+    // en "Onze aanpak" blijven vervallen (gebruikerskeuze: vragen-blok mag weg bij ruimtegebrek).
+    expect(html).toContain("Uitgangspunten");
+    expect(html).toContain("Genoemde netto bedragen zijn exclusief BTW.");
+    expect(html).not.toContain("Prijsstelling");
+    expect(html).toContain("Storingen");
+    expect(html).toContain("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;");
     expect(html).toContain("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag");
     expect(html).not.toContain("Voor zaterdagen");
-    expect(html).not.toContain("Storingsmeldingen vanuit het portaal");
     expect(html).not.toContain("Onze aanpak");
     expect(html).not.toContain("Heeft u nog vragen");
     expect(html).toContain("Iedere aansprakelijkheid van E-Charging B.V.");

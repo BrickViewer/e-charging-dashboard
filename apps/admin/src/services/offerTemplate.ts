@@ -707,26 +707,35 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   // overleg ingevuld, dus die renderen onveranderd). Zonder overleg begint de voorwaardenpagina
   // bij "Prijsstelling" (brk verhuist mee).
   const heeftOverleg = !!(m.overlegNaam || m.overlegDatum);
-  if (heeftOverleg) {
+  if (contractV2) {
+    // Contract (voorwaarden + ondertekening op één pagina): "Uitgangspunten" bundelt de
+    // overleg-referentie én de BTW-regel (beide zijn uitgangspunten — de losse "Prijsstelling"-
+    // kop vervalt om ruimte te maken); daarna "Storingen" als eigen sectie mét de portaal-
+    // introzin (gebruikerskeuze 2026-07-16). Toeslagen op twee regels en derden/materialen als
+    // één alinea (inhoudelijk verbatim); labelkolom 400px zodat de lange toeslag-regel niet omslaat.
     blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
-    blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
-  }
-  blocks.push({ ...bSec(contractV2 ? "Prijsstelling en storingen" : "Prijsstelling", heeftOverleg ? (contractV2 ? 16 : 19) : 0, HEAD), brk: !heeftOverleg });
-  blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", 8));
-  if (m.withInstallation) blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
-  if (m.withManagement) {
-    if (contractV2) {
-      // Contract (voorwaarden + ondertekening op één pagina): tarieven direct onder de
-      // gecombineerde kop, toeslagen op twee regels en de derden-/materialenzinnen als één
-      // doorlopende alinea — alles inhoudelijk verbatim, alleen strakker gezet. De labelkolom
-      // is 400px zodat de lange toeslag-regel niet omslaat (alle rijen gelijk uitgelijnd).
-      const rowC = (l: string, r: string) => `<div style="display:flex"><div style="width:400px">${l}</div><div>${r}</div></div>`;
-      blocks.push(bRaw(rowC("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 8));
-      blocks.push(bRaw(rowC("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
-      blocks.push(bRaw(rowC("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag", "75 % toeslag."), 8));
-      blocks.push(bRaw(rowC("Zon- en feestdagen", "125 % toeslag."), 1));
-      blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend. De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
-    } else {
+    if (heeftOverleg) blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
+    blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", heeftOverleg ? 5 : 8));
+    blocks.push(bSec("Storingen", 16, HEAD));
+    blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
+    const rowC = (l: string, r: string) => `<div style="display:flex"><div style="width:400px">${l}</div><div>${r}</div></div>`;
+    blocks.push(bRaw(rowC("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 8));
+    blocks.push(bRaw(rowC("Voorrijkosten", `${mEur(m.voorrijkostenPerKm)} p/km`), 1));
+    blocks.push(bRaw(rowC("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag", "75 % toeslag."), 8));
+    blocks.push(bRaw(rowC("Zon- en feestdagen", "125 % toeslag."), 1));
+    blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend. De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 8));
+    blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 16, HEAD));
+    blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
+    blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
+  } else {
+    if (heeftOverleg) {
+      blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
+      blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
+    }
+    blocks.push({ ...bSec("Prijsstelling", heeftOverleg ? 19 : 0, HEAD), brk: !heeftOverleg });
+    blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", 8));
+    if (m.withInstallation) blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
+    if (m.withManagement) {
       blocks.push(bSec("Storingen", 19, HEAD));
       blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven;", 8));
       blocks.push(bRaw(row2("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 6));
@@ -737,16 +746,16 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend.", 16));
       blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
     }
+    blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 19, HEAD));
+    blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
+    if (m.withInstallation) {
+      blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.toeslagWerkuur)} gehanteerd worden:`));
+      blocks.push(bSub("50% Avonduren (17.00 &ndash; 23.00 uur)"));
+      blocks.push(bSub("75% Nachturen (23.00 &ndash; 07.00 uur) en zaterdag (normale werkuren)"));
+      blocks.push(bSub("125% Zon- en feestdagen (normale werkuren)"));
+    }
+    blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
   }
-  blocks.push(bSec("Onze voorwaarden bij deze aanbieding", contractV2 ? 16 : 19, HEAD));
-  blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
-  if (m.withInstallation) {
-    blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.toeslagWerkuur)} gehanteerd worden:`));
-    blocks.push(bSub("50% Avonduren (17.00 &ndash; 23.00 uur)"));
-    blocks.push(bSub("75% Nachturen (23.00 &ndash; 07.00 uur) en zaterdag (normale werkuren)"));
-    blocks.push(bSub("125% Zon- en feestdagen (normale werkuren)"));
-  }
-  blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
   if (m.withManagement) {
     // Kop: v1 bevroren INCLUSIEF de originele tikfout "contactduur" (verstuurde offertes renderen
     // byte-gelijk); v2 = "contractduur" gefixt en "Vergoeding" voorop wanneer de vergoedingsregel
@@ -794,7 +803,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   const sigDate = signature?.date ? fmtDateShort(signature.date) : "";
   const dots = "………………….…………";
   // Contract: aansprakelijkheid + ondertekening vloeien onder de voorwaarden op dezelfde pagina.
-  blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", contractV2 ? 24 : 0, HEAD), brk: !contractV2 });
+  blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", contractV2 ? 16 : 0, HEAD), brk: !contractV2 });
   blocks.push(bFb(esc(AANSPRAKELIJKHEID), 9));
   if (m.withInstallation) {
     if (m.textVersion <= 1) {
