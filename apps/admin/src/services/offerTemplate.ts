@@ -389,6 +389,9 @@ const headerRow = (t: string) =>
   `</tr>`;
 const g = (t: string) => `<span style="color:${GREEN}">${t}</span>`;
 
+// Paginakop-datum: v2 voluit ("16 juli 2026", gebruikerskeuze 2026-07-16); v1 bevroren op
+// "16-07-2026" (verstuurde offertes). LET OP: geen extra interpolaties/witruimte in de template
+// toevoegen — de header-HTML moet voor v1 byte-gelijk blijven.
 function header(m: ResolvedModel, logoUrl: string | null, pageNum: number, total: number): string {
   const logo = logoUrl
     ? `<img src="${logoUrl}" alt="E-Charging" style="height:72px;display:block" />`
@@ -397,7 +400,7 @@ function header(m: ResolvedModel, logoUrl: string | null, pageNum: number, total
   <div style="display:flex;justify-content:space-between;align-items:flex-start">
     <div>${logo}</div>
     <table style="border-collapse:collapse;margin-left:auto;color:${FAINT};font-size:10.5px"><tbody>
-      ${headerRow(esc(m.dateShort) || "datum")}
+      ${headerRow(esc(m.textVersion <= 1 ? m.dateShort : m.dateLong) || "datum")}
       ${headerRow(esc(m.reference) || "referentie")}
       ${headerRow(`Pagina ${pageNum} van ${total}`)}
     </tbody></table>

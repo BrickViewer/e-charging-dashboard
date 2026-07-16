@@ -247,6 +247,14 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingang geldt ook zakelijk alleen-beheer
   });
 
+  it("paginakop-datum: v2 voluit ('16 juli 2026'), v1 bevroren op cijfers ('16-07-2026')", () => {
+    const v2 = htmlOf(privData(undefined, { date: "2026-07-16" }));
+    expect(v2).toContain("16 juli 2026");
+    expect(v2).not.toContain("16-07-2026");
+    const v1 = htmlOf(privData(1, { date: "2026-07-16" }));
+    expect(v1).toContain("16-07-2026");
+  });
+
   it("voorblad: contract gebruikt de Contract-cover; offertes en v1 de Offerte-cover", () => {
     const assets = { logoUrl: null, coverUrl: "/offer-cover.jpg", contractCoverUrl: "/contract-cover.jpg" };
     const htmlWith = (d: OfferTemplateData) => buildOfferPages(d, assets).map((p) => p.innerHTML).join("\n");
