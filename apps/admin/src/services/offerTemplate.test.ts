@@ -66,7 +66,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("inkomstenbron");
     expect(html).not.toContain("voor betaald worden");
     expect(html).toContain("laadpas van uw werkgever of leasemaatschappij");
-    expect(html).toContain("levert u geld op");
+    expect(html).not.toContain("Elke kWh die u thuis laadt, levert u geld op"); // openingszin verwijderd (gebruikerskeuze)
     // Punt 1 = het laadpas-punt (geld-eerst-bookending); AI-rendement en jargon zijn weg
     expect(html).toContain("Laden via de zaak? Automatisch geregeld");
     expect(html).toContain("Extra vergoeding voor groene stroom");
@@ -94,7 +94,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // vergoedingsblok); "werkt" staat in een groene g()-span → uniek als "werkt</span>".
     const kopIdx = html.indexOf("werkt</span>");
     expect(kopIdx).toBeGreaterThan(-1);
-    expect(kopIdx).toBeLessThan(html.indexOf("levert u geld op"));
+    expect(kopIdx).toBeLessThan(html.indexOf("wordt ingesteld op"));
     // Particulier = enkel stroomvergoeding: nooit een instellingen-lijst of blokkeer-/starttarief
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");

@@ -625,15 +625,13 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
           const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
           blocks.push(bRaw(
             `<div style="text-align:center">` +
-            cLine(`Elke kWh die u thuis laadt, levert u geld op.`, true) +
-            cLine(`${ingesteld} op ${bold(money2(m.laadkosten as number))} per kWh (excl. BTW).`) +
+            cLine(`${ingesteld} op ${bold(money2(m.laadkosten as number))} per kWh (excl. BTW).`, true) +
             cLine(`U ontvangt elke maand netto ${bold(money2(afname))} per geladen kWh op uw rekening.`) +
             `</div>`, 18));
         } else {
           blocks.push(bRaw(
             `<div style="text-align:center">` +
-            cLine(`Elke kWh die u thuis laadt, levert u geld op.`, true) +
-            cLine(`U ontvangt elke maand het laadtarief min ${bold(money2(m.serviceFeePerKwh))} per geladen kWh op uw rekening.`) +
+            cLine(`U ontvangt elke maand het laadtarief min ${bold(money2(m.serviceFeePerKwh))} per geladen kWh op uw rekening.`, true) +
             `</div>`, 18));
         }
       } else {
