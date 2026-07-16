@@ -291,7 +291,6 @@ function beheerPoints(textVersion: number, opts?: { isPrivate?: boolean; poles?:
       ["Elke maand geld op uw rekening", `Wij betalen u elke maand voor de stroom die uw ${paal} ${levert}. U ontvangt daarbij een duidelijke betaalspecificatie. Zelf hoeft u niets te doen.`],
       ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u 24/7 elke laadsessie, het verbruik en wat u ervoor krijgt. Ook al uw maandelijkse betaalspecificaties vindt u er overzichtelijk terug."],
       [n > 1 ? "Uw laadpalen blijven gewoon werken" : "Uw laadpaal blijft gewoon werken", "Bij een storing krijgen wij direct een melding. Meestal lossen we het op afstand op, vaak voordat u iets merkt. Onze helpdesk is 24/7 bereikbaar."],
-      ["Reparatie nodig? U heeft voorrang", "Is een bezoek aan huis toch nodig, dan komen wij met voorrang langs. U kent de tarieven vooraf, dus u komt nooit voor verrassingen te staan."],
       ["Extra vergoeding voor groene stroom", `Via de ERE-regeling kan uw ${paal} extra geld opleveren. Wij koppelen u aan onze partner die de aanvraag voor u regelt en leveren de gegevens van uw ${paal} rechtstreeks aan.`],
     ];
   }
@@ -586,13 +585,36 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   // --- Beheermodule (alleen bij beheer-scope) — start altijd strak op een nieuwe pagina ---
   if (m.withManagement) {
     blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", 0, GREEN), brk: true });
-    blocks.push(bP(privV2
-      ? (m.withInstallation
-        ? `Na de installatie configureren wij uw ${paalWoord} en activeren we die in ons eigen platform. Dit houdt onder andere in:`
-        : `Wij nemen uw ${paalWoord} op in ons eigen platform en beheren die volledig voor u. Dit houdt onder andere in:`)
-      : (m.withInstallation
+    // Netto per geladen kWh (laadtarief − marge) — gebruikt in de particuliere intro én in de
+    // zakelijke v2-prijs-alinea. Pure berekening; v1/zakelijk-gedrag ongewijzigd.
+    const afname = (!m.laadkosten || m.laadkosten <= 0) ? null : Math.max(0, m.laadkosten - m.serviceFeePerKwh);
+    if (privV2) {
+      // Intro (gebruikerskeuze): eerst wat de klant per geladen kWh netto ontvangt, dan een
+      // extreem simpel huishoud-voorbeeld (stroom inkopen vs. wat de laadpaal oplevert), dan de
+      // aanloop naar de punten. Het voorbeeld alleen bij een vast laadtarief waar de klant
+      // écht iets overhoudt t.o.v. de indicatieve huishoud-stroomprijs.
+      const HUISHOUD_STROOMPRIJS = 0.25; // indicatief ("ongeveer"), standaard NL-huishouden
+      const boldAmt = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
+      const eersteZin = m.withInstallation
+        ? `Na de installatie configureren wij uw ${paalWoord} en activeren we die in ons eigen platform.`
+        : `Wij nemen uw ${paalWoord} op in ons eigen platform en beheren die volledig voor u.`;
+      const vergoedingZin = afname != null
+        ? `Voor elke kWh die via uw ${paalWoord} wordt geladen, ontvangt u van ons elke maand ${boldAmt(money2(afname))} netto op uw rekening.`
+        : `Voor elke kWh die via uw ${paalWoord} wordt geladen, ontvangt u van ons elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} netto op uw rekening.`;
+      blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
+      if (afname != null && afname - HUISHOUD_STROOMPRIJS > 0.005) {
+        blocks.push(bP(
+          `Een simpel voorbeeld: u koopt uw stroom thuis in voor ongeveer ${money2(HUISHOUD_STROOMPRIJS)} per kWh. ` +
+          `Er wordt bij u geladen tegen het laadtarief van ${money2(m.laadkosten as number)} per kWh. ` +
+          `Wij betalen u ${money2(afname)} per geladen kWh. ` +
+          `Zo houdt u ${money2(afname - HUISHOUD_STROOMPRIJS)} per geladen kWh over.`, 12));
+      }
+      blocks.push(bP("Ons beheer houdt onder andere in:", 16));
+    } else {
+      blocks.push(bP(m.withInstallation
         ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
-        : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:"), privV2 ? 16 : 10));
+        : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:", 10));
+    }
     // Particulier (v2): 8-PUNTS SPACING-GRID (alle maten veelvoud van 8, proportionele
     // hiërarchie; nagemeten met de Playwright-harness — zie memory offer-b2c-particulier):
     //   titel→body 8 · bSec→intro 16 · prijsregels 8
@@ -609,39 +631,15 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     } else {
       // v2 — afname-model (commissionairs-handboek §8): wij kopen de stroom tegen een afnameprijs;
       // geen fee/dienstverlening/inhouding. Bij een vast laadtarief noemen we de concrete afnameprijs.
-      const afname = (!m.laadkosten || m.laadkosten <= 0) ? null : Math.max(0, m.laadkosten - m.serviceFeePerKwh);
       const concrete = afname != null
         ? ` Bij het afgesproken laadtarief van ${money2(m.laadkosten as number)} per kWh komt dat neer op een afnameprijs van ${money2(afname)} per kWh.`
         : "";
       if (privV2) {
-        // Particulier: de kop "Een laadpaal die voor u werkt" is de sectiekop van het
-        // vergoedingsblok en staat VÓÓR de prijs-alinea (keep: nooit als wees onderaan een
-        // pagina). Prijs gepositioneerd als instelling + netto-ontvangst (gebruikerskeuze) —
-        // beide getallen zonder het verschil te benoemen, zoals de handboek-tabel zelf. Alleen
-        // bij een dynamisch/onbekend laadtarief valt de alinea terug op de prijsformule.
-        // Particulier heeft ENKEL een stroomvergoeding (nooit blokkeer-/starttarief), dus de
-        // "afgesproken instellingen"-lijst verschijnt hier bewust niet.
-        // Prijsblok: gecentreerd afsluitend statement (zonder eigen kop), bedragen vet, 14px,
-        // regels op 8px. mt 64 = sectiegrens op het 8-punts grid (zie spacing-comment hierboven).
-        const bold = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
-        const cLine = (t: string, first = false) => `<div style="margin-top:${first ? 0 : 8}px">${t}</div>`;
-        // tag "centerRest" op de KOP: buildOfferPages herrekent de marge zodat de groep
-        // kop + prijsregels EXACT in het midden staat tussen de onderkant van punt 6 en de
-        // footer-streep (mt 64 = fallback). Prijsblok volgt de kop op 16 (2 grid-units).
+        // Particulier: de vergoeding + het voorbeeld staan in de INTRO (gebruikerskeuze; de
+        // eerdere prijsregels zijn vervallen). De kop sluit de pagina als gecentreerd statement:
+        // tag "centerRest" → buildOfferPages centreert hem exact tussen het laatste punt en de
+        // footer-streep (mt 64 = fallback; −12px optische correctie in de berekening).
         blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 64), keep: true, tag: "centerRest" });
-        if (afname != null) {
-          const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
-          blocks.push(bRaw(
-            `<div style="text-align:center;font-size:14px">` +
-            cLine(`${ingesteld} op ${bold(money2(m.laadkosten as number))} per geladen kWh (excl. BTW).`, true) +
-            cLine(`Hiervan ontvangt u elke maand ${bold(money2(afname))} per geladen kWh netto op uw rekening.`) +
-            `</div>`, 16));
-        } else {
-          blocks.push(bRaw(
-            `<div style="text-align:center;font-size:14px">` +
-            cLine(`U ontvangt elke maand het laadtarief min ${bold(money2(m.serviceFeePerKwh))} per geladen kWh netto op uw rekening.`, true) +
-            `</div>`, 16));
-        }
       } else {
         blocks.push(bP(
           `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +

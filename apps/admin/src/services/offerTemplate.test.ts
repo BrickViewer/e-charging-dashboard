@@ -60,47 +60,42 @@ describe("offerte tekst-versies", () => {
 });
 
 describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
-  it("rendert kop, het laadpas-punt en de prijs-alinea (ingesteld op X / netto Y)", () => {
+  it("rendert de vergoeding + het huishoud-voorbeeld in de intro en 5 punten", () => {
     const html = htmlOf(privData());
-    // Kop: ook particulier "inkomstenbron" (enkelvoud), geen aparte particulier-kop meer
+    // Kop: ook particulier "inkomstenbron" (enkelvoud)
     expect(html).toContain("inkomstenbron");
     expect(html).not.toContain("voor betaald worden");
     expect(html).toContain("laadpas van uw werkgever of leasemaatschappij");
-    expect(html).not.toContain("Elke kWh die u thuis laadt, levert u geld op"); // openingszin verwijderd (gebruikerskeuze)
-    // Punt 1 = het laadpas-punt (geld-eerst-bookending); AI-rendement en jargon zijn weg
+    // Intro: netto-vergoeding + extreem simpel huishoud-voorbeeld (gebruikerskeuze)
+    expect(html).toContain("ontvangt u van ons elke maand");
+    expect(html).toContain("€ 0,40");
+    expect(html).toContain("Een simpel voorbeeld: u koopt uw stroom thuis in voor ongeveer € 0,25 per kWh");
+    expect(html).toContain("het laadtarief van € 0,50 per kWh");
+    expect(html).toContain("Zo houdt u € 0,15 per geladen kWh over");
+    expect(html).toContain("Ons beheer houdt onder andere in:");
+    // 5 punten: reparatie-punt geheel verwijderd (gebruikerskeuze); ERE = 05
     expect(html).toContain("Laden via de zaak? Automatisch geregeld");
     expect(html).toContain("Extra vergoeding voor groene stroom");
     expect(html).toContain("koppelen u aan onze partner"); // ERE-hulp expliciet
+    expect(html).not.toContain("Reparatie nodig");
     expect(html).not.toContain("Nooit meer declareren");
     expect(html).not.toContain("Doorlopende optimalisatie van rendement");
     expect(html).not.toContain("transactieverwerking");
     expect(html).not.toContain("up en running");
-    expect(html).not.toContain("Altijd en overal"); // spacing-fix dashboard-punt
+    expect(html).not.toContain("Altijd en overal");
     expect(html).toContain("betaalspecificatie");
-    // Prijsblok: gecentreerde regels, bedragen vet (span breekt de string → delen los pinnen);
-    // de kop "Een laadpaal die voor u werkt" is verwijderd (gebruikerskeuze).
-    expect(html).toContain("Uw laadpaal wordt ingesteld op");
-    expect(html).toContain("€ 0,50");
-    expect(html).toContain("per geladen kWh (excl. BTW)");
-    expect(html).toContain("Hiervan ontvangt u elke maand");
-    expect(html).toContain("€ 0,40");
-    expect(html).toContain("per geladen kWh netto op uw rekening");
-    // Kop "Een laadpaal die voor u werkt" staat (weer) boven het prijsblok — gebruikerskeuze.
+    // Prijsregels vervallen (vergoeding leeft in de intro); de kop sluit de pagina af
+    expect(html).not.toContain("wordt ingesteld op");
+    expect(html).not.toContain("Hiervan ontvangt u");
     const kopIdx = html.indexOf("werkt</span>");
     expect(kopIdx).toBeGreaterThan(-1);
-    expect(kopIdx).toBeLessThan(html.indexOf("wordt ingesteld op"));
-    expect(html).not.toContain("laadbeurt na laadbeurt"); // slotzin verwijderd (gebruikerskeuze)
-    expect(html).toContain("telt elke kWh automatisch mee"); // gasten-laadpas (punt 1)
-    expect(html).toContain("betaalspecificaties vindt u er overzichtelijk terug"); // dashboard (punt 3)
-    expect(html).not.toContain("afnameprijs");
-    expect(html).not.toContain("op eigen naam");
-    expect(html).not.toContain("U betaalt ons nooit iets");
-    // Het prijsblok sluit de pagina af, ná het laatste punt (ERE eindigt op "…rechtstreeks aan.");
-    // de ERE-slotzin "U heeft er geen omkijken naar." is verwijderd (gebruikerskeuze).
-    expect(html).not.toContain("omkijken naar");
     const ereIdx = html.indexOf("rechtstreeks aan");
     expect(ereIdx).toBeGreaterThan(-1);
-    expect(ereIdx).toBeLessThan(html.indexOf("wordt ingesteld op"));
+    expect(ereIdx).toBeLessThan(kopIdx);
+    expect(html).not.toContain("omkijken naar");
+    expect(html).not.toContain("laadbeurt na laadbeurt");
+    expect(html).toContain("telt elke kWh automatisch mee"); // gasten-laadpas (punt 1)
+    expect(html).toContain("betaalspecificaties vindt u er overzichtelijk terug"); // dashboard (punt 3)
     // Particulier = enkel stroomvergoeding: nooit een instellingen-lijst of blokkeer-/starttarief
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
@@ -109,13 +104,21 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toMatch(/service-?fee|\bfee\b/i);
     expect(html).not.toContain("inhouding");
     expect(html).not.toContain("opbrengst uit");
+    expect(html).not.toContain("afnameprijs");
+    expect(html).not.toContain("op eigen naam");
   });
 
-  it("dynamisch laadtarief: prijsformule-fallback i.p.v. concrete bedragen", () => {
+  it("dynamisch laadtarief: formule-vergoeding in de intro, geen voorbeeld-alinea", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
-    expect(html).toContain("U ontvangt elke maand het laadtarief min");
-    expect(html).toContain("€ 0,10");
+    expect(html).toContain("het laadtarief min € 0,10 netto op uw rekening");
+    expect(html).not.toContain("Een simpel voorbeeld");
     expect(html).not.toContain("wordt ingesteld op");
+  });
+
+  it("laag laadtarief (geen voordeel t.o.v. huishoudprijs): voorbeeld-alinea vervalt", () => {
+    const html = htmlOf(privData(undefined, { chargeTariffPerKwh: 0.3 })); // netto 0,20 < 0,25
+    expect(html).toContain("€ 0,20"); // de vergoeding zelf blijft staan
+    expect(html).not.toContain("Een simpel voorbeeld");
   });
 
   it("alleen-beheer particulier: beheer-intro opent met het geldvoordeel en sluit de declaratie-lus", () => {
@@ -124,11 +127,9 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("levert elke kWh die u thuis laadt u geld op");
     expect(html).toContain("Declareren bij uw werkgever is nooit meer nodig");
     expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
-    // Zelfde slot als installatie+beheer: prijsblok na de punten, geen instellingen-lijst op pagina 1
-    expect(html).toContain("Uw laadpaal wordt ingesteld op");
-    const ereIdx = html.indexOf("rechtstreeks aan");
-    expect(ereIdx).toBeGreaterThan(-1);
-    expect(ereIdx).toBeLessThan(html.indexOf("wordt ingesteld op"));
+    // Zelfde slot: intro-vergoeding + voorbeeld op de beheerpagina, geen instellingen-lijst op p1
+    expect(html).toContain("beheren die volledig voor u");
+    expect(html).toContain("Een simpel voorbeeld");
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
   });
