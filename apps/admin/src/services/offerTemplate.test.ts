@@ -71,9 +71,11 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // Intro: netto-vergoeding + gestapeld rekenvoorbeeld (echte berekening, gebruikerskeuze)
     expect(html).toContain("Voor de vergoeding van uw stroom ontvangt u elke maand");
     expect(html).toContain("€ 0,40");
-    // Mark-casus rekent altijd € 0,05 ONDER de eigen vergoeding (hier 0,40 → 0,35); jaarbedragen
-    // berekend: 4.000×0,35=1.400, stroom 1.000, over 400, ERE 400, totaal 800 (geen disclaimer).
-    expect(html).toContain("Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met de laadpas van zijn werkgever: zo'n 4.000 kWh per jaar");
+    // Mark-casus rekent € 0,05 ONDER de eigen vergoeding, afgerond op het dichtstbijzijnde
+    // 5-cent-veelvoud (hier 0,40 → 0,35); jaarbedragen berekend: 4.000×0,35=1.400, stroom 1.000,
+    // over 400, ERE 400, totaal 800 (geen disclaimer).
+    expect(html).toContain("Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met zijn zakelijke laadpas: zo'n 4.000 kWh per jaar");
+    expect(html).not.toContain("laadpas van zijn werkgever"); // casus zegt "zijn zakelijke laadpas" (punt 1 houdt "uw werkgever of leasemaatschappij")
     expect(html).toContain('<span style="font-style:italic">Bijvoorbeeld:'); // hele casus cursief
     expect(html).toContain("Zijn vergoeding is € 0,35 per geladen kWh");
     expect(html).toContain("Aan vergoeding ontvangt hij dus € 1.400 per jaar");
@@ -125,14 +127,21 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("op eigen naam");
   });
 
-  it("dynamisch laadtarief: formule-vergoeding in de intro; Mark-casus valt terug op vaste € 0,38", () => {
+  it("dynamisch laadtarief: formule-vergoeding in de intro; Mark-casus valt terug op vaste € 0,35", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
     expect(html).toContain("het laadtarief min € 0,10 per geladen kWh netto op uw rekening");
-    // Zonder vast tarief is er geen "vergoeding − 0,05" → vaste fallback-reeks
+    // Zonder vast tarief is er geen "vergoeding − 0,05" → vaste fallback-reeks (5-tal, consistent)
     expect(html).toContain("Bijvoorbeeld: Mark rijdt");
-    expect(html).toContain("Zijn vergoeding is € 0,38 per geladen kWh");
-    expect(html).toContain("€ 1.520 per jaar");
+    expect(html).toContain("Zijn vergoeding is € 0,35 per geladen kWh");
+    expect(html).toContain("€ 1.400 per jaar");
     expect(html).not.toContain("wordt ingesteld op"); // geen tarief -> geen voorwaarden-regel
+  });
+
+  it("niet-rond tarief (0,48): Mark rondt naar het dichtstbijzijnde 5-tal (0,38 − 0,05 = 0,33 → € 0,35)", () => {
+    const html = htmlOf(privData(undefined, { chargeTariffPerKwh: 0.48 })); // vergoeding 0,38
+    expect(html).toContain("€ 0,38"); // de eigen vergoeding in de intro
+    expect(html).toContain("Zijn vergoeding is € 0,35 per geladen kWh");
+    expect(html).toContain("Aan vergoeding ontvangt hij dus € 1.400 per jaar");
   });
 
   it("laag laadtarief: eigen vergoeding blijft; Mark-casus vervalt (zou richting verlies rekenen)", () => {

@@ -603,21 +603,22 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))} per geladen kWh netto op uw rekening.`
         : `Voor de vergoeding van uw stroom ontvangt u elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh netto op uw rekening.`;
       blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
-      // Mark rekent altijd € 0,05 ONDER de afgesproken vergoeding (gebruikerseis): het voorbeeld
-      // blijft zo conservatiever dan de deal van de lezer. Geen vast tarief (dynamisch) → vaste
-      // € 0,38. Onder € 0,30 klopt het verhaal niet meer (de stroomkosten van € 0,25 benaderen of
+      // Mark rekent € 0,05 ONDER de afgesproken vergoeding, afgerond op het dichtstbijzijnde
+      // 5-cent-veelvoud (gebruikerseis; ×20 i.p.v. /0,05 tegen FP-drift): het voorbeeld blijft
+      // 3-7 cent onder de deal van de lezer. Geen vast tarief (dynamisch) → vaste € 0,35.
+      // Onder € 0,30 klopt het verhaal niet meer (de stroomkosten van € 0,25 benaderen of
       // overstijgen de vergoeding) → casus weglaten. Overige casusgetallen vast: 4.000 kWh thuis ↔
       // 25.000 km is feitelijk onderbouwd (CBS/ElaadNL/ANWB; ~75-80% thuislaad-aandeel — "het
       // grootste deel daarvan thuis"); ERE 4.000 × € 0,10 = € 400; jaarbedragen zijn altijd hele
-      // euro's (4.000 × centbedrag).
-      const markRate = afname != null ? Math.round((afname - 0.05) * 100) / 100 : 0.38;
+      // euro's (4.000 × 5-cent-veelvoud).
+      const markRate = afname != null ? Math.round((afname - 0.05) * 20) / 20 : 0.35;
       if (markRate >= 0.3) {
         const eur0 = (n: number) => `€ ${int0(n)}`;
         const vergoedingJr = 4000 * markRate;
         const overJr = vergoedingJr - 1000; // stroomkosten: 4.000 × € 0,25
         blocks.push(bP(
           `<span style="font-style:italic">` +
-          `Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met de laadpas van zijn werkgever: zo'n 4.000 kWh per jaar. ` +
+          `Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met zijn zakelijke laadpas: zo'n 4.000 kWh per jaar. ` +
           `Zijn vergoeding is ${money2(markRate)} per geladen kWh. Aan vergoeding ontvangt hij dus ${eur0(vergoedingJr)} per jaar. ` +
           `Zelf betaalt hij voor die stroom ongeveer € 1.000 per jaar, bij een stroomprijs van € 0,25 per kWh. ` +
           `Daarmee houdt Mark ${eur0(overJr)} per jaar over. ` +
