@@ -38,6 +38,7 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("als enige inhouding");
     expect(html).toContain("wij betalen uw opbrengst uit");
     expect(html).toContain("door E-Charging opgemaakte self-billing factuur.");
+    expect(html).toContain("eerste dag van de kalendermaand volgend op de opleverdatum"); // v1-ingangsdatum bevroren
     expect(html).not.toContain("afnameprijs");
   });
 
@@ -56,6 +57,7 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("Doorlopende optimalisatie van rendement");
     expect(html).toContain("afgesproken instellingen");
     expect(html).toContain("Blokkeertarief");
+    expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingangsdatum
   });
 });
 
@@ -94,7 +96,8 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("betaalspecificatie");
     // Prijsregels vervallen; de instelling+netto leven nu in de asterisk-VOETNOOT (voorwaarden)
     expect(html).toContain("€ 0,40</span>*"); // asterisk direct achter het vetgedrukte bedrag
-    expect(html).toContain("* Uw laadpaal wordt ingesteld op € 0,50 per kWh (excl. btw). Hiervan ontvangt u € 0,40 netto op uw rekening.");
+    expect(html).toContain("* Uw laadpaal wordt ingesteld op € 0,50 per kWh (excl. btw). Hiervan ontvangt u € 0,40 per kWh netto op uw rekening.");
+    expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingangsdatum (alle klanttypen)
     const kopIdx = html.indexOf("werkt</span>");
     expect(kopIdx).toBeGreaterThan(-1);
     const ereIdx = html.indexOf("rechtstreeks aan");

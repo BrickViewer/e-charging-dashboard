@@ -713,15 +713,18 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
       : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
     blocks.push(bFb(m.withInstallation
-      ? "De overeenkomst gaat in op de eerste dag van de kalendermaand volgend op de opleverdatum."
+      // v2 (alle klanttypen): ingang bij ondertekening; v1 behoudt de oorspronkelijke zin (bevroren).
+      ? (m.textVersion <= 1
+        ? "De overeenkomst gaat in op de eerste dag van de kalendermaand volgend op de opleverdatum."
+        : "De overeenkomst gaat in op de dag van ondertekening.")
       : `De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
     blocks.push(bFb("De overeenkomst wordt aangegaan voor een periode van één (1) jaar, te rekenen vanaf de ingangsdatum. Na afloop van deze periode wordt de overeenkomst telkens stilzwijgend verlengd met een periode van één (1) jaar, tenzij opdrachtgever of aannemer de overeenkomst schriftelijk opzegt met inachtneming van een opzegtermijn van drie (3) maanden vóór het einde van de lopende contractperiode."));
-    // Asterisk-voetnoot bij de vergoedingszin op de beheerpagina (alleen particulier v2 met een
-    // vast laadtarief; bij dynamisch tarief staat er geen asterisk en dus ook geen voetnoot).
+    // Asterisk-voetnoot bij de vergoedingszin op de beheerpagina, als ☞-bullet zoals de overige
+    // voorwaarden (alleen particulier v2 met een vast laadtarief; bij dynamisch tarief staat er
+    // geen asterisk en dus ook geen voetnoot).
     if (privV2 && afname != null) {
       const ingesteldVw = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
-      blocks.push(bRaw(
-        `<div>* ${ingesteldVw} op ${money2(m.laadkosten as number)} per kWh (excl. btw). Hiervan ontvangt u ${money2(afname)} netto op uw rekening.</div>`, 8));
+      blocks.push(bFb(`* ${ingesteldVw} op ${money2(m.laadkosten as number)} per kWh (excl. btw). Hiervan ontvangt u ${money2(afname)} per kWh netto op uw rekening.`));
     }
   }
   if (m.withInstallation) {
