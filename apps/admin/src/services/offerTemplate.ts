@@ -713,7 +713,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // voorwaarden (alleen particulier v2 met een vast laadtarief; bij dynamisch tarief staat er
     // geen asterisk en dus ook geen voetnoot).
     if (privV2 && afname != null) {
-      const ingesteldVw = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
+      const ingesteldVw = m.numPoles > 1 ? "De laadpalen worden ingesteld" : "De laadpaal wordt ingesteld";
       blocks.push(bFb(`* ${ingesteldVw} op ${money2(m.laadkosten as number)} per kWh (excl. btw). Hiervan ontvangt u ${money2(afname)} per kWh netto op uw rekening.`));
     }
   }
