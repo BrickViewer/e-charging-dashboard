@@ -16,6 +16,7 @@ export function CompanySettingsTab() {
   const [company, setCompany] = useState({
     name: "", kvk: "", address: "", phone: "", email: "", logo_url: "", dashboard_url: "",
     btw_number: "", iban: "", bic: "", country: "Nederland",
+    rsin: "", vestigingsnummer: "", sbi_code: "",
   });
   // Adres via het gedeelde AddressFields-blok (postcode → straat/plaats-autofill).
   // De organizations-tabel kent geen los huisnummer-veld; straat + huisnummer worden
@@ -31,6 +32,7 @@ export function CompanySettingsTab() {
       dashboard_url: org.dashboard_url || "http://localhost:8080",
       btw_number: org.btw_number || "", iban: org.iban || "", bic: org.bic || "",
       country: org.country || "Nederland",
+      rsin: org.rsin || "", vestigingsnummer: org.vestigingsnummer || "", sbi_code: org.sbi_code || "",
     });
     // Straat + huisnummer zitten gecombineerd in address_street; die gaat in het
     // straatveld. Huisnummer blijft leeg tot de gebruiker het los invult.
@@ -66,6 +68,8 @@ export function CompanySettingsTab() {
           phone: company.phone || null, email: company.email || null, logo_url: company.logo_url || null,
           dashboard_url: company.dashboard_url || null,
           btw_number: company.btw_number || null, iban: company.iban || null, bic: company.bic || null,
+          rsin: company.rsin || null, vestigingsnummer: company.vestigingsnummer || null,
+          sbi_code: company.sbi_code || null,
         },
       });
       toast.success("Bedrijfsgegevens opgeslagen");
@@ -82,7 +86,7 @@ export function CompanySettingsTab() {
         <div>
           <h2 className="text-base font-semibold">Bedrijfsgegevens</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            E-Group BV — gegevens die verschijnen in offertes, mails en het klantportaal
+            E-Charging B.V. — gegevens die verschijnen in offertes, mails en het klantportaal
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -112,9 +116,22 @@ export function CompanySettingsTab() {
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div><Label htmlFor="company-btw">BTW-nummer</Label><Input id="company-btw" value={company.btw_number} onChange={e => setCompany(p => ({ ...p, btw_number: e.target.value }))} placeholder="NL857756618B01" /></div>
-            <div><Label htmlFor="company-iban">IBAN</Label><Input id="company-iban" value={company.iban} onChange={e => setCompany(p => ({ ...p, iban: e.target.value }))} placeholder="NL00BANK0123456789" /></div>
-            <div><Label htmlFor="company-bic">BIC</Label><Input id="company-bic" value={company.bic} onChange={e => setCompany(p => ({ ...p, bic: e.target.value }))} placeholder="INGBNL2A" /></div>
+            <div><Label htmlFor="company-btw">BTW-nummer</Label><Input id="company-btw" value={company.btw_number} onChange={e => setCompany(p => ({ ...p, btw_number: e.target.value }))} placeholder="NL869765784B01" /></div>
+            <div><Label htmlFor="company-iban">IBAN</Label><Input id="company-iban" value={company.iban} onChange={e => setCompany(p => ({ ...p, iban: e.target.value }))} placeholder="NL09 RABO 0176 3641 29" /></div>
+            <div><Label htmlFor="company-bic">BIC</Label><Input id="company-bic" value={company.bic} onChange={e => setCompany(p => ({ ...p, bic: e.target.value }))} placeholder="RABONL2U" /></div>
+          </div>
+        </div>
+        <div className="pt-4 border-t border-border space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold">Registratie (KvK)</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Registergegevens van de B.V. — vastgelegd voor administratie en toekomstige documenten
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div><Label htmlFor="company-rsin">RSIN</Label><Input id="company-rsin" value={company.rsin} onChange={e => setCompany(p => ({ ...p, rsin: e.target.value }))} placeholder="869765784" /></div>
+            <div><Label htmlFor="company-vestiging">Vestigingsnummer</Label><Input id="company-vestiging" value={company.vestigingsnummer} onChange={e => setCompany(p => ({ ...p, vestigingsnummer: e.target.value }))} placeholder="000066105676" /></div>
+            <div><Label htmlFor="company-sbi">SBI-code</Label><Input id="company-sbi" value={company.sbi_code} onChange={e => setCompany(p => ({ ...p, sbi_code: e.target.value }))} placeholder="43212" /></div>
           </div>
         </div>
         <div className="pt-4 border-t border-border">

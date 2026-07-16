@@ -44,10 +44,10 @@ export function shell(_supabaseUrl: string, innerHtml: string): string {
           ${innerHtml}
         </td></tr>
         <tr><td class="ec-foot" style="padding:20px 40px;background:#fafbfc;border-top:1px solid #eef0f2;font-family:Arial,Helvetica,sans-serif;color:#9aa1ab;font-size:11px;line-height:1.8">
-          <span style="color:#6b7280;font-weight:700">E-Charging</span><br>
-          Dwarsweg 8, 5301 KT Zaltbommel · 0418 684272<br>
+          <span style="color:#6b7280;font-weight:700">E-Charging B.V.</span><br>
+          Dwarsweg 8, 5301 KT Zaltbommel<br>
           www.e-charging.nl · info@e-charging.nl<br>
-          KvK 30241843 · BTW NL8213.92.402.B01 · IBAN NL33RABO0143928449
+          KvK 42107233 · BTW NL869765784B01 · IBAN NL09 RABO 0176 3641 29
         </td></tr>
       </table>
     </td></tr>
@@ -133,7 +133,7 @@ ${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."}
 
 Met vriendelijke groet,
 ${signoff}
-Dwarsweg 8, 5301 KT Zaltbommel · 0418 684272 · info@e-charging.nl`;
+Dwarsweg 8, 5301 KT Zaltbommel · info@e-charging.nl`;
   return { html: shell(o.supabaseUrl, inner), text };
 }
 

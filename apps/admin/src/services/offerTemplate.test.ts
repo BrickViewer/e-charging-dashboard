@@ -40,6 +40,10 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("door E-Charging opgemaakte self-billing factuur.");
     expect(html).toContain("eerste dag van de kalendermaand volgend op de opleverdatum"); // v1-ingangsdatum bevroren
     expect(html).toContain("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule"); // v1-kop bevroren, incl. originele tikfout "contactduur"
+    // v1-footer bevroren: oude registratiegegevens van vóór de eigen B.V. (incl. telefoonregel)
+    expect(html).toContain("KvK: 30241843");
+    expect(html).toContain("Telefoon: 0418 - 684272");
+    expect(html).not.toContain("KvK: 42107233");
     expect(html).not.toContain("afnameprijs");
   });
 
@@ -66,6 +70,12 @@ describe("offerte tekst-versies", () => {
     // v2 laat 0%-betaaltermijnen weg (FALLBACK_TEMPLATE = 50/0/50; echte zakelijke offertes
     // volgen het org-sjabloon, zie de override-test bij particulier)
     expect(html).toContain("Betalingen levering en installatie: 50% bij opdracht en 50% na werkzaamheden.");
+    // v2-footer: registratiegegevens van de eigen B.V. (sinds 2026-07-16), zonder telefoonregel
+    expect(html).toContain("KvK: 42107233");
+    expect(html).toContain("BTW: NL869765784B01");
+    expect(html).toContain("IBAN: NL09 RABO 0176 3641 29");
+    expect(html).not.toContain("KvK: 30241843");
+    expect(html).not.toContain("Telefoon:");
   });
 });
 

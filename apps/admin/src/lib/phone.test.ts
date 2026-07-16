@@ -13,7 +13,7 @@ describe("normalizePhone", () => {
 
   it("ondersteunt vast en internationaal", () => {
     expect(normalizePhone("020-1234567")).toBe("+31201234567");
-    expect(normalizePhone("0418 684272")).toBe("+31418684272");
+    expect(normalizePhone("0418 123456")).toBe("+31418123456");
     expect(normalizePhone("+49 30 12345678")).toBe("+493012345678");
     expect(normalizePhone("+32 470 12 34 56")).toBe("+32470123456");
   });

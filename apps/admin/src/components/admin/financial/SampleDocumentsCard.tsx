@@ -25,9 +25,9 @@ const SAMPLE_ORG: SelfBillingOrg = {
   address_postal: "5301 KT",
   address_city: "Zaltbommel",
   country: "Nederland",
-  kvk: "30241843",
-  btw_number: "NL821392402B01",
-  iban: "NL33RABO0143928449",
+  kvk: "42107233",
+  btw_number: "NL869765784B01",
+  iban: "NL09 RABO 0176 3641 29",
   email: "info@e-charging.nl",
 };
 

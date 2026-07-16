@@ -3272,8 +3272,11 @@ export type Database = {
           sharepoint_root_item_id: string | null
           sharepoint_site_id: string | null
           sharepoint_site_name: string | null
+          rsin: string | null
+          sbi_code: string | null
           sharepoint_site_url: string | null
           updated_at: string | null
+          vestigingsnummer: string | null
         }
         Insert: {
           address?: string | null
@@ -3316,8 +3319,11 @@ export type Database = {
           sharepoint_root_item_id?: string | null
           sharepoint_site_id?: string | null
           sharepoint_site_name?: string | null
+          rsin?: string | null
+          sbi_code?: string | null
           sharepoint_site_url?: string | null
           updated_at?: string | null
+          vestigingsnummer?: string | null
         }
         Update: {
           address?: string | null
@@ -3360,8 +3366,11 @@ export type Database = {
           sharepoint_root_item_id?: string | null
           sharepoint_site_id?: string | null
           sharepoint_site_name?: string | null
+          rsin?: string | null
+          sbi_code?: string | null
           sharepoint_site_url?: string | null
           updated_at?: string | null
+          vestigingsnummer?: string | null
         }
         Relationships: []
       }

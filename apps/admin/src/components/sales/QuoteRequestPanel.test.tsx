@@ -89,7 +89,7 @@ const zakelijkOud = {
       telefoon: "0612345678",
       type_organisatie: "anders",
       type_organisatie_anders: "Woningcorporatie",
-      kvk: "30241843",
+      kvk: "87654321",
     },
     locatie: {
       adres: "Dwarsweg 8",

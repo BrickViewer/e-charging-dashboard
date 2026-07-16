@@ -7,8 +7,6 @@
 import { btn, escHtml, eyebrow, fine, greet, h1, p, shell } from "../_shared/offer-email.ts";
 import { TRIAGE_LABEL, type Flow, type Triage } from "./labels.ts";
 
-const SUPPORT_TEL = "0418 684 272";
-
 /** Vaste-breedte samenvatting in een grijs blok; \n blijft \n. */
 function pre(text: string): string {
   return `<pre style="margin:18px 0 0;padding:16px 18px;background:#f6f7f9;border:1px solid #eceef1;border-radius:8px;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:12.5px;line-height:1.65;color:#374151;white-space:pre-wrap;word-break:break-word">${escHtml(text)}</pre>`;
@@ -45,7 +43,7 @@ export function renderIntakeConfirmation(o: {
     p(`<strong>Wat u kunt verwachten:</strong> ${verwachting}`),
     rows(o.samenvatting),
     fine(
-      `Heeft u tussentijds een vraag? Reageer gerust op deze e-mail of bel ons op ${SUPPORT_TEL}. Wij reageren binnen twee werkdagen.`,
+      "Heeft u tussentijds een vraag? Reageer gerust op deze e-mail of mail naar info@e-charging.nl. Wij reageren binnen twee werkdagen.",
     ),
     greet,
   ].join("");
@@ -59,7 +57,7 @@ export function renderIntakeConfirmation(o: {
     "",
     ...o.samenvatting.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`),
     "",
-    `Heeft u een vraag? Reageer op deze e-mail of bel ${SUPPORT_TEL}.`,
+    "Heeft u een vraag? Reageer op deze e-mail of mail naar info@e-charging.nl.",
     "",
     "Met vriendelijke groet,",
     "Team E-Charging",

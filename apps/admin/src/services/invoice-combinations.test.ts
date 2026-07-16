@@ -67,8 +67,8 @@ describe("validateSelfBillingInvoiceData: juiste combinaties geblokkeerd/toegest
       kvk: "90000001", btw_number: "NL900000001B01", vat_status: "vat_liable", vat_status_confirmed_at: "2026-01-01", ...clientOver,
     },
     org: {
-      name: "E-Charging", kvk: "30241843", btw_number: "NL8213.92.402.B01", iban: "NL33RABO0143928449",
-      address_street: "Dwarsweg 8", address_postal: "5301KT", address_city: "Zaltbommel", country: "Nederland",
+      name: "E-Charging B.V.", kvk: "42107233", btw_number: "NL869765784B01", iban: "NL09 RABO 0176 3641 29",
+      address_street: "Dwarsweg 8", address_postal: "5301 KT", address_city: "Zaltbommel", country: "Nederland",
     },
     paymentDetails: { payout_iban: "NL91ABNA0417164300", payout_account_holder_name: "Test BV" },
   });

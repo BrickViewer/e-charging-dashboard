@@ -25,10 +25,20 @@ export const PAGE_H = 1123; // 297mm @ 96dpi
 const PAD = 72; // marge l/r — gemeten op de bron (tekstkolom ~648px breed → zelfde regelafbreking)
 
 const SENDER_CITY = "Zaltbommel";
-const COMPANY_FOOTER = {
+// Bevroren footer van verstuurde (v1-)offertes — registratiegegevens van vóór de eigen B.V.
+// NIET wijzigen: verstuurde offertes moeten byte-gelijk her-renderen.
+const COMPANY_FOOTER_V1 = {
   left: ["Dwarsweg 8", "5301 KT Zaltbommel", "Telefoon: 0418 - 684272"],
   mid: ["www.e-charging.nl", "info@e-charging.nl"],
   right: ["KvK: 30241843", "BTW: NL8213.92.402.B01", "IBAN: NL33RABO0143928449"],
+};
+// Actuele registratiegegevens E-Charging B.V. (eigen B.V. sinds 2026-07-16). Telefoonregel
+// bewust weg: de B.V. heeft nog geen eigen nummer. Rechterkolom houdt 3 regels zodat de
+// footer-hoogte (en daarmee de hairline-positie in de paginering) ongewijzigd blijft.
+const COMPANY_FOOTER = {
+  left: ["Dwarsweg 8", "5301 KT Zaltbommel"],
+  mid: ["www.e-charging.nl", "info@e-charging.nl"],
+  right: ["KvK: 42107233", "BTW: NL869765784B01", "IBAN: NL09 RABO 0176 3641 29"],
 };
 
 const FALLBACK_TEMPLATE: OfferTemplateValues = {
@@ -395,14 +405,16 @@ function header(m: ResolvedModel, logoUrl: string | null, pageNum: number, total
   <div style="border-top:1px solid ${HAIRLINE};margin-top:16px"></div>`;
 }
 
-function footer(): string {
+// v1 (verstuurde offertes) rendert de bevroren oude registratiegegevens; v2+ de actuele B.V.-set.
+function footer(textVersion: number): string {
+  const f = textVersion <= 1 ? COMPANY_FOOTER_V1 : COMPANY_FOOTER;
   const col = (lines: string[], align: string) =>
     `<div style="text-align:${align};color:${FOOT};font-size:9px;line-height:1.6">${lines.map(esc).join("<br/>")}</div>`;
   return `
   <div style="position:absolute;left:${PAD}px;right:${PAD}px;bottom:34px">
     <div style="border-top:1px solid ${HAIRLINE};margin-bottom:8px"></div>
     <div style="display:flex;justify-content:space-between">
-      ${col(COMPANY_FOOTER.left, "left")}${col(COMPANY_FOOTER.mid, "center")}${col(COMPANY_FOOTER.right, "right")}
+      ${col(f.left, "left")}${col(f.mid, "center")}${col(f.right, "right")}
     </div>
   </div>`;
 }
@@ -445,7 +457,7 @@ function assembleLetterPage(m: ResolvedModel, logoUrl: string | null, pageNum: n
   return pageEl(
     `<div style="position:absolute;left:${PAD}px;right:${PAD}px;top:62px">${header(m, logoUrl, pageNum, total)}</div>` +
     `<div style="position:absolute;left:${PAD}px;right:${PAD}px;top:${CONTENT_TOP}px;bottom:${CONTENT_BOTTOM}px">${content}</div>` +
-    footer(),
+    footer(m.textVersion),
     LETTER_FONT,
   );
 }
