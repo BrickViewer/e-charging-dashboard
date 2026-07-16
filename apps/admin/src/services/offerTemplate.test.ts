@@ -69,17 +69,15 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // Intro: netto-vergoeding + gestapeld rekenvoorbeeld (echte berekening, gebruikerskeuze)
     expect(html).toContain("ontvangt u van ons elke maand");
     expect(html).toContain("€ 0,40");
-    expect(html).toContain("Een rekenvoorbeeld, bij ongeveer 20.000 kilometer en 4.000 kWh thuisladen per jaar:");
-    expect(html).toContain("Wij betalen u (4.000 kWh × € 0,40)");
-    expect(html).toContain("€ 1.600");
-    expect(html).toContain("Uw eigen stroomkosten (4.000 kWh × € 0,25)");
-    expect(html).toContain("− € 1.000");
-    expect(html).toContain("U houdt over");
-    expect(html).toContain("€ 600 per jaar");
-    expect(html).toContain("Extra met de ERE-regeling (indicatief € 0,10 per kWh)");
-    expect(html).toContain("+ € 400");
-    expect(html).toContain("zo'n € 1.000 per jaar");
-    expect(html).toContain("Dat is ruim € 80 per maand.");
+    expect(html).toContain("Een rekenvoorbeeld. Stel: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis");
+    expect(html).toContain("Wij betalen u € 0,40 per geladen kWh, dus € 1.600 per jaar");
+    expect(html).toContain("bij een stroomprijs van € 0,25 per kWh");
+    expect(html).toContain("U houdt dus € 600 per jaar over");
+    expect(html).toContain("ERE-regeling? Dan komt daar indicatief nog zo'n € 400 per jaar bij");
+    expect(html).toContain("al snel € 1.000 per jaar");
+    // Tabelvorm + maandbedrag zijn afgewezen (gebruikerskeuze)
+    expect(html).not.toContain("Wij betalen u (4.000");
+    expect(html).not.toContain("per maand");
     expect(html).toContain("Ons beheer houdt onder andere in:");
     // 5 punten: reparatie-punt geheel verwijderd (gebruikerskeuze); ERE = 05
     expect(html).toContain("Laden via de zaak? Automatisch geregeld");

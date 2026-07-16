@@ -605,27 +605,22 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         : `Voor elke kWh die via uw ${paalWoord} wordt geladen, ontvangt u van ons elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} netto op uw rekening.`;
       blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
       if (afname != null && afname - HUISHOUD_STROOMPRIJS > 0.005) {
+        // Uitgeschreven situatie-voorbeeld (gebruikerskeuze; de eerdere tabelvorm is afgewezen
+        // als overweldigend) — de STANDAARD voor particuliere offertes. Korte zinnen, bedragen
+        // live uit de offerte, ERE altijd "indicatief", geen maandbedrag.
         const eur0 = (v: number) => `€ ${Math.round(v).toLocaleString("nl-NL")}`;
         const betaaldJaar = VOORBEELD_KWH_JAAR * afname;
         const kostenJaar = VOORBEELD_KWH_JAAR * HUISHOUD_STROOMPRIJS;
         const overJaar = betaaldJaar - kostenJaar;
         const ereJaar = VOORBEELD_KWH_JAAR * ERE_INDICATIE;
         const totaalJaar = overJaar + ereJaar;
-        const maandTiental = Math.floor(totaalJaar / 12 / 10) * 10;
-        blocks.push(bP("Een rekenvoorbeeld, bij ongeveer 20.000 kilometer en 4.000 kWh thuisladen per jaar:", 12));
-        // Echte berekening onder elkaar: label links, bedrag rechts (tabular), hairlines vóór de
-        // totaalregels, totalen vet. Iedereen leest dit als een simpel sommetje.
-        const calcRow = (label: string, bedrag: string, opts?: { bold?: boolean; line?: boolean }) =>
-          `<div style="display:flex;justify-content:space-between;max-width:430px;${opts?.line ? `border-top:1px solid ${HAIRLINE};padding-top:4px;` : ""}${opts?.bold ? "font-weight:700;" : ""}margin-top:4px">` +
-          `<div>${label}</div><div style="font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:16px">${bedrag}</div></div>`;
-        blocks.push(bRaw(
-          calcRow(`Wij betalen u (4.000 kWh × ${money2(afname)})`, eur0(betaaldJaar)) +
-          calcRow(`Uw eigen stroomkosten (4.000 kWh × ${money2(HUISHOUD_STROOMPRIJS)})`, `− ${eur0(kostenJaar)}`) +
-          calcRow("U houdt over", `${eur0(overJaar)} per jaar`, { bold: true, line: true }) +
-          calcRow(`Extra met de ERE-regeling (indicatief ${money2(ERE_INDICATIE)} per kWh)`, `+ ${eur0(ereJaar)}`) +
-          calcRow("Totaal", `zo'n ${eur0(totaalJaar)} per jaar`, { bold: true, line: true }) +
-          `<div style="color:${MUTED};margin-top:5px">Dat is ruim ${eur0(maandTiental)} per maand.</div>`,
-          10));
+        blocks.push(bP(
+          `Een rekenvoorbeeld. Stel: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis. ` +
+          `Wij betalen u ${money2(afname)} per geladen kWh, dus ${eur0(betaaldJaar)} per jaar. ` +
+          `Zelf betaalt u voor die stroom ongeveer ${eur0(kostenJaar)} per jaar, bij een stroomprijs van ${money2(HUISHOUD_STROOMPRIJS)} per kWh. ` +
+          `U houdt dus ${eur0(overJaar)} per jaar over. ` +
+          `Meldt u zich ook aan voor de ERE-regeling? Dan komt daar indicatief nog zo'n ${eur0(ereJaar)} per jaar bij. ` +
+          `Zo verdient u met uw ${paalWoord} al snel ${eur0(totaalJaar)} per jaar.`, 12));
       }
       blocks.push(bP("Ons beheer houdt onder andere in:", 16));
     } else {
