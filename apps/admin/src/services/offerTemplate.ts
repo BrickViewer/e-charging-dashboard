@@ -743,7 +743,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(bRaw(rowC("Zon- en feestdagen", "125 % toeslag."), 1));
     blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend. De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 8));
     blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 16, HEAD));
-    blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
+    blocks.push(bFb("De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.", 8));
     blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
   } else {
     if (heeftOverleg) {
@@ -765,7 +765,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
     }
     blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 19, HEAD));
-    blocks.push(bFb("De Algemene voorwaarden E-Charging BV.", 8));
+    blocks.push(bFb(m.textVersion <= 1
+      ? "De Algemene voorwaarden E-Charging BV." // v1 bevroren (verstuurde offertes)
+      : "De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.", 8));
     if (m.withInstallation) {
       blocks.push(bFb(`Uitvoering &ldquo;levering en installatie&rdquo; kunnen aaneengesloten plaatsvinden binnen normale werkuren (tussen 07.00 &ndash; 17.00 uur). Indien er buiten deze uren werkzaamheden moeten plaats vinden zullen de volgende toeslagen per werkuur á ${mEur(m.toeslagWerkuur)} gehanteerd worden:`));
       blocks.push(bSub("50% Avonduren (17.00 &ndash; 23.00 uur)"));

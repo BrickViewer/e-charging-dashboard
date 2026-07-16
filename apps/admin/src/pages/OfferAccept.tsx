@@ -254,7 +254,7 @@ export default function OfferAccept() {
                 </label>
                 <div className="flex items-start gap-2.5 text-sm leading-snug">
                   <Checkbox className="mt-0.5 shrink-0" checked={termsChecked} onCheckedChange={(v) => setTermsChecked(v === true)} />
-                  <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/verwerkersovereenkomst" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Verwerkersovereenkomst</a>, en met elektronisch ondertekenen.</span>
+                  <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/regeling-gegevensuitwisseling" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Regeling gegevensuitwisseling</a>, en met elektronisch ondertekenen.</span>
                 </div>
               </div>
 

@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
         signer_function: signerFunction || null,
         authority_confirmed: authorityConfirmed,
         terms_accepted: termsAccepted,
-        terms_version: "AV/VWO www.e-charging.nl",
+        terms_version: "AV + Regeling gegevensuitwisseling www.e-charging.nl",
         document_sha256: documentSha256,
         signed_at: new Date().toISOString(),
         ip: signerIp,

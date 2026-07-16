@@ -40,6 +40,8 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("door E-Charging opgemaakte self-billing factuur.");
     expect(html).toContain("eerste dag van de kalendermaand volgend op de opleverdatum"); // v1-ingangsdatum bevroren
     expect(html).toContain("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule"); // v1-kop bevroren, incl. originele tikfout "contactduur"
+    expect(html).toContain("De Algemene voorwaarden E-Charging BV."); // v1-AV-regel bevroren (zonder Regeling gegevensuitwisseling)
+    expect(html).not.toContain("Regeling gegevensuitwisseling");
     // v1-footer bevroren: oude registratiegegevens van vóór de eigen B.V. (incl. telefoonregel)
     expect(html).toContain("KvK: 30241843");
     expect(html).toContain("Telefoon: 0418 - 684272");
@@ -70,6 +72,9 @@ describe("offerte tekst-versies", () => {
     // v2 laat 0%-betaaltermijnen weg (FALLBACK_TEMPLATE = 50/0/50; echte zakelijke offertes
     // volgen het org-sjabloon, zie de override-test bij particulier)
     expect(html).toContain("Betalingen levering en installatie: 50% bij opdracht en 50% na werkzaamheden.");
+    // Voorwaarden verwijzen naar AV én de Regeling gegevensuitwisseling (vervangt de VWO)
+    expect(html).toContain("De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.");
+    expect(html).not.toContain("Verwerkersovereenkomst");
     // v2-footer: registratiegegevens van de eigen B.V. (sinds 2026-07-16), zonder telefoonregel
     expect(html).toContain("KvK: 42107233");
     expect(html).toContain("BTW: NL869765784B01");
@@ -226,6 +231,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("Prijsstelling");
     expect(html).toContain("Storingen");
     expect(html).toContain("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven; genoemde bedragen zijn exclusief btw.");
+    expect(html).toContain("De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.");
     expect(html).toContain("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag");
     expect(html).not.toContain("Voor zaterdagen");
     expect(html).not.toContain("Onze aanpak");
