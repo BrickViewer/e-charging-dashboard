@@ -506,6 +506,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   // Particulier (v2+): enkelvoud + "aan huis" + de ontzorgingsbelofte in de intro-zin.
   const privV2 = m.isPrivate && m.textVersion >= 2;
   const paalWoord = m.numPoles > 1 ? "laadpalen" : "laadpaal";
+  // Netto per geladen kWh (laadtarief − marge) — gebruikt in de particuliere intro, de zakelijke
+  // v2-prijs-alinea én de asterisk-voetnoot in de voorwaarden. Pure berekening.
+  const afname = (!m.laadkosten || m.laadkosten <= 0) ? null : Math.max(0, m.laadkosten - m.serviceFeePerKwh);
   if (privV2) {
     blocks.push(bP(m.withInstallation && m.withManagement
       ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren, aansluiten en volledig beheren van uw ${paalWoord} aan huis, zodat u er zelf niets aan hoeft te doen.`
@@ -585,9 +588,6 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   // --- Beheermodule (alleen bij beheer-scope) — start altijd strak op een nieuwe pagina ---
   if (m.withManagement) {
     blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", 0, GREEN), brk: true });
-    // Netto per geladen kWh (laadtarief − marge) — gebruikt in de particuliere intro én in de
-    // zakelijke v2-prijs-alinea. Pure berekening; v1/zakelijk-gedrag ongewijzigd.
-    const afname = (!m.laadkosten || m.laadkosten <= 0) ? null : Math.max(0, m.laadkosten - m.serviceFeePerKwh);
     if (privV2) {
       // Intro (gebruikerskeuze): eerst wat de klant per geladen kWh netto ontvangt, dan een
       // GESTAPELD rekenvoorbeeld (echte berekening onder elkaar: betaald − stroomkosten =
@@ -600,8 +600,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       const eersteZin = m.withInstallation
         ? `Na de installatie configureren wij uw ${paalWoord} en activeren we die in ons eigen platform.`
         : `Wij nemen uw ${paalWoord} op in ons eigen platform en beheren die volledig voor u.`;
+      // Asterisk verwijst naar de voetnoot onder "Activatiekosten, ingangsdatum, contactduur en
+      // opzegging beheermodule" in de voorwaarden (laadtarief-instelling + netto-ontvangst).
       const vergoedingZin = afname != null
-        ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))} per geladen kWh netto op uw rekening.`
+        ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))}* per geladen kWh netto op uw rekening.`
         : `Voor de vergoeding van uw stroom ontvangt u elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh netto op uw rekening.`;
       blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
       if (afname != null && afname - HUISHOUD_STROOMPRIJS > 0.005) {
@@ -616,7 +618,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         const totaalJaar = overJaar + ereJaar;
         blocks.push(bP(
           `<span style="font-style:italic">` +
-          `Bijvoorbeeld: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis. ` +
+          `Bijvoorbeeld: u rijdt ongeveer 25.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis. ` +
           `Aan vergoeding ontvangt u dan ${eur0(betaaldJaar)} per jaar. ` +
           `Zelf betaalt u voor die stroom ongeveer ${eur0(kostenJaar)} per jaar, bij een stroomprijs van ${money2(HUISHOUD_STROOMPRIJS)} per kWh. ` +
           `U houdt dus ${eur0(overJaar)} per jaar over. ` +
@@ -624,7 +626,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
           `Zo verdient u met uw ${paalWoord} al snel ${eur0(totaalJaar)} per jaar.` +
           `</span>`, 12));
       }
-      blocks.push(bP("Ons beheer houdt onder andere in:", 16));
+      blocks.push(bP("Uw voordelen op een rij:", 16));
     } else {
       blocks.push(bP(m.withInstallation
         ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
@@ -714,6 +716,13 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       ? "De overeenkomst gaat in op de eerste dag van de kalendermaand volgend op de opleverdatum."
       : `De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
     blocks.push(bFb("De overeenkomst wordt aangegaan voor een periode van één (1) jaar, te rekenen vanaf de ingangsdatum. Na afloop van deze periode wordt de overeenkomst telkens stilzwijgend verlengd met een periode van één (1) jaar, tenzij opdrachtgever of aannemer de overeenkomst schriftelijk opzegt met inachtneming van een opzegtermijn van drie (3) maanden vóór het einde van de lopende contractperiode."));
+    // Asterisk-voetnoot bij de vergoedingszin op de beheerpagina (alleen particulier v2 met een
+    // vast laadtarief; bij dynamisch tarief staat er geen asterisk en dus ook geen voetnoot).
+    if (privV2 && afname != null) {
+      const ingesteldVw = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
+      blocks.push(bRaw(
+        `<div>* ${ingesteldVw} op ${money2(m.laadkosten as number)} per kWh (excl. btw). Hiervan ontvangt u ${money2(afname)} netto op uw rekening.</div>`, 8));
+    }
   }
   if (m.withInstallation) {
     blocks.push(bSec("Niet in deze aanbieding opgenomen", 19, HEAD));

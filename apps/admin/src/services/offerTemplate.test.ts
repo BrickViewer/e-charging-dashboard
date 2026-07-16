@@ -69,7 +69,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // Intro: netto-vergoeding + gestapeld rekenvoorbeeld (echte berekening, gebruikerskeuze)
     expect(html).toContain("Voor de vergoeding van uw stroom ontvangt u elke maand");
     expect(html).toContain("€ 0,40");
-    expect(html).toContain("Bijvoorbeeld: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis");
+    expect(html).toContain("Bijvoorbeeld: u rijdt ongeveer 25.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis");
     expect(html).toContain('<span style="font-style:italic">Bijvoorbeeld:'); // heel het voorbeeld cursief
     expect(html).toContain("Aan vergoeding ontvangt u dan € 1.600 per jaar");
     expect(html).toContain("bij een stroomprijs van € 0,25 per kWh");
@@ -79,7 +79,8 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // Tabelvorm + maandbedrag zijn afgewezen (gebruikerskeuze)
     expect(html).not.toContain("Wij betalen u (4.000");
     expect(html).not.toContain("per maand");
-    expect(html).toContain("Ons beheer houdt onder andere in:");
+    expect(html).toContain("Uw voordelen op een rij:");
+    expect(html).not.toContain("Ons beheer houdt onder andere in");
     // 5 punten: reparatie-punt geheel verwijderd (gebruikerskeuze); ERE = 05
     expect(html).toContain("Laden via de zaak? Automatisch geregeld");
     expect(html).toContain("Extra vergoeding voor groene stroom");
@@ -91,9 +92,9 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("up en running");
     expect(html).not.toContain("Altijd en overal");
     expect(html).toContain("betaalspecificatie");
-    // Prijsregels vervallen (vergoeding leeft in de intro); de kop sluit de pagina af
-    expect(html).not.toContain("wordt ingesteld op");
-    expect(html).not.toContain("Hiervan ontvangt u");
+    // Prijsregels vervallen; de instelling+netto leven nu in de asterisk-VOETNOOT (voorwaarden)
+    expect(html).toContain("€ 0,40</span>*"); // asterisk direct achter het vetgedrukte bedrag
+    expect(html).toContain("* Uw laadpaal wordt ingesteld op € 0,50 per kWh (excl. btw). Hiervan ontvangt u € 0,40 netto op uw rekening.");
     const kopIdx = html.indexOf("werkt</span>");
     expect(kopIdx).toBeGreaterThan(-1);
     const ereIdx = html.indexOf("rechtstreeks aan");
