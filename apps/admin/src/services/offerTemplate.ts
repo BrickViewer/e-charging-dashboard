@@ -287,9 +287,9 @@ function beheerPoints(textVersion: number, opts?: { isPrivate?: boolean; poles?:
     const paal = n > 1 ? "laadpalen" : "laadpaal";
     const levert = n > 1 ? "leveren" : "levert";
     return [
-      ["Laden via de zaak? Automatisch geregeld", "Laadt u thuis met de laadpas van uw werkgever of leasemaatschappij? Elke geladen kWh wordt automatisch geregistreerd en vergoed. Declareren is nooit meer nodig."],
+      ["Laden via de zaak? Automatisch geregeld", "Laadt u thuis met de laadpas van uw werkgever of leasemaatschappij? Elke geladen kWh wordt automatisch geregistreerd en vergoed. Declareren is nooit meer nodig. Ook als iemand anders met een eigen laadpas bij u laadt, telt elke kWh automatisch mee."],
       ["Elke maand geld op uw rekening", `Wij betalen u elke maand voor de stroom die uw ${paal} ${levert}. U ontvangt daarbij een duidelijke betaalspecificatie. Zelf hoeft u niets te doen.`],
-      ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u 24/7 elke laadsessie, het verbruik en wat u ervoor krijgt."],
+      ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u 24/7 elke laadsessie, het verbruik en wat u ervoor krijgt. Ook al uw maandelijkse betaalspecificaties vindt u er overzichtelijk terug."],
       [n > 1 ? "Uw laadpalen blijven gewoon werken" : "Uw laadpaal blijft gewoon werken", "Bij een storing krijgen wij direct een melding. Meestal lossen we het op afstand op, vaak voordat u iets merkt. Onze helpdesk is 24/7 bereikbaar."],
       ["Reparatie nodig? U heeft voorrang", "Is een bezoek aan huis toch nodig, dan komen wij met voorrang langs. U kent de tarieven vooraf, dus u komt nooit voor verrassingen te staan."],
       ["Extra vergoeding voor groene stroom", `Via de ERE-regeling kan uw ${paal} extra geld opleveren. Wij koppelen u aan onze partner die de aanvraag voor u regelt en leveren de gegevens van uw ${paal} rechtstreeks aan. U heeft er geen omkijken naar.`],
@@ -592,10 +592,13 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         : `Wij nemen uw ${paalWoord} op in ons eigen platform en beheren die volledig voor u. Dit houdt onder andere in:`)
       : (m.withInstallation
         ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
-        : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:"), 10));
+        : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:"), privV2 ? 16 : 10));
+    // Particulier (v2): ruimer verticaal ritme zodat de pagina strak gevuld is (de zes punten +
+    // kop + prijs-alinea zijn de hele pagina); zakelijk behoudt de oorspronkelijke maten.
+    // Nagemeten met de Playwright-harness: ±40px slack onder de prijs-alinea.
     beheerPoints(m.textVersion, { isPrivate: m.isPrivate, poles: m.numPoles }).forEach(([t, b], i) => blocks.push(bRaw(
-      `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
-      i === 0 ? 14 : 22)));
+      `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:${privV2 ? 7 : 5}px">${esc(b)}</div></div></div>`,
+      i === 0 ? (privV2 ? 22 : 14) : (privV2 ? 38 : 22))));
     if (m.textVersion <= 1) {
       // v1 — oorspronkelijke tekst van verstuurde offertes (fee-frasering; NIET wijzigen).
       blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
@@ -614,17 +617,23 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         // bij een dynamisch/onbekend laadtarief valt de alinea terug op de prijsformule.
         // Particulier heeft ENKEL een stroomvergoeding (nooit blokkeer-/starttarief), dus de
         // "afgesproken instellingen"-lijst verschijnt hier bewust niet.
-        blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 26), keep: true });
+        blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 52), keep: true });
+        // Slotzin (terugverdien-belofte) sluit het vergoedingsblok af.
+        const slotZin = m.numPoles > 1
+          ? `Zo verdienen uw laadpalen zichzelf laadbeurt na laadbeurt terug.`
+          : `Zo verdient uw laadpaal zichzelf laadbeurt na laadbeurt terug.`;
         if (afname != null) {
           const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
           blocks.push(bP(
             `Elke kWh die u thuis laadt, levert u geld op. ` +
             `${ingesteld} op ${money2(m.laadkosten as number)} per kWh (excl. BTW). ` +
-            `U ontvangt elke maand netto ${money2(afname)} per geladen kWh op uw rekening.`, 12));
+            `U ontvangt elke maand netto ${money2(afname)} per geladen kWh op uw rekening. ` +
+            slotZin, 18));
         } else {
           blocks.push(bP(
             `Elke kWh die u thuis laadt, levert u geld op. ` +
-            `U ontvangt elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh op uw rekening.`, 12));
+            `U ontvangt elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh op uw rekening. ` +
+            slotZin, 18));
         }
       } else {
         blocks.push(bP(

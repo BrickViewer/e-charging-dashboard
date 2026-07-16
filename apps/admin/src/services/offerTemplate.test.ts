@@ -77,9 +77,12 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("up en running");
     expect(html).not.toContain("Altijd en overal"); // spacing-fix dashboard-punt
     expect(html).toContain("betaalspecificatie");
-    // Prijs-alinea: instelling + netto-ontvangst; geen afnameprijs-term, geen "op eigen naam"
+    // Prijs-alinea: instelling + netto-ontvangst + terugverdien-slotzin; geen afnameprijs-term/"op eigen naam"
     expect(html).toContain("Uw laadpaal wordt ingesteld op € 0,50 per kWh (excl. BTW)");
     expect(html).toContain("netto € 0,40 per geladen kWh op uw rekening");
+    expect(html).toContain("laadbeurt na laadbeurt terug");
+    expect(html).toContain("telt elke kWh automatisch mee"); // gasten-laadpas (punt 1)
+    expect(html).toContain("betaalspecificaties vindt u er overzichtelijk terug"); // dashboard (punt 3)
     expect(html).not.toContain("afnameprijs");
     expect(html).not.toContain("op eigen naam");
     expect(html).not.toContain("U betaalt ons nooit iets");
