@@ -193,11 +193,16 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("Zijn vergoeding is € 0,35 per geladen kWh"); // tarief 0,50 → 0,40 − 0,05
     expect(html).toContain("Uw voordelen op een rij:");
     expect(html).toContain("Laden via de zaak? Automatisch geregeld");
-    expect(html).toContain("werkt</span>"); // slotkop "Een laadpaal die voor u werkt"
+    expect(html).not.toContain("werkt</span>"); // slotkop vervallen op het contractblad (gebruikerskeuze)
     // Geen instellingen-lijst; de tarief-instelregel leeft in de voorwaarden
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
     expect(html).toContain("De laadpaal wordt ingesteld op € 0,50 per kWh (excl. btw)");
+    // Ingang v2 = ondertekening, ook bij alleen-beheer (geen vaste ingangsdatum meer)
+    expect(html).toContain("gaat in op de dag van ondertekening");
+    expect(html).not.toContain("ingangsdatum van de overeenkomst is gesteld");
+    // Geen overleg ingevuld in de testdata → sectie Uitgangspunten geheel verborgen
+    expect(html).not.toContain("Uitgangspunten");
   });
 
   it("alleen-beheer zakelijk: hero + begeleidende tekst + instellingen-pagina blijven (geen contractblad)", () => {
@@ -208,6 +213,16 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("volledig in beheer");
     expect(html).toContain("ontzorgd wordt volgens het E-Charging concept");
     expect(html).toContain("afgesproken instellingen");
+    expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingang geldt ook zakelijk alleen-beheer
+  });
+
+  it("Uitgangspunten/Overleg alleen tonen bij ingevuld overleg (geldt voor elke offerte)", () => {
+    const zonder = htmlOf(data());
+    expect(zonder).not.toContain("Uitgangspunten");
+    expect(zonder).not.toContain("Overleg met");
+    const met = htmlOf(data(undefined, { offerDetails: { overlegNaam: "Wessel Jonkers", overlegDatum: "2026-07-01" } }));
+    expect(met).toContain("Uitgangspunten");
+    expect(met).toContain("Overleg met Wessel Jonkers");
   });
 
   it("v1 + particulier: verstuurde offerte rendert de OUDE teksten, geen laadpas-variant", () => {

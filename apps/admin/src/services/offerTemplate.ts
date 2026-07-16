@@ -518,7 +518,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   if (!contractV2) blocks.push({ ...bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, m.dateGap), tag: "dateGap" });
   // Referentieblok: op het contractblad met kleinere binnengap (8 i.p.v. 20) en iets meer lucht
   // na het naamblok (mt 24) — de datum staat daar al in de paginakop rechtsboven.
-  blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:${contractV2 ? 8 : 20}px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, contractV2 ? 24 : 18));
+  blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:${contractV2 ? 12 : 20}px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, contractV2 ? 16 : 18));
   if (!contractV2) blocks.push({ ...bRaw(`<div>${esc(aanhefLine(m.aanhef))}</div>`, m.aanhefGap), tag: "aanhefGap" });
   if (contractV2) {
     // Geen dank-/aanhef-zin: het contractblad gaat van het referentieblok direct de sectie in.
@@ -618,7 +618,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       const vergoedingZin = afname != null
         ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))} per geladen kWh netto op uw rekening.`
         : `Voor de vergoeding van uw stroom ontvangt u elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh netto op uw rekening.`;
-      blocks.push(bP(`${eersteZin} ${vergoedingZin}`, contractV2 ? 12 : 16));
+      blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
       // Mark rekent € 0,05 ONDER de afgesproken vergoeding, afgerond op het dichtstbijzijnde
       // 5-cent-veelvoud (gebruikerseis; ×20 i.p.v. /0,05 tegen FP-drift): het voorbeeld blijft
       // 3-7 cent onder de deal van de lezer. Geen vast tarief (dynamisch) → vaste € 0,35.
@@ -640,9 +640,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
           `Daarmee houdt Mark ${eur0(overJr)} per jaar over. ` +
           `Ook heeft hij zich aangemeld voor de ERE-regeling. Die subsidie levert hem nog eens zo'n € 400 per jaar op. ` +
           `Zo verdient Mark met zijn laadpaal al snel ${eur0(overJr + 400)} per jaar.` +
-          `</span>`, contractV2 ? 8 : 12));
+          `</span>`, 12));
       }
-      blocks.push(bP("Uw voordelen op een rij:", contractV2 ? 12 : 16));
+      blocks.push(bP("Uw voordelen op een rij:", 16));
     } else {
       blocks.push(bP(m.withInstallation
         ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
@@ -653,9 +653,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     //   titel→body 8 · bSec→intro 16 · prijsregels 8
     //   intro→punt01 40 == punt→punt 40 (5 units) · punt06→prijsblok 64 (8 units, sectiegrens)
     // Typografie: punt-titels 15px (donkere kopkleur, nummer gelijk) → body 12,5px → prijsblok 14px.
-    // Zakelijk behoudt de oorspronkelijke maten. Contractblad: ritme 16 (alles op één pagina).
+    // Zakelijk behoudt de oorspronkelijke maten. Contractblad: ritme 24 (alles op één pagina;
+    // de slotkop is daar vervallen, dus het ritme kan ademen).
     const titleSize = privV2 ? ";font-size:15px;line-height:1.3" : "";
-    const puntRitme = contractV2 ? 16 : 32;
+    const puntRitme = contractV2 ? 24 : 32;
     beheerPoints(m.textVersion, { isPrivate: m.isPrivate, poles: m.numPoles }).forEach(([t, b], i) => blocks.push(bRaw(
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px${titleSize}">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${privV2 ? HEAD : INK}${titleSize}">${esc(t)}</div><div style="color:${MUTED};margin-top:${privV2 ? 8 : 5}px">${esc(b)}</div></div></div>`,
       i === 0 ? (privV2 ? puntRitme : 14) : (privV2 ? puntRitme : 22))));
@@ -668,13 +669,15 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       const concrete = afname != null
         ? ` Bij het afgesproken laadtarief van ${money2(m.laadkosten as number)} per kWh komt dat neer op een afnameprijs van ${money2(afname)} per kWh.`
         : "";
-      if (privV2) {
-        // Particulier: de vergoeding + het voorbeeld staan in de INTRO (gebruikerskeuze; de
-        // eerdere prijsregels zijn vervallen). De kop sluit de pagina als gecentreerd statement:
-        // tag "centerRest" → buildOfferPages centreert hem exact tussen het laatste punt en de
-        // footer-streep (mt 64 = fallback; −12px optische correctie in de berekening).
+      if (privV2 && !contractV2) {
+        // Particulier installatie+beheer: de vergoeding + het voorbeeld staan in de INTRO
+        // (gebruikerskeuze; de eerdere prijsregels zijn vervallen). De kop sluit de pagina als
+        // gecentreerd statement: tag "centerRest" → buildOfferPages centreert hem exact tussen
+        // het laatste punt en de footer-streep (mt 64 = fallback; −12px optische correctie).
+        // Op het CONTRACTBLAD (alleen-beheer) is de kop bewust vervallen (gebruikerskeuze
+        // 2026-07-16, ná eerdere herplaatsing — daar eindigt het blad op punt 05).
         blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 64), keep: true, tag: "centerRest" });
-      } else {
+      } else if (!privV2) {
         blocks.push(bP(
           `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +
           `De stroom die uw laadpalen leveren nemen wij van u af en verkopen wij op eigen naam door. ` +
@@ -699,9 +702,16 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
 
   // --- Uitgangspunten / voorwaarden ---
   const row2 = (l: string, r: string) => `<div style="display:flex"><div style="width:330px">${l}</div><div>${r}</div></div>`;
-  blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
-  blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
-  blocks.push(bSec("Prijsstelling", 19, HEAD));
+  // "Uitgangspunten/Overleg met…" alleen tonen als er daadwerkelijk iets is ingevuld
+  // (gebruikerskeuze 2026-07-16, geldt voor ELKE offerte — alle verstuurde offertes hebben
+  // overleg ingevuld, dus die renderen onveranderd). Zonder overleg begint de voorwaardenpagina
+  // bij "Prijsstelling" (brk verhuist mee).
+  const heeftOverleg = !!(m.overlegNaam || m.overlegDatum);
+  if (heeftOverleg) {
+    blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
+    blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
+  }
+  blocks.push({ ...bSec("Prijsstelling", heeftOverleg ? 19 : 0, HEAD), brk: !heeftOverleg });
   blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", 8));
   if (m.withInstallation) blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
   if (m.withManagement) {
@@ -736,12 +746,13 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(m.withInstallation
       ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
       : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
-    blocks.push(bFb(m.withInstallation
-      // v2 (alle klanttypen): ingang bij ondertekening; v1 behoudt de oorspronkelijke zin (bevroren).
-      ? (m.textVersion <= 1
+    // v2 (alle klanttypen én scopes): ingang bij ondertekening; v1 behoudt per scope de
+    // oorspronkelijke zin (bevroren — verstuurde offertes).
+    blocks.push(bFb(m.textVersion <= 1
+      ? (m.withInstallation
         ? "De overeenkomst gaat in op de eerste dag van de kalendermaand volgend op de opleverdatum."
-        : "De overeenkomst gaat in op de dag van ondertekening.")
-      : `De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
+        : `De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`)
+      : "De overeenkomst gaat in op de dag van ondertekening."));
     blocks.push(bFb("De overeenkomst wordt aangegaan voor een periode van één (1) jaar, te rekenen vanaf de ingangsdatum. Na afloop van deze periode wordt de overeenkomst telkens stilzwijgend verlengd met een periode van één (1) jaar, tenzij opdrachtgever of aannemer de overeenkomst schriftelijk opzegt met inachtneming van een opzegtermijn van drie (3) maanden vóór het einde van de lopende contractperiode."));
     // Concrete tarief-instelling bij de vergoedingszin op de beheerpagina, als ☞-bullet zoals de
     // overige voorwaarden (alleen particulier v2 met een vast laadtarief; bij dynamisch tarief is
