@@ -12,6 +12,7 @@ function validInput(): InvoiceValidationInput {
       invoice_number: "ECF-2026-00001",
       vat_status: "vat_liable",
       vat_rate: 0.21,
+      client_payout: 100,
     },
     client: {
       company_name: "Van de berg Vastgoed",
@@ -179,6 +180,26 @@ describe("validateSelfBillingInvoiceData — BTW-status en consistentie", () => 
     input.client.btw_number = null;
     // vat_rate blijft 0.21 → fout
     expect(fieldsOf(input)).toContain("vat_rate");
+  });
+});
+
+describe("validateSelfBillingInvoiceData — bedrag-guards (handboek §9)", () => {
+  it("weigert een negatieve afrekening (incasso loopt via een aparte factuur)", () => {
+    const input = validInput();
+    input.settlement.client_payout = -12.5;
+    expect(fieldsOf(input)).toContain("client_payout");
+  });
+
+  it("weigert een afrekening van € 0,00 — nul is geen prijs", () => {
+    const input = validInput();
+    input.settlement.client_payout = 0;
+    expect(fieldsOf(input)).toContain("client_payout");
+  });
+
+  it("accepteert elk positief bedrag, ook centen", () => {
+    const input = validInput();
+    input.settlement.client_payout = 0.01;
+    expect(fieldsOf(input)).not.toContain("client_payout");
   });
 });
 

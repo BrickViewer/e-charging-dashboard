@@ -35,14 +35,14 @@ export function ClientOverviewTab({
             <div className="space-y-3">
               <div><Label>Startdatum</Label><Input type="date" value={ed.contract_start_date} onChange={e => setEd("contract_start_date", e.target.value)} /></div>
               <div><Label>Looptijd (maanden)</Label><Input type="number" value={ed.contract_duration_months} onChange={e => setEd("contract_duration_months", e.target.value)} /></div>
-              <div><Label>Standaard E-Charging fee (€/kWh, leeg = €0,10)</Label><Input type="number" step="0.01" placeholder="standaard 0,10" value={ed.echarging_fee_per_kwh} onChange={e => setEd("echarging_fee_per_kwh", e.target.value)} /></div>
-              <p className="text-[11px] text-muted-foreground">Terugval-fee voor locaties zonder eigen tarief. Laad-/start-/blokkeertarief én de service-fee per locatie stel je in op de locatiepagina.</p>
+              <div><Label>Standaard e-Charging-marge (€/kWh, leeg = €0,10)</Label><Input type="number" step="0.01" placeholder="standaard 0,10" value={ed.echarging_fee_per_kwh} onChange={e => setEd("echarging_fee_per_kwh", e.target.value)} /></div>
+              <p className="text-[11px] text-muted-foreground">Terugvalmarge voor locaties zonder eigen tarief. Laad-/start-/blokkeertarief én de marge per locatie stel je in op de locatiepagina.</p>
             </div>
           ) : (
             <div className="space-y-1">
               <p><span className="text-muted-foreground">Startdatum:</span> {client.contract_start_date || "—"}</p>
               <p><span className="text-muted-foreground">Looptijd:</span> {client.contract_duration_months} maanden</p>
-              <p><span className="text-muted-foreground">Standaard E-Charging fee:</span> {client.echarging_fee_per_kwh != null ? `€${Number(client.echarging_fee_per_kwh).toFixed(2)}/kWh` : "standaard (€0,10/kWh)"}</p>
+              <p><span className="text-muted-foreground">Standaard e-Charging-marge:</span> {client.echarging_fee_per_kwh != null ? `€${Number(client.echarging_fee_per_kwh).toFixed(2)}/kWh` : "standaard (€0,10/kWh)"}</p>
               <p className="text-[11px] text-muted-foreground">Tarieven gelden per locatie — zie de locatiepagina.</p>
             </div>
           )}

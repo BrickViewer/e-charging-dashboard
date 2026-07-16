@@ -665,10 +665,10 @@ export default function AdminConfiguratorSettings() {
             <Card>
               <CardHeader>
                 <CardTitle>Tarieven (offerte)</CardTitle>
-                <CardDescription>Service-fee en storingstarieven die in de offerte-voorwaarden komen te staan.</CardDescription>
+                <CardDescription>Marge per kWh (bepaalt de afnameprijs: laadtarief − marge) en de storingstarieven in de offerte-voorwaarden.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-5 md:grid-cols-3">
-                <CurrencyInput label="Service-fee / kWh (€)" value={settings.offerTemplate.serviceFeePerKwh} onChange={(v) => setOffer({ serviceFeePerKwh: Math.max(0, v) })} />
+                <CurrencyInput label="Marge / kWh (€)" value={settings.offerTemplate.serviceFeePerKwh} onChange={(v) => setOffer({ serviceFeePerKwh: Math.max(0, v) })} />
                 <CurrencyInput label="Servicemonteur / uur (€)" value={settings.offerTemplate.servicemonteurPerHour} onChange={(v) => setOffer({ servicemonteurPerHour: Math.max(0, v) })} />
                 <CurrencyInput label="Voorrijkosten / km (€)" value={settings.offerTemplate.voorrijkostenPerKm} onChange={(v) => setOffer({ voorrijkostenPerKm: Math.max(0, v) })} />
                 <CurrencyInput label="Toeslag per werkuur (€)" value={settings.offerTemplate.toeslagWerkuur} onChange={(v) => setOffer({ toeslagWerkuur: Math.max(0, v) })} />

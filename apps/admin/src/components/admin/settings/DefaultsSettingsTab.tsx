@@ -74,14 +74,14 @@ export function DefaultsSettingsTab() {
     <Card className="portal-card">
       <CardContent className="p-5 space-y-4">
         <div>
-          <h2 className="text-base font-semibold">Service-fee</h2>
+          <h2 className="text-base font-semibold">Marge per kWh</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            De standaard E-Charging-fee per kWh, gebruikt bij het berekenen van de maandafrekeningen
+            De standaard e-Charging-marge per kWh (het verschil tussen laadtarief en afnameprijs), gebruikt bij het berekenen van de maandafrekeningen
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="default-fee">E-Charging fee per kWh (€)</Label>
+            <Label htmlFor="default-fee">Marge per kWh (€)</Label>
             <Input id="default-fee" type="number" step="0.01" min="0" value={defaults.default_echarging_fee_per_kwh} onChange={e => setDefaults(p => ({ ...p, default_echarging_fee_per_kwh: e.target.value }))} />
             <p className="text-[11px] text-muted-foreground mt-1.5">Standaard 0,10; een expliciete 0 wordt gerespecteerd. Per klant te overschrijven op de klantpagina.</p>
           </div>
@@ -93,7 +93,7 @@ export function DefaultsSettingsTab() {
           <div>
             <h3 className="text-sm font-semibold">Lead-schatting</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              De geschatte beheeropbrengst per jaar in de leads-module = dit bedrag per laadpaal maal het aantal palen op de offerte.
+              De geschatte marge per jaar in de leads-module = dit bedrag per laadpaal maal het aantal palen op de offerte.
             </p>
           </div>
           <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">

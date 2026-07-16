@@ -224,6 +224,15 @@ export function VatStatusField({
               </span>
             </label>
           </RadioGroup>
+          {/* KOR-val-disclosure (handboek): INFORMEREN, niet adviseren — de keuze en de
+              fiscale afweging blijven bij de klant/diens boekhouder. */}
+          {value === "kor" && (
+            <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              Ter informatie: past u de KOR toe, dan kunt u de btw op uw eigen ingekochte stroom
+              niet terugvragen (indicatief € 0,076 – € 0,102 per kWh). Dit is uw eigen keuze en
+              wij adviseren hier niet over — overleg zo nodig met uw boekhouder.
+            </p>
+          )}
         </div>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}

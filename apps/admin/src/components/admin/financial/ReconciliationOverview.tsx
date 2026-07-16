@@ -68,7 +68,7 @@ export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: stri
         <div>
           <h2 className="text-lg font-semibold">Maandoverzicht & reconciliatie</h2>
           <p className="text-sm text-muted-foreground">
-            Wat eFlux betaalt, verdeeld over klanten + fee — en wat nog niet is toegewezen of uitbetaald.
+            Wat eFlux betaalt, verdeeld over klanten + brutomarge — en wat nog niet is toegewezen of uitbetaald.
           </p>
         </div>
         <PeriodStepper label={`Heel ${year}`} index={idx} count={years.length} onIndexChange={setYearIdx} />
@@ -121,8 +121,8 @@ export function ReconciliationOverview({ onOpenMonth }: { onOpenMonth: (ym: stri
 
       <p className="text-xs text-muted-foreground">
         <span className="font-medium text-foreground">Sluit:</span> ontvangen van eFlux (excl. BTW) = toegewezen
-        aan klanten (uit te keren + fee) + nog niet toegewezen. Reconciliatie vergelijkt de eFlux-creditfactuur met
-        onze sessie-omzet × 1,21. Bedragen incl. BTW bij eFlux/uitbetalingen, excl. BTW bij omzet/fee/marge.
+        aan klanten (uit te keren + brutomarge) + nog niet toegewezen. Reconciliatie vergelijkt de eFlux-creditfactuur
+        met onze sessie-omzet × 1,21. Bedragen incl. BTW bij eFlux/uitbetalingen, excl. BTW bij omzet/marge.
       </p>
     </div>
   );
@@ -148,7 +148,7 @@ function HeadlineStrip({ tot }: { tot: FinancialsTotals }) {
           label="Onze marge"
           value={formatEuro(tot.margeExcl)}
           red={tot.margeExcl < 0}
-          sub="fee − eFlux-kosten"
+          sub="brutomarge − eFlux-kosten"
         />
       </CardContent>
     </Card>
@@ -337,7 +337,7 @@ function MonthRowDetail({ m, ym, onOpenMonth }: { m: MonthFinancials; ym: string
         {m.factuurOntbreekt && <Row label="Verwacht (factuur nog niet binnen)" value={formatEuro(m.ontvangenVerwacht)} muted />}
         <Row label="→ Toegewezen aan klanten" sub="excl. BTW" value={formatEuro(m.assignedExcl)} indent />
         <p className="pl-6 text-[11px] text-muted-foreground/80">
-          uit te keren {formatEuro(m.payoutTotal)} · onze fee {formatEuro(m.feeTotal)}
+          uit te keren {formatEuro(m.payoutTotal)} · brutomarge {formatEuro(m.feeTotal)}
         </p>
         <Row label="→ Nog niet toegewezen" value={formatEuro(m.unassignedExcl)} indent amber={m.unassignedExcl > 0.005} />
         <div className="my-1 border-t border-dashed border-border" />

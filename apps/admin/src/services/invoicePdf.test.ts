@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildSelfBillingInvoicePdf, InvoiceValidationError, isBetaalspecificatie } from "./invoicePdf";
+import {
+  buildSelfBillingInvoicePdf, InvoiceValidationError, isBetaalspecificatie,
+  SELF_BILLING_HEADER, BETAALSPEC_TITLE, NO_VAT_SENTENCE, NO_VAT_REASON_KOR,
+  NO_VAT_REASON_PRIVATE, ACCEPTANCE_SENTENCE, paymentSentence,
+} from "./invoicePdf";
 import type {
   SelfBillingClient,
   SelfBillingOrg,
@@ -103,6 +107,42 @@ describe("buildSelfBillingInvoicePdf", () => {
 
     expect(err).toBeInstanceOf(InvoiceValidationError);
     expect((err as InvoiceValidationError).issues.map((i) => i.field)).toContain("org_kvk");
+  });
+});
+
+// De letterlijke handboek-zinnen (p. 2–3) — de renderer gebruikt uitsluitend deze constanten,
+// dus het pinnen van de constante pint de tekst op het document.
+describe("verplichte documentteksten (commissionairs-handboek)", () => {
+  it("kop self-billing factuur", () => {
+    expect(SELF_BILLING_HEADER).toBe("FACTUUR UITGEREIKT DOOR AFNEMER");
+  });
+  it("kop betaalspecificatie", () => {
+    expect(BETAALSPEC_TITLE).toBe("BETAALSPECIFICATIE");
+  });
+  it("0%-vermelding + beide redenen", () => {
+    expect(NO_VAT_SENTENCE).toBe("Geen omzetbelasting in rekening gebracht.");
+    expect(NO_VAT_REASON_KOR).toBe("Kleineondernemersregeling van toepassing.");
+    expect(NO_VAT_REASON_PRIVATE).toBe("Leverancier is geen ondernemer voor de omzetbelasting.");
+  });
+  it("aanvaardingsclausule", () => {
+    expect(ACCEPTANCE_SENTENCE).toBe("Geen bezwaar binnen 14 dagen geldt als aanvaarding.");
+  });
+  it("betaalzin met IBAN", () => {
+    expect(paymentSentence("NL00 BANK 0000 0000 00")).toBe(
+      "Wordt binnen 14 dagen overgemaakt op NL00 BANK 0000 0000 00",
+    );
+  });
+});
+
+describe("buildSelfBillingInvoicePdf — €0,00-guard (handboek §9: nul is geen prijs)", () => {
+  it("weigert een afrekening van € 0,00", async () => {
+    const { settlement, client, org, paymentDetails } = fixtures("vat_liable");
+    settlement.client_payout = 0;
+    const err = await buildSelfBillingInvoicePdf(settlement, client, org, paymentDetails, sampleLines)
+      .then(() => null)
+      .catch((e) => e as InvoiceValidationError);
+    expect(err).toBeInstanceOf(InvoiceValidationError);
+    expect((err as InvoiceValidationError).issues.map((i) => i.field)).toContain("client_payout");
   });
 });
 

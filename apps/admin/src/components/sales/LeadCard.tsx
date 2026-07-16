@@ -108,7 +108,7 @@ export function LeadCard({
           </span>
         )}
         {showMgmt && (
-          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700" title="Geschatte beheeropbrengst per jaar">
+          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700" title="Geschatte marge per jaar">
             ≈ {euro0(mgmtYear)}/jr
           </span>
         )}

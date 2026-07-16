@@ -259,7 +259,7 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
               <Field label="Looptijd (mnd)"><Input inputMode="numeric" value={t("contract_duration_months")} onChange={(e) => set("contract_duration_months")(e.target.value)} /></Field>
               <Field label="Opzegtermijn (mnd)"><Input inputMode="numeric" value={t("notice_period_months")} onChange={(e) => set("notice_period_months")(e.target.value)} /></Field>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Tarieven (laad-/start-/blokkeertarief en onze service-fee) stel je per locatie in, niet op het klantaccount.</p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Tarieven (laad-/start-/blokkeertarief en onze marge) stel je per locatie in, niet op het klantaccount.</p>
           </div>
 
           <ScopeSelector

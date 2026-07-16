@@ -555,7 +555,7 @@ export function LeadDetailSheet({
                     <InfoCard title="Sales" icon={Euro}>
                       <DetailRow label="Eigenaar" value={ownerName(lead.owner_user_id)} />
                       <DetailRow label="Offerte waarde" value={leadQuoteVal > 0 ? euro(leadQuoteVal) : null} />
-                      <DetailRow label="Geschatte beheeropbrengst / jaar" value={leadMgmtYear != null ? `≈ ${euro(leadMgmtYear)}/jr` : null} />
+                      <DetailRow label="Geschatte marge / jaar" value={leadMgmtYear != null ? `≈ ${euro(leadMgmtYear)}/jr` : null} />
                     </InfoCard>
 
                     <InfoCard title="Tags" icon={Tag}>

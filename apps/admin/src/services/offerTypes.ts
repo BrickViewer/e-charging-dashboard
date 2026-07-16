@@ -27,6 +27,11 @@ export interface OfferTemplateValues {
 }
 
 export interface OfferDetails {
+  // Tekstversie van de VASTE offerte-copy (fee-vrije handboek-teksten). Afwezig of >= 2 =
+  // huidige (handboek-conforme) teksten; 1 = de oorspronkelijke teksten van vóór 2026-07-16.
+  // Verstuurde offertes zijn via een backfill op 1 gezet zodat her-renderen (accept-pagina,
+  // getekende PDF) byte-voor-byte hetzelfde document oplevert als wat de klant ontving.
+  text_version?: number | null;
   // Adres (geseed uit de lead, bewerkbaar per offerte).
   addressStreet?: string | null;
   addressPostalCode?: string | null;

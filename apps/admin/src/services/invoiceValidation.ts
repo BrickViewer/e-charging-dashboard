@@ -147,8 +147,14 @@ export function validateSelfBillingInvoiceData(input: InvoiceValidationInput): I
   // ── Negatieve afrekening (klant is E-Charging geld schuldig) hoort NIET op een
   //    self-billing vergoedingsfactuur (die zou "wordt aan u uitbetaald" tonen bij een
   //    negatief bedrag). Dit loopt via de aparte incassofactuur / "Factuur te sturen"-pad.
-  if (Number(settlement.client_payout ?? 0) < 0) {
+  const payoutRaw = settlement.client_payout;
+  const payout = Number(payoutRaw ?? 0);
+  if (payout < 0) {
     add("client_payout", "Negatieve afrekening — verloopt via de aparte incassofactuur, niet via een vergoedingsfactuur", "afrekening");
+  } else if (payoutRaw != null && payout === 0) {
+    // Handboek §9: "Inkopen voor € 0,00 — nul is geen prijs." Een lege maand krijgt geen document.
+    // (In productie is client_payout een NOT NULL-kolom; de null-check dekt alleen testinput af.)
+    add("client_payout", "Afrekening van € 0,00 — nul is geen prijs (handboek); hiervoor wordt geen document opgemaakt", "afrekening");
   }
 
   return { ok: missing.length === 0, missing };

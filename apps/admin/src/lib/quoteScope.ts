@@ -10,7 +10,8 @@ export const SCOPE_LABEL: Record<QuoteScope, string> = {
 };
 
 export const SCOPE_HINT: Record<QuoteScope, string> = {
-  installatie_beheer: "Levering & installatie + e-Charging dashboard/opbrengstdeling.",
+  // "opbrengstdeling" is handboek-verboden taal (en een dood concept sinds het afname-model).
+  installatie_beheer: "Levering & installatie + e-Charging dashboard/maandelijkse afrekening.",
   alleen_installatie: "Alleen levering & installatie, geen beheer.",
   alleen_beheer: "Alleen beheer van bestaande laadpalen (geen installatie).",
 };

@@ -23,12 +23,15 @@ import {
 //     ("Naar"). Regel "Afname elektriciteit", géén btw, met "Geen omzetbelasting in rekening
 //     gebracht." + de reden (KOR / geen ondernemer). Geen art. 35a.
 //
-// Het document toont UITSLUITEND het netto stroombedrag (= client_payout). De brutomarge en
-// de bruto laadopbrengst staan NERGENS op het document. Activatiekosten staan er ook NIET op
-// (aparte factuur via een extern programma) — saldering op één document is niet toegestaan.
-// Renderen wordt GEWEIGERD (InvoiceValidationError) zolang verplichte gegevens ontbreken.
+// Het document toont UITSLUITEND het netto stroombedrag (= client_payout) en de bijbehorende
+// AFNAMEPRIJS per kWh (= client_payout ÷ kWh — handboek p. 2: "100 kWh x EUR 0,40"). De
+// brutomarge en de bruto laadopbrengst staan NERGENS op het document. Activatiekosten staan
+// er ook NIET op (aparte factuur via een extern programma) — saldering op één document is
+// niet toegestaan. Renderen wordt GEWEIGERD (InvoiceValidationError) zolang verplichte
+// gegevens ontbreken, of bij een afrekening van € 0,00 ("nul is geen prijs", handboek §9).
 //
-// Pagina 1: één regel "Levering/Afname elektriciteit {maand}" = client_payout, + evt. btw.
+// Pagina 1: één regel "Levering/Afname elektriciteit {maand} — {kWh} kWh × € {afnameprijs}"
+// = client_payout, + evt. btw.
 // Pagina 2+: transactiespecificatie met een NETTO bedrag per sessie dat optelt tot het
 // pagina-1-totaal (transparant, maar de brutomarge blijft afgeschermd).
 
@@ -213,6 +216,17 @@ export function isBetaalspecificatie(vatStatus: string | null | undefined): bool
   return vatStatus === "private" || vatStatus === "kor";
 }
 
+// ── Verplichte documentteksten (commissionairs-handboek p. 2–3) ──────────────
+// Als exporteerbare constanten zodat de tests de letterlijke zinnen pinnen; de
+// renderer hieronder gebruikt uitsluitend deze constanten.
+export const SELF_BILLING_HEADER = "FACTUUR UITGEREIKT DOOR AFNEMER";
+export const BETAALSPEC_TITLE = "BETAALSPECIFICATIE";
+export const NO_VAT_SENTENCE = "Geen omzetbelasting in rekening gebracht.";
+export const NO_VAT_REASON_KOR = "Kleineondernemersregeling van toepassing.";
+export const NO_VAT_REASON_PRIVATE = "Leverancier is geen ondernemer voor de omzetbelasting.";
+export const ACCEPTANCE_SENTENCE = "Geen bezwaar binnen 14 dagen geldt als aanvaarding.";
+export const paymentSentence = (iban: string) => `Wordt binnen 14 dagen overgemaakt op ${iban}`;
+
 export async function buildSelfBillingInvoicePdf(
   settlement: SelfBillingSettlement,
   client: SelfBillingClient,
@@ -264,7 +278,9 @@ export async function buildSelfBillingInvoicePdf(
   const vatPct = (vat.vatRate * 100).toLocaleString("nl-NL", { maximumFractionDigits: 2 });
   // Particulier of KOR → betaalspecificatie (E-Charging → klant); vat_liable → self-billing factuur.
   const isPrivate = isBetaalspecificatie(vatStatus);
-  const docTitle = isPrivate ? "Betaalspecificatie" : "Vergoedingsfactuur";
+  // Handboek-koppen: de betaalspecificatie heet letterlijk "BETAALSPECIFICATIE"; de
+  // self-billing factuur draagt prominent "FACTUUR UITGEREIKT DOOR AFNEMER" (art. 35a).
+  const docTitle = isPrivate ? BETAALSPEC_TITLE : "Vergoedingsfactuur";
   const docNrLabel = isPrivate ? "Betaalspecificatie" : "Factuur";
   // Commissionair-framing: de betaalspecificatie beschrijft de AFNAME door E-Charging,
   // de self-billing factuur de LEVERING door de klant.
@@ -285,14 +301,15 @@ export async function buildSelfBillingInvoicePdf(
 
   // ── Titel (rechts) ───────────────────────────────────────
   setFont("bold");
-  doc.setFontSize(18);
+  doc.setFontSize(isPrivate ? 15 : 18);
   doc.setTextColor(...INK);
   doc.text(docTitle, R, 24, { align: "right" });
   if (!isPrivate) {
+    // Art. 35a-vermelding prominent in de kop (handboek p. 2), i.p.v. een los "SELFBILLING"-label.
     setFont("bold");
     doc.setFontSize(8);
     doc.setTextColor(...BRAND_GREEN);
-    doc.text("SELFBILLING", R, 29.5, { align: "right" });
+    doc.text(SELF_BILLING_HEADER, R, 29.5, { align: "right" });
   }
   setFont("normal");
   doc.setFontSize(9);
@@ -376,23 +393,18 @@ export async function buildSelfBillingInvoicePdf(
     L, cursor,
   );
   cursor += 4.5;
-  // Uitbetaalrekening van de klant (de eigenaar ontvangt het geld).
-  if (iban || holder) {
+  // Betaalzin letterlijk conform het handboek: "Wordt binnen 14 dagen overgemaakt op <IBAN>".
+  if (iban) {
     setFont("normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...MUTED);
-    const payParts = [iban ? `Uitbetaling op ${iban}` : "", holder ? `t.n.v. ${holder}` : ""].filter(Boolean);
-    doc.text(payParts.join("  ·  "), L, cursor);
-    cursor += 5;
-  }
-  // Self-billing-markering (Wet OB art. 35a) geldt alleen voor een btw-ondernemer-leverancier.
-  // Een particulier/KOR reikt geen btw-factuur uit → betaalspecificatie zonder deze vermelding.
-  if (!isPrivate) {
-    setFont("bold");
     doc.setFontSize(8.5);
     doc.setTextColor(...INK);
-    doc.text("Factuur uitgereikt door afnemer", L, cursor);
-    cursor += 4.2;
+    doc.text(`${paymentSentence(iban)}${holder ? ` t.n.v. ${holder}` : ""}`, L, cursor);
+    cursor += 5;
+  }
+  // Self-billing-toelichting (Wet OB art. 35a) geldt alleen voor een btw-ondernemer-leverancier;
+  // de kop draagt al "FACTUUR UITGEREIKT DOOR AFNEMER". Een particulier/KOR reikt geen
+  // btw-factuur uit → betaalspecificatie zonder deze vermelding.
+  if (!isPrivate) {
     setFont("normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
@@ -401,7 +413,7 @@ export async function buildSelfBillingInvoicePdf(
       L, cursor,
     );
     cursor += 4;
-    doc.text("Geen bezwaar binnen 14 dagen geldt als aanvaarding.", L, cursor);
+    doc.text(ACCEPTANCE_SENTENCE, L, cursor);
     cursor += 9;
   } else {
     cursor += 4.5;
@@ -446,10 +458,16 @@ export async function buildSelfBillingInvoicePdf(
   doc.line(L, cursor, R, cursor);
   cursor += 7;
 
+  // Handboek-regel mét prijs per kWh: "<kWh> kWh × € <afnameprijs>" (blended = bedrag ÷ kWh;
+  // 2 decimalen als dat op de cent naar het bedrag terugrekent, anders 4). Het BEDRAG blijft
+  // leidend — de prijs is de weergave van de deling, centverschillen wijzigen het bedrag nooit.
+  const unitPrice = totalKwh > 0 ? subtotal / totalKwh : null;
+  const priceDec = unitPrice != null && Math.abs(Math.round(unitPrice * 100) / 100 * totalKwh - subtotal) < 0.005 ? 2 : 4;
+  const qtyPart = unitPrice != null ? ` — ${nlNum(totalKwh, 2)} kWh × € ${nlNum(unitPrice, priceDec)}` : "";
   setFont("normal");
   doc.setFontSize(10.5);
   doc.setTextColor(...INK);
-  doc.text(`${lineLabel} ${periodLabel}`, L, cursor);
+  doc.text(`${lineLabel} ${periodLabel}${qtyPart}`, L, cursor);
   setFont("bold");
   doc.text(euro(subtotal), R, cursor, { align: "right" });
   cursor += 4.5;
@@ -491,12 +509,12 @@ export async function buildSelfBillingInvoicePdf(
     setFont("normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
-    doc.text("Geen omzetbelasting in rekening gebracht.", R, cursor, { align: "right" });
+    doc.text(NO_VAT_SENTENCE, R, cursor, { align: "right" });
     cursor += 3.6;
     const reason = vatStatus === "kor"
-      ? "Kleineondernemersregeling van toepassing."
+      ? NO_VAT_REASON_KOR
       : vatStatus === "private"
-      ? "Leverancier is geen ondernemer voor de omzetbelasting."
+      ? NO_VAT_REASON_PRIVATE
       : "Geen BTW van toepassing.";
     doc.text(reason, R, cursor, { align: "right" });
   }

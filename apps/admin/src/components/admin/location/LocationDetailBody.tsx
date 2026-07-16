@@ -222,11 +222,11 @@ export function LocationDetailBody({
     if (!locationId) return;
     const raw = feeInput.trim().replace(",", ".");
     const fee = raw === "" ? null : Number(raw);
-    if (fee !== null && (!Number.isFinite(fee) || fee < 0)) { toast.error("Ongeldige service-fee"); return; }
+    if (fee !== null && (!Number.isFinite(fee) || fee < 0)) { toast.error("Ongeldige marge"); return; }
     setSavingFee(true);
     try {
       await setLocationServiceFee(locationId, fee);
-      toast.success("Service-fee opgeslagen");
+      toast.success("Marge opgeslagen");
       queryClient.invalidateQueries({ queryKey: ["admin-location-tariff", locationId] });
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
       queryClient.invalidateQueries({ queryKey: ["admin-financial-overview"] });
@@ -402,13 +402,13 @@ export function LocationDetailBody({
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Tarieven · per locatie</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Onze service-fee bepaalt de marge in de maandafrekening van déze locatie (leeg = klant-/standaardtarief).
+                Onze marge per kWh bepaalt de brutomarge in de maandafrekening van déze locatie (leeg = klant-/standaardtarief).
                 De laadtarieven voor bestuurders beheer je in e-Flux op de palen.
               </p>
             </div>
             <div className="flex items-end gap-2">
               <div className="w-48">
-                <label htmlFor="service-fee" className="text-xs text-muted-foreground">E-Charging service-fee (€/kWh)</label>
+                <label htmlFor="service-fee" className="text-xs text-muted-foreground">e-Charging-marge (€/kWh)</label>
                 <Input id="service-fee" inputMode="decimal" placeholder="leeg = standaard" value={feeInput}
                   onChange={(e) => setFeeInput(e.target.value)} />
               </div>

@@ -89,7 +89,7 @@ export function ClientSettlementCard({
                 variant="ghost"
                 onClick={() => unapproveSettlement(s.id)}
                 disabled={approvingId === s.id}
-                title="Terug naar 'berekend' — daarna kun je bv. de fee kwijtschelden"
+                title="Terug naar 'berekend' — daarna kun je bv. de marge kwijtschelden"
               >
                 <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
                 Terugdraaien
@@ -132,7 +132,7 @@ export function ClientSettlementCard({
             <summary className="flex justify-between cursor-pointer hover:text-foreground list-none">
               <span className="text-muted-foreground inline-flex items-center gap-1">
                 <span className="text-[10px] opacity-60 group-open:rotate-90 transition-transform inline-block">▶</span>
-                - E-Charging service-fee
+                - e-Charging-brutomarge
               </span>
               <span className="tabular-nums">-{formatEuro(echargingRevenue)}</span>
             </summary>
@@ -150,7 +150,7 @@ export function ClientSettlementCard({
                 </thead>
                 <tbody className="text-muted-foreground/85">
                   <tr>
-                    <td className="py-1.5 pr-2">Service-fee over geladen energie</td>
+                    <td className="py-1.5 pr-2">Brutomarge over geladen energie</td>
                     <td className="py-1.5 px-2 text-right tabular-nums">{formatNumber(totalKwh, 3)}</td>
                     <td className="py-1.5 px-2 text-right tabular-nums">{formatEuro(feePerKwh)}</td>
                     <td className="py-1.5 pl-2 text-right tabular-nums">{formatEuro(echargingRevenue)}</td>

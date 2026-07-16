@@ -49,8 +49,8 @@ export function FeeWaiverControl({ settlement }: FeeWaiverControlProps) {
     },
     onSuccess: (next) => {
       toast.success(next
-        ? `Service-fee voor ${periodLabel} kwijtgescholden`
-        : `Service-fee voor ${periodLabel} hersteld`);
+        ? `Marge voor ${periodLabel} kwijtgescholden`
+        : `Marge voor ${periodLabel} hersteld`);
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
       queryClient.invalidateQueries({ queryKey: ["admin-client-settlements"] });
     },
@@ -69,20 +69,20 @@ export function FeeWaiverControl({ settlement }: FeeWaiverControlProps) {
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" disabled={mutation.isPending}>
-              {waived ? "Kwijtschelding opheffen" : "Fee kwijtschelden"}
+              {waived ? "Kwijtschelding opheffen" : "Marge kwijtschelden"}
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                {waived ? `Kwijtschelding opheffen voor ${periodLabel}?` : `Service-fee kwijtschelden voor ${periodLabel}?`}
+                {waived ? `Kwijtschelding opheffen voor ${periodLabel}?` : `Marge kwijtschelden voor ${periodLabel}?`}
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {waived ? (
-                  <>Het tarief van de klant wordt hersteld en de fee en uitbetaling worden herrekend.</>
+                  <>Het tarief van de klant wordt hersteld en de marge en uitbetaling worden herrekend.</>
                 ) : (
                   <>
-                    De E-Charging service-fee ({euro(Number(settlement.echarging_revenue || 0))}) vervalt voor deze maand.
+                    De e-Charging-marge ({euro(Number(settlement.echarging_revenue || 0))}) vervalt voor deze maand.
                     De uitbetaling aan de klant wordt dan {euro(Number(settlement.gross_revenue || 0))} (het volledige brutobedrag).
                     Dit werkt door in de afrekening en de vergoedingsfactuur. Je kunt dit terugdraaien zolang de maand niet is goedgekeurd.
                   </>

@@ -699,9 +699,9 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
                             {s.fee_waived && (
                               <span
                                 className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium bg-primary/15 text-primary border border-primary/25"
-                                title="Service-fee voor deze maand kwijtgescholden"
+                                title="Marge voor deze maand kwijtgescholden"
                               >
-                                fee 0
+                                marge 0
                               </span>
                             )}
                           </span>
@@ -807,7 +807,7 @@ function SettlementsTab({ initialPeriod = "all" }: { initialPeriod?: string }) {
                 {unapproveTarget ? periodLabel(unapproveTarget.year, unapproveTarget.month) : ""}
                 {unapproveTarget?.clients?.company_name ? ` van ${unapproveTarget.clients.company_name}` : ""}
               </strong>{" "}
-              gaat terug naar status <strong>berekend</strong>. Daarna kun je bijvoorbeeld de service-fee
+              gaat terug naar status <strong>berekend</strong>. Daarna kun je bijvoorbeeld de marge
               kwijtschelden of de cijfers laten herberekenen, en opnieuw goedkeuren. De afrekening is in de
               tussentijd niet zichtbaar voor de klant.
             </AlertDialogDescription>

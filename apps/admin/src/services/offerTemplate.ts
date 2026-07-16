@@ -145,6 +145,7 @@ const aanhefLine = (raw: string | null | undefined): string => {
 export interface TariffLine { label: string; amount: number | null; unit: string; text?: string }
 
 interface ResolvedModel {
+  textVersion: number;
   company: string; hasCompany: boolean; isPrivate: boolean; contactName: string; addr1: string; addr2: string;
   dateLong: string; dateShort: string; reference: string;
   onzeReferentie: string; object: string; betreft: string; aanhef: string;
@@ -174,6 +175,9 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   const od: OfferDetails = data.offerDetails ?? {};
   const tpl: OfferTemplateValues = data.offerTemplate ?? FALLBACK_TEMPLATE;
   const n = firstNum(data.numChargePoints) ?? 0;
+  // Tekstversie: afwezig => nieuwste (handboek-conform). Verstuurde offertes dragen 1 (backfill)
+  // en her-renderen met de oorspronkelijke teksten — een getekend document mag nooit verschuiven.
+  const textVersion = firstNum(od.text_version) ?? 2;
 
   // Adres: offerte-velden (override) winnen; leeg → live uit het gekoppelde object.
   let addr1 = firstStr(od.addressStreet, data.objectStreet);
@@ -212,6 +216,7 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   const tariffLines: TariffLine[] = order.map((k) => tariffDefs[k]).filter((l): l is TariffLine => !!l);
 
   return {
+    textVersion,
     // Particulier (geen bedrijf): val terug op de contactnaam zodat cover/briefkop een naam tonen.
     company: firstStr(data.company, od.tav, data.contactName),
     hasCompany: !!firstStr(data.company),
@@ -239,7 +244,8 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     eindgroepAmperage: firstNum(od.eindgroepAmperage, tpl.defaultEindgroepAmperage) ?? tpl.defaultEindgroepAmperage,
     leveringText: firstStr(od.leveringText, DEFAULT_LEVERING_TEXT),
     // Beheer-toelichting: volledig adres (straat + huisnummer via addr1), maar zonder postcode (alleen plaats).
-    beheerIntroText: firstStr(od.beheerIntroText, defaultBeheerIntro({ poles: n, addr1, addr2: firstStr(od.addressCity, data.objectCity) })),
+    // De default volgt de tekstversie: verstuurde (v1-)offertes met een lege override her-renderen de oude tekst.
+    beheerIntroText: firstStr(od.beheerIntroText, defaultBeheerIntro({ poles: n, addr1, addr2: firstStr(od.addressCity, data.objectCity) }, textVersion)),
     totalInvestment: firstNum(data.totalInvestment),
     stelpost: firstNum(od.stelpostGraafwerk, tpl.defaultStelpostGraafwerk),
     serviceFeePerKwh: firstNum(od.serviceFeePerKwh, tpl.serviceFeePerKwh) ?? tpl.serviceFeePerKwh,
@@ -261,14 +267,23 @@ function resolve(data: OfferTemplateData): ResolvedModel {
 // ===========================================================================
 // VASTE COPY — verbatim uit "OFF laadpaal - Systeem.pdf".
 // ===========================================================================
-const BEHEER_POINTS: Array<[string, string]> = [
-  ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u realtime wat uw palen doen: opbrengsten, verbruik en gebruik per paal. Eén plek voor inzicht, controle en rapportage. 24/7 inzichtelijk."],
-  ["Uw palen blijven up en running", "Wij krijgen direct een melding bij een storing en lossen het meestal op voordat u het in de gaten heeft. Eerst op afstand; lukt dat niet, dan komen wij ter plaatse voor een diagnose. U en uw laadgebruikers kunnen de helpdesk 24/7 bereiken."],
-  ["Doorlopende optimalisatie van rendement", "Wij analyseren continu het werkelijke gebruik van uw palen en stellen tarieven, blokkeerregels en tijdsvensters daarop af, met behulp van AI. Zo brengen uw palen het maximale op, ook als de markt of het gebruik verandert."],
-  ["Hulp met ERE-onboarding", "Wij koppelen u aan onze partner die u begeleidt bij de ERE-aanvraag. De gegevens van uw laadpalen worden door ons rechtstreeks aan de ERE-inboeker verstrekt, zodat u hier geen omkijken naar heeft."],
-  ["Elke maand geld op uw rekening", "Wij verzorgen transactieverwerking, facturatie en uitbetaling. Elke maand ontvangt u uw self-billing factuur en wij betalen uw opbrengst uit."],
-  ["Prioriteit op reparaties", "Gaat er echter iets mis en is een bezoek op locatie nodig, dan komen wij met voorrang langs om uw paal weer aan de praat te krijgen. Hiervoor gelden vaste, vooraf bekende tarieven (zie de prijsstelling), zodat u nooit voor verrassingen komt te staan."],
-];
+// Punt 5 kent twee tekstversies: v1 (oorspronkelijk, met "uitbetaling"/"opbrengst uitbetalen") voor
+// verstuurde offertes, v2 (handboek-taalregels: "wij betalen u voor de geleverde stroom") voor alles nieuw.
+const BEHEER_POINT_5_V1: [string, string] =
+  ["Elke maand geld op uw rekening", "Wij verzorgen transactieverwerking, facturatie en uitbetaling. Elke maand ontvangt u uw self-billing factuur en wij betalen uw opbrengst uit."];
+const BEHEER_POINT_5_V2: [string, string] =
+  ["Elke maand geld op uw rekening", "Wij verzorgen de transactieverwerking en de maandelijkse afrekening. Elke maand betalen wij u voor de door uw palen geleverde stroom en ontvangt u het bijbehorende afrekendocument — u hoeft zelf niets op te maken en ons nooit iets te betalen."];
+
+function beheerPoints(textVersion: number): Array<[string, string]> {
+  return [
+    ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u realtime wat uw palen doen: opbrengsten, verbruik en gebruik per paal. Eén plek voor inzicht, controle en rapportage. 24/7 inzichtelijk."],
+    ["Uw palen blijven up en running", "Wij krijgen direct een melding bij een storing en lossen het meestal op voordat u het in de gaten heeft. Eerst op afstand; lukt dat niet, dan komen wij ter plaatse voor een diagnose. U en uw laadgebruikers kunnen de helpdesk 24/7 bereiken."],
+    ["Doorlopende optimalisatie van rendement", "Wij analyseren continu het werkelijke gebruik van uw palen en stellen tarieven, blokkeerregels en tijdsvensters daarop af, met behulp van AI. Zo brengen uw palen het maximale op, ook als de markt of het gebruik verandert."],
+    ["Hulp met ERE-onboarding", "Wij koppelen u aan onze partner die u begeleidt bij de ERE-aanvraag. De gegevens van uw laadpalen worden door ons rechtstreeks aan de ERE-inboeker verstrekt, zodat u hier geen omkijken naar heeft."],
+    textVersion <= 1 ? BEHEER_POINT_5_V1 : BEHEER_POINT_5_V2,
+    ["Prioriteit op reparaties", "Gaat er echter iets mis en is een bezoek op locatie nodig, dan komen wij met voorrang langs om uw paal weer aan de praat te krijgen. Hiervoor gelden vaste, vooraf bekende tarieven (zie de prijsstelling), zodat u nooit voor verrassingen komt te staan."],
+  ];
+}
 
 // Standaard "Levering en installatie"-tekst (verbatim uit het sjabloon). Dit is de
 // DEFAULT; per offerte te overschrijven via offer_details.leveringText (vrije tekst,
@@ -283,14 +298,18 @@ export const DEFAULT_LEVERING_TEXT = LEVERING_INSTALLATIE.join("\n\n");
 // Standaard begeleidende tekst op pagina 1 bij "alleen beheer" (scope zonder installatie): een korte samenvatting
 // die de kernafspraak benadrukt (hoeveel laadpalen we beheren en op welk adres). Vult automatisch aantal + adres in;
 // per offerte te overschrijven via offer_details.beheerIntroText (alinea's gescheiden door een lege regel).
-export function defaultBeheerIntro(o?: { poles?: number | null; addr1?: string | null; addr2?: string | null }): string {
+export function defaultBeheerIntro(o?: { poles?: number | null; addr1?: string | null; addr2?: string | null }, textVersion = 2): string {
   const p = o?.poles ?? 0;
   const palen = p > 1 ? `uw ${p} laadpalen` : (p === 1 ? "uw laadpaal" : "uw laadpalen");
   const adres = [o?.addr1, o?.addr2].map((s) => (s ?? "").trim()).filter(Boolean).join(", ");
   const opAdres = adres ? ` op ${adres}` : "";
+  // Slotzin volgt de tekstversie: v1 = oorspronkelijk ("facturatie en uitbetaling"), v2 = handboek-taal.
+  const slot = textVersion <= 1
+    ? "Vanaf dat moment bewaken wij uw palen dag en nacht en verzorgen we de facturatie en uitbetaling."
+    : "Vanaf dat moment bewaken wij uw palen dag en nacht en verzorgen wij de maandelijkse afrekening: wij betalen u elke maand voor de door uw palen geleverde stroom.";
   return `Wij nemen ${palen}${opAdres} volledig in beheer, zodat u volledig ontzorgd wordt volgens het E-Charging concept.\n\n`
     + "We koppelen uw laadpalen aan ons platform en uw eigen online dashboard. Hiervoor ontvangt u nadat wij deze palen hebben gekoppeld een uitnodiging per e-mail om een eigen account aan te maken.\n\n"
-    + "Op iedere paal plaatsen we een QR-code waarmee u en uw gebruikers een storing met één scan direct kunnen melden. Vanaf dat moment bewaken wij uw palen dag en nacht en verzorgen we de facturatie en uitbetaling.";
+    + `Op iedere paal plaatsen we een QR-code waarmee u en uw gebruikers een storing met één scan direct kunnen melden. ${slot}`;
 }
 export const DEFAULT_BEHEER_INTRO = defaultBeheerIntro();
 
@@ -517,10 +536,25 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(bP(m.withInstallation
       ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
       : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:", 10));
-    BEHEER_POINTS.forEach(([t, b], i) => blocks.push(bRaw(
+    beheerPoints(m.textVersion).forEach(([t, b], i) => blocks.push(bRaw(
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
       i === 0 ? 14 : 22)));
-    blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
+    if (m.textVersion <= 1) {
+      // v1 — oorspronkelijke tekst van verstuurde offertes (fee-frasering; NIET wijzigen).
+      blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
+    } else {
+      // v2 — afname-model (commissionairs-handboek §8): wij kopen de stroom tegen een afnameprijs;
+      // geen fee/dienstverlening/inhouding. Bij een vast laadtarief noemen we de concrete afnameprijs.
+      const afname = (!m.laadkosten || m.laadkosten <= 0) ? null : Math.max(0, m.laadkosten - m.serviceFeePerKwh);
+      const concrete = afname != null
+        ? ` Bij het afgesproken laadtarief van ${money2(m.laadkosten as number)} per kWh komt dat neer op een afnameprijs van ${money2(afname)} per kWh.`
+        : "";
+      blocks.push(bP(
+        `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +
+        `De stroom die uw laadpalen leveren nemen wij van u af en verkopen wij op eigen naam door. ` +
+        `De afnameprijs is het laadtarief verminderd met ${money2(m.serviceFeePerKwh)} per geladen kWh.${concrete} ` +
+        `Wij betalen u elke maand voor de geleverde stroom — u hoeft ons nooit iets te betalen.`, 24));
+    }
     // De eenmalige activatie-/onboardingkosten tonen we alleen onder de voorwaarden (zie hieronder), niet hier.
     // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij installatie+beheer; bij alleen-beheer
     // staat dit blok (gestapeld) al op pagina 1.
@@ -593,7 +627,11 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", 0, HEAD), brk: true });
   blocks.push(bFb(esc(AANSPRAKELIJKHEID), 9));
   if (m.withInstallation) blocks.push(bFb(`Betalingen levering en installatie: ${esc(m.betaalBijOpdracht)}% bij opdracht, ${esc(m.betaalBijStart)}% bij start werkzaamheden en ${esc(m.betaalNaWerk)}% na werkzaamheden.`));
-  if (m.withManagement) blocks.push(bFb("Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte self-billing factuur."));
+  if (m.withManagement) blocks.push(bFb(m.textVersion <= 1
+    ? "Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte self-billing factuur."
+    // v2: het documenttype volgt de btw-situatie (self-billing factuur / betaalspecificatie) en de
+    // richting is expliciet: wij betalen de klant, de klant hoeft niets op te maken of te betalen.
+    : `Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte ${m.isPrivate ? "betaalspecificatie" : "self-billing factuur"}; wij betalen u voor de geleverde stroom.`));
   blocks.push(bFb("Betalingen binnen 14 dagen na factuurdatum."));
   blocks.push(bSec("Onze aanpak", 24, HEAD));
   blocks.push(bP(esc(AANPAK), 9));

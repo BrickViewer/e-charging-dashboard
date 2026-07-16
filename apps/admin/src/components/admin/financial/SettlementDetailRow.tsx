@@ -33,7 +33,7 @@ export function SettlementDetailRow({ settlement }: { settlement: AdminSettlemen
               <p className="font-medium">{fmt(Number(settlement.gross_revenue || 0))}</p>
             </div>
             <div>
-              <p className="text-muted-foreground mb-1">E-Charging service-fee</p>
+              <p className="text-muted-foreground mb-1">e-Charging-brutomarge</p>
               <p className="font-medium flex items-center gap-2 flex-wrap">
                 {fmt(Number(settlement.echarging_revenue || 0))}
                 <FeeWaiverControl settlement={settlement} />
