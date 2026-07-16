@@ -12,7 +12,7 @@ import {
   type UploadRef,
   type ZakelijkPayload,
 } from "@/hooks/useQuoteRequest";
-import { MAPS, TRIAGE_KLEUR, TRIAGE_LABEL, bytes, label, maandLabel } from "@/lib/quoteRequest";
+import { MAPS, TRIAGE_KLEUR, TRIAGE_LABEL, bytes, label, maandLabel, zakelijkAdres } from "@/lib/quoteRequest";
 
 // Toont de offerteaanvraag zoals de klant hem op de website invulde: alle antwoorden
 // per stap, plus de foto's en video's uit de privé-bucket (signed URL op aanvraag).
@@ -131,7 +131,7 @@ function ZakelijkBlokken({ req, data }: { req: QuoteRequest; data: ZakelijkPaylo
       </Card>
 
       <Card title="Locatie" icon={Info}>
-        <Row label="Adres" value={data.locatie.adres} />
+        <Row label="Adres" value={zakelijkAdres(data.locatie)} />
         <Row
           label="Type locatie"
           value={data.locatie.type_locatie === "anders" ? `Anders: ${data.locatie.type_locatie_anders}` : label(MAPS.typeLocatie, data.locatie.type_locatie)}
@@ -151,6 +151,7 @@ function ZakelijkBlokken({ req, data }: { req: QuoteRequest; data: ZakelijkPaylo
               : label(MAPS.jaNee, data.schaal.uitbreiding)
           }
         />
+        {/* Legacy: alleen oude aanvragen hebben nog een laadtype; zonder waarde rendert Row niets. */}
         <Row label="Gewenst laadtype" value={label(MAPS.laadtype, data.schaal.laadtype)} />
       </Card>
 

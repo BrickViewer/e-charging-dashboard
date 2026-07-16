@@ -11,7 +11,6 @@ import {
   KABEL_LENGTE,
   KLEUR_FRONT,
   LAADTARIEF,
-  LAADTYPE,
   PLAATSING,
   TRIAGE_LABEL,
   TYPE_LOCATIE,
@@ -181,6 +180,26 @@ export function parseZakelijk(raw: unknown) {
   const typeOrganisatie = enumOf(o.type_organisatie, TYPE_ORGANISATIE, "Type organisatie", true);
   const typeLocatie = enumOf(l.type_locatie, TYPE_LOCATIE, "Type locatie", true);
 
+  // ── Adres van de locatie: nieuwe vorm (losse velden) of oude vorm (één regel).
+  // De website stuurt sinds juli 2026 straat/huisnummer/postcode/plaats; gecachte
+  // oudere bundles sturen nog één adres-string. Zodra er één nieuw veld gevuld is
+  // geldt de nieuwe vorm (alle vier verplicht, postcode gevalideerd); anders is
+  // de oude adres-regel verplicht.
+  const straat = str(l.straat, "Straat van de locatie", { max: 200 });
+  const huisnummer = str(l.huisnummer, "Huisnummer van de locatie", { max: 20 });
+  const postcodeLocatie = str(l.postcode, "Postcode van de locatie", { max: 20 });
+  const plaats = str(l.plaats, "Plaats van de locatie", { max: 120 });
+  const adresOud = str(l.adres, "Adres van de locatie", { max: 300 });
+  const nieuweAdresVorm = Boolean(straat || huisnummer || postcodeLocatie || plaats);
+  if (nieuweAdresVorm) {
+    if (!straat) throw new BadRequest("Straat van de locatie is verplicht");
+    if (!huisnummer) throw new BadRequest("Huisnummer van de locatie is verplicht");
+    if (!POSTCODE_RE.test(postcodeLocatie)) throw new BadRequest("Ongeldige postcode");
+    if (!plaats) throw new BadRequest("Plaats van de locatie is verplicht");
+  } else if (!adresOud) {
+    throw new BadRequest("Straat van de locatie is verplicht");
+  }
+
   const aantalRaw = str(s.aantal_laadpunten, "Aantal laadpunten", { verplicht: true, max: 6 });
   if (!/^\d+$/.test(aantalRaw)) throw new BadRequest("Ongeldig aantal laadpunten");
   const aantal = parseInt(aantalRaw, 10);
@@ -209,7 +228,12 @@ export function parseZakelijk(raw: unknown) {
       kvk: str(o.kvk, "KvK-nummer", { max: 20 }),
     },
     locatie: {
-      adres: str(l.adres, "Adres van de locatie", { verplicht: true, max: 300 }),
+      straat,
+      huisnummer,
+      postcode: postcodeLocatie,
+      plaats,
+      // Alleen gevuld bij een inzending van een oude (gecachte) website-bundle.
+      adres: nieuweAdresVorm ? "" : adresOud,
       type_locatie: typeLocatie,
       type_locatie_anders:
         typeLocatie === "anders" ? str(l.type_locatie_anders, "Type locatie (anders)", { verplicht: true, max: 200 }) : "",
@@ -221,7 +245,8 @@ export function parseZakelijk(raw: unknown) {
       aantal_laadpunten: String(aantal),
       uitbreiding,
       uitbreiding_aantal: uitbreiding === "ja" ? str(s.uitbreiding_aantal, "Uitbreiding aantal", { max: 10 }) : "",
-      laadtype: enumOf(s.laadtype, LAADTYPE, "Laadtype", false),
+      // laadtype is juli 2026 van de website verwijderd (alleen AC-aanbod);
+      // een oude payload mag het veld nog sturen, het wordt genegeerd.
     },
     techniek: {
       foto_meterkast: files(t.foto_meterkast, "Foto meterkast"),
@@ -235,6 +260,11 @@ export function parseZakelijk(raw: unknown) {
       updates_opt_in: bool(a.updates_opt_in),
     },
   };
+}
+
+/** Eén leesbare adresregel, ongeacht of de aanvraag de oude of nieuwe vorm had. */
+export function locatieAdresRegel(l: ZakelijkData["locatie"]): string {
+  return l.straat ? `${l.straat} ${l.huisnummer}, ${l.postcode} ${l.plaats}` : l.adres;
 }
 
 /* ──────────────────────────────── triage ──────────────────────────────── */
@@ -373,7 +403,7 @@ export function buildSummary(flow: Flow, data: ParticulierData | ZakelijkData, t
   s += regel("KvK-nummer", o.kvk);
 
   s += `\nLOCATIE\n`;
-  s += regel("Adres", d.locatie.adres);
+  s += regel("Adres", locatieAdresRegel(d.locatie));
   s += regel(
     "Type locatie",
     d.locatie.type_locatie === "anders" ? `Anders: ${d.locatie.type_locatie_anders}` : label(TYPE_LOCATIE, d.locatie.type_locatie),
@@ -390,7 +420,6 @@ export function buildSummary(flow: Flow, data: ParticulierData | ZakelijkData, t
       ? `Ja${d.schaal.uitbreiding_aantal ? `, ongeveer ${d.schaal.uitbreiding_aantal} extra` : ""}`
       : label(JA_NEE, d.schaal.uitbreiding),
   );
-  s += regel("Gewenst laadtype", label(LAADTYPE, d.schaal.laadtype));
 
   s += `\nTECHNIEK\n`;
   s += regel("Foto meterkast", d.techniek.foto_meterkast.length ? `${d.techniek.foto_meterkast.length} toegevoegd` : "niet toegevoegd");

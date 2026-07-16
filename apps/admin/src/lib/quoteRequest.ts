@@ -66,6 +66,8 @@ const WIE_GAAT_LADEN: Record<string, string> = {
   bezoekers: "Bezoekers",
   publiek: "Publiek",
 };
+// Legacy: de laadtype-vraag is juli 2026 van de website verwijderd (alleen
+// AC-aanbod); oude aanvragen hebben het veld nog en blijven zo leesbaar.
 const LAADTYPE: Record<string, string> = { ac: "AC-laden", dc_snelladen: "DC-snelladen", adviseer_mij: "Adviseer mij" };
 
 export const MAPS = {
@@ -83,6 +85,17 @@ export const MAPS = {
   wieGaatLaden: WIE_GAAT_LADEN,
   laadtype: LAADTYPE,
 };
+
+/** Adresregel van een zakelijke aanvraag; oude aanvragen hebben één adres-string. */
+export function zakelijkAdres(l: {
+  adres?: string;
+  straat?: string;
+  huisnummer?: string;
+  postcode?: string;
+  plaats?: string;
+}): string {
+  return l.straat ? `${l.straat} ${l.huisnummer}, ${l.postcode} ${l.plaats}` : (l.adres ?? "");
+}
 
 /** Label opzoeken; valt terug op de ruwe waarde zodat er nooit een lege regel staat. */
 export function label(map: Record<string, string>, waarde: string | null | undefined): string {

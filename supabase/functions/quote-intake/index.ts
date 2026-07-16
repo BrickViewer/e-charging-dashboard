@@ -8,7 +8,6 @@ import { renderIntakeConfirmation, renderInternalIntakeNotice } from "./email.ts
 import {
   BESTAAND_NIEUWBOUW,
   EIGENDOM,
-  LAADTYPE,
   TRIAGE_LABEL,
   TRIAGE_TAAK,
   TYPE_LOCATIE,
@@ -21,6 +20,7 @@ import {
   buildSummary,
   collectFiles,
   computeTriage,
+  locatieAdresRegel,
   parseParticulier,
   parseZakelijk,
   type ParticulierData,
@@ -395,10 +395,14 @@ function zakelijkLead(d: ZakelijkData) {
       contact_role: o.functie || null,
       contact_email: o.email,
       contact_phone: o.telefoon,
-      address_street: d.locatie.adres,
+      // Nieuwe vorm: losse adreskolommen (activeert de object-matching op
+      // postcode + huisnummer). Oude vorm: hele adresregel in address_street.
+      address_street: d.locatie.straat || d.locatie.adres,
+      house_number: d.locatie.huisnummer || null,
+      postal_code: d.locatie.postcode || null,
+      city: d.locatie.plaats || null,
       estimated_charge_points: aantal,
       location_type: typeLocatie,
-      charger_type: d.schaal.laadtype ? label(LAADTYPE, d.schaal.laadtype) : null,
       owns_property: d.locatie.eigendom ? d.locatie.eigendom === "eigenaar" : null,
       grid_notes: [capaciteit, situatie, d.locatie.eigendom ? label(EIGENDOM, d.locatie.eigendom) : ""]
         .filter(Boolean)
@@ -452,7 +456,7 @@ function bevestigingsRegels(flow: Flow, data: ParticulierData | ZakelijkData): A
   const d = data as ZakelijkData;
   return [
     ["Organisatie", d.organisatie.bedrijfsnaam],
-    ["Locatie", d.locatie.adres],
+    ["Locatie", locatieAdresRegel(d.locatie)],
     ["Aantal laadpunten", d.schaal.aantal_laadpunten],
   ];
 }

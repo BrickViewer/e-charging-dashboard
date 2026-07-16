@@ -51,10 +51,14 @@ export type ZakelijkPayload = {
     type_organisatie: string; type_organisatie_anders: string; kvk: string;
   };
   locatie: {
-    adres: string; type_locatie: string; type_locatie_anders: string;
+    // Nieuwe aanvragen (vanaf juli 2026): losse adresvelden. Oude aanvragen:
+    // één adres-string. Beide vormen blijven permanent voorkomen in de payload.
+    adres?: string; straat?: string; huisnummer?: string; postcode?: string; plaats?: string;
+    type_locatie: string; type_locatie_anders: string;
     eigendom: string; bestaand_of_nieuwbouw: string; wie_gaat_laden: string[];
   };
-  schaal: { aantal_laadpunten: string; uitbreiding: string; uitbreiding_aantal: string; laadtype: string };
+  // laadtype bestaat alleen nog op oude aanvragen (vraag is van de website verwijderd).
+  schaal: { aantal_laadpunten: string; uitbreiding: string; uitbreiding_aantal: string; laadtype?: string };
   techniek: { foto_meterkast: UploadRef[]; situatie_media: UploadRef[]; aansluitwaarde: string; aansluitwaarde_onbekend: boolean };
   afronden: { opmerkingen: string; updates_opt_in: boolean };
 };

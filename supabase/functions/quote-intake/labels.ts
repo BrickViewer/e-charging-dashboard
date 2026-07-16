@@ -86,12 +86,6 @@ export const WIE_GAAT_LADEN: Record<string, string> = {
   publiek: "Publiek",
 };
 
-export const LAADTYPE: Record<string, string> = {
-  ac: "AC-laden",
-  dc_snelladen: "DC-snelladen",
-  adviseer_mij: "Adviseer mij",
-};
-
 export const UPLOAD_KIND: Record<string, string> = {
   meterkast: "Meterkast",
   plek: "Plek van de laadpaal",

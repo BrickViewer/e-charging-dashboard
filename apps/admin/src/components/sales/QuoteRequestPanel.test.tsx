@@ -71,7 +71,8 @@ const particulier = {
   },
 } as unknown as QuoteRequest;
 
-const zakelijk = {
+// Oude vorm (t/m juli 2026): één adres-string en een laadtype; moet leesbaar blijven.
+const zakelijkOud = {
   id: "2",
   created_at: "2026-07-09T12:00:00Z",
   privacy_accepted_at: "2026-07-09T12:00:00Z",
@@ -142,7 +143,7 @@ describe("QuoteRequestPanel", () => {
   });
 
   it("toont de zakelijke aanvraag, inclusief anders-invulvelden en onbekende capaciteit", () => {
-    mockQuery.mockReturnValue({ isLoading: false, data: zakelijk });
+    mockQuery.mockReturnValue({ isLoading: false, data: zakelijkOud });
     render(<QuoteRequestPanel leadId="lead-2" />);
 
     expect(screen.getByText("Zakelijk")).toBeInTheDocument();
@@ -158,5 +159,34 @@ describe("QuoteRequestPanel", () => {
     expect(screen.getByText("AC-laden")).toBeInTheDocument();
     expect(screen.getByText("Onbekend")).toBeInTheDocument();
     expect(screen.queryByText("Nieuwsbrief-opt-in")).not.toBeInTheDocument();
+  });
+
+  it("toont een nieuwe zakelijke aanvraag met losse adresvelden en zonder laadtype-rij", () => {
+    // Nieuwe vorm (vanaf juli 2026): straat/huisnummer/postcode/plaats, geen laadtype.
+    const zakelijkNieuw = {
+      ...zakelijkOud,
+      id: "3",
+      payload: {
+        ...(zakelijkOud as unknown as { payload: Record<string, unknown> }).payload,
+        locatie: {
+          straat: "Dwarsweg",
+          huisnummer: "8",
+          postcode: "5301 KT",
+          plaats: "Zaltbommel",
+          type_locatie: "parkeergarage",
+          type_locatie_anders: "",
+          eigendom: "huurder",
+          bestaand_of_nieuwbouw: "nieuwbouw_renovatie",
+          wie_gaat_laden: ["bewoners"],
+        },
+        schaal: { aantal_laadpunten: "12", uitbreiding: "nee", uitbreiding_aantal: "" },
+      },
+    } as unknown as QuoteRequest;
+
+    mockQuery.mockReturnValue({ isLoading: false, data: zakelijkNieuw });
+    render(<QuoteRequestPanel leadId="lead-3" />);
+
+    expect(screen.getByText("Dwarsweg 8, 5301 KT Zaltbommel")).toBeInTheDocument();
+    expect(screen.queryByText("Gewenst laadtype")).not.toBeInTheDocument();
   });
 });
