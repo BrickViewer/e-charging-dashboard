@@ -837,7 +837,10 @@ export function buildOfferPages(
       for (let i = centerIdx + 1; i < blocks.length && !blocks[i].brk; i++) groupH += blocks[i].mt + heights[i];
       const rest = HAIRLINE_Y - used - groupH;
       // Fractionele px toegestaan (CSS) → exacte centrering zonder afrondingsdrift.
-      blocks[centerIdx].mt = Math.max(16, rest / 2);
+      // −12px OPTISCHE correctie: de 26px-kop draagt ~8px leading boven de kapitaalhoogte
+      // (waardoor box-gecentreerd visueel te laag oogt) + koppen horen optisch iets bóven
+      // het meetkundige midden. Beoordeeld op de echte render (gebruikersfeedback).
+      blocks[centerIdx].mt = Math.max(16, rest / 2 - 12);
     }
   }
 
