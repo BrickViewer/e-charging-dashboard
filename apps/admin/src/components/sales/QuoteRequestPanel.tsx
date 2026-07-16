@@ -12,7 +12,7 @@ import {
   type UploadRef,
   type ZakelijkPayload,
 } from "@/hooks/useQuoteRequest";
-import { MAPS, TRIAGE_KLEUR, TRIAGE_LABEL, bytes, label, maandLabel, zakelijkAdres } from "@/lib/quoteRequest";
+import { MAPS, TRIAGE_KLEUR, TRIAGE_LABEL, bytes, centPerKwh, label, maandLabel, zakelijkAdres } from "@/lib/quoteRequest";
 
 // Toont de offerteaanvraag zoals de klant hem op de website invulde: alle antwoorden
 // per stap, plus de foto's en video's uit de privé-bucket (signed URL op aanvraag).
@@ -60,7 +60,7 @@ function ParticulierBlokken({ req, data }: { req: QuoteRequest; data: Particulie
     <>
       <Card title="Gegevens" icon={Info}>
         <Row label="Naam" value={g.naam} />
-        <Row label="Adres" value={`${g.straat} ${g.huisnummer}, ${g.postcode} ${g.plaats}`} />
+        <Row label="Adres" value={`${g.straat} ${[g.huisnummer, g.toevoeging].filter(Boolean).join(" ")}, ${g.postcode} ${g.plaats}`} />
         <Row label="E-mail" value={g.email} />
         <Row label="Telefoon" value={g.telefoon} />
       </Card>
@@ -68,6 +68,8 @@ function ParticulierBlokken({ req, data }: { req: QuoteRequest; data: Particulie
       <Card title="Meterkast" icon={Camera}>
         <Row label="Kruipruimte" value={label(MAPS.jaNeeWeetNiet, data.meterkast.kruipruimte)} />
         <Row label="Huidige aansluiting" value={label(MAPS.aansluiting, data.meterkast.aansluiting)} />
+        <Row label="Wordt verzwaard naar 3-fase" value={label(MAPS.jaNeeWeetNiet, data.meterkast.verzwaring_3fase)} />
+        <Row label="Verwachte verzwaring" value={maandLabel(data.meterkast.verzwaring_maand)} />
         <Bestanden
           files={bestandenVan(data.meterkast.fotos)}
           overgeslagen={data.meterkast.fotos_overgeslagen}
@@ -93,6 +95,8 @@ function ParticulierBlokken({ req, data }: { req: QuoteRequest; data: Particulie
         <Row label="Laadpas werkgever of zakelijk verrekenen" value={label(MAPS.jaNee, data.verrekenen.zakelijk_verrekenen)} />
         <Row label="Dynamisch energiecontract" value={label(MAPS.jaNeeWeetNiet, data.verrekenen.dynamisch_contract)} />
         <Row label="Gewenst laadtarief" value={label(MAPS.laadtarief, data.verrekenen.laadtarief)} />
+        <Row label="Gemiddelde stroomkosten" value={centPerKwh(data.verrekenen.stroomkosten_cent)} />
+        <Row label="Gewenste marge" value={centPerKwh(data.verrekenen.marge_cent)} />
       </Card>
 
       <Card title="Afronden" icon={Info}>

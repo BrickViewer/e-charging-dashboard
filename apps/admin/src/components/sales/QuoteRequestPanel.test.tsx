@@ -171,6 +171,7 @@ describe("QuoteRequestPanel", () => {
         locatie: {
           straat: "Dwarsweg",
           huisnummer: "8",
+          toevoeging: "A",
           postcode: "5301 KT",
           plaats: "Zaltbommel",
           type_locatie: "parkeergarage",
@@ -186,7 +187,7 @@ describe("QuoteRequestPanel", () => {
     mockQuery.mockReturnValue({ isLoading: false, data: zakelijkNieuw });
     render(<QuoteRequestPanel leadId="lead-3" />);
 
-    expect(screen.getByText("Dwarsweg 8, 5301 KT Zaltbommel")).toBeInTheDocument();
+    expect(screen.getByText("Dwarsweg 8 A, 5301 KT Zaltbommel")).toBeInTheDocument();
     expect(screen.queryByText("Gewenst laadtype")).not.toBeInTheDocument();
   });
 });

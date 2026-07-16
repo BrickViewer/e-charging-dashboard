@@ -35,6 +35,24 @@ export const MAX_LAADPALEN = 10;
 export const MAX_BESTANDEN_PER_VELD = 5;
 export const OPMERKINGEN_MAX = 5000;
 
+const MAAND_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Huisnummer + toevoeging tot één house_number, conform de dashboard-conventie
+ *  (combineHouse in apps/admin/src/lib/houseNumber.ts): "8" + "A" → "8 A". */
+export function combineHuisnummer(huisnummer: string, toevoeging: string): string {
+  return [huisnummer, toevoeging].filter(Boolean).join(" ");
+}
+
+/** Optionele slider-waarde in centen: afwezig → null; aanwezig maar geen
+ *  integer binnen het bereik → BadRequest (oude payloads sturen het veld niet). */
+function centOptioneel(v: unknown, veld: string, min: number, max: number): number | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < min || v > max) {
+    throw new BadRequest(`Ongeldige waarde voor ${veld}`);
+  }
+  return v;
+}
+
 const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 
@@ -124,7 +142,12 @@ export function parseParticulier(raw: unknown) {
   const verrekenen = enumOf(v.zakelijk_verrekenen, JA_NEE, "Zakelijk verrekenen", true);
   const plaatsing = enumOf(a.plaatsing, PLAATSING, "Gewenste plaatsing", true);
   const maand = plaatsing === "specifieke_maand" ? str(a.plaatsing_maand, "Maand", { verplicht: true, max: 7 }) : "";
-  if (maand && !/^\d{4}-(0[1-9]|1[0-2])$/.test(maand)) throw new BadRequest("Ongeldige maand");
+  if (maand && !MAAND_RE.test(maand)) throw new BadRequest("Ongeldige maand");
+
+  // Verzwaring naar 3-fase: optionele vervolgvraag (site stelt hem bij 1-fase).
+  const verzwaring = enumOf(m.verzwaring_3fase, JA_NEE_WEET_NIET, "Verzwaring naar 3-fase", false);
+  const verzwaringMaand = verzwaring === "ja" ? str(m.verzwaring_maand, "Verzwaring maand", { max: 7 }) : "";
+  if (verzwaringMaand && !MAAND_RE.test(verzwaringMaand)) throw new BadRequest("Ongeldige maand");
 
   if (!bool(a.privacy_akkoord)) throw new BadRequest("Akkoord met de privacyverklaring is verplicht");
 
@@ -133,6 +156,7 @@ export function parseParticulier(raw: unknown) {
       naam: str(g.naam, "Naam", { verplicht: true, max: 200 }),
       straat: str(g.straat, "Straat", { verplicht: true, max: 200 }),
       huisnummer: str(g.huisnummer, "Huisnummer", { verplicht: true, max: 20 }),
+      toevoeging: str(g.toevoeging, "Toevoeging", { max: 20 }),
       postcode,
       plaats: str(g.plaats, "Plaats", { verplicht: true, max: 120 }),
       email,
@@ -143,6 +167,8 @@ export function parseParticulier(raw: unknown) {
       fotos_overgeslagen: bool(m.fotos_overgeslagen),
       kruipruimte: enumOf(m.kruipruimte, JA_NEE_WEET_NIET, "Kruipruimte", true),
       aansluiting: enumOf(m.aansluiting, AANSLUITING, "Aansluiting", true),
+      verzwaring_3fase: verzwaring,
+      verzwaring_maand: verzwaringMaand,
     },
     aantal_laadpalen: aantal,
     laadpalen,
@@ -151,6 +177,9 @@ export function parseParticulier(raw: unknown) {
       dynamisch_contract:
         verrekenen === "ja" ? enumOf(v.dynamisch_contract, JA_NEE_WEET_NIET, "Dynamisch contract", true) : "",
       laadtarief: verrekenen === "ja" ? enumOf(v.laadtarief, LAADTARIEF, "Laadtarief", true) : "",
+      // Sliders van de site (centen per kWh); oude bundles sturen ze niet.
+      stroomkosten_cent: centOptioneel(v.stroomkosten_cent, "Gemiddelde stroomkosten", 5, 60),
+      marge_cent: centOptioneel(v.marge_cent, "Marge", 1, 30),
     },
     afronden: {
       plaatsing,
@@ -230,6 +259,7 @@ export function parseZakelijk(raw: unknown) {
     locatie: {
       straat,
       huisnummer,
+      toevoeging: str(l.toevoeging, "Toevoeging", { max: 20 }),
       postcode: postcodeLocatie,
       plaats,
       // Alleen gevuld bij een inzending van een oude (gecachte) website-bundle.
@@ -264,7 +294,9 @@ export function parseZakelijk(raw: unknown) {
 
 /** Eén leesbare adresregel, ongeacht of de aanvraag de oude of nieuwe vorm had. */
 export function locatieAdresRegel(l: ZakelijkData["locatie"]): string {
-  return l.straat ? `${l.straat} ${l.huisnummer}, ${l.postcode} ${l.plaats}` : l.adres;
+  return l.straat
+    ? `${l.straat} ${combineHuisnummer(l.huisnummer, l.toevoeging)}, ${l.postcode} ${l.plaats}`
+    : l.adres;
 }
 
 /* ──────────────────────────────── triage ──────────────────────────────── */
@@ -331,7 +363,7 @@ export function buildSummary(flow: Flow, data: ParticulierData | ZakelijkData, t
     const g = d.gegevens;
     let s = `${kop}\n── Offerteaanvraag particulier ──\n\nUW GEGEVENS\n`;
     s += regel("Naam", g.naam);
-    s += regel("Adres", `${g.straat} ${g.huisnummer}, ${g.postcode} ${g.plaats}`);
+    s += regel("Adres", `${g.straat} ${combineHuisnummer(g.huisnummer, g.toevoeging)}, ${g.postcode} ${g.plaats}`);
     s += regel("E-mail", g.email);
     s += regel("Telefoon", g.telefoon);
 
@@ -346,6 +378,8 @@ export function buildSummary(flow: Flow, data: ParticulierData | ZakelijkData, t
     );
     s += regel("Kruipruimte", label(JA_NEE_WEET_NIET, d.meterkast.kruipruimte));
     s += regel("Huidige aansluiting", label(AANSLUITING, d.meterkast.aansluiting));
+    s += regel("Verzwaring naar 3-fase", label(JA_NEE_WEET_NIET, d.meterkast.verzwaring_3fase));
+    s += regel("Verwachte verzwaring", maandLabel(d.meterkast.verzwaring_maand));
 
     d.laadpalen.forEach((lp, i) => {
       s += `\nLAADPAAL ${i + 1}\n`;
@@ -376,6 +410,14 @@ export function buildSummary(flow: Flow, data: ParticulierData | ZakelijkData, t
     s += regel("Laadpas werkgever of zakelijk verrekenen", label(JA_NEE, d.verrekenen.zakelijk_verrekenen));
     s += regel("Dynamisch energiecontract", label(JA_NEE_WEET_NIET, d.verrekenen.dynamisch_contract));
     s += regel("Gewenst laadtarief", label(LAADTARIEF, d.verrekenen.laadtarief));
+    s += regel(
+      "Gemiddelde stroomkosten",
+      d.verrekenen.stroomkosten_cent === null ? "" : `${d.verrekenen.stroomkosten_cent} cent per kWh`,
+    );
+    s += regel(
+      "Gewenste marge",
+      d.verrekenen.marge_cent === null ? "" : `${d.verrekenen.marge_cent} cent per kWh`,
+    );
 
     s += `\nAFRONDEN\n`;
     s += regel(

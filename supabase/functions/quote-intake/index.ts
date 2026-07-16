@@ -19,6 +19,7 @@ import {
   BadRequest,
   buildSummary,
   collectFiles,
+  combineHuisnummer,
   computeTriage,
   locatieAdresRegel,
   parseParticulier,
@@ -356,7 +357,7 @@ function particulierLead(d: ParticulierData) {
       contact_email: g.email,
       contact_phone: g.telefoon,
       address_street: g.straat,
-      house_number: g.huisnummer,
+      house_number: combineHuisnummer(g.huisnummer, g.toevoeging),
       postal_code: g.postcode,
       city: g.plaats,
       estimated_charge_points: d.aantal_laadpalen,
@@ -398,7 +399,7 @@ function zakelijkLead(d: ZakelijkData) {
       // Nieuwe vorm: losse adreskolommen (activeert de object-matching op
       // postcode + huisnummer). Oude vorm: hele adresregel in address_street.
       address_street: d.locatie.straat || d.locatie.adres,
-      house_number: d.locatie.huisnummer || null,
+      house_number: combineHuisnummer(d.locatie.huisnummer, d.locatie.toevoeging) || null,
       postal_code: d.locatie.postcode || null,
       city: d.locatie.plaats || null,
       estimated_charge_points: aantal,

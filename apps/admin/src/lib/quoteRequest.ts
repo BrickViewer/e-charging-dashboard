@@ -91,10 +91,18 @@ export function zakelijkAdres(l: {
   adres?: string;
   straat?: string;
   huisnummer?: string;
+  toevoeging?: string;
   postcode?: string;
   plaats?: string;
 }): string {
-  return l.straat ? `${l.straat} ${l.huisnummer}, ${l.postcode} ${l.plaats}` : (l.adres ?? "");
+  if (!l.straat) return l.adres ?? "";
+  const nummer = [l.huisnummer, l.toevoeging].filter(Boolean).join(" ");
+  return `${l.straat} ${nummer}, ${l.postcode} ${l.plaats}`;
+}
+
+/** Slider-waarde van de site (centen per kWh) leesbaar maken; leeg bij afwezig. */
+export function centPerKwh(v: number | null | undefined): string {
+  return typeof v === "number" ? `${v} cent per kWh` : "";
 }
 
 /** Label opzoeken; valt terug op de ruwe waarde zodat er nooit een lege regel staat. */

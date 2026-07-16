@@ -37,11 +37,12 @@ export type LaadpaalPayload = {
 };
 
 export type ParticulierPayload = {
-  gegevens: { naam: string; straat: string; huisnummer: string; postcode: string; plaats: string; email: string; telefoon: string };
-  meterkast: { fotos: UploadRef[]; fotos_overgeslagen: boolean; kruipruimte: string; aansluiting: string };
+  // toevoeging, verzwaring_* en de centen-velden bestaan sinds juli 2026; oudere aanvragen missen ze.
+  gegevens: { naam: string; straat: string; huisnummer: string; toevoeging?: string; postcode: string; plaats: string; email: string; telefoon: string };
+  meterkast: { fotos: UploadRef[]; fotos_overgeslagen: boolean; kruipruimte: string; aansluiting: string; verzwaring_3fase?: string; verzwaring_maand?: string };
   aantal_laadpalen: number;
   laadpalen: LaadpaalPayload[];
-  verrekenen: { zakelijk_verrekenen: string; dynamisch_contract: string; laadtarief: string };
+  verrekenen: { zakelijk_verrekenen: string; dynamisch_contract: string; laadtarief: string; stroomkosten_cent?: number | null; marge_cent?: number | null };
   afronden: { plaatsing: string; plaatsing_maand: string; opmerkingen: string; updates_opt_in: boolean };
 };
 
@@ -53,7 +54,7 @@ export type ZakelijkPayload = {
   locatie: {
     // Nieuwe aanvragen (vanaf juli 2026): losse adresvelden. Oude aanvragen:
     // één adres-string. Beide vormen blijven permanent voorkomen in de payload.
-    adres?: string; straat?: string; huisnummer?: string; postcode?: string; plaats?: string;
+    adres?: string; straat?: string; huisnummer?: string; toevoeging?: string; postcode?: string; plaats?: string;
     type_locatie: string; type_locatie_anders: string;
     eigendom: string; bestaand_of_nieuwbouw: string; wie_gaat_laden: string[];
   };
