@@ -72,7 +72,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("Voor de vergoeding van uw stroom ontvangt u elke maand");
     expect(html).toContain("€ 0,40");
     // Mark-casus: vaste illustratie-bedragen, bewust losgekoppeld van de offerte (geen disclaimer)
-    expect(html).toContain("Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis: zo'n 4.000 kWh per jaar");
+    expect(html).toContain("Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met de laadpas van zijn werkgever: zo'n 4.000 kWh per jaar");
     expect(html).toContain('<span style="font-style:italic">Bijvoorbeeld:'); // hele casus cursief
     expect(html).toContain("Zijn vergoeding is € 0,38 per geladen kWh");
     expect(html).toContain("Aan vergoeding ontvangt hij dus € 1.520 per jaar");

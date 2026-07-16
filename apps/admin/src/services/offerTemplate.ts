@@ -609,7 +609,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       // deel daarvan thuis" benoemt dat).
       blocks.push(bP(
         `<span style="font-style:italic">` +
-        `Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis: zo'n 4.000 kWh per jaar. ` +
+        `Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met de laadpas van zijn werkgever: zo'n 4.000 kWh per jaar. ` +
         `Zijn vergoeding is € 0,38 per geladen kWh. Aan vergoeding ontvangt hij dus € 1.520 per jaar. ` +
         `Zelf betaalt hij voor die stroom ongeveer € 1.000 per jaar, bij een stroomprijs van € 0,25 per kWh. ` +
         `Daarmee houdt Mark € 520 per jaar over. ` +
