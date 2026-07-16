@@ -71,7 +71,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("€ 0,40");
     expect(html).toContain("Bijvoorbeeld: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis");
     expect(html).toContain('<span style="font-style:italic">Bijvoorbeeld:'); // heel het voorbeeld cursief
-    expect(html).toContain("Wij betalen u € 0,40 per geladen kWh, dus € 1.600 per jaar");
+    expect(html).toContain("Aan vergoeding ontvangt u dan € 1.600 per jaar");
     expect(html).toContain("bij een stroomprijs van € 0,25 per kWh");
     expect(html).toContain("U houdt dus € 600 per jaar over");
     expect(html).toContain("ERE-regeling? Dan komt daar indicatief nog zo'n € 400 per jaar bij");

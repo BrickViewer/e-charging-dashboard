@@ -617,7 +617,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         blocks.push(bP(
           `<span style="font-style:italic">` +
           `Bijvoorbeeld: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis. ` +
-          `Wij betalen u ${money2(afname)} per geladen kWh, dus ${eur0(betaaldJaar)} per jaar. ` +
+          `Aan vergoeding ontvangt u dan ${eur0(betaaldJaar)} per jaar. ` +
           `Zelf betaalt u voor die stroom ongeveer ${eur0(kostenJaar)} per jaar, bij een stroomprijs van ${money2(HUISHOUD_STROOMPRIJS)} per kWh. ` +
           `U houdt dus ${eur0(overJaar)} per jaar over. ` +
           `Meldt u zich ook aan voor de ERE-regeling? Dan komt daar indicatief nog zo'n ${eur0(ereJaar)} per jaar bij. ` +
