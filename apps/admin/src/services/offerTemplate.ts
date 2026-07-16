@@ -625,20 +625,22 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         // regels op 8px. mt 64 = sectiegrens op het 8-punts grid (zie spacing-comment hierboven).
         const bold = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
         const cLine = (t: string, first = false) => `<div style="margin-top:${first ? 0 : 8}px">${t}</div>`;
-        // tag "centerRest": buildOfferPages herrekent de marge zodat dit blok EXACT in het
-        // midden staat tussen de onderkant van punt 6 en de footer-streep (mt 64 = fallback).
+        // tag "centerRest" op de KOP: buildOfferPages herrekent de marge zodat de groep
+        // kop + prijsregels EXACT in het midden staat tussen de onderkant van punt 6 en de
+        // footer-streep (mt 64 = fallback). Prijsblok volgt de kop op 16 (2 grid-units).
+        blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 64), keep: true, tag: "centerRest" });
         if (afname != null) {
           const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
-          blocks.push({ ...bRaw(
+          blocks.push(bRaw(
             `<div style="text-align:center;font-size:14px">` +
             cLine(`${ingesteld} op ${bold(money2(m.laadkosten as number))} per geladen kWh (excl. BTW).`, true) +
             cLine(`Hiervan ontvangt u elke maand ${bold(money2(afname))} per geladen kWh netto op uw rekening.`) +
-            `</div>`, 64), tag: "centerRest" });
+            `</div>`, 16));
         } else {
-          blocks.push({ ...bRaw(
+          blocks.push(bRaw(
             `<div style="text-align:center;font-size:14px">` +
             cLine(`U ontvangt elke maand het laadtarief min ${bold(money2(m.serviceFeePerKwh))} per geladen kWh netto op uw rekening.`, true) +
-            `</div>`, 64), tag: "centerRest" });
+            `</div>`, 16));
         }
       } else {
         blocks.push(bP(
@@ -817,10 +819,11 @@ export function buildOfferPages(
     }
   }
 
-  // centerRest (particuliere beheermodule-pagina): zet het prijsblok EXACT in het midden tussen
-  // de onderkant van het laatste punt en de footer-streep. De streep staat op PAGE_H − 34
-  // (footer-bottom) − ~52 (footer-inhoud) ⇒ content-relatief HAIRLINE_Y. De pagina begint bij
-  // het laatste brk-blok ervóór (vervolgpagina → eerste blok rendert met mt 0).
+  // centerRest (particuliere beheermodule-pagina): zet de blokgroep vanaf het gemarkeerde blok
+  // (kop + prijsregels) EXACT in het midden tussen de onderkant van het laatste punt en de
+  // footer-streep. De streep staat op PAGE_H − 34 (footer-bottom) − ~52 (footer-inhoud) ⇒
+  // content-relatief HAIRLINE_Y. De pagina begint bij het laatste brk-blok ervóór
+  // (vervolgpagina → eerste blok rendert met mt 0).
   const centerIdx = blocks.findIndex((b) => b.tag === "centerRest");
   if (centerIdx > 0) {
     const HAIRLINE_Y = PAGE_H - 34 - 52 - CONTENT_TOP; // ≈ 865, geverifieerd met de meet-harness
@@ -829,7 +832,10 @@ export function buildOfferPages(
     if (brkIdx >= 0) {
       let used = heights[brkIdx]; // eerste blok op de pagina: mt gereset naar 0
       for (let i = brkIdx + 1; i < centerIdx; i++) used += blocks[i].mt + heights[i];
-      const rest = HAIRLINE_Y - used - heights[centerIdx];
+      // De groep = het centerRest-blok + alles erna tot een volgende brk (of het einde).
+      let groupH = heights[centerIdx];
+      for (let i = centerIdx + 1; i < blocks.length && !blocks[i].brk; i++) groupH += blocks[i].mt + heights[i];
+      const rest = HAIRLINE_Y - used - groupH;
       // Fractionele px toegestaan (CSS) → exacte centrering zonder afrondingsdrift.
       blocks[centerIdx].mt = Math.max(16, rest / 2);
     }

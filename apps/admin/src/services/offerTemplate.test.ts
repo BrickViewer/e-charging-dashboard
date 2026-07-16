@@ -85,7 +85,10 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("Hiervan ontvangt u elke maand");
     expect(html).toContain("€ 0,40");
     expect(html).toContain("per geladen kWh netto op uw rekening");
-    expect(html).not.toContain("voor u werkt");
+    // Kop "Een laadpaal die voor u werkt" staat (weer) boven het prijsblok — gebruikerskeuze.
+    const kopIdx = html.indexOf("werkt</span>");
+    expect(kopIdx).toBeGreaterThan(-1);
+    expect(kopIdx).toBeLessThan(html.indexOf("wordt ingesteld op"));
     expect(html).not.toContain("laadbeurt na laadbeurt"); // slotzin verwijderd (gebruikerskeuze)
     expect(html).toContain("telt elke kWh automatisch mee"); // gasten-laadpas (punt 1)
     expect(html).toContain("betaalspecificaties vindt u er overzichtelijk terug"); // dashboard (punt 3)
