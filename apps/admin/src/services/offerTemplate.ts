@@ -289,10 +289,10 @@ function beheerPoints(textVersion: number, opts?: { isPrivate?: boolean; poles?:
     return [
       ["Laden via de zaak? Automatisch geregeld", "Laadt u thuis met de laadpas van uw werkgever of leasemaatschappij? Elke geladen kWh wordt automatisch geregistreerd en vergoed. Declareren is nooit meer nodig."],
       ["Elke maand geld op uw rekening", `Wij betalen u elke maand voor de stroom die uw ${paal} ${levert}. U ontvangt daarbij een duidelijke betaalspecificatie. Zelf hoeft u niets te doen.`],
-      ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u elke laadsessie, het verbruik en wat u ervoor krijgt. Altijd en overal, 24/7."],
+      ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u 24/7 elke laadsessie, het verbruik en wat u ervoor krijgt."],
       [n > 1 ? "Uw laadpalen blijven gewoon werken" : "Uw laadpaal blijft gewoon werken", "Bij een storing krijgen wij direct een melding. Meestal lossen we het op afstand op, vaak voordat u iets merkt. Onze helpdesk is 24/7 bereikbaar."],
       ["Reparatie nodig? U heeft voorrang", "Is een bezoek aan huis toch nodig, dan komen wij met voorrang langs. U kent de tarieven vooraf, dus u komt nooit voor verrassingen te staan."],
-      ["Extra vergoeding voor groene stroom", `Via de ERE-regeling kan uw ${paal} extra geld opleveren. Onze partner regelt de aanvraag en wij leveren de gegevens aan. U heeft er geen omkijken naar.`],
+      ["Extra vergoeding voor groene stroom", `Via de ERE-regeling kan uw ${paal} extra geld opleveren. Wij koppelen u aan onze partner die de aanvraag voor u regelt en leveren de gegevens van uw ${paal} rechtstreeks aan. U heeft er geen omkijken naar.`],
     ];
   }
   return [
@@ -522,9 +522,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(bP(`Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het ${introScope}.`, 12));
   }
 
-  // Kop: particulier (v2+) krijgt het laadpas-/gemak-frame i.p.v. "inkomstenbron".
+  // Kop: ook voor een particulier "inkomstenbron" (gebruikerskeuze) — alleen enkelvoud bij één paal.
   const heroKop = privV2
-    ? `Thuis ${g("laden")} en er ${g("vanzelf")} voor betaald worden.`
+    ? `Wij maken van uw ${g(paalWoord)} een ${g("inkomstenbron")}.`
     : `Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`;
 
   // --- Levering en installatie (alleen bij installatie-scope) ---
@@ -605,18 +605,20 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         ? ` Bij het afgesproken laadtarief van ${money2(m.laadkosten as number)} per kWh komt dat neer op een afnameprijs van ${money2(afname)} per kWh.`
         : "";
       if (privV2) {
-        // Particulier: kort en op B1-niveau, winst-frame, risico-omkering als slot. Bij een vast
-        // laadtarief noemen we direct de concrete afnameprijs (handboek §8-voorbeeldzin); alleen
-        // bij een dynamisch tarief valt de zin terug op de prijsformule. Geen "op eigen naam"
-        // (verwarrend voor een leek; de juridische inrichting hoort in het contract, niet hier).
-        const prijsZin = afname != null
-          ? `Wij nemen de stroom van uw ${paalWoord} af tegen een vaste afnameprijs van ${money2(afname)} per kWh.`
-          : `Wij nemen de stroom van uw ${paalWoord} af tegen het geldende laadtarief min ${money2(m.serviceFeePerKwh)} per kWh.`;
-        blocks.push(bP(
-          `Elke kWh die u thuis laadt, levert u geld op. ` +
-          prijsZin + ` ` +
-          `De vergoeding staat elke maand automatisch op uw rekening. ` +
-          `U betaalt ons nooit iets.`, 24));
+        // Particulier: prijs gepositioneerd als instelling + netto-ontvangst (gebruikerskeuze) —
+        // beide getallen zonder het verschil te benoemen, zoals de handboek-tabel zelf. Alleen
+        // bij een dynamisch/onbekend laadtarief valt de alinea terug op de prijsformule.
+        if (afname != null) {
+          const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
+          blocks.push(bP(
+            `Elke kWh die u thuis laadt, levert u geld op. ` +
+            `${ingesteld} op ${money2(m.laadkosten as number)} per kWh (excl. BTW). ` +
+            `U ontvangt elke maand netto ${money2(afname)} per geladen kWh op uw rekening.`, 24));
+        } else {
+          blocks.push(bP(
+            `Elke kWh die u thuis laadt, levert u geld op. ` +
+            `U ontvangt elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh op uw rekening.`, 24));
+        }
       } else {
         blocks.push(bP(
           `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +

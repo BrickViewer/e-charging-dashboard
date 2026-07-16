@@ -57,35 +57,39 @@ describe("offerte tekst-versies", () => {
 });
 
 describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
-  it("rendert kop, het laadpas-punt en de korte prijs-alinea met concrete afnameprijs", () => {
+  it("rendert kop, het laadpas-punt en de prijs-alinea (ingesteld op X / netto Y)", () => {
     const html = htmlOf(privData());
-    // Kop + laadpas-hook
-    expect(html).toContain("vanzelf");
-    expect(html).toContain("voor betaald worden");
+    // Kop: ook particulier "inkomstenbron" (enkelvoud), geen aparte particulier-kop meer
+    expect(html).toContain("inkomstenbron");
+    expect(html).not.toContain("voor betaald worden");
     expect(html).toContain("laadpas van uw werkgever of leasemaatschappij");
     expect(html).toContain("levert u geld op");
     // Punt 1 = het laadpas-punt (geld-eerst-bookending); AI-rendement en jargon zijn weg
     expect(html).toContain("Laden via de zaak? Automatisch geregeld");
     expect(html).toContain("Extra vergoeding voor groene stroom");
+    expect(html).toContain("koppelen u aan onze partner"); // ERE-hulp expliciet
     expect(html).not.toContain("Nooit meer declareren");
     expect(html).not.toContain("Doorlopende optimalisatie van rendement");
     expect(html).not.toContain("transactieverwerking");
     expect(html).not.toContain("up en running");
+    expect(html).not.toContain("Altijd en overal"); // spacing-fix dashboard-punt
     expect(html).toContain("betaalspecificatie");
-    // Prijs-alinea: concrete afnameprijs (vast tarief 0,50 − 0,10), geen "op eigen naam"
-    expect(html).toContain("vaste afnameprijs van € 0,40 per kWh");
+    // Prijs-alinea: instelling + netto-ontvangst; geen afnameprijs-term, geen "op eigen naam"
+    expect(html).toContain("Uw laadpaal wordt ingesteld op € 0,50 per kWh (excl. BTW)");
+    expect(html).toContain("netto € 0,40 per geladen kWh op uw rekening");
+    expect(html).not.toContain("afnameprijs");
     expect(html).not.toContain("op eigen naam");
-    expect(html).toContain("U betaalt ons nooit iets");
+    expect(html).not.toContain("U betaalt ons nooit iets");
     // Handboek-taalregels blijven gelden
     expect(html).not.toMatch(/service-?fee|\bfee\b/i);
     expect(html).not.toContain("inhouding");
     expect(html).not.toContain("opbrengst uit");
   });
 
-  it("dynamisch laadtarief: prijsformule-fallback i.p.v. concrete afnameprijs", () => {
+  it("dynamisch laadtarief: prijsformule-fallback i.p.v. concrete bedragen", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
-    expect(html).toContain("het geldende laadtarief min € 0,10 per kWh");
-    expect(html).not.toContain("vaste afnameprijs van");
+    expect(html).toContain("het laadtarief min € 0,10 per geladen kWh");
+    expect(html).not.toContain("wordt ingesteld op");
   });
 
   it("alleen-beheer particulier: beheer-intro opent met het geldvoordeel en sluit de declaratie-lus", () => {
