@@ -171,18 +171,43 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("Bijvoorbeeld: Mark");
   });
 
-  it("alleen-beheer particulier: beheer-intro opent met het geldvoordeel en sluit de declaratie-lus", () => {
+  it("alleen-beheer particulier = CONTRACTBLAD: gegevens + volledige beheermodule op één blad", () => {
     const html = htmlOf(privData(undefined, { withInstallation: false }));
-    expect(html).toContain("volledig in beheer");
-    expect(html).toContain("levert elke kWh die u thuis laadt u geld op");
-    expect(html).toContain("Declareren bij uw werkgever is nooit meer nodig");
-    expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
-    // Zelfde slot: intro-vergoeding + voorbeeld op de beheerpagina, geen instellingen-lijst op p1
+    // Gegevens blijven (bindend contract): naam-/adresblok + referentieblok
+    expect(html).toContain("J. Voorbeeld");
+    expect(html).toContain("Onze referentie");
+    expect(html).toContain("Betreft");
+    // Brief-conventies vervallen: geen datum-regel (staat in de paginakop), aanhef of dank-zin
+    expect(html).not.toContain("Zaltbommel,");
+    expect(html).not.toContain("Geachte");
+    expect(html).not.toContain("Hartelijk dank voor uw aanvraag");
+    // Hero-kop + begeleidende intro-alinea's vervallen; de sectie opent met de kernzin
+    expect(html).not.toContain("inkomstenbron");
+    expect(html).not.toContain("volledig in beheer");
+    expect(html).not.toContain("levert elke kWh die u thuis laadt u geld op");
+    expect(html).not.toContain("Declareren bij uw werkgever");
     expect(html).toContain("beheren die volledig voor u");
+    // Volledige beheermodule-inhoud aanwezig: vergoeding, Mark-casus, punten en slotkop
+    expect(html).toContain("Voor de vergoeding van uw stroom ontvangt u elke maand");
     expect(html).toContain("Bijvoorbeeld: Mark rijdt");
     expect(html).toContain("Zijn vergoeding is € 0,35 per geladen kWh"); // tarief 0,50 → 0,40 − 0,05
+    expect(html).toContain("Uw voordelen op een rij:");
+    expect(html).toContain("Laden via de zaak? Automatisch geregeld");
+    expect(html).toContain("werkt</span>"); // slotkop "Een laadpaal die voor u werkt"
+    // Geen instellingen-lijst; de tarief-instelregel leeft in de voorwaarden
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
+    expect(html).toContain("De laadpaal wordt ingesteld op € 0,50 per kWh (excl. btw)");
+  });
+
+  it("alleen-beheer zakelijk: hero + begeleidende tekst + instellingen-pagina blijven (geen contractblad)", () => {
+    const html = htmlOf(data(undefined, { withInstallation: false }));
+    expect(html).toContain("Hartelijk dank voor uw aanvraag");
+    expect(html).toContain("Geachte");
+    expect(html).toContain("inkomstenbron");
+    expect(html).toContain("volledig in beheer");
+    expect(html).toContain("ontzorgd wordt volgens het E-Charging concept");
+    expect(html).toContain("afgesproken instellingen");
   });
 
   it("v1 + particulier: verstuurde offerte rendert de OUDE teksten, geen laadpas-variant", () => {
@@ -191,5 +216,12 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("Doorlopende optimalisatie van rendement");
     expect(html).not.toContain("Laden via de zaak");
     expect(html).not.toContain("afnameprijs");
+    // v1 alleen-beheer (zoals verstuurde offerte 201-19-26): oude pagina 1 blijft bevroren —
+    // GEEN contractblad, mét aanhef/dank-zin/beheerIntro.
+    const beheerV1 = htmlOf(privData(1, { withInstallation: false }));
+    expect(beheerV1).toContain("Geachte");
+    expect(beheerV1).toContain("Hartelijk dank voor uw aanvraag");
+    expect(beheerV1).toContain("volledig in beheer");
+    expect(beheerV1).toContain("Zaltbommel,"); // datum-regel blijft in v1
   });
 });

@@ -503,17 +503,26 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   ].filter(Boolean).join("");
   const refRow = (lbl: string, valHtml: string) =>
     `<div style="display:flex"><div style="width:128px">${esc(lbl)}</div><div>: ${valHtml}</div></div>`;
-  blocks.push(bRaw(`<div style="line-height:1.5">${recipient}</div>`, 14));
-  blocks.push({ ...bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, m.dateGap), tag: "dateGap" });
-  blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:20px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, 18));
-  blocks.push({ ...bRaw(`<div>${esc(aanhefLine(m.aanhef))}</div>`, m.aanhefGap), tag: "aanhefGap" });
   // Particulier (v2+): enkelvoud + "aan huis" + de ontzorgingsbelofte in de intro-zin.
   const privV2 = m.isPrivate && m.textVersion >= 2;
   const paalWoord = m.numPoles > 1 ? "laadpalen" : "laadpaal";
   // Netto per geladen kWh (laadtarief − marge) — gebruikt in de particuliere intro, de zakelijke
   // v2-prijs-alinea én de asterisk-voetnoot in de voorwaarden. Pure berekening.
   const afname = (!m.laadkosten || m.laadkosten <= 0) ? null : Math.max(0, m.laadkosten - m.serviceFeePerKwh);
-  if (privV2) {
+  // Contractblad (gebruikerskeuze 2026-07-16): de particuliere alleen-beheer-offerte is ÉÉN pagina
+  // die als contract leest — gegevens + volledige beheermodule samengevoegd. Brief-conventies
+  // (datum-regel, aanhef, dank-zin) en de hero-kop + beheerIntro-alinea's vervallen daar; de
+  // beheermodule-sectie opent direct met de kernzin waarvoor getekend wordt.
+  const contractV2 = privV2 && m.withManagement && !m.withInstallation;
+  blocks.push(bRaw(`<div style="line-height:1.5">${recipient}</div>`, 14));
+  if (!contractV2) blocks.push({ ...bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, m.dateGap), tag: "dateGap" });
+  // Referentieblok: op het contractblad met kleinere binnengap (8 i.p.v. 20) en iets meer lucht
+  // na het naamblok (mt 24) — de datum staat daar al in de paginakop rechtsboven.
+  blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:${contractV2 ? 8 : 20}px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, contractV2 ? 24 : 18));
+  if (!contractV2) blocks.push({ ...bRaw(`<div>${esc(aanhefLine(m.aanhef))}</div>`, m.aanhefGap), tag: "aanhefGap" });
+  if (contractV2) {
+    // Geen dank-/aanhef-zin: het contractblad gaat van het referentieblok direct de sectie in.
+  } else if (privV2) {
     blocks.push(bP(m.withInstallation && m.withManagement
       ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren, aansluiten en volledig beheren van uw ${paalWoord} aan huis, zodat u er zelf niets aan hoeft te doen.`
       : m.withInstallation
@@ -572,7 +581,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       priceHtml +
       `<div style="font-style:italic;margin-top:30px">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`,
       24));
-  } else if (m.withManagement) {
+  } else if (m.withManagement && !contractV2) {
+    // Zakelijk (en v1) alleen-beheer: hero + begeleidende tekst op pagina 1. Het particuliere
+    // contractblad (contractV2) slaat dit over — de beheermodule volgt daar direct.
     blocks.push(bBig(heroKop, 30));
     // Begeleidende aanpak-tekst (vrije tekst, alinea's gescheiden door een lege regel) zodat pagina 1 netjes
     // vult i.p.v. enkel de kop; zelfde herpaginering als leveringText.
@@ -589,9 +600,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     }
   }
 
-  // --- Beheermodule (alleen bij beheer-scope) — start altijd strak op een nieuwe pagina ---
+  // --- Beheermodule (alleen bij beheer-scope) — eigen pagina, behalve op het contractblad
+  // (particulier alleen-beheer, v2): daar vloeit de sectie direct onder het referentieblok. ---
   if (m.withManagement) {
-    blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", 0, GREEN), brk: true });
+    blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", contractV2 ? 24 : 0, GREEN), brk: !contractV2 });
     if (privV2) {
       // Intro (gebruikerskeuze): eerst wat de klant per geladen kWh netto ontvangt, dan de
       // Mark-CASUS — een specifiek, uitgeschreven persoonsvoorbeeld (geen disclaimer —
@@ -606,7 +618,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       const vergoedingZin = afname != null
         ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))} per geladen kWh netto op uw rekening.`
         : `Voor de vergoeding van uw stroom ontvangt u elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh netto op uw rekening.`;
-      blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
+      blocks.push(bP(`${eersteZin} ${vergoedingZin}`, contractV2 ? 12 : 16));
       // Mark rekent € 0,05 ONDER de afgesproken vergoeding, afgerond op het dichtstbijzijnde
       // 5-cent-veelvoud (gebruikerseis; ×20 i.p.v. /0,05 tegen FP-drift): het voorbeeld blijft
       // 3-7 cent onder de deal van de lezer. Geen vast tarief (dynamisch) → vaste € 0,35.
@@ -628,9 +640,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
           `Daarmee houdt Mark ${eur0(overJr)} per jaar over. ` +
           `Ook heeft hij zich aangemeld voor de ERE-regeling. Die subsidie levert hem nog eens zo'n € 400 per jaar op. ` +
           `Zo verdient Mark met zijn laadpaal al snel ${eur0(overJr + 400)} per jaar.` +
-          `</span>`, 12));
+          `</span>`, contractV2 ? 8 : 12));
       }
-      blocks.push(bP("Uw voordelen op een rij:", 16));
+      blocks.push(bP("Uw voordelen op een rij:", contractV2 ? 12 : 16));
     } else {
       blocks.push(bP(m.withInstallation
         ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
@@ -641,11 +653,12 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     //   titel→body 8 · bSec→intro 16 · prijsregels 8
     //   intro→punt01 40 == punt→punt 40 (5 units) · punt06→prijsblok 64 (8 units, sectiegrens)
     // Typografie: punt-titels 15px (donkere kopkleur, nummer gelijk) → body 12,5px → prijsblok 14px.
-    // Zakelijk behoudt de oorspronkelijke maten.
+    // Zakelijk behoudt de oorspronkelijke maten. Contractblad: ritme 16 (alles op één pagina).
     const titleSize = privV2 ? ";font-size:15px;line-height:1.3" : "";
+    const puntRitme = contractV2 ? 16 : 32;
     beheerPoints(m.textVersion, { isPrivate: m.isPrivate, poles: m.numPoles }).forEach(([t, b], i) => blocks.push(bRaw(
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px${titleSize}">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${privV2 ? HEAD : INK}${titleSize}">${esc(t)}</div><div style="color:${MUTED};margin-top:${privV2 ? 8 : 5}px">${esc(b)}</div></div></div>`,
-      i === 0 ? (privV2 ? 32 : 14) : (privV2 ? 32 : 22))));
+      i === 0 ? (privV2 ? puntRitme : 14) : (privV2 ? puntRitme : 22))));
     if (m.textVersion <= 1) {
       // v1 — oorspronkelijke tekst van verstuurde offertes (fee-frasering; NIET wijzigen).
       blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
@@ -881,21 +894,28 @@ export function buildOfferPages(
     const HAIRLINE_Y = PAGE_H - 34 - 52 - CONTENT_TOP; // ≈ 865, geverifieerd met de meet-harness
     let brkIdx = -1;
     for (let i = centerIdx - 1; i >= 0; i--) if (blocks[i].brk) { brkIdx = i; break; }
+    // Verbruikte hoogte boven de groep op de pagina waar die start: na een brk begint de pagina
+    // bij dat blok (mt gereset naar 0); zonder brk staat alles op pagina 1, waar het eerste blok
+    // zijn eigen mt behoudt (contractblad: particulier alleen-beheer op één pagina).
+    let used: number;
     if (brkIdx >= 0) {
-      let used = heights[brkIdx]; // eerste blok op de pagina: mt gereset naar 0
+      used = heights[brkIdx]; // eerste blok op de pagina: mt gereset naar 0
       for (let i = brkIdx + 1; i < centerIdx; i++) used += blocks[i].mt + heights[i];
-      // De groep = het centerRest-blok + alles erna tot een volgende brk (of het einde).
-      let groupH = heights[centerIdx];
-      for (let i = centerIdx + 1; i < blocks.length && !blocks[i].brk; i++) groupH += blocks[i].mt + heights[i];
-      const rest = HAIRLINE_Y - used - groupH;
-      // Fractionele px toegestaan (CSS) → exacte centrering zonder afrondingsdrift.
-      // OPTISCHE correctie omhoog (max 12px): de 26px-kop draagt ~8px leading boven de
-      // kapitaalhoogte + koppen horen optisch iets bóven het meetkundige midden. Proportioneel
-      // aan de beschikbare rest, zodat de kop bij een volle pagina niet op het blok erboven
-      // plakt. Beoordeeld op de echte render (gebruikersfeedback).
-      const shift = Math.min(12, Math.max(0, (rest - 40) / 4));
-      blocks[centerIdx].mt = Math.max(16, rest / 2 - shift);
+    } else {
+      used = blocks[0].mt + heights[0]; // pagina 1: eerste blok rendert mét mt
+      for (let i = 1; i < centerIdx; i++) used += blocks[i].mt + heights[i];
     }
+    // De groep = het centerRest-blok + alles erna tot een volgende brk (of het einde).
+    let groupH = heights[centerIdx];
+    for (let i = centerIdx + 1; i < blocks.length && !blocks[i].brk; i++) groupH += blocks[i].mt + heights[i];
+    const rest = HAIRLINE_Y - used - groupH;
+    // Fractionele px toegestaan (CSS) → exacte centrering zonder afrondingsdrift.
+    // OPTISCHE correctie omhoog (max 12px): de 26px-kop draagt ~8px leading boven de
+    // kapitaalhoogte + koppen horen optisch iets bóven het meetkundige midden. Proportioneel
+    // aan de beschikbare rest, zodat de kop bij een volle pagina niet op het blok erboven
+    // plakt. Beoordeeld op de echte render (gebruikersfeedback).
+    const shift = Math.min(12, Math.max(0, (rest - 40) / 4));
+    blocks[centerIdx].mt = Math.max(16, rest / 2 - shift);
   }
 
   const pages = paginateLetter(blocks, heights);
