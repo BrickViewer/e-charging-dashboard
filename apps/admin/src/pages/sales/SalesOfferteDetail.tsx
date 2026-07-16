@@ -274,6 +274,10 @@ export default function SalesOfferteDetail() {
     } catch (e) { toast.error(e instanceof Error ? e.message : "Opslaan mislukt"); }
   };
 
+  // Particulier: betaaltermijn-placeholders tonen de particuliere default (50/0/50) i.p.v. het
+  // org-sjabloon, gelijk aan wat offerTemplate.resolve() zonder override rendert.
+  const isParticulier = quote?.is_private ?? !(companyName && companyName.trim());
+
   const pdfData = (): OfferPdfData => {
     const snap = (quote!.calculation_snapshot ?? {}) as Record<string, unknown>;
     const pi = (snap.pricing_input ?? {}) as Record<string, unknown>;
@@ -758,9 +762,9 @@ export default function SalesOfferteDetail() {
               ? <p className="mt-1 text-[10px] text-muted-foreground">Bij installatie loopt het contract automatisch vanaf de 1e van de maand na de opleverdatum — ingangsdatum niet nodig.</p>
               : <p className="mt-1 text-[10px] text-muted-foreground">Alleen beheer: vul hier de vaste ingangsdatum in.</p>}
             <div className="mt-2 grid grid-cols-3 gap-2">
-              <div className="space-y-1"><Label className="text-xs">% bij opdracht</Label><Input inputMode="numeric" value={numVal("betaalBijOpdrachtPct")} placeholder={String(tpl?.betaalBijOpdrachtPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijOpdrachtPct", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">% bij start</Label><Input inputMode="numeric" value={numVal("betaalBijStartPct")} placeholder={String(tpl?.betaalBijStartPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijStartPct", e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">% na werk</Label><Input inputMode="numeric" value={numVal("betaalNaWerkPct")} placeholder={String(tpl?.betaalNaWerkPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalNaWerkPct", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">% bij opdracht</Label><Input inputMode="numeric" value={numVal("betaalBijOpdrachtPct")} placeholder={String(isParticulier ? 50 : tpl?.betaalBijOpdrachtPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijOpdrachtPct", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">% bij start</Label><Input inputMode="numeric" value={numVal("betaalBijStartPct")} placeholder={String(isParticulier ? 0 : tpl?.betaalBijStartPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalBijStartPct", e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">% na werk</Label><Input inputMode="numeric" value={numVal("betaalNaWerkPct")} placeholder={String(isParticulier ? 50 : tpl?.betaalNaWerkPct ?? "")} disabled={!isConcept} onChange={(e) => setNum("betaalNaWerkPct", e.target.value)} /></div>
             </div>
           </Section>
 

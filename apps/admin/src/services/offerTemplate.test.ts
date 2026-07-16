@@ -63,6 +63,9 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("Activatiekosten, ingangsdatum, contractduur en opzegging beheermodule");
     expect(html).not.toContain("contactduur");
     expect(html).not.toContain("Vergoeding, activatiekosten");
+    // v2 laat 0%-betaaltermijnen weg (FALLBACK_TEMPLATE = 50/0/50; echte zakelijke offertes
+    // volgen het org-sjabloon, zie de override-test bij particulier)
+    expect(html).toContain("Betalingen levering en installatie: 50% bij opdracht en 50% na werkzaamheden.");
   });
 });
 
@@ -112,6 +115,9 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // Sectiekop noemt de vergoeding voorop (en de contractduur-tikfout is gefixt)
     expect(html).toContain("Vergoeding, activatiekosten, ingangsdatum, contractduur en opzegging beheermodule");
     expect(html).not.toContain("contactduur");
+    // Betaaltermijnen particulier: standaard 50/0/50, de 0%-termijn wordt weggelaten
+    expect(html).toContain("Betalingen levering en installatie: 50% bij opdracht en 50% na werkzaamheden.");
+    expect(html).not.toContain("% bij start werkzaamheden");
     expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingangsdatum (alle klanttypen)
     const kopIdx = html.indexOf("werkt</span>");
     expect(kopIdx).toBeGreaterThan(-1);
@@ -145,6 +151,11 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("wordt ingesteld op"); // geen tarief -> geen voorwaarden-regel
     expect(html).not.toContain("Vergoeding, activatiekosten"); // kop zonder "Vergoeding" als de regel ontbreekt
     expect(html).toContain("Activatiekosten, ingangsdatum, contractduur en opzegging beheermodule");
+  });
+
+  it("betaaltermijn-overrides verslaan de particuliere 50/0/50-default (volledige 3-delige zin)", () => {
+    const html = htmlOf(privData(undefined, { offerDetails: { betaalBijOpdrachtPct: 50, betaalBijStartPct: 40, betaalNaWerkPct: 10 } }));
+    expect(html).toContain("Betalingen levering en installatie: 50% bij opdracht, 40% bij start werkzaamheden en 10% na werkzaamheden.");
   });
 
   it("niet-rond tarief (0,48): Mark rondt naar het dichtstbijzijnde 5-tal (0,38 − 0,05 = 0,33 → € 0,35)", () => {

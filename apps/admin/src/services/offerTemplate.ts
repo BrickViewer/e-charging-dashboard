@@ -180,6 +180,10 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   const textVersion = firstNum(od.text_version) ?? 2;
   // Particulier vroeg berekenen (zelfde afleiding als in de return): stuurt de default-beheer-intro.
   const isPrivate = data.isPrivate ?? !firstStr(data.company);
+  // Particulier (v2): betaaltermijnen standaard 50/0/50 (gebruikerskeuze 2026-07-16); het
+  // org-sjabloon blijft de zakelijke default. Per-offerte overrides winnen altijd; v1 blijft
+  // op het org-sjabloon zodat verstuurde offertes bevroren renderen.
+  const privBetaal = isPrivate && textVersion >= 2;
 
   // Adres: offerte-velden (override) winnen; leeg → live uit het gekoppelde object.
   let addr1 = firstStr(od.addressStreet, data.objectStreet);
@@ -260,9 +264,9 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     toeslagWerkuur: firstNum(od.toeslagWerkuur, tpl.toeslagWerkuur) ?? 0,
     activatiekostenPerSocket: firstNum(od.activatiekostenPerSocket, tpl.activatiekostenPerSocket) ?? 0,
     ingangsdatum: od.ingangsdatum ? fmtDateLong(od.ingangsdatum) : "",
-    betaalBijOpdracht: firstNum(od.betaalBijOpdrachtPct, tpl.betaalBijOpdrachtPct) ?? 0,
-    betaalBijStart: firstNum(od.betaalBijStartPct, tpl.betaalBijStartPct) ?? 0,
-    betaalNaWerk: firstNum(od.betaalNaWerkPct, tpl.betaalNaWerkPct) ?? 0,
+    betaalBijOpdracht: firstNum(od.betaalBijOpdrachtPct, privBetaal ? 50 : tpl.betaalBijOpdrachtPct) ?? 0,
+    betaalBijStart: firstNum(od.betaalBijStartPct, privBetaal ? 0 : tpl.betaalBijStartPct) ?? 0,
+    betaalNaWerk: firstNum(od.betaalNaWerkPct, privBetaal ? 50 : tpl.betaalNaWerkPct) ?? 0,
     signerName: firstStr(od.echargingSignerName, tpl.echargingSignerName),
   };
 }
@@ -754,7 +758,23 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   const dots = "………………….…………";
   blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", 0, HEAD), brk: true });
   blocks.push(bFb(esc(AANSPRAKELIJKHEID), 9));
-  if (m.withInstallation) blocks.push(bFb(`Betalingen levering en installatie: ${esc(m.betaalBijOpdracht)}% bij opdracht, ${esc(m.betaalBijStart)}% bij start werkzaamheden en ${esc(m.betaalNaWerk)}% na werkzaamheden.`));
+  if (m.withInstallation) {
+    if (m.textVersion <= 1) {
+      // v1 — vaste 3-delige zin van verstuurde offertes (NIET wijzigen).
+      blocks.push(bFb(`Betalingen levering en installatie: ${esc(m.betaalBijOpdracht)}% bij opdracht, ${esc(m.betaalBijStart)}% bij start werkzaamheden en ${esc(m.betaalNaWerk)}% na werkzaamheden.`));
+    } else {
+      // v2 — 0%-termijnen weglaten (particulier-default 50/0/50 zou anders "0% bij start" tonen).
+      const termijnen = [
+        m.betaalBijOpdracht > 0 ? `${esc(m.betaalBijOpdracht)}% bij opdracht` : "",
+        m.betaalBijStart > 0 ? `${esc(m.betaalBijStart)}% bij start werkzaamheden` : "",
+        m.betaalNaWerk > 0 ? `${esc(m.betaalNaWerk)}% na werkzaamheden` : "",
+      ].filter(Boolean);
+      if (termijnen.length) {
+        const opsomming = termijnen.length > 1 ? `${termijnen.slice(0, -1).join(", ")} en ${termijnen[termijnen.length - 1]}` : termijnen[0];
+        blocks.push(bFb(`Betalingen levering en installatie: ${opsomming}.`));
+      }
+    }
+  }
   if (m.withManagement) blocks.push(bFb(m.textVersion <= 1
     ? "Betalingen beheermodule: maandelijkse afrekening op basis van een door E-Charging opgemaakte self-billing factuur."
     // v2: het documenttype volgt de btw-situatie (self-billing factuur / betaalspecificatie) en de
