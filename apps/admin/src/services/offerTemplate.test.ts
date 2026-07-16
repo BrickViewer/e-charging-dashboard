@@ -56,34 +56,43 @@ describe("offerte tekst-versies", () => {
   });
 });
 
-describe("particuliere offerte (v2) — laadpas-verhaal", () => {
-  it("rendert kop, 'Nooit meer declareren' en de particuliere prijs-alinea", () => {
+describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
+  it("rendert kop, het laadpas-punt en de korte prijs-alinea met concrete afnameprijs", () => {
     const html = htmlOf(privData());
     // Kop + laadpas-hook
     expect(html).toContain("vanzelf");
     expect(html).toContain("voor betaald worden");
     expect(html).toContain("laadpas van uw werkgever of leasemaatschappij");
     expect(html).toContain("levert u geld op");
-    // Beheerpunt 3 vervangen; documentterm klopt (particulier krijgt een betaalspecificatie)
-    expect(html).toContain("Nooit meer declareren");
+    // Punt 1 = het laadpas-punt (geld-eerst-bookending); AI-rendement en jargon zijn weg
+    expect(html).toContain("Laden via de zaak? Automatisch geregeld");
+    expect(html).toContain("Extra vergoeding voor groene stroom");
+    expect(html).not.toContain("Nooit meer declareren");
     expect(html).not.toContain("Doorlopende optimalisatie van rendement");
+    expect(html).not.toContain("transactieverwerking");
+    expect(html).not.toContain("up en running");
     expect(html).toContain("betaalspecificatie");
-    // Enkelvoud + zelfde feitelijke kern als zakelijk
-    expect(html).toContain("uw laadpaal");
-    expect(html).toContain("afnameprijs");
-    expect(html).toContain("€ 0,40");
-    expect(html).toContain("U hoeft ons nooit iets te betalen");
+    // Prijs-alinea: concrete afnameprijs (vast tarief 0,50 − 0,10), geen "op eigen naam"
+    expect(html).toContain("vaste afnameprijs van € 0,40 per kWh");
+    expect(html).not.toContain("op eigen naam");
+    expect(html).toContain("U betaalt ons nooit iets");
     // Handboek-taalregels blijven gelden
     expect(html).not.toMatch(/service-?fee|\bfee\b/i);
     expect(html).not.toContain("inhouding");
     expect(html).not.toContain("opbrengst uit");
   });
 
+  it("dynamisch laadtarief: prijsformule-fallback i.p.v. concrete afnameprijs", () => {
+    const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
+    expect(html).toContain("het geldende laadtarief min € 0,10 per kWh");
+    expect(html).not.toContain("vaste afnameprijs van");
+  });
+
   it("alleen-beheer particulier: beheer-intro opent met het geldvoordeel en sluit de declaratie-lus", () => {
     const html = htmlOf(privData(undefined, { withInstallation: false }));
     expect(html).toContain("volledig in beheer");
     expect(html).toContain("levert elke kWh die u thuis laadt u geld op");
-    expect(html).toContain("dan hoeft u nooit meer te declareren");
+    expect(html).toContain("Declareren bij uw werkgever is nooit meer nodig");
     expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
   });
 
@@ -91,7 +100,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal", () => {
     const html = htmlOf(privData(1));
     expect(html).toContain("service-fee van");
     expect(html).toContain("Doorlopende optimalisatie van rendement");
-    expect(html).not.toContain("Nooit meer declareren");
+    expect(html).not.toContain("Laden via de zaak");
     expect(html).not.toContain("afnameprijs");
   });
 });

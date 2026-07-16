@@ -278,21 +278,21 @@ const BEHEER_POINT_5_V2: [string, string] =
   ["Elke maand geld op uw rekening", "Wij verzorgen de transactieverwerking en de maandelijkse afrekening. Elke maand betalen wij u voor de door uw palen geleverde stroom en ontvangt u het bijbehorende afrekendocument — u hoeft zelf niets op te maken en ons nooit iets te betalen."];
 
 function beheerPoints(textVersion: number, opts?: { isPrivate?: boolean; poles?: number }): Array<[string, string]> {
-  // Particulier (alleen v2+): het laadpas-verhaal van de werkgever/leasemaatschappij vervangt
-  // "Doorlopende optimalisatie van rendement" (AI-tarieven zijn niet van toepassing op één
-  // thuispaal) en de overige punten gaan naar enkelvoud/particuliere toon. Zakelijk + v1
-  // blijven byte-gelijk.
+  // Particulier (alleen v2+): geld-eerst-volgorde ("bookending": sterkste voordeel op 1, bonus
+  // op 6), laadpas-verhaal i.p.v. "Doorlopende optimalisatie van rendement" (AI-tarieven zijn
+  // n.v.t. op een thuispaal), B1-leesniveau (korte actieve zinnen, geen jargon, geen
+  // gedachtestreepjes). Zakelijk + v1 blijven byte-gelijk.
   if (opts?.isPrivate && textVersion >= 2) {
     const n = opts.poles ?? 1;
     const paal = n > 1 ? "laadpalen" : "laadpaal";
-    const doetDoen = n > 1 ? "doen" : "doet";
+    const levert = n > 1 ? "leveren" : "levert";
     return [
-      ["Eén persoonlijk dashboard", `In uw eigen online dashboard ziet u realtime wat uw ${paal} ${doetDoen}: iedere laadsessie, het verbruik en wat u ervoor ontvangt. Eén plek voor inzicht en controle, 24/7 beschikbaar.`],
-      [n > 1 ? "Uw laadpalen blijven up en running" : "Uw laadpaal blijft up en running", "Wij krijgen direct een melding bij een storing en lossen het meestal op voordat u het in de gaten heeft. Eerst op afstand; lukt dat niet, dan komen wij ter plaatse voor een diagnose. U kunt onze helpdesk 24/7 bereiken."],
-      ["Nooit meer declareren", "Laadt u thuis met de laadpas van uw werkgever of leasemaatschappij, dan wordt iedere geladen kWh automatisch geregistreerd en verwerkt. Wij betalen u er elke maand voor — geen declaraties, geen bonnetjes, geen papierwerk."],
-      ["Hulp met ERE-onboarding", `Wij koppelen u aan onze partner die u begeleidt bij de ERE-aanvraag. De gegevens van uw ${paal} worden door ons rechtstreeks aan de ERE-inboeker verstrekt, zodat u hier geen omkijken naar heeft.`],
-      ["Elke maand geld op uw rekening", `Wij verzorgen de transactieverwerking en de maandelijkse afrekening. Elke maand betalen wij u voor de door uw ${paal} geleverde stroom en ontvangt u de bijbehorende betaalspecificatie — u hoeft zelf niets op te maken en ons nooit iets te betalen.`],
-      ["Prioriteit op reparaties", "Gaat er echter iets mis en is een bezoek op locatie nodig, dan komen wij met voorrang langs om uw paal weer aan de praat te krijgen. Hiervoor gelden vaste, vooraf bekende tarieven (zie de prijsstelling), zodat u nooit voor verrassingen komt te staan."],
+      ["Laden via de zaak? Automatisch geregeld", "Laadt u thuis met de laadpas van uw werkgever of leasemaatschappij? Elke geladen kWh wordt automatisch geregistreerd en vergoed. Declareren is nooit meer nodig."],
+      ["Elke maand geld op uw rekening", `Wij betalen u elke maand voor de stroom die uw ${paal} ${levert}. U ontvangt daarbij een duidelijke betaalspecificatie. Zelf hoeft u niets te doen.`],
+      ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u elke laadsessie, het verbruik en wat u ervoor krijgt. Altijd en overal, 24/7."],
+      [n > 1 ? "Uw laadpalen blijven gewoon werken" : "Uw laadpaal blijft gewoon werken", "Bij een storing krijgen wij direct een melding. Meestal lossen we het op afstand op, vaak voordat u iets merkt. Onze helpdesk is 24/7 bereikbaar."],
+      ["Reparatie nodig? U heeft voorrang", "Is een bezoek aan huis toch nodig, dan komen wij met voorrang langs. U kent de tarieven vooraf, dus u komt nooit voor verrassingen te staan."],
+      ["Extra vergoeding voor groene stroom", `Via de ERE-regeling kan uw ${paal} extra geld opleveren. Onze partner regelt de aanvraag en wij leveren de gegevens aan. U heeft er geen omkijken naar.`],
     ];
   }
   return [
@@ -328,14 +328,14 @@ export function defaultBeheerIntro(
   const adres = [o?.addr1, o?.addr2].map((s) => (s ?? "").trim()).filter(Boolean).join(", ");
   const opAdres = adres ? ` op ${adres}` : "";
 
-  // Particulier (alleen v2+): het laadpas-verhaal voorop — thuis laden levert geld op,
-  // declareren is nooit meer nodig. Enkelvoud/meervoud volgt het aantal palen.
+  // Particulier (alleen v2+): het geldvoordeel voorop, korte actieve zinnen (B1), geen
+  // gedachtestreepjes. Enkelvoud/meervoud volgt het aantal palen.
   if (isPrivate && textVersion >= 2) {
     const paal = p > 1 ? "laadpalen" : "laadpaal";
     const doetDoen = p > 1 ? "doen" : "doet";
-    return `Wij nemen ${palen}${opAdres} volledig in beheer. Vanaf dat moment levert elke kWh die u thuis laadt u geld op: wij nemen de stroom van u af en betalen u daar elke maand voor — automatisch, zonder dat u er iets voor hoeft te doen.\n\n`
-      + `We koppelen uw ${paal} aan ons platform en aan uw eigen online dashboard. Na de koppeling ontvangt u per e-mail een uitnodiging om uw account aan te maken; daarna ziet u altijd wat uw ${paal} ${doetDoen} en wat u ervoor ontvangt.\n\n`
-      + `Op uw ${paal} plaatsen we een QR-code waarmee u een storing met één scan direct meldt. Wij bewaken uw ${paal} dag en nacht en verzorgen de maandelijkse afrekening — laadt u met de laadpas van uw werkgever of leasemaatschappij, dan hoeft u nooit meer te declareren.`;
+    return `Wij nemen ${palen}${opAdres} volledig in beheer. Vanaf dat moment levert elke kWh die u thuis laadt u geld op. U hoeft er zelf niets voor te doen.\n\n`
+      + `We koppelen uw ${paal} aan ons platform en aan uw eigen online dashboard. U ontvangt per e-mail een uitnodiging om uw account aan te maken. Daarna ziet u altijd wat uw ${paal} ${doetDoen} en wat u ervoor krijgt.\n\n`
+      + `Op uw ${paal} plaatsen we een QR-code. Daarmee meldt u een storing met één scan. Wij bewaken uw ${paal} dag en nacht en betalen u elke maand voor de geladen stroom. Declareren bij uw werkgever is nooit meer nodig.`;
   }
 
   // Slotzin volgt de tekstversie: v1 = oorspronkelijk ("facturatie en uitbetaling"), v2 = handboek-taal.
@@ -509,10 +509,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   const paalWoord = m.numPoles > 1 ? "laadpalen" : "laadpaal";
   if (privV2) {
     blocks.push(bP(m.withInstallation && m.withManagement
-      ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren, aansluiten en volledig beheren van uw ${paalWoord} aan huis — zodat u er zelf niets aan hoeft te doen.`
+      ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren, aansluiten en volledig beheren van uw ${paalWoord} aan huis, zodat u er zelf niets aan hoeft te doen.`
       : m.withInstallation
         ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren en aansluiten van uw ${paalWoord} aan huis.`
-        : `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het volledige beheer van uw ${paalWoord} aan huis — zodat u er zelf nooit meer iets aan hoeft te doen.`, 12));
+        : `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het volledige beheer van uw ${paalWoord} aan huis, zodat u er zelf nooit meer iets aan hoeft te doen.`, 12));
   } else {
     const introScope = m.withInstallation && m.withManagement
       ? "leveren, monteren, aansluiten en beheren van uw laadpalen"
@@ -605,15 +605,18 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         ? ` Bij het afgesproken laadtarief van ${money2(m.laadkosten as number)} per kWh komt dat neer op een afnameprijs van ${money2(afname)} per kWh.`
         : "";
       if (privV2) {
-        // Particulier: het laadpas-verhaal opent (dé situatie van de lezer), zelfde feitelijke
-        // kern (afnameprijs = laadtarief − marge), en sluit met het geen-gedoe-drieluik.
-        const levert = m.numPoles > 1 ? "leveren" : "levert";
+        // Particulier: kort en op B1-niveau, winst-frame, risico-omkering als slot. Bij een vast
+        // laadtarief noemen we direct de concrete afnameprijs (handboek §8-voorbeeldzin); alleen
+        // bij een dynamisch tarief valt de zin terug op de prijsformule. Geen "op eigen naam"
+        // (verwarrend voor een leek; de juridische inrichting hoort in het contract, niet hier).
+        const prijsZin = afname != null
+          ? `Wij nemen de stroom van uw ${paalWoord} af tegen een vaste afnameprijs van ${money2(afname)} per kWh.`
+          : `Wij nemen de stroom van uw ${paalWoord} af tegen het geldende laadtarief min ${money2(m.serviceFeePerKwh)} per kWh.`;
         blocks.push(bP(
-          `Elke kWh die u thuis met de laadpas van uw werkgever of leasemaatschappij laadt, levert u geld op. ` +
-          `De stroom die uw ${paalWoord} ${levert} nemen wij van u af en verkopen wij op eigen naam door. ` +
-          `De afnameprijs is het laadtarief verminderd met ${money2(m.serviceFeePerKwh)} per geladen kWh.${concrete} ` +
-          `Wij regelen het volledige beheer en betalen u elke maand voor de geleverde stroom — automatisch, zonder declaraties en zonder papierwerk. ` +
-          `U hoeft ons nooit iets te betalen.`, 24));
+          `Elke kWh die u thuis laadt, levert u geld op. ` +
+          prijsZin + ` ` +
+          `De vergoeding staat elke maand automatisch op uw rekening. ` +
+          `U betaalt ons nooit iets.`, 24));
       } else {
         blocks.push(bP(
           `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +
