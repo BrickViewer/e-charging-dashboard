@@ -292,7 +292,7 @@ function beheerPoints(textVersion: number, opts?: { isPrivate?: boolean; poles?:
       ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u 24/7 elke laadsessie, het verbruik en wat u ervoor krijgt. Ook al uw maandelijkse betaalspecificaties vindt u er overzichtelijk terug."],
       [n > 1 ? "Uw laadpalen blijven gewoon werken" : "Uw laadpaal blijft gewoon werken", "Bij een storing krijgen wij direct een melding. Meestal lossen we het op afstand op, vaak voordat u iets merkt. Onze helpdesk is 24/7 bereikbaar."],
       ["Reparatie nodig? U heeft voorrang", "Is een bezoek aan huis toch nodig, dan komen wij met voorrang langs. U kent de tarieven vooraf, dus u komt nooit voor verrassingen te staan."],
-      ["Extra vergoeding voor groene stroom", `Via de ERE-regeling kan uw ${paal} extra geld opleveren. Wij koppelen u aan onze partner die de aanvraag voor u regelt en leveren de gegevens van uw ${paal} rechtstreeks aan. U heeft er geen omkijken naar.`],
+      ["Extra vergoeding voor groene stroom", `Via de ERE-regeling kan uw ${paal} extra geld opleveren. Wij koppelen u aan onze partner die de aanvraag voor u regelt en leveren de gegevens van uw ${paal} rechtstreeks aan.`],
     ];
   }
   return [
@@ -419,7 +419,7 @@ const FOOTER_CLEARANCE = 16;
 // Een blok = één atomair stuk brief. marginTop staat LOS van de html zodat we 'm per
 // pagina kunnen resetten (eerste blok op een vervolgpagina krijgt geen gat). keep =
 // "houd bij het volgende blok" (geen weeskop onderaan een pagina).
-interface Block { html: string; mt: number; keep?: boolean; brk?: boolean; tag?: "dateGap" | "aanhefGap" }
+interface Block { html: string; mt: number; keep?: boolean; brk?: boolean; tag?: "dateGap" | "aanhefGap" | "centerRest" }
 
 const bSec = (t: string, mt = 24, color: string = GREEN): Block =>
   ({ html: `<div style="font-weight:700;color:${color};text-decoration:underline">${esc(t)}</div>`, mt, keep: true });
@@ -625,18 +625,20 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         // regels op 8px. mt 64 = sectiegrens op het 8-punts grid (zie spacing-comment hierboven).
         const bold = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
         const cLine = (t: string, first = false) => `<div style="margin-top:${first ? 0 : 8}px">${t}</div>`;
+        // tag "centerRest": buildOfferPages herrekent de marge zodat dit blok EXACT in het
+        // midden staat tussen de onderkant van punt 6 en de footer-streep (mt 64 = fallback).
         if (afname != null) {
           const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
-          blocks.push(bRaw(
+          blocks.push({ ...bRaw(
             `<div style="text-align:center;font-size:14px">` +
             cLine(`${ingesteld} op ${bold(money2(m.laadkosten as number))} per geladen kWh (excl. BTW).`, true) +
             cLine(`Hiervan ontvangt u elke maand ${bold(money2(afname))} per geladen kWh netto op uw rekening.`) +
-            `</div>`, 64));
+            `</div>`, 64), tag: "centerRest" });
         } else {
-          blocks.push(bRaw(
+          blocks.push({ ...bRaw(
             `<div style="text-align:center;font-size:14px">` +
             cLine(`U ontvangt elke maand het laadtarief min ${bold(money2(m.serviceFeePerKwh))} per geladen kWh netto op uw rekening.`, true) +
-            `</div>`, 64));
+            `</div>`, 64), tag: "centerRest" });
         }
       } else {
         blocks.push(bP(
@@ -783,7 +785,12 @@ export function buildOfferPages(
     return d;
   });
   document.body.appendChild(measure);
-  const heights = nodes.map((d) => d.offsetHeight);
+  // Fractionele hoogtes (getBoundingClientRect) ALLEEN wanneer er een centerRest-blok is
+  // (particulier v2): de opgetelde offsetHeight-afronding verstoorde de exacte centrering.
+  // v1/zakelijk blijven op offsetHeight zodat de paginering van verstuurde offertes
+  // gegarandeerd identiek blijft aan hoe ze ooit zijn gerenderd.
+  const fractional = blocks.some((b) => b.tag === "centerRest");
+  const heights = nodes.map((d) => (fractional ? d.getBoundingClientRect().height : d.offsetHeight));
   document.body.removeChild(measure);
 
   // Auto-fit: krimp ALLEEN de twee briefkop-witruimtes (datum/aanhef) als pagina 1 (alles vóór de
@@ -807,6 +814,24 @@ export function buildOfferPages(
       const dCut = Math.round((reduce * dSlack) / slack);
       dateB.mt -= dCut;
       aanhefB.mt -= reduce - dCut; // rest naar de aanhef → som klopt exact
+    }
+  }
+
+  // centerRest (particuliere beheermodule-pagina): zet het prijsblok EXACT in het midden tussen
+  // de onderkant van het laatste punt en de footer-streep. De streep staat op PAGE_H − 34
+  // (footer-bottom) − ~52 (footer-inhoud) ⇒ content-relatief HAIRLINE_Y. De pagina begint bij
+  // het laatste brk-blok ervóór (vervolgpagina → eerste blok rendert met mt 0).
+  const centerIdx = blocks.findIndex((b) => b.tag === "centerRest");
+  if (centerIdx > 0) {
+    const HAIRLINE_Y = PAGE_H - 34 - 52 - CONTENT_TOP; // ≈ 865, geverifieerd met de meet-harness
+    let brkIdx = -1;
+    for (let i = centerIdx - 1; i >= 0; i--) if (blocks[i].brk) { brkIdx = i; break; }
+    if (brkIdx >= 0) {
+      let used = heights[brkIdx]; // eerste blok op de pagina: mt gereset naar 0
+      for (let i = brkIdx + 1; i < centerIdx; i++) used += blocks[i].mt + heights[i];
+      const rest = HAIRLINE_Y - used - heights[centerIdx];
+      // Fractionele px toegestaan (CSS) → exacte centrering zonder afrondingsdrift.
+      blocks[centerIdx].mt = Math.max(16, rest / 2);
     }
   }
 

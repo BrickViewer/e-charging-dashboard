@@ -92,8 +92,12 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("afnameprijs");
     expect(html).not.toContain("op eigen naam");
     expect(html).not.toContain("U betaalt ons nooit iets");
-    // Het prijsblok sluit de pagina af, ná het laatste punt (ERE, "…omkijken naar.").
-    expect(html.indexOf("omkijken naar")).toBeLessThan(html.indexOf("wordt ingesteld op"));
+    // Het prijsblok sluit de pagina af, ná het laatste punt (ERE eindigt op "…rechtstreeks aan.");
+    // de ERE-slotzin "U heeft er geen omkijken naar." is verwijderd (gebruikerskeuze).
+    expect(html).not.toContain("omkijken naar");
+    const ereIdx = html.indexOf("rechtstreeks aan");
+    expect(ereIdx).toBeGreaterThan(-1);
+    expect(ereIdx).toBeLessThan(html.indexOf("wordt ingesteld op"));
     // Particulier = enkel stroomvergoeding: nooit een instellingen-lijst of blokkeer-/starttarief
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
@@ -119,7 +123,9 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
     // Zelfde slot als installatie+beheer: prijsblok na de punten, geen instellingen-lijst op pagina 1
     expect(html).toContain("Uw laadpaal wordt ingesteld op");
-    expect(html.indexOf("omkijken naar")).toBeLessThan(html.indexOf("wordt ingesteld op"));
+    const ereIdx = html.indexOf("rechtstreeks aan");
+    expect(ereIdx).toBeGreaterThan(-1);
+    expect(ereIdx).toBeLessThan(html.indexOf("wordt ingesteld op"));
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
   });
