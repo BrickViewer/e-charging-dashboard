@@ -152,6 +152,9 @@ verify_jwt = false
 [functions.send-client-invitation]
 verify_jwt = false
 
+[functions.send-client-message]
+verify_jwt = true
+
 [functions.send-fault-notification]
 verify_jwt = false
 

@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import {
   ArrowLeft, MapPin, Zap, FileText, Activity, Building2, Pencil, Save, X,
-  Plug, Wallet, Trash2, AlertTriangle,
+  Plug, Wallet, Trash2, AlertTriangle, MessageSquare,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/services/activityLog";
@@ -43,6 +43,7 @@ import { ClientLocationsTab } from "@/components/admin/client/ClientLocationsTab
 import { ClientFinancialTab } from "@/components/admin/client/ClientFinancialTab";
 import { ClientActivityTab } from "@/components/admin/client/ClientActivityTab";
 import { LinkLocationsDialog } from "@/components/admin/client/LinkLocationsDialog";
+import { SendClientMessageDialog } from "@/components/admin/client/SendClientMessageDialog";
 
 // Klant-rij-updates lopen via één react-query-mutatie (i.p.v. losse supabase.from(...).update-calls
 // verspreid door de component) zodat de caches consistent invalideren.
@@ -85,10 +86,12 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
   const [sendingInvite, setSendingInvite] = useState(false);
   const [eraseDialogOpen, setEraseDialogOpen] = useState(false);
   const [linkLocationOpen, setLinkLocationOpen] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
   const [erasingClient, setErasingClient] = useState(false);
   const { approvingId, approveSettlement, unapproveSettlement, executeMoneyFlow, markEfluxReimbursed } =
     useClientSettlementActions(clientId);
   const canViewPaymentDetails = role === "admin" || role === "manager";
+  const canSendMessage = role === "admin" || role === "manager";
   const { data: paymentDetails } = useQuery({
     queryKey: ["admin-client-payment-details", clientId],
     enabled: !!clientId && canViewPaymentDetails,
@@ -131,13 +134,13 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
 
   const handleActivateManagement = async () => {
     if (!clientId) return;
-    if (!window.confirm("Beheer activeren? De klant krijgt dashboard-toegang en opbrengstdeling gaat lopen.")) return;
+    if (!window.confirm("Beheer activeren? De klant krijgt dashboard-toegang en de maandelijkse afrekening gaat lopen.")) return;
     try {
       await updateClientMutation.mutateAsync({ managed: true });
       await logActivity({
         client_id: clientId,
         action: "client_updated",
-        description: "Beheer geactiveerd (dashboard + opbrengstdeling)",
+        description: "Beheer geactiveerd (dashboard + maandelijkse afrekening)",
       });
       queryClient.invalidateQueries({ queryKey: ["admin-client-activity", clientId] });
       queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
@@ -433,11 +436,17 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
               onClick={handleActivateManagement}
               className="mt-1 block text-xs font-medium text-primary hover:underline"
             >
-              Beheer activeren (dashboard + opbrengstdeling)
+              Beheer activeren (dashboard + maandelijkse afrekening)
             </button>
           )}
         </div>
         <div className="flex items-center gap-2">
+          {!isEditing && !isErased && canSendMessage && (
+            <Button variant="outline" size="sm" onClick={() => setMessageOpen(true)} className="portal-card">
+              <MessageSquare className="w-4 h-4 mr-1.5" />
+              Bericht sturen
+            </Button>
+          )}
           {!isEditing && !isErased && (
             <Button variant="outline" size="sm" onClick={startEditing} className="portal-card">
               <Pencil className="w-4 h-4 mr-1.5" />
@@ -637,6 +646,15 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
         clientName={client.company_name}
         open={linkLocationOpen}
         onOpenChange={setLinkLocationOpen}
+      />
+
+      <SendClientMessageDialog
+        clientId={clientId}
+        clientName={client.company_name}
+        hasPortalAccount={!!client.portal_user_id}
+        recipientEmail={client.contact_email ?? null}
+        open={messageOpen}
+        onClose={() => setMessageOpen(false)}
       />
 
       <DeleteConfirmDialog
