@@ -595,15 +595,14 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:"), privV2 ? 16 : 10));
     // Particulier (v2): 8-PUNTS SPACING-GRID (alle maten veelvoud van 8, proportionele
     // hiërarchie; nagemeten met de Playwright-harness — zie memory offer-b2c-particulier):
-    //   titel→body 8 · bSec→intro 16 · kop→prijsblok 16 · prijsregels 8
-    //   intro→punt01 32 == punt→punt 32 · punt06→kop VISUEEL 64 (= 2× punt-afstand; box-mt
-    //   lager omdat de 26px-kop eigen leading meebrengt)
-    // Typografie: kop 26px → titels 15px (donkere kopkleur, nummer gelijk) → body 12,5px.
+    //   titel→body 8 · bSec→intro 16 · prijsregels 8
+    //   intro→punt01 40 == punt→punt 40 (5 units) · punt06→prijsblok 64 (8 units, sectiegrens)
+    // Typografie: punt-titels 15px (donkere kopkleur, nummer gelijk) → body 12,5px → prijsblok 14px.
     // Zakelijk behoudt de oorspronkelijke maten.
     const titleSize = privV2 ? ";font-size:15px;line-height:1.3" : "";
     beheerPoints(m.textVersion, { isPrivate: m.isPrivate, poles: m.numPoles }).forEach(([t, b], i) => blocks.push(bRaw(
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px${titleSize}">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${privV2 ? HEAD : INK}${titleSize}">${esc(t)}</div><div style="color:${MUTED};margin-top:${privV2 ? 8 : 5}px">${esc(b)}</div></div></div>`,
-      i === 0 ? (privV2 ? 32 : 14) : (privV2 ? 32 : 22))));
+      i === 0 ? (privV2 ? 40 : 14) : (privV2 ? 40 : 22))));
     if (m.textVersion <= 1) {
       // v1 — oorspronkelijke tekst van verstuurde offertes (fee-frasering; NIET wijzigen).
       blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
@@ -622,25 +621,22 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         // bij een dynamisch/onbekend laadtarief valt de alinea terug op de prijsformule.
         // Particulier heeft ENKEL een stroomvergoeding (nooit blokkeer-/starttarief), dus de
         // "afgesproken instellingen"-lijst verschijnt hier bewust niet.
-        // Kop-mt 56 → visueel 64 (8-punts grid: exact 2× de punt-afstand; de 26px-kop brengt
-        // ~8px eigen leading mee boven de kapitaalhoogte — gemeten met de harness).
-        blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 56), keep: true });
-        // Prijsblok: gecentreerde regels onder de (gecentreerde) kop, bedragen vet; regels op 8px.
+        // Prijsblok: gecentreerd afsluitend statement (zonder eigen kop), bedragen vet, 14px,
+        // regels op 8px. mt 64 = sectiegrens op het 8-punts grid (zie spacing-comment hierboven).
         const bold = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
         const cLine = (t: string, first = false) => `<div style="margin-top:${first ? 0 : 8}px">${t}</div>`;
-        // 14px: het prijsblok is het afsluitende accent onder de 26px-kop (boven de 12,5px-body's).
         if (afname != null) {
           const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
           blocks.push(bRaw(
             `<div style="text-align:center;font-size:14px">` +
-            cLine(`${ingesteld} op ${bold(money2(m.laadkosten as number))} per kWh (excl. BTW).`, true) +
-            cLine(`U ontvangt elke maand netto ${bold(money2(afname))} per geladen kWh op uw rekening.`) +
-            `</div>`, 16));
+            cLine(`${ingesteld} op ${bold(money2(m.laadkosten as number))} per geladen kWh (excl. BTW).`, true) +
+            cLine(`Hiervan ontvangt u elke maand ${bold(money2(afname))} per geladen kWh netto op uw rekening.`) +
+            `</div>`, 64));
         } else {
           blocks.push(bRaw(
             `<div style="text-align:center;font-size:14px">` +
-            cLine(`U ontvangt elke maand het laadtarief min ${bold(money2(m.serviceFeePerKwh))} per geladen kWh op uw rekening.`, true) +
-            `</div>`, 16));
+            cLine(`U ontvangt elke maand het laadtarief min ${bold(money2(m.serviceFeePerKwh))} per geladen kWh netto op uw rekening.`, true) +
+            `</div>`, 64));
         }
       } else {
         blocks.push(bP(

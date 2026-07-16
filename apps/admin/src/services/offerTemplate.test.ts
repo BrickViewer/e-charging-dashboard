@@ -77,24 +77,23 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("up en running");
     expect(html).not.toContain("Altijd en overal"); // spacing-fix dashboard-punt
     expect(html).toContain("betaalspecificatie");
-    // Prijsblok: gecentreerde regels, bedragen vet (span breekt de string → delen los pinnen)
+    // Prijsblok: gecentreerde regels, bedragen vet (span breekt de string → delen los pinnen);
+    // de kop "Een laadpaal die voor u werkt" is verwijderd (gebruikerskeuze).
     expect(html).toContain("Uw laadpaal wordt ingesteld op");
     expect(html).toContain("€ 0,50");
-    expect(html).toContain("(excl. BTW)");
-    expect(html).toContain("U ontvangt elke maand netto");
+    expect(html).toContain("per geladen kWh (excl. BTW)");
+    expect(html).toContain("Hiervan ontvangt u elke maand");
     expect(html).toContain("€ 0,40");
-    expect(html).toContain("per geladen kWh op uw rekening");
+    expect(html).toContain("per geladen kWh netto op uw rekening");
+    expect(html).not.toContain("voor u werkt");
     expect(html).not.toContain("laadbeurt na laadbeurt"); // slotzin verwijderd (gebruikerskeuze)
     expect(html).toContain("telt elke kWh automatisch mee"); // gasten-laadpas (punt 1)
     expect(html).toContain("betaalspecificaties vindt u er overzichtelijk terug"); // dashboard (punt 3)
     expect(html).not.toContain("afnameprijs");
     expect(html).not.toContain("op eigen naam");
     expect(html).not.toContain("U betaalt ons nooit iets");
-    // Kop "Een laadpaal die voor u werkt" staat VÓÓR de prijs-alinea (sectiekop van het
-    // vergoedingsblok); "werkt" staat in een groene g()-span → uniek als "werkt</span>".
-    const kopIdx = html.indexOf("werkt</span>");
-    expect(kopIdx).toBeGreaterThan(-1);
-    expect(kopIdx).toBeLessThan(html.indexOf("wordt ingesteld op"));
+    // Het prijsblok sluit de pagina af, ná het laatste punt (ERE, "…omkijken naar.").
+    expect(html.indexOf("omkijken naar")).toBeLessThan(html.indexOf("wordt ingesteld op"));
     // Particulier = enkel stroomvergoeding: nooit een instellingen-lijst of blokkeer-/starttarief
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
@@ -118,10 +117,9 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("levert elke kWh die u thuis laadt u geld op");
     expect(html).toContain("Declareren bij uw werkgever is nooit meer nodig");
     expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
-    // Zelfde slot als installatie+beheer: kop vóór prijs-alinea, geen instellingen-lijst op pagina 1
-    const kopIdx = html.indexOf("werkt</span>");
-    expect(kopIdx).toBeGreaterThan(-1);
-    expect(kopIdx).toBeLessThan(html.indexOf("Uw laadpaal wordt ingesteld"));
+    // Zelfde slot als installatie+beheer: prijsblok na de punten, geen instellingen-lijst op pagina 1
+    expect(html).toContain("Uw laadpaal wordt ingesteld op");
+    expect(html.indexOf("omkijken naar")).toBeLessThan(html.indexOf("wordt ingesteld op"));
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
   });
