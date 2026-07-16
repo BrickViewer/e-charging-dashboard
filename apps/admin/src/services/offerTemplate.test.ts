@@ -67,7 +67,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("voor betaald worden");
     expect(html).toContain("laadpas van uw werkgever of leasemaatschappij");
     // Intro: netto-vergoeding + gestapeld rekenvoorbeeld (echte berekening, gebruikerskeuze)
-    expect(html).toContain("ontvangt u van ons elke maand");
+    expect(html).toContain("Voor de vergoeding van uw stroom ontvangt u elke maand");
     expect(html).toContain("€ 0,40");
     expect(html).toContain("Bijvoorbeeld: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis");
     expect(html).toContain('<span style="font-style:italic">Bijvoorbeeld:'); // heel het voorbeeld cursief
@@ -118,7 +118,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
 
   it("dynamisch laadtarief: formule-vergoeding in de intro, geen voorbeeld-alinea", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
-    expect(html).toContain("het laadtarief min € 0,10 netto op uw rekening");
+    expect(html).toContain("het laadtarief min € 0,10 per geladen kWh op uw rekening");
     expect(html).not.toContain("Bijvoorbeeld: u rijdt");
     expect(html).not.toContain("wordt ingesteld op");
   });
