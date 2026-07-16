@@ -77,10 +77,14 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("up en running");
     expect(html).not.toContain("Altijd en overal"); // spacing-fix dashboard-punt
     expect(html).toContain("betaalspecificatie");
-    // Prijs-alinea: instelling + netto-ontvangst + terugverdien-slotzin; geen afnameprijs-term/"op eigen naam"
-    expect(html).toContain("Uw laadpaal wordt ingesteld op € 0,50 per kWh (excl. BTW)");
-    expect(html).toContain("netto € 0,40 per geladen kWh op uw rekening");
-    expect(html).toContain("laadbeurt na laadbeurt terug");
+    // Prijsblok: gecentreerde regels, bedragen vet (span breekt de string → delen los pinnen)
+    expect(html).toContain("Uw laadpaal wordt ingesteld op");
+    expect(html).toContain("€ 0,50");
+    expect(html).toContain("(excl. BTW)");
+    expect(html).toContain("U ontvangt elke maand netto");
+    expect(html).toContain("€ 0,40");
+    expect(html).toContain("per geladen kWh op uw rekening");
+    expect(html).not.toContain("laadbeurt na laadbeurt"); // slotzin verwijderd (gebruikerskeuze)
     expect(html).toContain("telt elke kWh automatisch mee"); // gasten-laadpas (punt 1)
     expect(html).toContain("betaalspecificaties vindt u er overzichtelijk terug"); // dashboard (punt 3)
     expect(html).not.toContain("afnameprijs");
@@ -103,7 +107,8 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
 
   it("dynamisch laadtarief: prijsformule-fallback i.p.v. concrete bedragen", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
-    expect(html).toContain("het laadtarief min € 0,10 per geladen kWh");
+    expect(html).toContain("U ontvangt elke maand het laadtarief min");
+    expect(html).toContain("€ 0,10");
     expect(html).not.toContain("wordt ingesteld op");
   });
 

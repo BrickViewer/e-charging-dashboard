@@ -618,22 +618,23 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         // Particulier heeft ENKEL een stroomvergoeding (nooit blokkeer-/starttarief), dus de
         // "afgesproken instellingen"-lijst verschijnt hier bewust niet.
         blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 52), keep: true });
-        // Slotzin (terugverdien-belofte) sluit het vergoedingsblok af.
-        const slotZin = m.numPoles > 1
-          ? `Zo verdienen uw laadpalen zichzelf laadbeurt na laadbeurt terug.`
-          : `Zo verdient uw laadpaal zichzelf laadbeurt na laadbeurt terug.`;
+        // Prijsblok: gecentreerde regels onder de (gecentreerde) kop, bedragen vet.
+        const bold = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
+        const cLine = (t: string, first = false) => `<div style="margin-top:${first ? 0 : 5}px">${t}</div>`;
         if (afname != null) {
           const ingesteld = m.numPoles > 1 ? "Uw laadpalen worden ingesteld" : "Uw laadpaal wordt ingesteld";
-          blocks.push(bP(
-            `Elke kWh die u thuis laadt, levert u geld op. ` +
-            `${ingesteld} op ${money2(m.laadkosten as number)} per kWh (excl. BTW). ` +
-            `U ontvangt elke maand netto ${money2(afname)} per geladen kWh op uw rekening. ` +
-            slotZin, 18));
+          blocks.push(bRaw(
+            `<div style="text-align:center">` +
+            cLine(`Elke kWh die u thuis laadt, levert u geld op.`, true) +
+            cLine(`${ingesteld} op ${bold(money2(m.laadkosten as number))} per kWh (excl. BTW).`) +
+            cLine(`U ontvangt elke maand netto ${bold(money2(afname))} per geladen kWh op uw rekening.`) +
+            `</div>`, 18));
         } else {
-          blocks.push(bP(
-            `Elke kWh die u thuis laadt, levert u geld op. ` +
-            `U ontvangt elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh op uw rekening. ` +
-            slotZin, 18));
+          blocks.push(bRaw(
+            `<div style="text-align:center">` +
+            cLine(`Elke kWh die u thuis laadt, levert u geld op.`, true) +
+            cLine(`U ontvangt elke maand het laadtarief min ${bold(money2(m.serviceFeePerKwh))} per geladen kWh op uw rekening.`) +
+            `</div>`, 18));
         }
       } else {
         blocks.push(bP(
