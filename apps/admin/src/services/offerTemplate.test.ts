@@ -69,7 +69,8 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     // Intro: netto-vergoeding + gestapeld rekenvoorbeeld (echte berekening, gebruikerskeuze)
     expect(html).toContain("ontvangt u van ons elke maand");
     expect(html).toContain("€ 0,40");
-    expect(html).toContain("Een rekenvoorbeeld. Stel: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis");
+    expect(html).toContain("Bijvoorbeeld: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis");
+    expect(html).toContain('<span style="font-style:italic">Bijvoorbeeld:'); // heel het voorbeeld cursief
     expect(html).toContain("Wij betalen u € 0,40 per geladen kWh, dus € 1.600 per jaar");
     expect(html).toContain("bij een stroomprijs van € 0,25 per kWh");
     expect(html).toContain("U houdt dus € 600 per jaar over");
@@ -101,6 +102,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("omkijken naar");
     expect(html).not.toContain("laadbeurt na laadbeurt");
     expect(html).toContain("telt elke kWh automatisch mee"); // gasten-laadpas (punt 1)
+    expect(html).not.toContain("Declareren is nooit meer nodig"); // verwijderd (gebruikerskeuze)
     expect(html).toContain("betaalspecificaties vindt u er overzichtelijk terug"); // dashboard (punt 3)
     // Particulier = enkel stroomvergoeding: nooit een instellingen-lijst of blokkeer-/starttarief
     expect(html).not.toContain("afgesproken instellingen");
@@ -117,14 +119,14 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
   it("dynamisch laadtarief: formule-vergoeding in de intro, geen voorbeeld-alinea", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
     expect(html).toContain("het laadtarief min € 0,10 netto op uw rekening");
-    expect(html).not.toContain("Een rekenvoorbeeld");
+    expect(html).not.toContain("Bijvoorbeeld: u rijdt");
     expect(html).not.toContain("wordt ingesteld op");
   });
 
   it("laag laadtarief (geen voordeel t.o.v. huishoudprijs): voorbeeld-alinea vervalt", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: 0.3 })); // netto 0,20 < 0,25
     expect(html).toContain("€ 0,20"); // de vergoeding zelf blijft staan
-    expect(html).not.toContain("Een rekenvoorbeeld");
+    expect(html).not.toContain("Bijvoorbeeld: u rijdt");
   });
 
   it("alleen-beheer particulier: beheer-intro opent met het geldvoordeel en sluit de declaratie-lus", () => {
@@ -135,7 +137,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
     // Zelfde slot: intro-vergoeding + voorbeeld op de beheerpagina, geen instellingen-lijst op p1
     expect(html).toContain("beheren die volledig voor u");
-    expect(html).toContain("Een rekenvoorbeeld");
+    expect(html).toContain("Bijvoorbeeld: u rijdt");
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
   });

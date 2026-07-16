@@ -287,7 +287,7 @@ function beheerPoints(textVersion: number, opts?: { isPrivate?: boolean; poles?:
     const paal = n > 1 ? "laadpalen" : "laadpaal";
     const levert = n > 1 ? "leveren" : "levert";
     return [
-      ["Laden via de zaak? Automatisch geregeld", "Laadt u thuis met de laadpas van uw werkgever of leasemaatschappij? Elke geladen kWh wordt automatisch geregistreerd en vergoed. Declareren is nooit meer nodig. Ook als iemand anders met een eigen laadpas bij u laadt, telt elke kWh automatisch mee."],
+      ["Laden via de zaak? Automatisch geregeld", "Laadt u thuis met de laadpas van uw werkgever of leasemaatschappij? Elke geladen kWh wordt automatisch geregistreerd en vergoed. Ook als iemand anders met een eigen laadpas bij u laadt, telt elke kWh automatisch mee."],
       ["Elke maand geld op uw rekening", `Wij betalen u elke maand voor de stroom die uw ${paal} ${levert}. U ontvangt daarbij een duidelijke betaalspecificatie. Zelf hoeft u niets te doen.`],
       ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u 24/7 elke laadsessie, het verbruik en wat u ervoor krijgt. Ook al uw maandelijkse betaalspecificaties vindt u er overzichtelijk terug."],
       [n > 1 ? "Uw laadpalen blijven gewoon werken" : "Uw laadpaal blijft gewoon werken", "Bij een storing krijgen wij direct een melding. Meestal lossen we het op afstand op, vaak voordat u iets merkt. Onze helpdesk is 24/7 bereikbaar."],
@@ -615,12 +615,14 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         const ereJaar = VOORBEELD_KWH_JAAR * ERE_INDICATIE;
         const totaalJaar = overJaar + ereJaar;
         blocks.push(bP(
-          `Een rekenvoorbeeld. Stel: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis. ` +
+          `<span style="font-style:italic">` +
+          `Bijvoorbeeld: u rijdt ongeveer 20.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis. ` +
           `Wij betalen u ${money2(afname)} per geladen kWh, dus ${eur0(betaaldJaar)} per jaar. ` +
           `Zelf betaalt u voor die stroom ongeveer ${eur0(kostenJaar)} per jaar, bij een stroomprijs van ${money2(HUISHOUD_STROOMPRIJS)} per kWh. ` +
           `U houdt dus ${eur0(overJaar)} per jaar over. ` +
           `Meldt u zich ook aan voor de ERE-regeling? Dan komt daar indicatief nog zo'n ${eur0(ereJaar)} per jaar bij. ` +
-          `Zo verdient u met uw ${paalWoord} al snel ${eur0(totaalJaar)} per jaar.`, 12));
+          `Zo verdient u met uw ${paalWoord} al snel ${eur0(totaalJaar)} per jaar.` +
+          `</span>`, 12));
       }
       blocks.push(bP("Ons beheer houdt onder andere in:", 16));
     } else {
