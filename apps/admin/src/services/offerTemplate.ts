@@ -178,6 +178,8 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   // Tekstversie: afwezig => nieuwste (handboek-conform). Verstuurde offertes dragen 1 (backfill)
   // en her-renderen met de oorspronkelijke teksten — een getekend document mag nooit verschuiven.
   const textVersion = firstNum(od.text_version) ?? 2;
+  // Particulier vroeg berekenen (zelfde afleiding als in de return): stuurt de default-beheer-intro.
+  const isPrivate = data.isPrivate ?? !firstStr(data.company);
 
   // Adres: offerte-velden (override) winnen; leeg → live uit het gekoppelde object.
   let addr1 = firstStr(od.addressStreet, data.objectStreet);
@@ -222,7 +224,7 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     hasCompany: !!firstStr(data.company),
     // Particulier = geen bedrijf gekoppeld. Bij verzonden offertes leidt de opgeslagen vlag (freeze),
     // anders afleiden uit 'geen bedrijf'. Stuurt BTW-weergave, voorwaarden en toon.
-    isPrivate: data.isPrivate ?? !firstStr(data.company),
+    isPrivate,
     contactName: firstStr(od.tav, data.contactName),
     addr1, addr2,
     dateLong: fmtDateLong(dateIso),
@@ -244,8 +246,9 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     eindgroepAmperage: firstNum(od.eindgroepAmperage, tpl.defaultEindgroepAmperage) ?? tpl.defaultEindgroepAmperage,
     leveringText: firstStr(od.leveringText, DEFAULT_LEVERING_TEXT),
     // Beheer-toelichting: volledig adres (straat + huisnummer via addr1), maar zonder postcode (alleen plaats).
-    // De default volgt de tekstversie: verstuurde (v1-)offertes met een lege override her-renderen de oude tekst.
-    beheerIntroText: firstStr(od.beheerIntroText, defaultBeheerIntro({ poles: n, addr1, addr2: firstStr(od.addressCity, data.objectCity) }, textVersion)),
+    // De default volgt tekstversie + particulier: verstuurde (v1-)offertes met een lege override
+    // her-renderen de oude tekst; een particulier-concept krijgt het laadpas-verhaal.
+    beheerIntroText: firstStr(od.beheerIntroText, defaultBeheerIntro({ poles: n, addr1, addr2: firstStr(od.addressCity, data.objectCity) }, textVersion, isPrivate)),
     totalInvestment: firstNum(data.totalInvestment),
     stelpost: firstNum(od.stelpostGraafwerk, tpl.defaultStelpostGraafwerk),
     serviceFeePerKwh: firstNum(od.serviceFeePerKwh, tpl.serviceFeePerKwh) ?? tpl.serviceFeePerKwh,
@@ -274,7 +277,24 @@ const BEHEER_POINT_5_V1: [string, string] =
 const BEHEER_POINT_5_V2: [string, string] =
   ["Elke maand geld op uw rekening", "Wij verzorgen de transactieverwerking en de maandelijkse afrekening. Elke maand betalen wij u voor de door uw palen geleverde stroom en ontvangt u het bijbehorende afrekendocument — u hoeft zelf niets op te maken en ons nooit iets te betalen."];
 
-function beheerPoints(textVersion: number): Array<[string, string]> {
+function beheerPoints(textVersion: number, opts?: { isPrivate?: boolean; poles?: number }): Array<[string, string]> {
+  // Particulier (alleen v2+): het laadpas-verhaal van de werkgever/leasemaatschappij vervangt
+  // "Doorlopende optimalisatie van rendement" (AI-tarieven zijn niet van toepassing op één
+  // thuispaal) en de overige punten gaan naar enkelvoud/particuliere toon. Zakelijk + v1
+  // blijven byte-gelijk.
+  if (opts?.isPrivate && textVersion >= 2) {
+    const n = opts.poles ?? 1;
+    const paal = n > 1 ? "laadpalen" : "laadpaal";
+    const doetDoen = n > 1 ? "doen" : "doet";
+    return [
+      ["Eén persoonlijk dashboard", `In uw eigen online dashboard ziet u realtime wat uw ${paal} ${doetDoen}: iedere laadsessie, het verbruik en wat u ervoor ontvangt. Eén plek voor inzicht en controle, 24/7 beschikbaar.`],
+      [n > 1 ? "Uw laadpalen blijven up en running" : "Uw laadpaal blijft up en running", "Wij krijgen direct een melding bij een storing en lossen het meestal op voordat u het in de gaten heeft. Eerst op afstand; lukt dat niet, dan komen wij ter plaatse voor een diagnose. U kunt onze helpdesk 24/7 bereiken."],
+      ["Nooit meer declareren", "Laadt u thuis met de laadpas van uw werkgever of leasemaatschappij, dan wordt iedere geladen kWh automatisch geregistreerd en verwerkt. Wij betalen u er elke maand voor — geen declaraties, geen bonnetjes, geen papierwerk."],
+      ["Hulp met ERE-onboarding", `Wij koppelen u aan onze partner die u begeleidt bij de ERE-aanvraag. De gegevens van uw ${paal} worden door ons rechtstreeks aan de ERE-inboeker verstrekt, zodat u hier geen omkijken naar heeft.`],
+      ["Elke maand geld op uw rekening", `Wij verzorgen de transactieverwerking en de maandelijkse afrekening. Elke maand betalen wij u voor de door uw ${paal} geleverde stroom en ontvangt u de bijbehorende betaalspecificatie — u hoeft zelf niets op te maken en ons nooit iets te betalen.`],
+      ["Prioriteit op reparaties", "Gaat er echter iets mis en is een bezoek op locatie nodig, dan komen wij met voorrang langs om uw paal weer aan de praat te krijgen. Hiervoor gelden vaste, vooraf bekende tarieven (zie de prijsstelling), zodat u nooit voor verrassingen komt te staan."],
+    ];
+  }
   return [
     ["Eén persoonlijk dashboard", "In uw eigen online dashboard ziet u realtime wat uw palen doen: opbrengsten, verbruik en gebruik per paal. Eén plek voor inzicht, controle en rapportage. 24/7 inzichtelijk."],
     ["Uw palen blijven up en running", "Wij krijgen direct een melding bij een storing en lossen het meestal op voordat u het in de gaten heeft. Eerst op afstand; lukt dat niet, dan komen wij ter plaatse voor een diagnose. U en uw laadgebruikers kunnen de helpdesk 24/7 bereiken."],
@@ -298,11 +318,26 @@ export const DEFAULT_LEVERING_TEXT = LEVERING_INSTALLATIE.join("\n\n");
 // Standaard begeleidende tekst op pagina 1 bij "alleen beheer" (scope zonder installatie): een korte samenvatting
 // die de kernafspraak benadrukt (hoeveel laadpalen we beheren en op welk adres). Vult automatisch aantal + adres in;
 // per offerte te overschrijven via offer_details.beheerIntroText (alinea's gescheiden door een lege regel).
-export function defaultBeheerIntro(o?: { poles?: number | null; addr1?: string | null; addr2?: string | null }, textVersion = 2): string {
+export function defaultBeheerIntro(
+  o?: { poles?: number | null; addr1?: string | null; addr2?: string | null },
+  textVersion = 2,
+  isPrivate = false,
+): string {
   const p = o?.poles ?? 0;
   const palen = p > 1 ? `uw ${p} laadpalen` : (p === 1 ? "uw laadpaal" : "uw laadpalen");
   const adres = [o?.addr1, o?.addr2].map((s) => (s ?? "").trim()).filter(Boolean).join(", ");
   const opAdres = adres ? ` op ${adres}` : "";
+
+  // Particulier (alleen v2+): het laadpas-verhaal voorop — thuis laden levert geld op,
+  // declareren is nooit meer nodig. Enkelvoud/meervoud volgt het aantal palen.
+  if (isPrivate && textVersion >= 2) {
+    const paal = p > 1 ? "laadpalen" : "laadpaal";
+    const doetDoen = p > 1 ? "doen" : "doet";
+    return `Wij nemen ${palen}${opAdres} volledig in beheer. Vanaf dat moment levert elke kWh die u thuis laadt u geld op: wij nemen de stroom van u af en betalen u daar elke maand voor — automatisch, zonder dat u er iets voor hoeft te doen.\n\n`
+      + `We koppelen uw ${paal} aan ons platform en aan uw eigen online dashboard. Na de koppeling ontvangt u per e-mail een uitnodiging om uw account aan te maken; daarna ziet u altijd wat uw ${paal} ${doetDoen} en wat u ervoor ontvangt.\n\n`
+      + `Op uw ${paal} plaatsen we een QR-code waarmee u een storing met één scan direct meldt. Wij bewaken uw ${paal} dag en nacht en verzorgen de maandelijkse afrekening — laadt u met de laadpas van uw werkgever of leasemaatschappij, dan hoeft u nooit meer te declareren.`;
+  }
+
   // Slotzin volgt de tekstversie: v1 = oorspronkelijk ("facturatie en uitbetaling"), v2 = handboek-taal.
   const slot = textVersion <= 1
     ? "Vanaf dat moment bewaken wij uw palen dag en nacht en verzorgen we de facturatie en uitbetaling."
@@ -469,16 +504,32 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   blocks.push({ ...bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, m.dateGap), tag: "dateGap" });
   blocks.push(bRaw(`<div>${refRow("Onze referentie", mStr(m.onzeReferentie, "referentie"))}<div style="margin-top:20px">${refRow("Locatie", mStr(m.object, "Locatie"))}</div>${refRow("Betreft", mStr(m.betreft, "Betreft"))}</div>`, 18));
   blocks.push({ ...bRaw(`<div>${esc(aanhefLine(m.aanhef))}</div>`, m.aanhefGap), tag: "aanhefGap" });
-  const introScope = m.withInstallation && m.withManagement
-    ? "leveren, monteren, aansluiten en beheren van uw laadpalen"
-    : m.withInstallation
-      ? "leveren, monteren en aansluiten van uw laadpalen"
-      : "het beheer van uw bestaande laadpalen";
-  blocks.push(bP(`Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het ${introScope}.`, 12));
+  // Particulier (v2+): enkelvoud + "aan huis" + de ontzorgingsbelofte in de intro-zin.
+  const privV2 = m.isPrivate && m.textVersion >= 2;
+  const paalWoord = m.numPoles > 1 ? "laadpalen" : "laadpaal";
+  if (privV2) {
+    blocks.push(bP(m.withInstallation && m.withManagement
+      ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren, aansluiten en volledig beheren van uw ${paalWoord} aan huis — zodat u er zelf niets aan hoeft te doen.`
+      : m.withInstallation
+        ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren en aansluiten van uw ${paalWoord} aan huis.`
+        : `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het volledige beheer van uw ${paalWoord} aan huis — zodat u er zelf nooit meer iets aan hoeft te doen.`, 12));
+  } else {
+    const introScope = m.withInstallation && m.withManagement
+      ? "leveren, monteren, aansluiten en beheren van uw laadpalen"
+      : m.withInstallation
+        ? "leveren, monteren en aansluiten van uw laadpalen"
+        : "het beheer van uw bestaande laadpalen";
+    blocks.push(bP(`Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het ${introScope}.`, 12));
+  }
+
+  // Kop: particulier (v2+) krijgt het laadpas-/gemak-frame i.p.v. "inkomstenbron".
+  const heroKop = privV2
+    ? `Thuis ${g("laden")} en er ${g("vanzelf")} voor betaald worden.`
+    : `Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`;
 
   // --- Levering en installatie (alleen bij installatie-scope) ---
   if (m.withInstallation) {
-    if (m.withManagement) blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
+    if (m.withManagement) blocks.push(bBig(heroKop, 30));
     blocks.push(bSec("Levering en installatie", 30, GREEN));
     // De scope-tekst is bewerkbare vrije tekst (offer_details.leveringText); alinea's
     // gescheiden door een lege regel → losse blokken zodat alles netjes herpagineert.
@@ -516,7 +567,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       `<div style="font-style:italic;margin-top:30px">Stelpost graafwerkzaamheden: ${mStel(m.stelpost)}<br/>Note: deze kosten zitten dus niet in de offerteprijs.</div>`,
       24));
   } else if (m.withManagement) {
-    blocks.push(bBig(`Wij maken van uw ${g("laadpalen")} een ${g("inkomstenbron")}.`, 30));
+    blocks.push(bBig(heroKop, 30));
     // Begeleidende aanpak-tekst (vrije tekst, alinea's gescheiden door een lege regel) zodat pagina 1 netjes
     // vult i.p.v. enkel de kop; zelfde herpaginering als leveringText.
     m.beheerIntroText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
@@ -532,11 +583,15 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
 
   // --- Beheermodule (alleen bij beheer-scope) — start altijd strak op een nieuwe pagina ---
   if (m.withManagement) {
-    blocks.push({ ...bSec("Beheermodule laadpalen", 0, GREEN), brk: true });
-    blocks.push(bP(m.withInstallation
-      ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
-      : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:", 10));
-    beheerPoints(m.textVersion).forEach(([t, b], i) => blocks.push(bRaw(
+    blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", 0, GREEN), brk: true });
+    blocks.push(bP(privV2
+      ? (m.withInstallation
+        ? `Na de installatie configureren wij uw ${paalWoord} en activeren we die in ons eigen platform. Dit houdt onder andere in:`
+        : `Wij nemen uw ${paalWoord} op in ons eigen platform en beheren die volledig voor u. Dit houdt onder andere in:`)
+      : (m.withInstallation
+        ? "Na de installatie configureren wij voor u de laadpalen en activeren we die in ons eigen platform. Dit houdt onder andere in:"
+        : "Wij nemen uw bestaande laadpalen op in ons eigen platform en beheren ze volledig voor u. Dit houdt onder andere in:"), 10));
+    beheerPoints(m.textVersion, { isPrivate: m.isPrivate, poles: m.numPoles }).forEach(([t, b], i) => blocks.push(bRaw(
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${INK}">${esc(t)}</div><div style="color:${MUTED};margin-top:5px">${esc(b)}</div></div></div>`,
       i === 0 ? 14 : 22)));
     if (m.textVersion <= 1) {
@@ -549,11 +604,23 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       const concrete = afname != null
         ? ` Bij het afgesproken laadtarief van ${money2(m.laadkosten as number)} per kWh komt dat neer op een afnameprijs van ${money2(afname)} per kWh.`
         : "";
-      blocks.push(bP(
-        `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +
-        `De stroom die uw laadpalen leveren nemen wij van u af en verkopen wij op eigen naam door. ` +
-        `De afnameprijs is het laadtarief verminderd met ${money2(m.serviceFeePerKwh)} per geladen kWh.${concrete} ` +
-        `Wij betalen u elke maand voor de geleverde stroom — u hoeft ons nooit iets te betalen.`, 24));
+      if (privV2) {
+        // Particulier: het laadpas-verhaal opent (dé situatie van de lezer), zelfde feitelijke
+        // kern (afnameprijs = laadtarief − marge), en sluit met het geen-gedoe-drieluik.
+        const levert = m.numPoles > 1 ? "leveren" : "levert";
+        blocks.push(bP(
+          `Elke kWh die u thuis met de laadpas van uw werkgever of leasemaatschappij laadt, levert u geld op. ` +
+          `De stroom die uw ${paalWoord} ${levert} nemen wij van u af en verkopen wij op eigen naam door. ` +
+          `De afnameprijs is het laadtarief verminderd met ${money2(m.serviceFeePerKwh)} per geladen kWh.${concrete} ` +
+          `Wij regelen het volledige beheer en betalen u elke maand voor de geleverde stroom — automatisch, zonder declaraties en zonder papierwerk. ` +
+          `U hoeft ons nooit iets te betalen.`, 24));
+      } else {
+        blocks.push(bP(
+          `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +
+          `De stroom die uw laadpalen leveren nemen wij van u af en verkopen wij op eigen naam door. ` +
+          `De afnameprijs is het laadtarief verminderd met ${money2(m.serviceFeePerKwh)} per geladen kWh.${concrete} ` +
+          `Wij betalen u elke maand voor de geleverde stroom — u hoeft ons nooit iets te betalen.`, 24));
+      }
     }
     // De eenmalige activatie-/onboardingkosten tonen we alleen onder de voorwaarden (zie hieronder), niet hier.
     // "Een laadpaal die voor u werkt" + de inline-tariefregels alleen bij installatie+beheer; bij alleen-beheer

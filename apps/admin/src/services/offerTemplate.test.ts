@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { buildOfferPages, type OfferTemplateData } from "./offerTemplate";
 
-function data(textVersion?: number): OfferTemplateData {
+function data(textVersion?: number, o?: Partial<OfferTemplateData>): OfferTemplateData {
   return {
     quoteNumber: "OFF-2026-001",
     company: "Voorbeeldbedrijf B.V.",
@@ -20,8 +20,13 @@ function data(textVersion?: number): OfferTemplateData {
     startFeePerSession: 0,
     offerDetails: textVersion != null ? { text_version: textVersion } : {},
     offerTemplate: null,
+    ...o,
   };
 }
+
+// Particulier = geen bedrijf (isPrivate afgeleid), meestal één laadpaal.
+const privData = (textVersion?: number, o?: Partial<OfferTemplateData>) =>
+  data(textVersion, { company: "", numChargePoints: 1, ...o });
 
 const htmlOf = (d: OfferTemplateData) =>
   buildOfferPages(d, { logoUrl: null, coverUrl: null }).map((p) => p.innerHTML).join("\n");
@@ -45,5 +50,48 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("afnameprijs");
     expect(html).toContain("€ 0,40"); // concrete afnameprijs: laadtarief 0,50 − marge 0,10
     expect(html).toContain("u hoeft ons nooit iets te betalen");
+    // Zakelijk behoudt de zakelijke kop + AI-optimalisatiepunt (particulier-variant lekt niet).
+    expect(html).toContain("inkomstenbron");
+    expect(html).toContain("Doorlopende optimalisatie van rendement");
+  });
+});
+
+describe("particuliere offerte (v2) — laadpas-verhaal", () => {
+  it("rendert kop, 'Nooit meer declareren' en de particuliere prijs-alinea", () => {
+    const html = htmlOf(privData());
+    // Kop + laadpas-hook
+    expect(html).toContain("vanzelf");
+    expect(html).toContain("voor betaald worden");
+    expect(html).toContain("laadpas van uw werkgever of leasemaatschappij");
+    expect(html).toContain("levert u geld op");
+    // Beheerpunt 3 vervangen; documentterm klopt (particulier krijgt een betaalspecificatie)
+    expect(html).toContain("Nooit meer declareren");
+    expect(html).not.toContain("Doorlopende optimalisatie van rendement");
+    expect(html).toContain("betaalspecificatie");
+    // Enkelvoud + zelfde feitelijke kern als zakelijk
+    expect(html).toContain("uw laadpaal");
+    expect(html).toContain("afnameprijs");
+    expect(html).toContain("€ 0,40");
+    expect(html).toContain("U hoeft ons nooit iets te betalen");
+    // Handboek-taalregels blijven gelden
+    expect(html).not.toMatch(/service-?fee|\bfee\b/i);
+    expect(html).not.toContain("inhouding");
+    expect(html).not.toContain("opbrengst uit");
+  });
+
+  it("alleen-beheer particulier: beheer-intro opent met het geldvoordeel en sluit de declaratie-lus", () => {
+    const html = htmlOf(privData(undefined, { withInstallation: false }));
+    expect(html).toContain("volledig in beheer");
+    expect(html).toContain("levert elke kWh die u thuis laadt u geld op");
+    expect(html).toContain("dan hoeft u nooit meer te declareren");
+    expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
+  });
+
+  it("v1 + particulier: verstuurde offerte rendert de OUDE teksten, geen laadpas-variant", () => {
+    const html = htmlOf(privData(1));
+    expect(html).toContain("service-fee van");
+    expect(html).toContain("Doorlopende optimalisatie van rendement");
+    expect(html).not.toContain("Nooit meer declareren");
+    expect(html).not.toContain("afnameprijs");
   });
 });

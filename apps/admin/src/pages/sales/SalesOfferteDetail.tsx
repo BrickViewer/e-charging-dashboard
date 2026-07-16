@@ -694,7 +694,7 @@ export default function SalesOfferteDetail() {
           ) : (
             <>
               <Section title="Toelichting beheer (pagina 1)" hint="Begeleidende tekst onder 'Wij maken van uw laadpalen een inkomstenbron' — alinea's scheiden met een lege regel. Leeg laten = standaardtekst.">
-                <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? defaultBeheerIntro({ poles: numOr(numChargePoints), addr1: [object?.address_street, object?.house_number].filter(Boolean).join(" ") || odStr("addressStreet"), addr2: object?.city || odStr("addressCity") })} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
+                <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? defaultBeheerIntro({ poles: numOr(numChargePoints), addr1: [object?.address_street, object?.house_number].filter(Boolean).join(" ") || odStr("addressStreet"), addr2: object?.city || odStr("addressCity") }, 2, quote.is_private ?? !companyName.trim())} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
               </Section>
               <Section title="Eenmalige kosten" hint="De eenmalige activatie-/onboardingkost voor het beheer van de bestaande laadpalen.">
                 <div className="grid grid-cols-2 gap-2">
