@@ -708,7 +708,14 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   }
   blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
   if (m.withManagement) {
-    blocks.push(bSec("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule", 19, HEAD));
+    // Kop: v1 bevroren INCLUSIEF de originele tikfout "contactduur" (verstuurde offertes renderen
+    // byte-gelijk); v2 = "contractduur" gefixt en "Vergoeding" voorop wanneer de vergoedingsregel
+    // in deze sectie staat (particulier v2 met vast laadtarief).
+    blocks.push(bSec(m.textVersion <= 1
+      ? "Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule"
+      : (privV2 && afname != null)
+        ? "Vergoeding, activatiekosten, ingangsdatum, contractduur en opzegging beheermodule"
+        : "Activatiekosten, ingangsdatum, contractduur en opzegging beheermodule", 19, HEAD));
     blocks.push(m.withInstallation
       ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
       : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));

@@ -39,6 +39,7 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("wij betalen uw opbrengst uit");
     expect(html).toContain("door E-Charging opgemaakte self-billing factuur.");
     expect(html).toContain("eerste dag van de kalendermaand volgend op de opleverdatum"); // v1-ingangsdatum bevroren
+    expect(html).toContain("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule"); // v1-kop bevroren, incl. originele tikfout "contactduur"
     expect(html).not.toContain("afnameprijs");
   });
 
@@ -58,6 +59,10 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("afgesproken instellingen");
     expect(html).toContain("Blokkeertarief");
     expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingangsdatum
+    // v2-kop: tikfout gefixt; "Vergoeding" alleen in de kop bij de particuliere vergoedingsregel
+    expect(html).toContain("Activatiekosten, ingangsdatum, contractduur en opzegging beheermodule");
+    expect(html).not.toContain("contactduur");
+    expect(html).not.toContain("Vergoeding, activatiekosten");
   });
 });
 
@@ -104,6 +109,9 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("€ 0,40</span>*");
     expect(html).toContain("De laadpaal wordt ingesteld op € 0,50 per kWh (excl. btw). Hiervan ontvangt u € 0,40 per kWh netto op uw rekening.");
     expect(html).not.toContain("* De laadpaal");
+    // Sectiekop noemt de vergoeding voorop (en de contractduur-tikfout is gefixt)
+    expect(html).toContain("Vergoeding, activatiekosten, ingangsdatum, contractduur en opzegging beheermodule");
+    expect(html).not.toContain("contactduur");
     expect(html).toContain("gaat in op de dag van ondertekening"); // v2-ingangsdatum (alle klanttypen)
     const kopIdx = html.indexOf("werkt</span>");
     expect(kopIdx).toBeGreaterThan(-1);
@@ -135,6 +143,8 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("Zijn vergoeding is € 0,35 per geladen kWh");
     expect(html).toContain("€ 1.400 per jaar");
     expect(html).not.toContain("wordt ingesteld op"); // geen tarief -> geen voorwaarden-regel
+    expect(html).not.toContain("Vergoeding, activatiekosten"); // kop zonder "Vergoeding" als de regel ontbreekt
+    expect(html).toContain("Activatiekosten, ingangsdatum, contractduur en opzegging beheermodule");
   });
 
   it("niet-rond tarief (0,48): Mark rondt naar het dichtstbijzijnde 5-tal (0,38 − 0,05 = 0,33 → € 0,35)", () => {
