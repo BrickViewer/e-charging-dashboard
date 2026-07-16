@@ -601,8 +601,8 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         ? `Na de installatie configureren wij uw ${paalWoord} en activeren we die in ons eigen platform.`
         : `Wij nemen uw ${paalWoord} op in ons eigen platform en beheren die volledig voor u.`;
       const vergoedingZin = afname != null
-        ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))} per geladen kWh op uw rekening.`
-        : `Voor de vergoeding van uw stroom ontvangt u elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh op uw rekening.`;
+        ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))} per geladen kWh netto op uw rekening.`
+        : `Voor de vergoeding van uw stroom ontvangt u elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh netto op uw rekening.`;
       blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
       if (afname != null && afname - HUISHOUD_STROOMPRIJS > 0.005) {
         // Uitgeschreven situatie-voorbeeld (gebruikerskeuze; de eerdere tabelvorm is afgewezen

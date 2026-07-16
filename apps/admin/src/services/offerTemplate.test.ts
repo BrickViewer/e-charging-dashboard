@@ -118,7 +118,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
 
   it("dynamisch laadtarief: formule-vergoeding in de intro, geen voorbeeld-alinea", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
-    expect(html).toContain("het laadtarief min € 0,10 per geladen kWh op uw rekening");
+    expect(html).toContain("het laadtarief min € 0,10 per geladen kWh netto op uw rekening");
     expect(html).not.toContain("Bijvoorbeeld: u rijdt");
     expect(html).not.toContain("wordt ingesteld op");
   });
