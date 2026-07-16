@@ -590,10 +590,12 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     const afname = (!m.laadkosten || m.laadkosten <= 0) ? null : Math.max(0, m.laadkosten - m.serviceFeePerKwh);
     if (privV2) {
       // Intro (gebruikerskeuze): eerst wat de klant per geladen kWh netto ontvangt, dan een
-      // extreem simpel huishoud-voorbeeld (stroom inkopen vs. wat de laadpaal oplevert), dan de
-      // aanloop naar de punten. Het voorbeeld alleen bij een vast laadtarief waar de klant
-      // écht iets overhoudt t.o.v. de indicatieve huishoud-stroomprijs.
+      // GESTAPELD rekenvoorbeeld (echte berekening onder elkaar: betaald − stroomkosten =
+      // over, + ERE = totaal per jaar/maand), dan de aanloop naar de punten. Het voorbeeld
+      // alleen bij een vast laadtarief waar de klant écht iets overhoudt.
       const HUISHOUD_STROOMPRIJS = 0.25; // indicatief ("ongeveer"), standaard NL-huishouden
+      const VOORBEELD_KWH_JAAR = 4000;   // ≈ 20.000 km per jaar thuisladen
+      const ERE_INDICATIE = 0.10;        // indicatief €/kWh (zie ERE-regeling; nooit een belofte)
       const boldAmt = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
       const eersteZin = m.withInstallation
         ? `Na de installatie configureren wij uw ${paalWoord} en activeren we die in ons eigen platform.`
@@ -603,11 +605,27 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         : `Voor elke kWh die via uw ${paalWoord} wordt geladen, ontvangt u van ons elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} netto op uw rekening.`;
       blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
       if (afname != null && afname - HUISHOUD_STROOMPRIJS > 0.005) {
-        blocks.push(bP(
-          `Een simpel voorbeeld: u koopt uw stroom thuis in voor ongeveer ${money2(HUISHOUD_STROOMPRIJS)} per kWh. ` +
-          `Er wordt bij u geladen tegen het laadtarief van ${money2(m.laadkosten as number)} per kWh. ` +
-          `Wij betalen u ${money2(afname)} per geladen kWh. ` +
-          `Zo houdt u ${money2(afname - HUISHOUD_STROOMPRIJS)} per geladen kWh over.`, 12));
+        const eur0 = (v: number) => `€ ${Math.round(v).toLocaleString("nl-NL")}`;
+        const betaaldJaar = VOORBEELD_KWH_JAAR * afname;
+        const kostenJaar = VOORBEELD_KWH_JAAR * HUISHOUD_STROOMPRIJS;
+        const overJaar = betaaldJaar - kostenJaar;
+        const ereJaar = VOORBEELD_KWH_JAAR * ERE_INDICATIE;
+        const totaalJaar = overJaar + ereJaar;
+        const maandTiental = Math.floor(totaalJaar / 12 / 10) * 10;
+        blocks.push(bP("Een rekenvoorbeeld, bij ongeveer 20.000 kilometer en 4.000 kWh thuisladen per jaar:", 12));
+        // Echte berekening onder elkaar: label links, bedrag rechts (tabular), hairlines vóór de
+        // totaalregels, totalen vet. Iedereen leest dit als een simpel sommetje.
+        const calcRow = (label: string, bedrag: string, opts?: { bold?: boolean; line?: boolean }) =>
+          `<div style="display:flex;justify-content:space-between;max-width:430px;${opts?.line ? `border-top:1px solid ${HAIRLINE};padding-top:4px;` : ""}${opts?.bold ? "font-weight:700;" : ""}margin-top:4px">` +
+          `<div>${label}</div><div style="font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:16px">${bedrag}</div></div>`;
+        blocks.push(bRaw(
+          calcRow(`Wij betalen u (4.000 kWh × ${money2(afname)})`, eur0(betaaldJaar)) +
+          calcRow(`Uw eigen stroomkosten (4.000 kWh × ${money2(HUISHOUD_STROOMPRIJS)})`, `− ${eur0(kostenJaar)}`) +
+          calcRow("U houdt over", `${eur0(overJaar)} per jaar`, { bold: true, line: true }) +
+          calcRow(`Extra met de ERE-regeling (indicatief ${money2(ERE_INDICATIE)} per kWh)`, `+ ${eur0(ereJaar)}`) +
+          calcRow("Totaal", `zo'n ${eur0(totaalJaar)} per jaar`, { bold: true, line: true }) +
+          `<div style="color:${MUTED};margin-top:5px">Dat is ruim ${eur0(maandTiental)} per maand.</div>`,
+          10));
       }
       blocks.push(bP("Ons beheer houdt onder andere in:", 16));
     } else {
@@ -624,7 +642,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     const titleSize = privV2 ? ";font-size:15px;line-height:1.3" : "";
     beheerPoints(m.textVersion, { isPrivate: m.isPrivate, poles: m.numPoles }).forEach(([t, b], i) => blocks.push(bRaw(
       `<div style="display:flex;gap:16px"><div style="color:${GREEN};font-weight:700;min-width:56px${titleSize}">${String(i + 1).padStart(2, "0")}</div><div><div style="font-weight:700;color:${privV2 ? HEAD : INK}${titleSize}">${esc(t)}</div><div style="color:${MUTED};margin-top:${privV2 ? 8 : 5}px">${esc(b)}</div></div></div>`,
-      i === 0 ? (privV2 ? 40 : 14) : (privV2 ? 40 : 22))));
+      i === 0 ? (privV2 ? 32 : 14) : (privV2 ? 32 : 22))));
     if (m.textVersion <= 1) {
       // v1 — oorspronkelijke tekst van verstuurde offertes (fee-frasering; NIET wijzigen).
       blocks.push(bP(`Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. Voor onze dienstverlening rekenen wij een service-fee van ${money2(m.serviceFeePerKwh)} per geladen kWh. Elke maand ontvangt u de opbrengst van uw palen op uw rekening, met onze service-fee als enige inhouding.`, 24));
@@ -835,10 +853,12 @@ export function buildOfferPages(
       for (let i = centerIdx + 1; i < blocks.length && !blocks[i].brk; i++) groupH += blocks[i].mt + heights[i];
       const rest = HAIRLINE_Y - used - groupH;
       // Fractionele px toegestaan (CSS) → exacte centrering zonder afrondingsdrift.
-      // −12px OPTISCHE correctie: de 26px-kop draagt ~8px leading boven de kapitaalhoogte
-      // (waardoor box-gecentreerd visueel te laag oogt) + koppen horen optisch iets bóven
-      // het meetkundige midden. Beoordeeld op de echte render (gebruikersfeedback).
-      blocks[centerIdx].mt = Math.max(16, rest / 2 - 12);
+      // OPTISCHE correctie omhoog (max 12px): de 26px-kop draagt ~8px leading boven de
+      // kapitaalhoogte + koppen horen optisch iets bóven het meetkundige midden. Proportioneel
+      // aan de beschikbare rest, zodat de kop bij een volle pagina niet op het blok erboven
+      // plakt. Beoordeeld op de echte render (gebruikersfeedback).
+      const shift = Math.min(12, Math.max(0, (rest - 40) / 4));
+      blocks[centerIdx].mt = Math.max(16, rest / 2 - shift);
     }
   }
 

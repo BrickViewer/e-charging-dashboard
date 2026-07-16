@@ -66,12 +66,20 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("inkomstenbron");
     expect(html).not.toContain("voor betaald worden");
     expect(html).toContain("laadpas van uw werkgever of leasemaatschappij");
-    // Intro: netto-vergoeding + extreem simpel huishoud-voorbeeld (gebruikerskeuze)
+    // Intro: netto-vergoeding + gestapeld rekenvoorbeeld (echte berekening, gebruikerskeuze)
     expect(html).toContain("ontvangt u van ons elke maand");
     expect(html).toContain("€ 0,40");
-    expect(html).toContain("Een simpel voorbeeld: u koopt uw stroom thuis in voor ongeveer € 0,25 per kWh");
-    expect(html).toContain("het laadtarief van € 0,50 per kWh");
-    expect(html).toContain("Zo houdt u € 0,15 per geladen kWh over");
+    expect(html).toContain("Een rekenvoorbeeld, bij ongeveer 20.000 kilometer en 4.000 kWh thuisladen per jaar:");
+    expect(html).toContain("Wij betalen u (4.000 kWh × € 0,40)");
+    expect(html).toContain("€ 1.600");
+    expect(html).toContain("Uw eigen stroomkosten (4.000 kWh × € 0,25)");
+    expect(html).toContain("− € 1.000");
+    expect(html).toContain("U houdt over");
+    expect(html).toContain("€ 600 per jaar");
+    expect(html).toContain("Extra met de ERE-regeling (indicatief € 0,10 per kWh)");
+    expect(html).toContain("+ € 400");
+    expect(html).toContain("zo'n € 1.000 per jaar");
+    expect(html).toContain("Dat is ruim € 80 per maand.");
     expect(html).toContain("Ons beheer houdt onder andere in:");
     // 5 punten: reparatie-punt geheel verwijderd (gebruikerskeuze); ERE = 05
     expect(html).toContain("Laden via de zaak? Automatisch geregeld");
@@ -111,14 +119,14 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
   it("dynamisch laadtarief: formule-vergoeding in de intro, geen voorbeeld-alinea", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: null, offerDetails: { chargeTariffDynamic: true } }));
     expect(html).toContain("het laadtarief min € 0,10 netto op uw rekening");
-    expect(html).not.toContain("Een simpel voorbeeld");
+    expect(html).not.toContain("Een rekenvoorbeeld");
     expect(html).not.toContain("wordt ingesteld op");
   });
 
   it("laag laadtarief (geen voordeel t.o.v. huishoudprijs): voorbeeld-alinea vervalt", () => {
     const html = htmlOf(privData(undefined, { chargeTariffPerKwh: 0.3 })); // netto 0,20 < 0,25
     expect(html).toContain("€ 0,20"); // de vergoeding zelf blijft staan
-    expect(html).not.toContain("Een simpel voorbeeld");
+    expect(html).not.toContain("Een rekenvoorbeeld");
   });
 
   it("alleen-beheer particulier: beheer-intro opent met het geldvoordeel en sluit de declaratie-lus", () => {
@@ -129,7 +137,7 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).not.toContain("ontzorgd wordt volgens het E-Charging concept"); // zakelijke intro lekt niet
     // Zelfde slot: intro-vergoeding + voorbeeld op de beheerpagina, geen instellingen-lijst op p1
     expect(html).toContain("beheren die volledig voor u");
-    expect(html).toContain("Een simpel voorbeeld");
+    expect(html).toContain("Een rekenvoorbeeld");
     expect(html).not.toContain("afgesproken instellingen");
     expect(html).not.toContain("Blokkeertarief");
   });
