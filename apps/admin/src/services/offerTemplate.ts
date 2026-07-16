@@ -589,13 +589,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   if (m.withManagement) {
     blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", 0, GREEN), brk: true });
     if (privV2) {
-      // Intro (gebruikerskeuze): eerst wat de klant per geladen kWh netto ontvangt, dan een
-      // GESTAPELD rekenvoorbeeld (echte berekening onder elkaar: betaald − stroomkosten =
-      // over, + ERE = totaal per jaar/maand), dan de aanloop naar de punten. Het voorbeeld
-      // alleen bij een vast laadtarief waar de klant écht iets overhoudt.
-      const HUISHOUD_STROOMPRIJS = 0.25; // indicatief ("ongeveer"), standaard NL-huishouden
-      const VOORBEELD_KWH_JAAR = 4000;   // ≈ 20.000 km per jaar thuisladen
-      const ERE_INDICATIE = 0.10;        // indicatief €/kWh (zie ERE-regeling; nooit een belofte)
+      // Intro (gebruikerskeuze): eerst wat de klant per geladen kWh netto ontvangt, dan de
+      // Mark-CASUS — een specifiek, uitgeschreven persoonsvoorbeeld met VASTE bedragen, bewust
+      // losgekoppeld van de offerte van de lezer (daardoor onmiskenbaar een illustratie; geen
+      // disclaimer nodig — expliciete gebruikerskeuze). Naamregel: nooit namen van echte klanten.
       const boldAmt = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
       const eersteZin = m.withInstallation
         ? `Na de installatie configureren wij uw ${paalWoord} en activeren we die in ons eigen platform.`
@@ -606,26 +603,19 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))}* per geladen kWh netto op uw rekening.`
         : `Voor de vergoeding van uw stroom ontvangt u elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh netto op uw rekening.`;
       blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
-      if (afname != null && afname - HUISHOUD_STROOMPRIJS > 0.005) {
-        // Uitgeschreven situatie-voorbeeld (gebruikerskeuze; de eerdere tabelvorm is afgewezen
-        // als overweldigend) — de STANDAARD voor particuliere offertes. Korte zinnen, bedragen
-        // live uit de offerte, ERE altijd "indicatief", geen maandbedrag.
-        const eur0 = (v: number) => `€ ${Math.round(v).toLocaleString("nl-NL")}`;
-        const betaaldJaar = VOORBEELD_KWH_JAAR * afname;
-        const kostenJaar = VOORBEELD_KWH_JAAR * HUISHOUD_STROOMPRIJS;
-        const overJaar = betaaldJaar - kostenJaar;
-        const ereJaar = VOORBEELD_KWH_JAAR * ERE_INDICATIE;
-        const totaalJaar = overJaar + ereJaar;
-        blocks.push(bP(
-          `<span style="font-style:italic">` +
-          `Bijvoorbeeld: u rijdt ongeveer 25.000 kilometer per jaar en laadt daarvoor zo'n 4.000 kWh thuis. ` +
-          `Aan vergoeding ontvangt u dan ${eur0(betaaldJaar)} per jaar. ` +
-          `Zelf betaalt u voor die stroom ongeveer ${eur0(kostenJaar)} per jaar, bij een stroomprijs van ${money2(HUISHOUD_STROOMPRIJS)} per kWh. ` +
-          `U houdt dus ${eur0(overJaar)} per jaar over. ` +
-          `Meldt u zich ook aan voor de ERE-regeling? Dan komt daar indicatief nog zo'n ${eur0(ereJaar)} per jaar bij. ` +
-          `Zo verdient u met uw ${paalWoord} al snel ${eur0(totaalJaar)} per jaar.` +
-          `</span>`, 12));
-      }
+      // Vaste casus-bedragen: 4.000 kWh × € 0,38 = € 1.520; stroom 4.000 × € 0,25 = € 1.000;
+      // over € 520; ERE 4.000 × € 0,10 = € 400; totaal € 920. 25.000 km ↔ 4.000 kWh thuis is
+      // feitelijk onderbouwd (CBS/ElaadNL/ANWB; incl. ~75-80% thuislaad-aandeel — "het grootste
+      // deel daarvan thuis" benoemt dat).
+      blocks.push(bP(
+        `<span style="font-style:italic">` +
+        `Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis: zo'n 4.000 kWh per jaar. ` +
+        `Zijn vergoeding is € 0,38 per geladen kWh. Aan vergoeding ontvangt hij dus € 1.520 per jaar. ` +
+        `Zelf betaalt hij voor die stroom ongeveer € 1.000 per jaar, bij een stroomprijs van € 0,25 per kWh. ` +
+        `Daarmee houdt Mark € 520 per jaar over. ` +
+        `Ook heeft hij zich aangemeld voor de ERE-regeling. Die subsidie levert hem nog eens zo'n € 400 per jaar op. ` +
+        `Zo verdient Mark met zijn laadpaal al snel € 920 per jaar.` +
+        `</span>`, 12));
       blocks.push(bP("Uw voordelen op een rij:", 16));
     } else {
       blocks.push(bP(m.withInstallation
