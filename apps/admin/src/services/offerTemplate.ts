@@ -590,32 +590,41 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", 0, GREEN), brk: true });
     if (privV2) {
       // Intro (gebruikerskeuze): eerst wat de klant per geladen kWh netto ontvangt, dan de
-      // Mark-CASUS — een specifiek, uitgeschreven persoonsvoorbeeld met VASTE bedragen, bewust
-      // losgekoppeld van de offerte van de lezer (daardoor onmiskenbaar een illustratie; geen
-      // disclaimer nodig — expliciete gebruikerskeuze). Naamregel: nooit namen van echte klanten.
+      // Mark-CASUS — een specifiek, uitgeschreven persoonsvoorbeeld (geen disclaimer —
+      // expliciete gebruikerskeuze). Naamregel: nooit namen van echte klanten.
       const boldAmt = (t: string) => `<span style="font-weight:700;color:${INK}">${t}</span>`;
       const eersteZin = m.withInstallation
         ? `Na de installatie configureren wij uw ${paalWoord} en activeren we die in ons eigen platform.`
         : `Wij nemen uw ${paalWoord} op in ons eigen platform en beheren die volledig voor u.`;
-      // Asterisk verwijst naar de voetnoot onder "Activatiekosten, ingangsdatum, contactduur en
-      // opzegging beheermodule" in de voorwaarden (laadtarief-instelling + netto-ontvangst).
+      // De concrete instelling (laadtarief + netto-ontvangst) staat als ☞-regel onder
+      // "Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule" in de voorwaarden;
+      // bewust zonder asterisk-verwijzing (gebruikerskeuze).
       const vergoedingZin = afname != null
-        ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))}* per geladen kWh netto op uw rekening.`
+        ? `Voor de vergoeding van uw stroom ontvangt u elke maand ${boldAmt(money2(afname))} per geladen kWh netto op uw rekening.`
         : `Voor de vergoeding van uw stroom ontvangt u elke maand het laadtarief min ${money2(m.serviceFeePerKwh)} per geladen kWh netto op uw rekening.`;
       blocks.push(bP(`${eersteZin} ${vergoedingZin}`, 16));
-      // Vaste casus-bedragen: 4.000 kWh × € 0,38 = € 1.520; stroom 4.000 × € 0,25 = € 1.000;
-      // over € 520; ERE 4.000 × € 0,10 = € 400; totaal € 920. 25.000 km ↔ 4.000 kWh thuis is
-      // feitelijk onderbouwd (CBS/ElaadNL/ANWB; incl. ~75-80% thuislaad-aandeel — "het grootste
-      // deel daarvan thuis" benoemt dat).
-      blocks.push(bP(
-        `<span style="font-style:italic">` +
-        `Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met de laadpas van zijn werkgever: zo'n 4.000 kWh per jaar. ` +
-        `Zijn vergoeding is € 0,38 per geladen kWh. Aan vergoeding ontvangt hij dus € 1.520 per jaar. ` +
-        `Zelf betaalt hij voor die stroom ongeveer € 1.000 per jaar, bij een stroomprijs van € 0,25 per kWh. ` +
-        `Daarmee houdt Mark € 520 per jaar over. ` +
-        `Ook heeft hij zich aangemeld voor de ERE-regeling. Die subsidie levert hem nog eens zo'n € 400 per jaar op. ` +
-        `Zo verdient Mark met zijn laadpaal al snel € 920 per jaar.` +
-        `</span>`, 12));
+      // Mark rekent altijd € 0,05 ONDER de afgesproken vergoeding (gebruikerseis): het voorbeeld
+      // blijft zo conservatiever dan de deal van de lezer. Geen vast tarief (dynamisch) → vaste
+      // € 0,38. Onder € 0,30 klopt het verhaal niet meer (de stroomkosten van € 0,25 benaderen of
+      // overstijgen de vergoeding) → casus weglaten. Overige casusgetallen vast: 4.000 kWh thuis ↔
+      // 25.000 km is feitelijk onderbouwd (CBS/ElaadNL/ANWB; ~75-80% thuislaad-aandeel — "het
+      // grootste deel daarvan thuis"); ERE 4.000 × € 0,10 = € 400; jaarbedragen zijn altijd hele
+      // euro's (4.000 × centbedrag).
+      const markRate = afname != null ? Math.round((afname - 0.05) * 100) / 100 : 0.38;
+      if (markRate >= 0.3) {
+        const eur0 = (n: number) => `€ ${int0(n)}`;
+        const vergoedingJr = 4000 * markRate;
+        const overJr = vergoedingJr - 1000; // stroomkosten: 4.000 × € 0,25
+        blocks.push(bP(
+          `<span style="font-style:italic">` +
+          `Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met de laadpas van zijn werkgever: zo'n 4.000 kWh per jaar. ` +
+          `Zijn vergoeding is ${money2(markRate)} per geladen kWh. Aan vergoeding ontvangt hij dus ${eur0(vergoedingJr)} per jaar. ` +
+          `Zelf betaalt hij voor die stroom ongeveer € 1.000 per jaar, bij een stroomprijs van € 0,25 per kWh. ` +
+          `Daarmee houdt Mark ${eur0(overJr)} per jaar over. ` +
+          `Ook heeft hij zich aangemeld voor de ERE-regeling. Die subsidie levert hem nog eens zo'n € 400 per jaar op. ` +
+          `Zo verdient Mark met zijn laadpaal al snel ${eur0(overJr + 400)} per jaar.` +
+          `</span>`, 12));
+      }
       blocks.push(bP("Uw voordelen op een rij:", 16));
     } else {
       blocks.push(bP(m.withInstallation
@@ -709,12 +718,12 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         : "De overeenkomst gaat in op de dag van ondertekening.")
       : `De ingangsdatum van de overeenkomst is gesteld op ${mStr(m.ingangsdatum, "ingangsdatum")}.`));
     blocks.push(bFb("De overeenkomst wordt aangegaan voor een periode van één (1) jaar, te rekenen vanaf de ingangsdatum. Na afloop van deze periode wordt de overeenkomst telkens stilzwijgend verlengd met een periode van één (1) jaar, tenzij opdrachtgever of aannemer de overeenkomst schriftelijk opzegt met inachtneming van een opzegtermijn van drie (3) maanden vóór het einde van de lopende contractperiode."));
-    // Asterisk-voetnoot bij de vergoedingszin op de beheerpagina, als ☞-bullet zoals de overige
-    // voorwaarden (alleen particulier v2 met een vast laadtarief; bij dynamisch tarief staat er
-    // geen asterisk en dus ook geen voetnoot).
+    // Concrete tarief-instelling bij de vergoedingszin op de beheerpagina, als ☞-bullet zoals de
+    // overige voorwaarden (alleen particulier v2 met een vast laadtarief; bij dynamisch tarief is
+    // er geen concreet bedrag en dus geen regel). Bewust zonder asterisk (gebruikerskeuze).
     if (privV2 && afname != null) {
       const ingesteldVw = m.numPoles > 1 ? "De laadpalen worden ingesteld" : "De laadpaal wordt ingesteld";
-      blocks.push(bFb(`* ${ingesteldVw} op ${money2(m.laadkosten as number)} per kWh (excl. btw). Hiervan ontvangt u ${money2(afname)} per kWh netto op uw rekening.`));
+      blocks.push(bFb(`${ingesteldVw} op ${money2(m.laadkosten as number)} per kWh (excl. btw). Hiervan ontvangt u ${money2(afname)} per kWh netto op uw rekening.`));
     }
   }
   if (m.withInstallation) {
