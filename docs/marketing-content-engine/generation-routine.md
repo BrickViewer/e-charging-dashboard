@@ -18,8 +18,10 @@ Velden: `raw_title`, `raw_summary` (invalshoek), `target_keyword`, `assigned_cat
 1. `seo-aeo-keyword-research` — keyword + AEO-vraagvarianten (heuristisch; geen DataForSEO).
 2. `seo-aeo-content-cluster` — plaats in pillar/cluster; bepaal interne-link-doelen.
 3. `seo-aeo-blog-writer` — long-form concept: TL;DR, definitie-zin, vergelijkingstabel, 5-vraag-FAQ.
-4. `seo-authority-builder` — **E-E-A-T + eigen e-charging-data injecteren** (echte ERE-/tarief-/
-   rendementscijfers van het platform, klantcontext). Dít is de originaliteit-moat — geen generieke AI-tekst.
+4. `seo-authority-builder` — **E-E-A-T + eigen praktijkstem injecteren** (UITSLUITEND kwalitatieve
+   observaties uit advies/installatie/beheer; NOOIT platformcijfers, euro-opbrengsten of prijzen van het
+   eigen aanbod — zie de IJZEREN REGEL en COMMERCIELE VEILIGHEID in `_shared/blog.ts`). Dít is de
+   originaliteit-moat — geen generieke AI-tekst.
 5. `seo-keyword-strategist` — dichtheid/LSI, anti-over-optimalisatie.
 6. `seo-aeo-content-quality-auditor` — **kwaliteitsscore** (seo_score + fixlijst).
 7. `ai-seo` / `seo-geo` — **AEO-score** + AI-citatie-checklist.

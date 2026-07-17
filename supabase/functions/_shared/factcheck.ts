@@ -18,6 +18,7 @@ Controleer systematisch:
 3. DATA EN JAARTALLEN: kloppen jaartallen bij bronnen en gebeurtenissen? Kloppen "per <datum>"- en "vanaf <datum>"-claims ten opzichte van de datum van vandaag (iets aankondigen dat al gebeurd is, of als actueel brengen wat verlopen is, is een fout)?
 4. JURIDISCH EN FINANCIEEL: stellige claims over wet- en regelgeving, subsidies, tarieven of verplichtingen zonder verifieerbare basis zijn gevaarlijk — controleer ze of markeer ze.
 5. MERKRISICO: alles wat bij publicatie gênant of schadelijk zou zijn (aantoonbare onzin, tegenstrijdigheden binnen de tekst, beweringen over concurrenten of instanties die niet hard te maken zijn).
+6. COMMERCIEEL RISICO: het bedrijf levert zelf laadpalen, installatie en beheer. Elke concrete prijs of prijsrange daarvoor in de blog (aanschaf laadpaal of laadstation, installatiekosten, meterkastwerk, beheer of abonnementen; ook "vanaf"-bedragen en marktgemiddelden) werkt als prijsanker en schaadt het bedrijf commercieel. Hetzelfde geldt voor adviezen om het aanbod te omzeilen (zelf online kopen, installeren zonder erkend installateur, beheer overslaan) en voor duur/goedkoop-framing van laadpalen of de diensten. Markeer zo'n claim met "commercial_risk": true, OOK ALS HET BEDRAG FEITELIJK KLOPT met de bron: feitelijke juistheid maakt een prijsanker niet minder schadelijk. Geef als correction altijd: verwijder het bedrag of advies en herschrijf naar de prijsbepalende factoren met een verwijzing naar een vrijblijvende offerte. Subsidie-, energie- en fiscale bedragen met bron en jaartal zijn GEEN commercieel risico.
 
 Wees proportioneel — de lat voor "critical" is AANTOONBAARHEID, niet twijfel:
 - severity "critical" UITSLUITEND bij: (a) een claim die aantoonbaar in strijd is met een gezaghebbende primaire bron (wet- en regelgeving, ACM, RVO, CBS, officiële publicaties); (b) een verzonnen bron, citaat of cijfer; (c) juridisch/financieel advies dat aantoonbaar onjuist is en de lezer kan schaden; (d) een dode of verkeerd toegeschreven PRIMAIRE bron.
@@ -33,12 +34,15 @@ Geef per incorrect/unverifiable punt een concrete, direct bruikbare correctie (h
 Houd het rapport COMPACT (het moet binnen het antwoordbudget passen): rapporteer maximaal de 12 belangrijkste claims (prioriteer incorrect en critical; bundel identieke punten), houd elke correction beknopt (maximaal ~40 woorden, bij voorkeur één vervangzin), maximaal 8 verified_sources, en citeer nooit hele passages uit bronnen.
 
 Antwoord UITSLUITEND met geldige JSON, exact dit schema, zonder tekst eromheen:
-{"claims": [{"claim": string, "verdict": "correct" | "incorrect" | "unverifiable", "severity": "critical" | "minor", "evidence_url": string, "correction": string}], "sources_check": [{"name": string, "url": string, "status": "bevestigd" | "dood" | "onjuist_toegeschreven"}], "date_issues": [string], "brand_risk": [string], "verified_sources": [{"name": string, "url": string, "publisher": string, "date": string}], "confidence": number, "verdict": "pass" | "fail"}`;
+{"claims": [{"claim": string, "verdict": "correct" | "incorrect" | "unverifiable", "severity": "critical" | "minor", "commercial_risk": boolean, "evidence_url": string, "correction": string}], "sources_check": [{"name": string, "url": string, "status": "bevestigd" | "dood" | "onjuist_toegeschreven"}], "date_issues": [string], "brand_risk": [string], "verified_sources": [{"name": string, "url": string, "publisher": string, "date": string}], "confidence": number, "verdict": "pass" | "fail"}`;
 
 export interface FactcheckClaim {
   claim: string;
   verdict: "correct" | "incorrect" | "unverifiable";
   severity: "critical" | "minor";
+  // Commercieel schadelijke claim (prijsanker/omzeil-advies): blokkeert publicatie, ook als de
+  // claim feitelijk juist is. Zie categorie 6 in FACTCHECK_SYSTEM.
+  commercial_risk: boolean;
   evidence_url: string | null;
   correction: string | null;
 }
@@ -65,6 +69,7 @@ export function validateFactcheckJson(p: any): FactcheckReport {
       claim: c.claim.trim().slice(0, 500),
       verdict: c.verdict === "correct" ? "correct" : c.verdict === "incorrect" ? "incorrect" : "unverifiable",
       severity: c.severity === "critical" ? "critical" : "minor",
+      commercial_risk: c.commercial_risk === true,
       evidence_url: asStr(c.evidence_url),
       correction: asStr(c.correction),
     }));
@@ -83,7 +88,7 @@ export function validateFactcheckJson(p: any): FactcheckReport {
   // toegeschreven/dode bronnen, datumpunten en merkrisico's zijn FIXABLE: ze gaan als
   // concrete correcties de chirurgische fix-stap in, maar vellen het verdict niet meer.
   // (De oude telling liet blogs met nul feitenfouten terminaal stranden op 15 juli.)
-  const critical_count = claims.filter((c) => c.severity === "critical" && c.verdict !== "correct").length;
+  const critical_count = claims.filter((c) => (c.severity === "critical" && c.verdict !== "correct") || c.commercial_risk).length;
   const badSources = sources_check.filter((s: { status: string }) => s.status !== "bevestigd").length;
   const brand_risk = asList(p?.brand_risk);
   const date_issues = asList(p?.date_issues);
@@ -113,6 +118,10 @@ export function validateFactcheckJson(p: any): FactcheckReport {
 export function factcheckIssues(report: FactcheckReport): string[] {
   const out: string[] = [];
   for (const c of report.claims) {
+    if (c.commercial_risk) {
+      out.push(`COMMERCIEEL RISICO (verplicht corrigeren): "${c.claim}" — ${c.correction ?? "verwijder het bedrag of advies en herschrijf naar de prijsbepalende factoren met een verwijzing naar een vrijblijvende offerte"}`);
+      continue;
+    }
     if (c.verdict === "correct") continue;
     const kop = c.severity === "critical" ? "FEITENFOUT (verplicht corrigeren)" : "Feitelijk aandachtspunt";
     out.push(`${kop}: "${c.claim}" — ${c.correction ?? "verifieer of verwijder deze claim"}${c.evidence_url ? ` (bron: ${c.evidence_url})` : ""}`);
@@ -132,6 +141,10 @@ export function factcheckIssues(report: FactcheckReport): string[] {
 export function factcheckCorrections(report: FactcheckReport): string[] {
   const out: string[] = [];
   for (const c of report.claims) {
+    if (c.commercial_risk) {
+      out.push(`COMMERCIEEL RISICO: "${c.claim}" → ${c.correction ?? "verwijder het bedrag of advies; herschrijf naar de prijsbepalende factoren en verwijs naar een vrijblijvende offerte"}`);
+      continue;
+    }
     if (c.verdict === "correct") continue;
     out.push(`CLAIM: "${c.claim}" → ${c.correction ?? "verwijder deze claim of verzwak hem met een voorbehoud ('naar verwachting', 'nog niet definitief')"}`);
   }

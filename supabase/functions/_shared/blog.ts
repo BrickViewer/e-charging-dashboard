@@ -39,6 +39,12 @@ IJZEREN REGEL - GEEN exacte platform- of interne cijfers:
 - Noem NOOIT concrete aantallen uit ons eigen systeem: geen aantal laadpunten, geen aantal locaties, geen aantal laadsessies, geen kWh-hoeveelheden, geen euro-opbrengsten, geen bezettings- of groeipercentages van onszelf. Verzin ook geen "voorbeeldcijfers" over onze eigen schaal.
 - De eigen praktijkstem is UITSLUITEND kwalitatief (patronen, observaties, lessen), nooit kwantitatief. Publiek bekende marktcijfers met bron+jaartal mogen wel, maar presenteer die nooit als onze interne data.
 
+COMMERCIELE VEILIGHEID - de blog mag E-Charging nooit commercieel schaden:
+- Noem NOOIT een concrete prijs of prijsrange voor producten of diensten die E-Charging zelf levert of die de lezer bij ons zou afnemen: aanschaf van een laadpaal of laadstation, installatie, meterkastwerk, beheer of abonnementen. Ook niet met bron, ook niet als marktgemiddelde en ook geen "vanaf"-bedragen. Zulke bedragen werken als prijsanker en jagen klanten weg voordat er een gesprek is geweest.
+- Kostenonderwerpen zijn welkom, maar beantwoord ze ZONDER bedragen: beschrijf de factoren die de prijs bepalen (type laadpunt, de meterkast, afstand en graafwerk, load balancing, het aantal punten) en verwijs de lezer voor een concreet bedrag naar een vrijblijvende offerte.
+- Adviseer NOOIT om onderdelen van ons aanbod over te slaan of zelf te regelen (zelf online een laadpaal kopen, installeren zonder erkend installateur, beheer weglaten) en frame laadpalen of onze diensten nooit als duur of juist goedkoop.
+- Bedragen die WEL mogen (altijd met bron en jaartal): subsidieregelingen, energie- en stroomprijzen, fiscale bedragen en andere cijfers die niet gaan over wat wij leveren.
+
 Categorie:
 - Kies uit de meegegeven CATEGORIEEN de 1 tot 3 die het best passen en zet hun slugs in category_slugs (meest passende eerst; deze eerste is de primaire categorie). Kies liever een bestaande categorie dan een nieuwe.
 - Alleen als het onderwerp echt in GEEN enkele bestaande categorie past en het een terugkerend, breder thema is, mag je een nieuwe voorstellen via suggested_category {name, description, icon} (icon = een passende lucide-icoonnaam zoals "Zap", "Leaf", "Building2"). Laat suggested_category anders weg.
@@ -237,7 +243,7 @@ DOELGROEP van de blog: VvE's/appartementencomplexen, kantoren/bedrijfspanden, va
 
 Lever UITSLUITEND beknopte bullets, gegroepeerd onder deze koppen (koppen letterlijk overnemen), en begin ALTIJD met de BRANCHECHECK-regel:
 BRANCHECHECK: exact één van deze drie vormen — "passend", "herkaderbaar: <één zin met een invalshoek die het onderwerp relevant maakt voor de doelgroep>", of "niet-passend: <één zin waarom dit buiten de doelgroep valt>". Kies "niet-passend" als het onderwerp alleen geforceerd (met een kunstgreep) aan de doelgroep te koppelen is.
-KERNFEITEN: 5-10 bullets met de belangrijkste actuele feiten/cijfers/bedragen, elk met (bron, datum) erbij.
+KERNFEITEN: 5-10 bullets met de belangrijkste actuele feiten/cijfers/bedragen, elk met (bron, datum) erbij. Lever GEEN aanschaf-, installatie- of beheerprijzen van laadpalen of laadpunten aan (ook niet met bron): zulke bedragen mogen nooit in de blog. Gaat het onderwerp over kosten, lever dan in plaats van bedragen de prijsbepalende factoren aan.
 REGELGEVING: relevante wet- en regelgeving of subsidies met status per vandaag (van kracht / vervallen / aangekondigd), elk met (bron, datum).
 BRONNEN: elke gebruikte bron als "- naam | echte url | uitgever | datum". Alleen urls die je echt gevonden hebt; nooit gokken.
 INVALSHOEK: 2-3 bullets met wat dit betekent voor vastgoedeigenaren/VvE's/bedrijven.
@@ -276,6 +282,8 @@ Toets bovendien expliciet twee dingen (Google's maart-2026-lat + de "wie/hoe/waa
 HARDE CONTROLE - geen exacte platformcijfers: de blog mag GEEN concrete interne cijfers van het bedrijf zelf noemen (aantal laadpunten, aantal locaties, aantal laadsessies, kWh-hoeveelheden, euro-opbrengsten, bezettings-/groeipercentages gepresenteerd als eigen data). Vind je zoiets, dan is dat een ERNSTIG issue: zet het in issues, trek quality_score fors af en zet verdict op "revise". Publiek gebronde marktcijfers (met bron+jaartal) zijn wel toegestaan.
 
 HARDE CONTROLE - doelgroep: valt het onderwerp of de gekozen invalshoek buiten de doelgroep (bv. zwaar transport/logistiek, laadpleinen voor vrachtwagens, publieke snellaadcorridors, autonieuws/EV-modellen, consumenten-autotests), dan is dat een ERNSTIG issue: benoem het in issues en zet verdict op "revise".
+
+HARDE CONTROLE - commerciele veiligheid: de blog mag GEEN concrete prijs of prijsrange noemen voor zaken die het bedrijf zelf levert (aanschaf van een laadpaal of laadstation, installatie, meterkastwerk, beheer of abonnementen; ook geen "vanaf"-bedragen of marktgemiddelden, ook niet met bron) en mag de lezer NOOIT adviseren om het aanbod te omzeilen (zelf online kopen, installeren zonder erkend installateur, beheer overslaan) of laadpalen als duur of goedkoop framen. Vind je zoiets, dan is dat een ERNSTIG issue: zet het in issues en zet verdict op "revise". Subsidie-, energie- en fiscale bedragen met bron en jaartal zijn wel toegestaan.
 
 Geef daarnaast:
 - issues: korte, concrete lijst van tekortkomingen (welke sectie is generiek, welke claim is zwak, wat mist er feitelijk, en of er verboden interne cijfers in staan).
@@ -338,6 +346,8 @@ Verbeter gericht:
 - excerpt: 1 tot 2 VOLLEDIGE zinnen (maximaal ±250 tekens); wordt letterlijk als ondertitel getoond, dus eindig altijd met een afgeronde zin.
 
 IJZEREN REGEL - GEEN exacte platform- of interne cijfers: verwijder en gebruik NOOIT concrete interne cijfers uit ons eigen systeem (aantal laadpunten, aantal locaties, aantal laadsessies, kWh-hoeveelheden, euro-opbrengsten, bezettings-/groeipercentages van onszelf). Staan die in de HUIDIGE BLOG, herschrijf ze naar een kwalitatieve formulering zonder getal. De eigen praktijkstem is uitsluitend kwalitatief. Publiek gebronde marktcijfers (met bron+jaartal) mogen wel.
+
+COMMERCIELE VEILIGHEID: noem nooit een concrete prijs of prijsrange voor wat het bedrijf zelf levert (aanschaf laadpaal of laadstation, installatie, meterkastwerk, beheer of abonnementen; ook geen "vanaf"-bedragen, ook niet met bron) en adviseer nooit om het aanbod te omzeilen. Staan zulke bedragen of adviezen in de HUIDIGE BLOG, herschrijf ze naar de prijsbepalende factoren met een verwijzing naar een vrijblijvende offerte. Subsidie-, energie- en fiscale bedragen met bron en jaartal mogen wel.
 
 Categorie: kies uit de meegegeven CATEGORIEEN de 1 tot 3 best passende en zet hun slugs in category_slugs (meest passende eerst). Kies liever een bestaande categorie; stel alleen een nieuwe voor via suggested_category {name, description, icon} als het onderwerp echt nergens past.
 
