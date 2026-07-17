@@ -41,6 +41,9 @@ describe("offerte tekst-versies", () => {
     expect(html).toContain("eerste dag van de kalendermaand volgend op de opleverdatum"); // v1-ingangsdatum bevroren
     expect(html).toContain("Activatiekosten, ingangsdatum, contactduur en opzegging beheermodule"); // v1-kop bevroren, incl. originele tikfout "contactduur"
     expect(html).toContain("De Algemene voorwaarden E-Charging BV."); // v1-AV-regel bevroren (zonder Regeling gegevensuitwisseling)
+    expect(html).toContain("ons voorstel"); // v1-intro bevroren
+    expect(html).toContain("Onze voorwaarden bij deze aanbieding"); // v1-kop bevroren
+    expect(html).toContain("Deze aanbieding is 30 dagen geldig na datum van aanbieding.");
     expect(html).not.toContain("Regeling gegevensuitwisseling");
     // v1-footer bevroren: oude registratiegegevens van vóór de eigen B.V. (incl. telefoonregel)
     expect(html).toContain("KvK: 30241843");
@@ -72,6 +75,13 @@ describe("offerte tekst-versies", () => {
     // v2 laat 0%-betaaltermijnen weg (FALLBACK_TEMPLATE = 50/0/50; echte zakelijke offertes
     // volgen het org-sjabloon, zie de override-test bij particulier)
     expect(html).toContain("Betalingen levering en installatie: 50% bij opdracht en 50% na werkzaamheden.");
+    // Terminologie v2: "offerte" (geen "voorstel" of "aanbieding" meer)
+    expect(html).toContain("Hierbij ontvangt u onze offerte voor");
+    expect(html).not.toContain("ons voorstel");
+    expect(html).toContain("Onze voorwaarden bij deze offerte");
+    expect(html).toContain("Deze offerte is 30 dagen geldig na de offertedatum.");
+    expect(html).toContain("Niet in deze offerte opgenomen");
+    expect(html).not.toContain("aanbieding");
     // Voorwaarden verwijzen naar AV én de Regeling gegevensuitwisseling (vervangt de VWO)
     expect(html).toContain("De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.");
     expect(html).not.toContain("Verwerkersovereenkomst");
@@ -232,6 +242,12 @@ describe("particuliere offerte (v2) — laadpas-verhaal, geld-eerst", () => {
     expect(html).toContain("Storingen");
     expect(html).toContain("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven; genoemde bedragen zijn exclusief btw.");
     expect(html).toContain("De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.");
+    // Contract-terminologie: het document noemt zichzelf contract, nergens offerte-jargon
+    expect(html).toContain("Onze voorwaarden bij dit contract");
+    expect(html).toContain("Dit contract is 30 dagen geldig na dagtekening.");
+    expect(html).toContain("Beheercontract laadpaal"); // betreft-default op het contract
+    expect(html).not.toContain("aanbieding");
+    expect(html).not.toContain("voorstel");
     expect(html).toContain("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag");
     expect(html).not.toContain("Voor zaterdagen");
     expect(html).not.toContain("Onze aanpak");

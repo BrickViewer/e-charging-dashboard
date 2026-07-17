@@ -162,12 +162,18 @@ export default function SalesOfferteDetail() {
         aanhef: odLoaded.aanhef && String(odLoaded.aanhef).trim() ? odLoaded.aanhef : `Geachte heer/mevrouw${lastName ? " " + lastName : ""},`,
         tav: odLoaded.tav ?? (quote.prospect_contact || null),
         onzeReferentie: odLoaded.onzeReferentie ?? (quote.quote_number || null),
-        betreft: odLoaded.betreft ?? (oTpl?.defaultBetreftTemplate || "Offerte laadinfrastructuur"),
+        // Contract (particulier + alleen beheer): eigen betreft-default; anders het org-sjabloon.
+        betreft: odLoaded.betreft ?? (((quote.is_private ?? !(quote.prospect_company ?? "").trim()) && quote.with_installation === false && quote.with_management !== false)
+          ? `Beheercontract ${(quote.num_charge_points ?? 1) >= 2 ? "laadpalen" : "laadpaal"}`
+          : (oTpl?.defaultBetreftTemplate || "Offerte laadinfrastructuur")),
         activatiekostenPerSocket: odLoaded.activatiekostenPerSocket ?? (oTpl?.activatiekostenPerSocket || 18.5),
       });
       setNumDraft({});
       setEmailGreeting(odLoaded.emailGreeting ?? "");
-      const seededEmail = defaultOfferEmail({ withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points });
+      const seededEmail = defaultOfferEmail({
+        withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points,
+        isContract: (quote.is_private ?? !(quote.prospect_company ?? "").trim()) && quote.with_installation === false && quote.with_management !== false,
+      });
       setEmailMessage(odLoaded.emailMessage ?? seededEmail);
       lastDefaultRef.current = odLoaded.emailMessage ? "" : seededEmail;
       setEmailClosing(odLoaded.emailClosingName ?? "");

@@ -17,6 +17,7 @@ import { mdBoldToHtml } from "@/lib/emailBody";
 type QuoteSummary = {
   quoteNumber: string;
   company?: string | null;
+  isPrivate?: boolean | null;
   contact?: string | null;
   addressLine?: string | null;
   numChargePoints?: number | null;
@@ -43,6 +44,7 @@ const toPdfData = (q: QuoteSummary): OfferPdfData => ({
   quoteNumber: q.quoteNumber,
   date: q.date ?? null,
   company: q.company ?? "",
+  isPrivate: q.isPrivate ?? null,
   contactName: q.contact ?? null,
   addressLine: q.addressLine ?? null,
   numChargePoints: q.numChargePoints ?? null,

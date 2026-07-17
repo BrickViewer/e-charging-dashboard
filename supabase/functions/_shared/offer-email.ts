@@ -86,9 +86,15 @@ const stripBold = (s: string) => s.replace(/\*\*(.+?)\*\*/g, "$1");
 // 1) Verstuur-mail (offerte aanbieden). De PDF zit als bijlage wanneer hasAttachment.
 // De body-tekst is per offerte aanpasbaar (customMessage); aanhef, de knop, de geldigheid en de
 // ondertekening blijven automatisch. Bewust GEEN bedrag in de mailtekst.
-export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; contact?: string | null; total: number; acceptUrl: string; validUntil?: string | null; hasAttachment?: boolean; customMessage?: string | null; signoffName?: string | null; greeting?: string | null; withInstallation?: boolean | null; withManagement?: boolean | null; chargePoints?: number | null }): { html: string; text: string } {
+export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; contact?: string | null; total: number; acceptUrl: string; validUntil?: string | null; hasAttachment?: boolean; customMessage?: string | null; signoffName?: string | null; greeting?: string | null; withInstallation?: boolean | null; withManagement?: boolean | null; chargePoints?: number | null; isContract?: boolean | null }): { html: string; text: string } {
   const vu = nlDate(o.validUntil);
-  const bijlageZin = o.hasAttachment ? "De volledige offerte vindt u als <strong>PDF-bijlage</strong> bij deze e-mail." : "";
+  // Documenttype: het particuliere alleen-beheer-document is een CONTRACT (E-Charging heeft al
+  // getekend; de klant zet de tweede handtekening), al het andere is een offerte. Toon bij het
+  // contract warm en zeker: de deal is rond, er hoeft alleen nog getekend te worden.
+  const ct = o.isContract === true;
+  const bijlageZin = o.hasAttachment
+    ? (ct ? "Het volledige contract vindt u als <strong>PDF-bijlage</strong> bij deze e-mail." : "De volledige offerte vindt u als <strong>PDF-bijlage</strong> bij deze e-mail.")
+    : "";
   // Scope (installatie/beheer) + aantal palen bepalen de standaardtekst. MOET gelijk blijven aan
   // defaultOfferEmail() in apps/admin/src/services/offerTypes.ts.
   const inst = o.withInstallation ?? true;
@@ -109,27 +115,36 @@ export function renderOfferEmail(o: { supabaseUrl: string; quoteNumber: string; 
   const custom = o.customMessage && o.customMessage.trim() ? o.customMessage.trim() : "";
   const messageHtml = custom
     ? bodyParas(custom) // de PDF-bijlagezin staat nu in het bewerkbare bericht zelf (niet meer auto-aanplakken)
-    : p(`Hierbij ontvangt u ons voorstel voor ${subject}. ${bijlageZin}`) +
-      p(`In de offerte leest u de volledige uitwerking: ${detail}. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.`);
+    : ct
+      ? p(`Goed nieuws: alles staat voor u klaar. Hierbij ontvangt u het contract voor ${subject}. Wij hebben het contract al ondertekend. ${bijlageZin}`) +
+        p(`In het contract leest u alle afspraken: ${detail}. Zet uw digitale handtekening via onderstaande knop. Daarna regelen wij de rest.`)
+      : p(`Hierbij ontvangt u onze offerte voor ${subject}. ${bijlageZin}`) +
+        p(`In de offerte leest u de volledige uitwerking: ${detail}. Bekijk de offerte online en onderteken direct digitaal via onderstaande knop.`);
   const inner =
-    eyebrow(`Offerte ${o.quoteNumber}`) +
-    h1(o.company ? `Voorstel voor ${o.company}` : `Voorstel voor uw ${palen}`) +
+    eyebrow(`${ct ? "Contract" : "Offerte"} ${o.quoteNumber}`) +
+    h1(ct ? "Uw contract staat klaar" : (o.company ? `Offerte voor ${o.company}` : `Offerte voor uw ${palen}`)) +
     greetingHtml +
     messageHtml +
-    btn(o.acceptUrl, "Offerte bekijken en ondertekenen") +
-    fine(`${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."}`) +
+    btn(o.acceptUrl, ct ? "Contract bekijken en ondertekenen" : "Offerte bekijken en ondertekenen") +
+    fine(ct
+      ? (vu ? `Dit contract is geldig t/m ${vu}.` : "Dit contract is 30 dagen geldig.")
+      : (vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig.")) +
     `<p style="margin:22px 0 0;font-size:15px;line-height:1.65;color:#374151">Met vriendelijke groet,<br>${escHtml(signoff)}</p>`;
   const messageText = custom
     ? stripBold(custom)
-    : `Hierbij ontvangt u ons voorstel voor ${subject}.${o.hasAttachment ? " De volledige offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
+    : ct
+      ? `Goed nieuws: alles staat voor u klaar. Hierbij ontvangt u het contract voor ${subject}. Wij hebben het contract al ondertekend.${o.hasAttachment ? " Het volledige contract vindt u als PDF-bijlage bij deze e-mail." : ""}
+
+In het contract leest u alle afspraken: ${detail}. Daarna regelen wij de rest.`
+      : `Hierbij ontvangt u onze offerte voor ${subject}.${o.hasAttachment ? " De volledige offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
 
 In de offerte leest u de volledige uitwerking: ${detail}.`;
   const text = `${greetingText}
 
 ${messageText}
 
-Bekijk en onderteken de offerte online: ${o.acceptUrl}
-${vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig."}
+${ct ? "Bekijk en onderteken het contract online" : "Bekijk en onderteken de offerte online"}: ${o.acceptUrl}
+${ct ? (vu ? `Dit contract is geldig t/m ${vu}.` : "Dit contract is 30 dagen geldig.") : (vu ? `Deze offerte is geldig t/m ${vu}.` : "Deze offerte is 30 dagen geldig.")}
 
 Met vriendelijke groet,
 ${signoff}
@@ -138,22 +153,27 @@ Dwarsweg 8, 5301 KT Zaltbommel · info@e-charging.nl`;
 }
 
 // 2) Klant-bevestiging na ondertekenen (getekende PDF als bijlage).
-export function renderSignedConfirmation(o: { supabaseUrl: string; quoteNumber: string; signerName: string; total: number; hasAttachment?: boolean; withInstallation?: boolean | null }): { html: string; text: string } {
-  const bijlage = o.hasAttachment ? " De getekende offerte vindt u als PDF-bijlage bij deze e-mail." : "";
+export function renderSignedConfirmation(o: { supabaseUrl: string; quoteNumber: string; signerName: string; total: number; hasAttachment?: boolean; withInstallation?: boolean | null; isContract?: boolean | null }): { html: string; text: string } {
+  const ct = o.isContract === true;
+  const bijlage = o.hasAttachment
+    ? (ct ? " Het getekende contract vindt u als PDF-bijlage bij deze e-mail." : " De getekende offerte vindt u als PDF-bijlage bij deze e-mail.")
+    : "";
   // Scope-afstemming: geen "installatie inplannen" bij een enkel-beheer-offerte.
   const followUp = o.withInstallation === false
     ? "Wij nemen binnenkort contact met u op om uw beheer in gebruik te nemen."
     : "Wij nemen binnenkort contact met u op om de installatie in te plannen.";
   const inner =
-    eyebrow(`Offerte ${o.quoteNumber}`) +
-    h1("Bedankt, uw offerte is ondertekend") +
+    eyebrow(`${ct ? "Contract" : "Offerte"} ${o.quoteNumber}`) +
+    h1(ct ? "Bedankt, uw contract is ondertekend" : "Bedankt, uw offerte is ondertekend") +
     aanhef(o.signerName) +
-    p(`Hartelijk dank voor uw akkoord op offerte <strong>${o.quoteNumber}</strong>.${bijlage}`) +
+    p(ct
+      ? `Hartelijk dank. Contract <strong>${o.quoteNumber}</strong> is nu door beide partijen ondertekend.${bijlage}`
+      : `Hartelijk dank voor uw akkoord op offerte <strong>${o.quoteNumber}</strong>.${bijlage}`) +
     p(`${followUp} Heeft u vragen? Mail ons gerust via info@e-charging.nl.`) +
     greet;
   const text = `Beste ${o.signerName},
 
-Hartelijk dank voor uw akkoord op offerte ${o.quoteNumber}.${o.hasAttachment ? " De getekende offerte vindt u als PDF-bijlage bij deze e-mail." : ""}
+${ct ? `Hartelijk dank. Contract ${o.quoteNumber} is nu door beide partijen ondertekend.` : `Hartelijk dank voor uw akkoord op offerte ${o.quoteNumber}.`}${o.hasAttachment ? (ct ? " Het getekende contract vindt u als PDF-bijlage bij deze e-mail." : " De getekende offerte vindt u als PDF-bijlage bij deze e-mail.") : ""}
 
 ${followUp} Heeft u vragen? Mail ons via info@e-charging.nl.
 
@@ -163,41 +183,48 @@ Team E-Charging`;
 }
 
 // 3) Interne melding naar e-charging.
-export function renderInternalSignedNotice(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; signerName: string; total: number }): { html: string; text: string } {
+export function renderInternalSignedNotice(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; signerName: string; total: number; isContract?: boolean | null }): { html: string; text: string } {
+  const ct = o.isContract === true;
   const inner =
-    eyebrow("Offerte ondertekend") +
+    eyebrow(ct ? "Contract ondertekend" : "Offerte ondertekend") +
     h1(o.company || "Nieuwe ondertekening") +
     `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#374151;line-height:26px">
-      <tr><td width="130" style="color:#6b7280">Offerte</td><td style="font-weight:600;color:#111827">${o.quoteNumber}</td></tr>
+      <tr><td width="130" style="color:#6b7280">${ct ? "Contract" : "Offerte"}</td><td style="font-weight:600;color:#111827">${o.quoteNumber}</td></tr>
       <tr><td width="130" style="color:#6b7280">Getekend door</td><td style="font-weight:600;color:#111827">${o.signerName}</td></tr>
       <tr><td width="130" style="color:#6b7280">Investering</td><td style="font-weight:600;color:#111827">${eur0(o.total)} excl. BTW</td></tr>
     </table>` +
-    fine("De getekende offerte zit als bijlage. Rond de klant af via 'Klant aanmaken' (onboarding).");
-  const text = `${o.company || "Een klant"} heeft offerte ${o.quoteNumber} digitaal ondertekend.
+    fine(ct
+      ? "Het getekende contract zit als bijlage. Rond de klant af via 'Klant aanmaken' (onboarding)."
+      : "De getekende offerte zit als bijlage. Rond de klant af via 'Klant aanmaken' (onboarding).");
+  const text = `${o.company || "Een klant"} heeft ${ct ? "contract" : "offerte"} ${o.quoteNumber} digitaal ondertekend.
 Getekend door: ${o.signerName}
 Investering: ${eur0(o.total)} excl. BTW
-Getekende offerte als bijlage. Rond de klant af via 'Klant aanmaken' (onboarding).`;
+${ct ? "Getekend contract als bijlage." : "Getekende offerte als bijlage."} Rond de klant af via 'Klant aanmaken' (onboarding).`;
   return { html: shell(o.supabaseUrl, inner), text };
 }
 
 // 4) Verzoek aan een interne ondertekenaar om de offerte te beoordelen en te tekenen.
-export function renderInternalSignoffRequest(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; signerName: string; total: number; reviewUrl: string }): { html: string; text: string } {
+export function renderInternalSignoffRequest(o: { supabaseUrl: string; quoteNumber: string; company?: string | null; signerName: string; total: number; reviewUrl: string; isContract?: boolean | null }): { html: string; text: string } {
+  const ct = o.isContract === true;
+  const doc = ct ? "contract" : "offerte";
+  const hetDe = ct ? "het contract" : "de offerte";
+  const kosten = ct ? "eenmalige activatiekosten" : "eenmalige investering";
   const inner =
-    eyebrow(`Offerte ${o.quoteNumber}`) +
-    h1("Offerte ter ondertekening") +
+    eyebrow(`${ct ? "Contract" : "Offerte"} ${o.quoteNumber}`) +
+    h1(ct ? "Contract ter ondertekening" : "Offerte ter ondertekening") +
     aanhef(o.signerName) +
-    p(`Er staat een offerte voor ${o.company || "een klant"} klaar die jouw akkoord nodig heeft (eenmalige investering ${eur0(o.total)} excl. BTW).`) +
-    p("Bekijk de offerte, controleer of alles klopt en onderteken digitaal. Klopt er iets niet? Kies dan voor 'Wijzigen' — de offerte komt dan terug op concept zodat je 'm kunt aanpassen. Zodra je tekent, gaat de offerte automatisch naar de klant.") +
-    btn(o.reviewUrl, "Offerte beoordelen en ondertekenen") +
+    p(`Er staat een ${doc} voor ${o.company || "een klant"} klaar die jouw akkoord nodig heeft (${kosten} ${eur0(o.total)} excl. BTW).`) +
+    p(`Bekijk ${hetDe}, controleer of alles klopt en onderteken digitaal. Klopt er iets niet? Kies dan voor 'Wijzigen', dan komt ${hetDe} terug op concept zodat je 'm kunt aanpassen. Zodra je tekent, gaat ${hetDe} automatisch naar de klant.`) +
+    btn(o.reviewUrl, ct ? "Contract beoordelen en ondertekenen" : "Offerte beoordelen en ondertekenen") +
     fine("Je moet ingelogd zijn met je eigen E-Charging account om te kunnen tekenen.") +
     greet;
   const text = `Beste ${o.signerName},
 
-Er staat een offerte voor ${o.company || "een klant"} klaar die jouw akkoord nodig heeft (eenmalige investering ${eur0(o.total)} excl. BTW).
+Er staat een ${doc} voor ${o.company || "een klant"} klaar die jouw akkoord nodig heeft (${kosten} ${eur0(o.total)} excl. BTW).
 
-Bekijk en onderteken de offerte: ${o.reviewUrl}
+Bekijk en onderteken ${hetDe}: ${o.reviewUrl}
 
-Klopt er iets niet? Kies 'Wijzigen' — de offerte komt dan terug op concept. Zodra je tekent, gaat de offerte automatisch naar de klant. Je moet ingelogd zijn met je eigen E-Charging account.
+Klopt er iets niet? Kies 'Wijzigen', dan komt ${hetDe} terug op concept. Zodra je tekent, gaat ${hetDe} automatisch naar de klant. Je moet ingelogd zijn met je eigen E-Charging account.
 
 Met vriendelijke groet,
 Team E-Charging`;

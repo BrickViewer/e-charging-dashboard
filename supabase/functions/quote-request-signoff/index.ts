@@ -89,13 +89,15 @@ Deno.serve(async (req) => {
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
 
     if (RESEND_API_KEY) {
+      // Documenttype: particulier (geen bedrijf) + alleen beheer = contract; anders offerte.
+      const isContract = !((quote.prospect_company ?? "").trim()) && quote.with_management !== false && quote.with_installation === false;
       const { html, text } = renderInternalSignoffRequest({
         supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company,
-        signerName: prof?.full_name ?? "collega", total, reviewUrl,
+        signerName: prof?.full_name ?? "collega", total, reviewUrl, isContract,
       });
       const res = await sendEmail({
         to: [signerEmail],
-        subject: `Ter ondertekening · Offerte ${quote.quote_number}`,
+        subject: `Ter ondertekening · ${(!((quote.prospect_company ?? "").trim()) && quote.with_management !== false && quote.with_installation === false) ? "Contract" : "Offerte"} ${quote.quote_number}`,
         html, text,
         tags: [{ name: "type", value: "quote_signoff_request" }],
       });

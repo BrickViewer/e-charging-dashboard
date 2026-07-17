@@ -54,11 +54,14 @@ Deno.serve(async (req) => {
   try {
     const tokenHash = await sha256Hex(token);
     const { data: acc } = await sb.from("quote_acceptances").select("*").eq("token_hash", tokenHash).maybeSingle();
-    if (!acc) return json({ status: "not_found", message: "Offerte-link niet gevonden" }, 404);
+    if (!acc) return json({ status: "not_found", message: "Ondertekenlink niet gevonden" }, 404);
     const expired = new Date(acc.expires_at).getTime() < Date.now();
 
     const { data: quote } = await sb.from("quotes").select("*").eq("id", acc.quote_id).maybeSingle();
-    if (!quote) return json({ status: "not_found", message: "Offerte niet gevonden" }, 404);
+    if (!quote) return json({ status: "not_found", message: "Document niet gevonden" }, 404);
+
+    // Documenttype: particulier + alleen beheer = contract; anders offerte (zelfde regel als elders).
+    const isContract = (quote.is_private ?? !((quote.prospect_company ?? "").trim())) && quote.with_management !== false && quote.with_installation === false;
 
     const { data: lead } = quote.lead_id
       ? await sb.from("leads").select("*").eq("id", quote.lead_id).maybeSingle()
@@ -109,8 +112,8 @@ Deno.serve(async (req) => {
 
     if (req.method === "GET") {
       if (acc.status === "accepted" || quote.status === "getekend") return json({ status: "already_accepted", quote: summary });
-      if (acc.status === "revoked") return json({ status: "revoked", message: "Deze offerte-link is vervangen door een nieuwere." }, 410);
-      if (expired) return json({ status: "expired", message: "Deze offerte-link is verlopen." }, 410);
+      if (acc.status === "revoked") return json({ status: "revoked", message: "Deze ondertekenlink is vervangen door een nieuwere." }, 410);
+      if (expired) return json({ status: "expired", message: "Deze ondertekenlink is verlopen." }, 410);
       return json({ status: "ok", quote: summary });
     }
 
@@ -128,7 +131,7 @@ Deno.serve(async (req) => {
     const authorityConfirmed = body.authority_confirmed === true;
     const termsAccepted = body.terms_accepted === true;
     if (!authorityConfirmed || !termsAccepted) {
-      return json({ status: "invalid", message: "Bevestig dat u bevoegd bent en akkoord gaat met de offerte, de voorwaarden en elektronisch ondertekenen." }, 400);
+      return json({ status: "invalid", message: `Bevestig dat u bevoegd bent en akkoord gaat met ${isContract ? "het contract" : "de offerte"}, de voorwaarden en elektronisch ondertekenen.` }, 400);
     }
     // Audit-trail: vanwaar (IP/apparaat) + integriteit (hash van de getekende PDF).
     const signerIp = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
@@ -234,22 +237,22 @@ Deno.serve(async (req) => {
       }
       await sb.from("lead_activities").insert({
         lead_id: lead.id, organization_id: org, type: "quote_accepted",
-        description: `Offerte ${quote.quote_number} getekend door ${signerName} — klantaccount aanmaken in onboarding`,
+        description: `${isContract ? "Contract" : "Offerte"} ${quote.quote_number} getekend door ${signerName}, klantaccount aanmaken in onboarding`,
         metadata: { quote_id: quote.id, signer_name: signerName },
       });
     }
 
     // Mails: klant-bevestiging (met getekende PDF) + interne melding.
-    const attach = signedPdfB64 ? [{ filename: `offerte-${quote.quote_number}.pdf`, content: signedPdfB64.replace(/^data:[^,]+,/, "") }] : undefined;
+    const attach = signedPdfB64 ? [{ filename: `${isContract ? "contract" : "offerte"}-${quote.quote_number}.pdf`, content: signedPdfB64.replace(/^data:[^,]+,/, "") }] : undefined;
     const hasAttachment = !!attach;
     const recipient = (quote.prospect_email ?? lead?.contact_email) as string | null;
     if (recipient) {
-      const m = renderSignedConfirmation({ supabaseUrl, quoteNumber: quote.quote_number, signerName, total, hasAttachment, withInstallation: quote.with_installation !== false });
-      await sendEmail({ to: recipient, subject: `E-Charging · Offerte ${quote.quote_number} ondertekend`, html: m.html, text: m.text, attachments: attach });
+      const m = renderSignedConfirmation({ supabaseUrl, quoteNumber: quote.quote_number, signerName, total, hasAttachment, withInstallation: quote.with_installation !== false, isContract });
+      await sendEmail({ to: recipient, subject: `E-Charging · ${isContract ? "Contract" : "Offerte"} ${quote.quote_number} ondertekend`, html: m.html, text: m.text, attachments: attach });
     }
     {
-      const m = renderInternalSignedNotice({ supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company, signerName, total });
-      await sendEmail({ to: "info@e-charging.nl", subject: `Offerte ${quote.quote_number} ondertekend${quote.prospect_company ? ` — ${quote.prospect_company}` : ""}`, html: m.html, text: m.text, attachments: attach });
+      const m = renderInternalSignedNotice({ supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company, signerName, total, isContract });
+      await sendEmail({ to: "info@e-charging.nl", subject: `${isContract ? "Contract" : "Offerte"} ${quote.quote_number} ondertekend${quote.prospect_company ? ` — ${quote.prospect_company}` : ""}`, html: m.html, text: m.text, attachments: attach });
     }
 
     return json({ status: "accepted", quote: { ...summary, status: "getekend", acceptanceStatus: "accepted" } });

@@ -104,6 +104,9 @@ Deno.serve(async (req) => {
       const summary = {
         quoteNumber: quote.quote_number,
         company: quote.prospect_company,
+        // Particulier-vlag: nodig zodat de interne tekenpagina het contract (voorblad + teksten)
+        // exact zo rendert als de klant hem straks ziet.
+        isPrivate: quote.is_private ?? null,
         contact: quote.prospect_contact,
         addressLine: addr || null,
         numChargePoints: quote.num_charge_points ?? null,

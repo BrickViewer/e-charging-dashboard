@@ -89,6 +89,8 @@ Deno.serve(async (req) => {
     const acceptUrl = `${PUBLIC_URL}/offerte/${token}`;
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
 
+    // Documenttype: particulier (geen bedrijf) + alleen beheer = contract; anders offerte.
+    const isContract = !((quote.prospect_company ?? "").trim()) && quote.with_management !== false && quote.with_installation === false;
     if (RESEND_API_KEY) {
       const od = quote.offer_details as { emailMessage?: string | null; emailClosingName?: string | null; emailGreeting?: string | null } | null;
       const customMessage = od?.emailMessage ?? null;
@@ -101,14 +103,15 @@ Deno.serve(async (req) => {
         contact: quote.prospect_contact, total, acceptUrl, validUntil: quote.valid_until,
         hasAttachment: !!pdfBase64, customMessage, signoffName, greeting,
         withInstallation: quote.with_installation, withManagement: quote.with_management, chargePoints: quote.num_charge_points,
+        isContract,
       });
       const res = await sendEmail({
         to: [recipient],
-        subject: `E-Charging · Uw offerte ${quote.quote_number}`,
+        subject: `E-Charging · Uw ${isContract ? "contract" : "offerte"} ${quote.quote_number}`,
         html, text,
         sender: "info", // offerte = klantgerichte communicatie → vanuit info@
         tags: [{ name: "type", value: "quote_offer" }],
-        ...(pdfBase64 ? { attachments: [{ filename: `offerte-${quote.quote_number}.pdf`, content: pdfBase64 }] } : {}),
+        ...(pdfBase64 ? { attachments: [{ filename: `${isContract ? "contract" : "offerte"}-${quote.quote_number}.pdf`, content: pdfBase64 }] } : {}),
       });
       if (!res.ok) {
         const errText = await res.text();

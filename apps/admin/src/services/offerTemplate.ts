@@ -246,7 +246,10 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     reference: data.quoteNumber || "",
     onzeReferentie: firstStr(od.onzeReferentie, data.quoteNumber),
     object: firstStr(od.object, tpl.defaultObjectTemplate),
-    betreft: firstStr(od.betreft, tpl.defaultBetreftTemplate),
+    // Contract (particulier + alleen beheer, v2): eigen betreft-default; offertes volgen het org-sjabloon.
+    betreft: firstStr(od.betreft, (isPrivate && textVersion >= 2 && data.withManagement !== false && data.withInstallation === false)
+      ? `Beheercontract ${(firstNum(od.numPoles, n) ?? n) > 1 ? "laadpalen" : "laadpaal"}`
+      : tpl.defaultBetreftTemplate),
     aanhef: firstStr(od.aanhef, tpl.defaultAanhef),
     withManagement: data.withManagement !== false,
     withInstallation: data.withInstallation !== false,
@@ -494,9 +497,9 @@ function coverPage(m: ResolvedModel, logoUrl: string | null, coverUrl: string | 
     <div style="position:absolute;inset:0;background:${GREEN_DARK}"></div>
     <div style="position:absolute;top:0;left:80px;bottom:0;width:52%;background:rgba(233,240,233,0.9)"></div>
     ${logo}
-    <div style="position:absolute;top:455px;left:138px;font-style:italic;color:${MUTED};font-size:34px">Offerte</div>
+    <div style="position:absolute;top:455px;left:138px;font-style:italic;color:${MUTED};font-size:34px">${(m.isPrivate && m.textVersion >= 2 && m.withManagement && !m.withInstallation) ? "Contract" : "Offerte"}</div>
     <div style="position:absolute;top:705px;left:138px;line-height:1.18">
-      <div style="font-size:38px;font-weight:700;color:${INK}">Wij plaatsen</div>
+      <div style="font-size:38px;font-weight:700;color:${INK}">${(m.isPrivate && m.textVersion >= 2 && m.withManagement && !m.withInstallation) ? "Wij beheren" : "Wij plaatsen"}</div>
       <div style="font-size:38px;font-weight:700;color:${INK}">uw laadpalen,</div>
       <div style="font-size:38px;font-weight:700;font-style:italic;color:${GREEN}">U verdient eraan</div>
     </div>
@@ -539,17 +542,19 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // Geen dank-/aanhef-zin: het contractblad gaat van het referentieblok direct de sectie in.
   } else if (privV2) {
     blocks.push(bP(m.withInstallation && m.withManagement
-      ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren, aansluiten en volledig beheren van uw ${paalWoord} aan huis, zodat u er zelf niets aan hoeft te doen.`
+      ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u onze offerte voor het leveren, monteren, aansluiten en volledig beheren van uw ${paalWoord} aan huis, zodat u er zelf niets aan hoeft te doen.`
       : m.withInstallation
-        ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het leveren, monteren en aansluiten van uw ${paalWoord} aan huis.`
-        : `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het volledige beheer van uw ${paalWoord} aan huis, zodat u er zelf nooit meer iets aan hoeft te doen.`, 12));
+        ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u onze offerte voor het leveren, monteren en aansluiten van uw ${paalWoord} aan huis.`
+        : `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u onze offerte voor het volledige beheer van uw ${paalWoord} aan huis, zodat u er zelf nooit meer iets aan hoeft te doen.`, 12));
   } else {
     const introScope = m.withInstallation && m.withManagement
       ? "leveren, monteren, aansluiten en beheren van uw laadpalen"
       : m.withInstallation
         ? "leveren, monteren en aansluiten van uw laadpalen"
         : "het beheer van uw bestaande laadpalen";
-    blocks.push(bP(`Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het ${introScope}.`, 12));
+    blocks.push(bP(m.textVersion <= 1
+      ? `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u ons voorstel voor het ${introScope}.` // v1 bevroren
+      : `Hartelijk dank voor uw aanvraag. Hierbij ontvangt u onze offerte voor het ${introScope}.`, 12));
   }
 
   // Kop: ook voor een particulier "inkomstenbron" (gebruikerskeuze) — alleen enkelvoud bij één paal.
@@ -742,9 +747,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(bRaw(rowC("Voor werktijden tussen 17.00 uur en 08.00 uur en op zaterdag", "75 % toeslag."), 8));
     blocks.push(bRaw(rowC("Zon- en feestdagen", "125 % toeslag."), 1));
     blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend. De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 8));
-    blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 16, HEAD));
+    blocks.push(bSec("Onze voorwaarden bij dit contract", 16, HEAD));
     blocks.push(bFb("De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.", 8));
-    blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
+    blocks.push(bFb("Dit contract is 30 dagen geldig na dagtekening."));
   } else {
     if (heeftOverleg) {
       blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
@@ -764,7 +769,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       blocks.push(bP("Over werkzaamheden door derden zal een opslag van 20% als coördinatievergoeding worden berekend.", 16));
       blocks.push(bP("De gebruikte materialen zullen worden berekend volgens de meest actuele prijscourant van de Technische Unie.", 12));
     }
-    blocks.push(bSec("Onze voorwaarden bij deze aanbieding", 19, HEAD));
+    blocks.push(bSec(m.textVersion <= 1 ? "Onze voorwaarden bij deze aanbieding" : "Onze voorwaarden bij deze offerte", 19, HEAD));
     blocks.push(bFb(m.textVersion <= 1
       ? "De Algemene voorwaarden E-Charging BV." // v1 bevroren (verstuurde offertes)
       : "De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.", 8));
@@ -774,7 +779,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       blocks.push(bSub("75% Nachturen (23.00 &ndash; 07.00 uur) en zaterdag (normale werkuren)"));
       blocks.push(bSub("125% Zon- en feestdagen (normale werkuren)"));
     }
-    blocks.push(bFb("Deze aanbieding is 30 dagen geldig na datum van aanbieding."));
+    blocks.push(bFb(m.textVersion <= 1
+      ? "Deze aanbieding is 30 dagen geldig na datum van aanbieding." // v1 bevroren
+      : "Deze offerte is 30 dagen geldig na de offertedatum."));
   }
   if (m.withManagement) {
     // Kop: v1 bevroren INCLUSIEF de originele tikfout "contactduur" (verstuurde offertes renderen
@@ -805,7 +812,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     }
   }
   if (m.withInstallation) {
-    blocks.push(bSec("Niet in deze aanbieding opgenomen", 19, HEAD));
+    blocks.push(bSec(m.textVersion <= 1 ? "Niet in deze aanbieding opgenomen" : "Niet in deze offerte opgenomen", 19, HEAD));
     blocks.push(bFb("Hak-, graaf-, frees-, breek-, timmer-, schilder-, kit-, metsel- en stucadoorswerk, tenzij anders omschreven.", 8));
   }
 
@@ -853,7 +860,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // beheer-contract bewust vervallen (gebruikerskeuze 2026-07-16 — contact staat in de footer).
     blocks.push(bSec("Onze aanpak", 24, HEAD));
     blocks.push(bP(esc(AANPAK), 9));
-    blocks.push(bRaw(`<div style="text-align:center"><div>Heeft u nog vragen of opmerkingen naar aanleiding van deze aanbieding?</div><div style="margin-top:4px">Neem dan gerust contact met ons op.</div></div>`, 40));
+    blocks.push(bRaw(`<div style="text-align:center"><div>Heeft u nog vragen of opmerkingen naar aanleiding van ${m.textVersion <= 1 ? "deze aanbieding" : "deze offerte"}?</div><div style="margin-top:4px">Neem dan gerust contact met ons op.</div></div>`, 40));
   }
   blocks.push(bRaw(`<div style="display:flex;gap:40px"><div style="flex:1"><div>Met vriendelijke groet,</div><div style="height:72px;display:flex;align-items:flex-end">${ecSigImg}</div><div style="font-weight:600">${esc(ecName) || "Naam ondertekenaar"}</div><div style="margin-top:2px">E-Charging B.V.</div></div><div style="flex:1"><div>Voor akkoord getekend,</div><div style="height:72px;display:flex;align-items:flex-end">${sigImg}</div><div>Dhr./Mevr: ${esc(signature?.signerName) || dots}</div><div style="margin-top:6px">d.d. ${esc(sigDate) || dots}</div></div></div>`, contractV2 ? 24 : 44));
 

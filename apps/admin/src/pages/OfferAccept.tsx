@@ -157,6 +157,11 @@ export default function OfferAccept() {
   const done = accepted || resp?.status === "already_accepted";
   const invalid = resp && !["ok", "already_accepted"].includes(resp.status);
 
+  // Documenttype: particulier + alleen beheer = contract (E-Charging tekende al eerst);
+  // al het andere is een offerte. Zelfde regel als in de mails en op het document zelf.
+  const isContract = !!quote && (quote.isPrivate ?? !quote.company) && quote.withManagement !== false && quote.withInstallation === false;
+  const docCap = isContract ? "Contract" : "Offerte";
+
   // Gecentreerde toestanden (laden / getekend / ongeldig).
   if (loading || done || invalid || !quote) {
     return (
@@ -168,15 +173,15 @@ export default function OfferAccept() {
           ) : done ? (
             <Card><CardContent className="space-y-3 p-8 text-center">
               <CheckCircle className="mx-auto h-12 w-12 text-green-600" />
-              <h1 className="text-xl font-bold">Bedankt — uw offerte is getekend</h1>
-              <p className="text-sm text-muted-foreground">Offerte {quote?.quoteNumber} is digitaal ondertekend. U ontvangt per e-mail een bevestiging met de getekende offerte. {quote?.withInstallation === false ? "Wij nemen binnenkort contact met u op om uw beheer in gebruik te nemen." : "Wij nemen contact op voor de planning van de installatie."}</p>
+              <h1 className="text-xl font-bold">Bedankt, uw {isContract ? "contract" : "offerte"} is getekend</h1>
+              <p className="text-sm text-muted-foreground">{docCap} {quote?.quoteNumber} is digitaal ondertekend. U ontvangt per e-mail een bevestiging met {isContract ? "het getekende contract" : "de getekende offerte"}. {quote?.withInstallation === false ? "Wij nemen binnenkort contact met u op om uw beheer in gebruik te nemen." : "Wij nemen contact op voor de planning van de installatie."}</p>
               <p className="text-xs text-muted-foreground">Uw digitale ondertekening is geregistreerd.</p>
             </CardContent></Card>
           ) : (
             <Card><CardContent className="space-y-3 p-8 text-center">
               <AlertCircle className="mx-auto h-12 w-12 text-amber-500" />
-              <h1 className="text-xl font-bold">Offerte niet beschikbaar</h1>
-              <p className="text-sm text-muted-foreground">{resp?.message || "Deze offerte-link is niet (meer) geldig."}</p>
+              <h1 className="text-xl font-bold">{quote ? `${docCap} niet beschikbaar` : "Link niet geldig"}</h1>
+              <p className="text-sm text-muted-foreground">{resp?.message || "Deze ondertekenlink is niet (meer) geldig."}</p>
             </CardContent></Card>
           )}
         </div>
@@ -189,7 +194,7 @@ export default function OfferAccept() {
     <div className="flex min-h-[100dvh] flex-col bg-muted/30 lg:h-[100dvh] lg:overflow-hidden">
       <header className="flex items-center justify-between gap-3 border-b bg-background px-4 py-3 sm:px-6">
         <img src={logoFull} alt="E-Charging" className="h-7" />
-        <p className="text-xs font-medium text-muted-foreground">Offerte {quote.quoteNumber}</p>
+        <p className="text-xs font-medium text-muted-foreground">{docCap} {quote.quoteNumber}</p>
       </header>
 
       <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[1.65fr_1fr]">
@@ -199,7 +204,7 @@ export default function OfferAccept() {
           <div className="text-center">
             <button type="button" onClick={openPdf} disabled={pdfBusy} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-60">
               {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              Offerte als PDF openen
+              {docCap} als PDF openen
             </button>
           </div>
         </div>
@@ -208,7 +213,7 @@ export default function OfferAccept() {
         <aside className="flex flex-col border-t bg-background lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
           <div className="space-y-6 p-5 sm:p-6">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Offerte {quote.quoteNumber}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">{docCap} {quote.quoteNumber}</p>
               <h1 className="mt-1 text-xl font-bold leading-snug">{(quote.withInstallation ? "Wij plaatsen uw " : quote.withManagement ? "Wij beheren uw " : "Uw ") + ((quote.numChargePoints ?? 1) >= 2 ? "laadpalen." : "laadpaal.")}</h1>
               <p className="text-sm text-muted-foreground">Voor {quote.company || quote.contact || "u"}</p>
             </div>
@@ -250,11 +255,13 @@ export default function OfferAccept() {
                   <Checkbox className="mt-0.5 shrink-0" checked={authorityChecked} onCheckedChange={(v) => setAuthorityChecked(v === true)} />
                   <span>{quote.company
                     ? `Ik ben bevoegd om namens ${quote.company} deze offerte te aanvaarden en een bindende overeenkomst aan te gaan.`
-                    : "Ik aanvaard deze offerte en ga hiermee een bindende overeenkomst aan."}</span>
+                    : isContract
+                      ? "Ik aanvaard dit contract en ga hiermee een bindende overeenkomst aan."
+                      : "Ik aanvaard deze offerte en ga hiermee een bindende overeenkomst aan."}</span>
                 </label>
                 <div className="flex items-start gap-2.5 text-sm leading-snug">
                   <Checkbox className="mt-0.5 shrink-0" checked={termsChecked} onCheckedChange={(v) => setTermsChecked(v === true)} />
-                  <span>Ik aanvaard deze offerte en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/regeling-gegevensuitwisseling" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Regeling gegevensuitwisseling</a>, en met elektronisch ondertekenen.</span>
+                  <span>Ik aanvaard {isContract ? "dit contract" : "deze offerte"} en ga akkoord met de <a href="https://www.e-charging.nl/algemene-voorwaarden" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Algemene Voorwaarden</a> en de <a href="https://www.e-charging.nl/regeling-gegevensuitwisseling" target="_blank" rel="noopener noreferrer" className="text-inherit underline">Regeling gegevensuitwisseling</a>, en met elektronisch ondertekenen.</span>
                 </div>
               </div>
 
@@ -266,7 +273,7 @@ export default function OfferAccept() {
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Akkoord &amp; tekenen
               </Button>
-              <p className="text-center text-[11px] text-muted-foreground">Deze offerte is geldig t/m {fmtNlDate(quote.validUntil)}.</p>
+              <p className="text-center text-[11px] text-muted-foreground">{isContract ? "Dit contract" : "Deze offerte"} is geldig t/m {fmtNlDate(quote.validUntil)}.</p>
             </div>
           </div>
         </aside>
