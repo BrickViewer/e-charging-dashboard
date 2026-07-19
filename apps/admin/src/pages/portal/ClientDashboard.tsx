@@ -10,6 +10,7 @@ import {
   type PortalDashboardKpiRow,
 } from "@/hooks/useClientData";
 import { CockpitGauge } from "@/components/portal/CockpitGauge";
+import { DashboardBootSkeleton } from "@/components/portal/DashboardBootSkeleton";
 import { niceQuarterMax } from "@/components/portal/gaugeUtils";
 import { WarningLight } from "@/components/portal/WarningLight";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
@@ -77,7 +78,16 @@ export default function ClientDashboard() {
   }, [emblaApi]);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64 text-muted-foreground">Laden...</div>;
+    // Mobiel: zelfde skelet als de login-splash/PortalHome — de boot-meter
+    // blijft staan tot de echte XL-meter er met data overheen valt.
+    return (
+      <>
+        <div className="lg:hidden h-full">
+          <DashboardBootSkeleton />
+        </div>
+        <div className="hidden lg:flex items-center justify-center h-64 text-muted-foreground">Laden...</div>
+      </>
+    );
   }
 
   // Stabiele, ronde gauge-schaal o.b.v. de PIEKMAAND (hoogste maandwaarde tot nu toe).

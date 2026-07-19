@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Power, Loader2 } from "lucide-react";
 import { CockpitArc } from "@/components/portal/CockpitArc";
-import { CockpitGaugeBoot } from "@/components/portal/CockpitGauge";
+import { DashboardBootSkeleton } from "@/components/portal/DashboardBootSkeleton";
 import { usePortalTheme, usePortalThemeSync } from "@/hooks/usePortalTheme";
 import logoBright from "@/assets/icon-bright.svg";
 import logoFullColor from "@/assets/icon-full-color.svg";
@@ -30,6 +30,14 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
   const navigate = useNavigate();
   // Volg de dag/nacht-voorkeur van het apparaat (zelfde localStorage als het portaal).
   const { isLight } = usePortalThemeSync();
+
+  // Tijdens de splash alvast de bestemmings-chunk laden: de redirect landt dan
+  // zonder "Laden…"-flits (zelfde dynamic imports als de lazy routes in App.tsx).
+  useEffect(() => {
+    if (phase !== "ignition") return;
+    if (isInternal) void import("@/pages/admin/AdminDashboard");
+    else void import("@/pages/portal/PortalHome");
+  }, [phase, isInternal]);
 
   // Bij ignition: na 2.6s pulseringssequentie redirect uitvoeren
   useEffect(() => {
@@ -162,17 +170,7 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
               </div>
             </div>
             <div className="flex-1 min-h-0 w-full px-4 pt-1 pb-24 overflow-hidden">
-              <div className="h-full flex flex-col">
-                {/* Placeholder voor de selector-/statusrij van het dashboard */}
-                <div className="flex items-center justify-between px-4 pt-1">
-                  <div className="h-11" />
-                </div>
-                <div className="flex-1 min-h-0 flex items-center justify-center px-4 animate-ignition-fade">
-                  <CockpitGaugeBoot centerText={splashLabel} label="Live data wordt geladen" />
-                </div>
-                {/* Placeholder voor de carrousel-dots */}
-                <div className="h-10" />
-              </div>
+              <DashboardBootSkeleton />
             </div>
           </div>
 

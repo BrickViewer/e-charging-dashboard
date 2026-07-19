@@ -2,6 +2,7 @@ import { Link, Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import ClientDashboard from "./ClientDashboard";
+import { DashboardBootSkeleton } from "@/components/portal/DashboardBootSkeleton";
 import { useClientProfile } from "@/hooks/useClientData";
 import { useDemoMode } from "@/contexts/demoModeContextValue";
 
@@ -15,10 +16,17 @@ export default function PortalHome() {
   if (demo) return <ClientDashboard />;
 
   if (isLoading) {
+    // Mobiel: zelfde skelet als de login-splash → inloggen vloeit zonder
+    // geknipper over in het dashboard. Desktop houdt de kleine spinner.
     return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <>
+        <div className="lg:hidden h-full">
+          <DashboardBootSkeleton />
+        </div>
+        <div className="hidden lg:flex h-full items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </>
     );
   }
 
