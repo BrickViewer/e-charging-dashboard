@@ -2511,6 +2511,50 @@ export type Database = {
         }
         Relationships: []
       }
+      kpi_targets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          metric: string
+          month: number | null
+          organization_id: string
+          target_value: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metric: string
+          month?: number | null
+          organization_id: string
+          target_value: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metric?: string
+          month?: number | null
+          organization_id?: string
+          target_value?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_targets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_activities: {
         Row: {
           created_at: string
@@ -3248,6 +3292,7 @@ export type Database = {
           address_city: string | null
           address_postal: string | null
           address_street: string | null
+          agenda_mailbox: string | null
           avg_annual_revenue_per_charge_point: number | null
           bic: string | null
           btw_number: string | null
@@ -3295,6 +3340,7 @@ export type Database = {
           address_city?: string | null
           address_postal?: string | null
           address_street?: string | null
+          agenda_mailbox?: string | null
           avg_annual_revenue_per_charge_point?: number | null
           bic?: string | null
           btw_number?: string | null
@@ -3342,6 +3388,7 @@ export type Database = {
           address_city?: string | null
           address_postal?: string | null
           address_street?: string | null
+          agenda_mailbox?: string | null
           avg_annual_revenue_per_charge_point?: number | null
           bic?: string | null
           btw_number?: string | null
