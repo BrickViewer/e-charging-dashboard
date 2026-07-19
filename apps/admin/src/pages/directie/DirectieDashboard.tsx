@@ -14,19 +14,21 @@ import { CalendarDays, Euro, ListChecks, MapPin, PlugZap, Target, TrendingUp, Us
 import { KpiTile } from "@/components/admin/KpiTile";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
 import { useLeadStats } from "@/hooks/useLeads";
+import { useAllChargePoints, useAllClients } from "@/hooks/useAdminData";
 import { useDirectieActuals, useKpiTargets } from "@/hooks/useKpiTargets";
 import { useAgendaEvents } from "@/hooks/useAgenda";
 import { useAllTasks, useToggleTask } from "@/hooks/useTasks";
 import {
-  KPI_METRICS, cumulativeActual, formatKpiValue, monthTarget, progressPct, yearTarget,
+  KPI_METRICS, cumulativeActual, formatKpiValue, monthTarget, progressPct, rawPct, yearTarget,
 } from "@/services/kpiTargets";
 
 const MONTH_LABELS = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 
 function GoalBar({ label, actual, target, unit }: { label: string; actual: number; target: number | null; unit: "eur" | "kwh" | "count" }) {
-  const pct = progressPct(actual, target);
-  if (pct === null || target === null) return null;
-  const tone = pct >= 100 ? "text-[hsl(var(--status-green,152_60%_40%))]" : pct >= 70 ? "text-[hsl(var(--status-amber))]" : "text-destructive";
+  const barPct = progressPct(actual, target);
+  const labelPct = rawPct(actual, target);
+  if (barPct === null || labelPct === null || target === null) return null;
+  const tone = labelPct >= 100 ? "text-[hsl(var(--status-green,152_60%_40%))]" : labelPct >= 70 ? "text-[hsl(var(--status-amber))]" : "text-destructive";
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-2 text-xs">
@@ -34,10 +36,10 @@ function GoalBar({ label, actual, target, unit }: { label: string; actual: numbe
         <span className="tabular-nums">
           <span className="font-semibold text-foreground">{formatKpiValue(actual, unit)}</span>
           <span className="text-muted-foreground"> / {formatKpiValue(target, unit)}</span>
-          <span className={`ml-2 font-semibold ${tone}`}>{pct}%</span>
+          <span className={`ml-2 font-semibold ${tone}`}>{labelPct}%</span>
         </span>
       </div>
-      <Progress value={pct} className="h-1.5" />
+      <Progress value={barPct} className="h-1.5" />
     </div>
   );
 }
@@ -48,18 +50,24 @@ export default function DirectieDashboard() {
   const curMonth = now.getMonth() + 1; // 1-12
   const [year, setYear] = useState(curYear);
 
-  const { months, kpis, isLoading } = useDirectieActuals(year);
+  const { months, kpis, isLoading, isError } = useDirectieActuals(year);
   const targetsQ = useKpiTargets(year);
   const leadStats = useLeadStats();
 
-  // Vandaag-blok: afspraken (M365) + open taken t/m vandaag, afvinkbaar.
+  // KPI-strip hangt op meerdere queries; laat een skeleton/foutbanner zien i.p.v.
+  // een flits van nullen (patroon van AdminDashboard).
+  const { isLoading: cpLoading, isError: cpError } = useAllChargePoints();
+  const { isLoading: clLoading, isError: clError } = useAllClients();
+  const kpiLoading = isLoading || cpLoading || clLoading;
+  const kpiError = isError || cpError || clError;
+
+  // Vandaag-blok: je eigen Outlook-afspraken + open taken t/m vandaag, afvinkbaar.
   const pad = (n: number) => String(n).padStart(2, "0");
   const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const todayEventsQ = useAgendaEvents(`${todayKey}T00:00:00`, `${todayKey}T23:59:59`);
+  const todayAgenda = useAgendaEvents(`${todayKey}T00:00:00`, `${todayKey}T23:59:59`);
   const tasksQ = useAllTasks("all");
   const toggleTask = useToggleTask();
-  const agendaConnected = todayEventsQ.data?.status === "ok";
-  const todayEvents = todayEventsQ.data?.events ?? [];
+  const todayEvents = todayAgenda.events;
   const todayTasks = (tasksQ.data ?? [])
     .filter((t) => !t.done && t.due_date && t.due_date <= todayKey)
     .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
@@ -90,6 +98,16 @@ export default function DirectieDashboard() {
       </div>
 
       {/* KPI-strip: deze maand + stand van het bedrijf */}
+      {kpiError && (
+        <Card className="border-destructive/40">
+          <CardContent className="p-4 text-sm text-muted-foreground">De bedrijfscijfers konden niet volledig worden geladen. Ververs de pagina om het opnieuw te proberen.</CardContent>
+        </Card>
+      )}
+      {kpiLoading ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[92px] w-full rounded-xl" />)}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiTile label="Omzet deze maand" value={formatKpiValue(kpis.monthRevenue ?? 0, "eur")}
           subtitle={kpis.revenueChange != null ? `${kpis.revenueChange >= 0 ? "+" : ""}${kpis.revenueChange}% t.o.v. vorige maand` : null}
@@ -110,6 +128,7 @@ export default function DirectieDashboard() {
           subtitle={kpis.offlineChargePoints ? `${kpis.offlineChargePoints} offline` : "alles online"}
           icon={<PlugZap className="h-5 w-5" />} accent={kpis.offlineChargePoints ? "red" : "green"} />
       </div>
+      )}
 
       {/* Vandaag: afspraken + taken op één plek */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -119,10 +138,12 @@ export default function DirectieDashboard() {
               <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" /> Vandaag in de agenda</p>
               <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link to="/admin/agenda">Naar agenda</Link></Button>
             </div>
-            {todayEventsQ.isLoading ? (
+            {todayAgenda.isLoading ? (
               <Skeleton className="h-16 w-full rounded-lg" />
-            ) : !agendaConnected ? (
-              <p className="text-sm text-muted-foreground">Outlook-koppeling nog niet actief — zie <Link to="/admin/agenda" className="text-primary hover:underline">Agenda</Link> voor de setup.</p>
+            ) : todayAgenda.status === "not_connected" ? (
+              <p className="text-sm text-muted-foreground">Je Microsoft-agenda is nog niet gekoppeld — koppel 'm in <Link to="/admin/agenda" className="text-primary hover:underline">Agenda</Link>.</p>
+            ) : todayAgenda.status === "error" ? (
+              <p className="text-sm text-muted-foreground">Je afspraken konden niet worden geladen. Zie <Link to="/admin/agenda" className="text-primary hover:underline">Agenda</Link>.</p>
             ) : todayEvents.length === 0 ? (
               <p className="text-sm text-muted-foreground">Geen afspraken vandaag.</p>
             ) : (

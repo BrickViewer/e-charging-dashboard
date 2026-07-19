@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ListChecks, Plus, AlertTriangle, CheckCircle2, Building2, Trash2, Repeat } from "lucide-react";
+import { ListChecks, Plus, AlertTriangle, CheckCircle2, Building2, Trash2, Repeat, Search } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useAdminData";
 import { useLeadOptions, useTeamProfiles } from "@/hooks/useLeads";
@@ -30,6 +30,22 @@ const BUCKETS: { key: TaskBucket; label: string }[] = [
 ];
 
 const CATEGORY_LABELS: Record<TaskCategory, string> = { sales: "Sales", algemeen: "Algemeen" };
+
+const SORT_OPTIONS: { key: string; label: string }[] = [
+  { key: "smart", label: "Slim (prioriteit + datum)" },
+  { key: "priority", label: "Prioriteit" },
+  { key: "created", label: "Aangemaakt" },
+  { key: "alpha", label: "Alfabetisch" },
+];
+const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
+function sortComparator(sortBy: string): (a: TaskWithLead, b: TaskWithLead) => number {
+  switch (sortBy) {
+    case "priority": return (a, b) => PRIORITY_RANK[normalizePriority(a.priority)] - PRIORITY_RANK[normalizePriority(b.priority)] || compareTasks(a, b);
+    case "created": return (a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? "");
+    case "alpha": return (a, b) => a.title.localeCompare(b.title, "nl");
+    default: return compareTasks;
+  }
+}
 
 function initials(name: string | null | undefined) {
   if (!name) return "?";
@@ -104,6 +120,8 @@ export function TasksManager({ scope }: { scope: TaskScope }) {
   const [dueFilter, setDueFilter] = useState("all"); // all | overdue | today | week | none
   const [priorityFilter, setPriorityFilter] = useState("all"); // all | high | medium | low
   const [categoryFilter, setCategoryFilter] = useState("all"); // all | sales | algemeen (alleen directie)
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("smart");
 
   const now = new Date();
   const todayStr = toDateStr(now);
@@ -132,6 +150,7 @@ export function TasksManager({ scope }: { scope: TaskScope }) {
   const overdue = allTasks.filter((t) => !t.done && bucketOf(t.due_date, todayStr, weekEndStr) === "overdue").length;
   const totalOpen = allTasks.filter((t) => !t.done).length;
 
+  const searchLc = search.trim().toLowerCase();
   const filtered = allTasks.filter((t) => {
     if (statusFilter === "open" && t.done) return false;
     if (statusFilter === "done" && !t.done) return false;
@@ -141,12 +160,14 @@ export function TasksManager({ scope }: { scope: TaskScope }) {
     if (dueFilter !== "all" && bucketOf(t.due_date, todayStr, weekEndStr) !== dueFilter) return false;
     if (priorityFilter !== "all" && normalizePriority(t.priority) !== priorityFilter) return false;
     if (isDirectie && categoryFilter !== "all" && (t.category ?? "sales") !== categoryFilter) return false;
+    if (searchLc && !t.title.toLowerCase().includes(searchLc)) return false;
     return true;
   });
 
+  const comparator = sortComparator(sortBy);
   const grouped: Record<TaskBucket, TaskWithLead[]> = { overdue: [], today: [], week: [], later: [], none: [] };
   for (const t of filtered) grouped[bucketOf(t.due_date, todayStr, weekEndStr)].push(t);
-  for (const key of Object.keys(grouped) as TaskBucket[]) grouped[key].sort(compareTasks);
+  for (const key of Object.keys(grouped) as TaskBucket[]) grouped[key].sort(comparator);
 
   const isLoading = tasksQ.isLoading || profilesQ.isLoading;
 
@@ -208,6 +229,20 @@ export function TasksManager({ scope }: { scope: TaskScope }) {
           </Select>
           <Input type="date" className="h-8 w-full text-xs sm:w-[160px]" value={newDue} onChange={(e) => setNewDue(e.target.value)} />
         </div>
+      </div>
+
+      {/* Zoeken + sorteren */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-8" placeholder="Zoek op taaknaam…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-full sm:w-[220px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {SORT_OPTIONS.map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Filters */}
@@ -335,7 +370,7 @@ export function TasksManager({ scope }: { scope: TaskScope }) {
                       </Select>
                     </span>
                     <button
-                      className="text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                      className="text-muted-foreground opacity-100 hover:text-red-600 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
                       onClick={(e) => { e.stopPropagation(); deleteTask.mutate({ id: t.id, leadId: t.lead_id }); }}
                       aria-label="Taak verwijderen"
                     >

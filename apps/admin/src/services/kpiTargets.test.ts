@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cumulativeActual, monthTarget, progressPct, yearTarget, type KpiTargetRow } from "./kpiTargets";
+import { cumulativeActual, monthTarget, progressPct, rawPct, yearTarget, type KpiTargetRow } from "./kpiTargets";
 
 const rows: KpiTargetRow[] = [
   { metric: "omzet", year: 2026, month: null, target_value: 120000 },
@@ -49,5 +49,16 @@ describe("progressPct", () => {
   it("null zonder (positief) doel", () => {
     expect(progressPct(50, null)).toBeNull();
     expect(progressPct(50, 0)).toBeNull();
+  });
+});
+
+describe("rawPct", () => {
+  it("toont boven 100% zonder afkappen", () => {
+    expect(rawPct(150, 100)).toBe(150);
+    expect(rawPct(50, 100)).toBe(50);
+  });
+  it("null zonder (positief) doel", () => {
+    expect(rawPct(50, null)).toBeNull();
+    expect(rawPct(50, 0)).toBeNull();
   });
 });

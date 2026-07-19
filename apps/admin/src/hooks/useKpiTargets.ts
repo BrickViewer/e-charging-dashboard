@@ -124,5 +124,6 @@ export function useDirectieActuals(year: number) {
     months,
     kpis,
     isLoading: overviewQ.isLoading || newClientsQ.isLoading || wonLeadsQ.isLoading,
+    isError: overviewQ.isError || newClientsQ.isError || wonLeadsQ.isError,
   };
 }

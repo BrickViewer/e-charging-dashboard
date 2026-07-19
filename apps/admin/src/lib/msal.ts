@@ -40,8 +40,10 @@ const msalConfig: Configuration = {
 // Voorkom dat MSAL na de popup-redirect terugnavigeert.
 (msalConfig.auth as { navigateToLoginRequestUrl?: boolean }).navigateToLoginRequestUrl = false;
 
-// Delegated scopes voor het lezen van sites/drives + het maken van mappen/uploaden.
-export const graphScopes = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All"];
+// Delegated scopes: sites/drives (SharePoint) + de eigen Outlook-agenda (directie-
+// werkblad). Eén Microsoft-login dekt zo app + SharePoint + agenda; Calendars.ReadWrite
+// wordt via incrementele consent bij de eerste agenda-actie meegevraagd.
+export const graphScopes = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All", "Calendars.ReadWrite"];
 export const loginRequest = { scopes: graphScopes };
 
 export const msalInstance = new PublicClientApplication(msalConfig);

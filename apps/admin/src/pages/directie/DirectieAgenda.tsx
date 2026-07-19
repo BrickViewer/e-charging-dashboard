@@ -1,11 +1,10 @@
-// Bedrijfsagenda van het directie-werkblad: maandraster met twee lagen —
-// Microsoft 365-afspraken (edge graph-agenda, organizations.agenda_mailbox)
-// én taken met een deadline (lead_tasks, alle categorieën). Taken zijn hier
-// afvinkbaar, aan te maken per dag en in te plannen als agenda-blok. De
-// takenlaag werkt ook zolang de M365-koppeling nog niet is geconfigureerd;
-// de pagina toont dan een compacte setup-banner.
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+// Agenda van het directie-werkblad: maandraster met twee lagen — je eigen
+// Outlook-afspraken (delegated Microsoft Graph, /me) én taken met een deadline
+// (lead_tasks, alle categorieën). Taken zijn hier afvinkbaar, aan te maken per
+// dag en in te plannen als agenda-blok. De takenlaag werkt ook zolang je
+// Microsoft-agenda nog niet gekoppeld is; er staat dan een koppel-banner.
+import { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,20 +15,44 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  CalendarDays, CalendarClock, ChevronLeft, ChevronRight, ExternalLink, ListChecks, MapPin, Plus, Settings2, Trash2,
+  AlertTriangle, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, ListChecks, MapPin, Plus, Trash2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useAdminData";
+import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
 import { useAgendaEvents, useAgendaMutation, type AgendaEvent } from "@/hooks/useAgenda";
 import { useAddTask, useAllTasks, useToggleTask, type TaskWithLead } from "@/hooks/useTasks";
 import { PRIORITY_CHIP_CLASSES, PRIORITY_LABELS, normalizePriority } from "@/services/tasks";
 
 const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 const WEEKDAYS = ["ma", "di", "wo", "do", "vr", "za", "zo"];
+// Hover-acties: op desktop pas bij hover/focus, op touch/klein scherm altijd zichtbaar.
+const ROW_ACTIONS = "flex shrink-0 items-center gap-1 opacity-100 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:group-focus-within:opacity-100";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const dateKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const timeOf = (iso: string) => iso.slice(11, 16);
+const timeOf = (iso: string) => (iso ?? "").slice(11, 16);
+
+// Alle rasterdagen die een event raakt (meerdaagse + hele-dag-events tonen op
+// elke dag). Graph-hele-dag-events hebben een exclusieve einddag (middernacht
+// erna) → laatste dag = einde − 1.
+function eventDayKeys(e: AgendaEvent): string[] {
+  const startDay = (e.start ?? "").slice(0, 10);
+  if (!startDay) return [];
+  let endDay = (e.end ?? "").slice(0, 10) || startDay;
+  if (e.isAllDay && endDay > startDay) {
+    const d = new Date(`${endDay}T12:00:00`);
+    d.setDate(d.getDate() - 1);
+    endDay = dateKey(d);
+  }
+  const keys: string[] = [];
+  const d = new Date(`${startDay}T12:00:00`);
+  for (let i = 0; i < 366 && dateKey(d) <= endDay; i++) {
+    keys.push(dateKey(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return keys.length ? keys : [startDay];
+}
 
 type Draft = { id: string | null; subject: string; date: string; startTime: string; endTime: string; allDay: boolean; location: string; body: string };
 
@@ -46,25 +69,27 @@ export default function DirectieAgenda() {
 
   const { user } = useAuth();
   const org = useOrganization();
+  const { login } = useMicrosoftAuth();
+  const [linking, setLinking] = useState(false);
   const tasksQ = useAllTasks("all");
   const toggleTask = useToggleTask();
   const addTask = useAddTask();
 
-  // Rastergrenzen: maandag vóór de 1e t/m zondag na het maandeinde.
+  // Maandraster: maandag vóór de 1e t/m zondag na het maandeinde. Dag-increment
+  // (setDate) is DST-veilig; stoppen zodra we voorbij het maandeinde zijn én een
+  // volledige week af is.
   const gridStart = useMemo(() => {
     const d = new Date(cursor);
-    const dow = (d.getDay() + 6) % 7; // ma=0
-    d.setDate(d.getDate() - dow);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // ma = 0
     return d;
   }, [cursor]);
   const gridDays = useMemo(() => {
-    const days: Date[] = [];
     const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-    const totalDows = Math.ceil((((monthEnd.getTime() - gridStart.getTime()) / 86400000) + 1) / 7) * 7;
-    for (let i = 0; i < totalDows; i++) {
-      const d = new Date(gridStart);
-      d.setDate(d.getDate() + i);
-      days.push(d);
+    const days: Date[] = [];
+    const d = new Date(gridStart);
+    while (d <= monthEnd || days.length % 7 !== 0) {
+      days.push(new Date(d));
+      d.setDate(d.getDate() + 1);
     }
     return days;
   }, [gridStart, cursor]);
@@ -74,17 +99,19 @@ export default function DirectieAgenda() {
   const eventsQ = useAgendaEvents(rangeStart, rangeEnd);
   const mutation = useAgendaMutation();
 
-  const status = eventsQ.data?.status;
-  const connected = status === "ok";
+  const status = eventsQ.status;
+  const connected = status === "connected";
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, AgendaEvent[]>();
-    for (const e of eventsQ.data?.events ?? []) {
-      const key = (e.start ?? "").slice(0, 10);
-      map.set(key, [...(map.get(key) ?? []), e]);
+    for (const e of eventsQ.events) {
+      for (const key of eventDayKeys(e)) map.set(key, [...(map.get(key) ?? []), e]);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => Number(b.isAllDay) - Number(a.isAllDay) || (a.start ?? "").localeCompare(b.start ?? ""));
     }
     return map;
-  }, [eventsQ.data]);
+  }, [eventsQ.events]);
 
   // Takenlaag: alle taken met een deadline, per dag gegroepeerd.
   const tasksByDay = useMemo(() => {
@@ -113,13 +140,29 @@ export default function DirectieAgenda() {
 
   // Taak "timeboxen": afspraakdialoog voorgevuld met de taak (incl. deeplink).
   const planTask = (t: TaskWithLead) => setDraft({
-    ...emptyDraft(selectedDay),
+    ...emptyDraft(t.due_date ?? selectedDay),
     subject: t.title,
     body: `Taak in het E-Charging dashboard: ${window.location.origin}/admin/taken?task=${t.id}`,
   });
 
+  const connectAgenda = useCallback(async () => {
+    setLinking(true);
+    try {
+      await login();
+      await eventsQ.refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Koppelen met Microsoft mislukt");
+    } finally {
+      setLinking(false);
+    }
+  }, [login, eventsQ]);
+
   const saveDraft = async () => {
     if (!draft || !draft.subject.trim()) return;
+    if (!draft.allDay && draft.endTime <= draft.startTime) {
+      toast.error("De eindtijd moet ná de begintijd liggen");
+      return;
+    }
     const event = {
       subject: draft.subject.trim(),
       start: draft.allDay ? draft.date : `${draft.date}T${draft.startTime}`,
@@ -150,14 +193,9 @@ export default function DirectieAgenda() {
   const createQuickTask = () => {
     const title = quickTask.trim();
     if (!title || !org.data?.id) return;
-    addTask.mutate({
-      organizationId: org.data.id,
-      title,
-      dueDate: selectedDay,
-      assignedTo: user?.id ?? null,
-      category: "algemeen",
-    });
+    addTask.mutate({ organizationId: org.data.id, title, dueDate: selectedDay, assignedTo: user?.id ?? null, category: "algemeen" });
     setQuickTask("");
+    toast.success("Taak toegevoegd");
   };
 
   const monthLabel = `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
@@ -168,7 +206,7 @@ export default function DirectieAgenda() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Agenda</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Afspraken (Microsoft 365) en taken met een deadline, in één overzicht</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Je eigen Outlook-agenda en taken met een deadline, in één overzicht</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => { setCursor(new Date(today.getFullYear(), today.getMonth(), 1)); setSelectedDay(todayKey); }}>Vandaag</Button>
@@ -179,23 +217,28 @@ export default function DirectieAgenda() {
         </div>
       </div>
 
-      {/* Setup-banner: de takenlaag werkt altijd; M365 vraagt eenmalige setup */}
-      {(status === "not_configured" || status === "no_consent") && (
+      {/* Koppel-banner: de takenlaag werkt altijd; alleen de Outlook-laag vraagt koppeling */}
+      {status === "not_connected" && (
         <Card className="border-[hsl(var(--status-amber)/0.4)]">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="flex items-start gap-3">
-              <Settings2 className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--status-amber))]" />
+              <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--status-amber))]" />
               <p className="max-w-2xl text-sm text-muted-foreground">
-                {status === "not_configured" ? (
-                  <>De Outlook-koppeling is nog niet ingesteld: kies eerst een agenda-mailbox via{" "}
-                    <Link to="/beheer/instellingen" className="text-primary hover:underline">Instellingen → Standaardwaarden</Link>. Taken zie je hieronder al wel.</>
-                ) : (
-                  <>De Microsoft-koppeling mist nog toestemming: verleen op de bestaande Azure-app de application-permissie{" "}
-                    <span className="font-medium text-foreground">Calendars.ReadWrite</span> + admin-consent (e-group-tenant) en controleer de mailbox. Taken zie je hieronder al wel.</>
-                )}
+                Koppel je Microsoft-agenda om je Outlook-afspraken hier te zien en te beheren. Je taken staan hieronder al klaar.
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => eventsQ.refetch()}>Opnieuw controleren</Button>
+            <Button size="sm" onClick={connectAgenda} disabled={linking}>{linking ? "Koppelen…" : "Koppel je Microsoft-agenda"}</Button>
+          </CardContent>
+        </Card>
+      )}
+      {status === "error" && (
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <p className="max-w-2xl text-sm text-muted-foreground">Je afspraken konden niet worden geladen. Controleer je verbinding en probeer het opnieuw.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => eventsQ.refetch()}>Opnieuw proberen</Button>
           </CardContent>
         </Card>
       )}
@@ -220,11 +263,14 @@ export default function DirectieAgenda() {
                     ...events.map((e) => ({ kind: "event" as const, id: e.id, label: e.isAllDay ? e.subject : `${timeOf(e.start)} ${e.subject}` })),
                     ...openTasks.map((t) => ({ kind: "task" as const, id: t.id, label: t.title })),
                   ];
+                  const parts = [events.length ? `${events.length} afspra${events.length === 1 ? "ak" : "ken"}` : "", openTasks.length ? `${openTasks.length} ta${openTasks.length === 1 ? "ak" : "ken"}` : ""].filter(Boolean).join(", ");
                   const isSelected = key === selectedDay;
                   return (
                     <button
                       key={key}
                       onClick={() => setSelectedDay(key)}
+                      aria-label={`${d.getDate()} ${MONTHS[d.getMonth()]}${parts ? `, ${parts}` : ", geen items"}`}
+                      aria-pressed={isSelected}
                       className={`min-h-[80px] rounded-lg border p-1.5 text-left align-top transition-colors ${
                         isSelected ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/40"
                       } ${inMonth ? "" : "opacity-40"}`}
@@ -269,8 +315,10 @@ export default function DirectieAgenda() {
             {/* Afspraken */}
             <div className="space-y-2">
               <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" /> Afspraken</p>
-              {!connected ? (
-                <p className="text-xs text-muted-foreground">Beschikbaar zodra de Outlook-koppeling actief is.</p>
+              {status === "not_connected" ? (
+                <p className="text-xs text-muted-foreground">Koppel je Microsoft-agenda om je afspraken te zien.</p>
+              ) : status === "error" ? (
+                <p className="text-xs text-muted-foreground">Kon de afspraken niet laden.</p>
               ) : dayEvents.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Geen afspraken deze dag.</p>
               ) : (
@@ -286,7 +334,7 @@ export default function DirectieAgenda() {
                           <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" />{e.location}</p>
                         )}
                       </button>
-                      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className={ROW_ACTIONS}>
                         {e.webLink && (
                           <a href={e.webLink} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Openen in Outlook">
                             <ExternalLink className="h-3.5 w-3.5" />
@@ -325,7 +373,7 @@ export default function DirectieAgenda() {
                           {PRIORITY_LABELS[priority]}
                         </span>
                       )}
-                      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className={ROW_ACTIONS}>
                         {connected && !t.done && (
                           <button className="text-muted-foreground hover:text-foreground" onClick={() => planTask(t)} aria-label="Inplannen als afspraak" title="Inplannen als afspraak">
                             <CalendarClock className="h-3.5 w-3.5" />
@@ -347,7 +395,7 @@ export default function DirectieAgenda() {
                   onChange={(e) => setQuickTask(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") createQuickTask(); }}
                 />
-                <Button size="sm" className="h-8" variant="outline" onClick={createQuickTask} disabled={!quickTask.trim() || !org.data?.id}>
+                <Button size="sm" className="h-8" variant="outline" onClick={createQuickTask} disabled={!quickTask.trim() || !org.data?.id} aria-label="Taak toevoegen">
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>

@@ -52,3 +52,9 @@ export function progressPct(actual: number, target: number | null): number | nul
   if (target === null || target <= 0) return null;
   return Math.min(100, Math.round((actual / target) * 100));
 }
+
+/** Ongekapt percentage voor het label (mag >100 tonen "boven doel"); null zonder doel. */
+export function rawPct(actual: number, target: number | null): number | null {
+  if (target === null || target <= 0) return null;
+  return Math.round((actual / target) * 100);
+}

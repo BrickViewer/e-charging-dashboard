@@ -108,6 +108,7 @@ export function useAddTask() {
 
 // Bewerk een taak (alle velden). Toewijzen aan een ander triggert de e-mailmelding
 // (DB-trigger); bij een lead-herkoppeling worden alle lead-takencaches ververst.
+// Optimistisch: de patch is direct zichtbaar in beide scope-caches + de lead-taken.
 export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
@@ -115,7 +116,27 @@ export function useUpdateTask() {
       const { error } = await supabase.from("lead_tasks").update(patch).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, { leadId, patch }) => {
+    onMutate: async ({ id, patch, leadId }) => {
+      await qc.cancelQueries({ queryKey: ["all-tasks"] });
+      const prevAll = qc.getQueriesData<TaskWithLead[]>({ queryKey: ["all-tasks"] });
+      qc.setQueriesData<TaskWithLead[]>({ queryKey: ["all-tasks"] }, (old) =>
+        (old ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      );
+      let prevTasks: LeadTask[] | undefined;
+      if (leadId) {
+        await qc.cancelQueries({ queryKey: ["lead-tasks", leadId] });
+        prevTasks = qc.getQueryData<LeadTask[]>(["lead-tasks", leadId]);
+        qc.setQueryData<LeadTask[]>(["lead-tasks", leadId], (old) =>
+          (old ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)),
+        );
+      }
+      return { prevAll, prevTasks, leadId };
+    },
+    onError: (_e, _v, ctx) => {
+      for (const [key, data] of ctx?.prevAll ?? []) qc.setQueryData(key, data);
+      if (ctx?.leadId && ctx.prevTasks) qc.setQueryData(["lead-tasks", ctx.leadId], ctx.prevTasks);
+    },
+    onSettled: (_d, _e, { leadId, patch }) => {
       if ("lead_id" in patch) qc.invalidateQueries({ queryKey: ["lead-tasks"] });
       else if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
       qc.invalidateQueries({ queryKey: ["leads"] });
@@ -207,6 +228,8 @@ export function useUpdateTaskChecklist() {
   });
 }
 
+// Optimistisch verwijderen: de rij verdwijnt direct uit beide scope-caches, de
+// lead-taken en de ingebedde leadkaart-taken; rollback bij een fout.
 export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
@@ -214,7 +237,28 @@ export function useDeleteTask() {
       const { error } = await supabase.from("lead_tasks").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, { leadId }) => {
+    onMutate: async ({ id, leadId }) => {
+      await qc.cancelQueries({ queryKey: ["all-tasks"] });
+      const prevAll = qc.getQueriesData<TaskWithLead[]>({ queryKey: ["all-tasks"] });
+      qc.setQueriesData<TaskWithLead[]>({ queryKey: ["all-tasks"] }, (old) => (old ?? []).filter((t) => t.id !== id));
+      const prevLeads = qc.getQueryData<LeadWithTasks[]>(["leads", "open"]);
+      qc.setQueryData<LeadWithTasks[]>(["leads", "open"], (old) =>
+        (old ?? []).map((l) => ({ ...l, lead_tasks: (l.lead_tasks ?? []).filter((t) => t.id !== id) })),
+      );
+      let prevTasks: LeadTask[] | undefined;
+      if (leadId) {
+        await qc.cancelQueries({ queryKey: ["lead-tasks", leadId] });
+        prevTasks = qc.getQueryData<LeadTask[]>(["lead-tasks", leadId]);
+        qc.setQueryData<LeadTask[]>(["lead-tasks", leadId], (old) => (old ?? []).filter((t) => t.id !== id));
+      }
+      return { prevAll, prevLeads, prevTasks, leadId };
+    },
+    onError: (_e, _v, ctx) => {
+      for (const [key, data] of ctx?.prevAll ?? []) qc.setQueryData(key, data);
+      if (ctx?.prevLeads) qc.setQueryData(["leads", "open"], ctx.prevLeads);
+      if (ctx?.leadId && ctx.prevTasks) qc.setQueryData(["lead-tasks", ctx.leadId], ctx.prevTasks);
+    },
+    onSettled: (_d, _e, { leadId }) => {
       if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["all-tasks"] });

@@ -1,13 +1,18 @@
-// Bedrijfsagenda (Microsoft 365) via edge graph-agenda. Alle acties lopen
-// server-side op de agenda van organizations.agenda_mailbox; hier alleen de
-// dunne fetch-/mutatielaag met react-query.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+// Eigen Outlook-agenda (per ingelogde medewerker) via de delegated MSAL-koppeling
+// — dezelfde die SharePoint gebruikt. Alle calls lopen browser-side op /me/... met
+// het Graph-token van de ingelogde gebruiker; geen gedeelde mailbox, geen edge.
+import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGraphApi } from "@/hooks/useGraphApi";
+import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
+
+const TZ = "Europe/Amsterdam";
+const PREFER_TZ = { Prefer: `outlook.timezone="${TZ}"` };
 
 export interface AgendaEvent {
   id: string;
   subject: string;
-  start: string;
+  start: string; // "YYYY-MM-DDTHH:mm:ss" in TZ (Prefer-header)
   end: string;
   isAllDay: boolean;
   location: string | null;
@@ -16,7 +21,9 @@ export interface AgendaEvent {
   webLink: string | null;
 }
 
-export type AgendaStatus = "ok" | "not_configured" | "no_consent";
+// connected = Microsoft gekoppeld én lijst opgehaald; not_connected = geen MSAL-sessie
+// (koppel-knop tonen); error = wel gekoppeld maar Graph gaf een fout (retry tonen).
+export type AgendaStatus = "connected" | "not_connected" | "error";
 
 export interface AgendaEventInput {
   subject: string;
@@ -27,38 +34,86 @@ export interface AgendaEventInput {
   body?: string;
 }
 
-interface AgendaResponse {
-  status: AgendaStatus | "error" | "forbidden";
-  message?: string;
-  events?: AgendaEvent[];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapEvent(x: any): AgendaEvent {
+  return {
+    id: x.id as string,
+    subject: (x.subject as string) || "(zonder titel)",
+    start: x.start?.dateTime as string,
+    end: x.end?.dateTime as string,
+    isAllDay: !!x.isAllDay,
+    location: (x.location?.displayName as string) || null,
+    bodyPreview: (x.bodyPreview as string) || null,
+    organizer: (x.organizer?.emailAddress?.name as string) || null,
+    webLink: (x.webLink as string) || null,
+  };
 }
 
-async function invokeAgenda(body: Record<string, unknown>): Promise<AgendaResponse> {
-  const { data, error } = await supabase.functions.invoke("graph-agenda", { body });
-  if (error) throw error;
-  const res = data as AgendaResponse;
-  if (res.status === "error" || res.status === "forbidden") throw new Error(res.message ?? "Agenda-actie mislukt");
-  return res;
+function toGraphEvent(e: AgendaEventInput) {
+  return {
+    subject: e.subject,
+    isAllDay: !!e.allDay,
+    start: { dateTime: e.allDay ? `${e.start.slice(0, 10)}T00:00:00` : e.start, timeZone: TZ },
+    end: { dateTime: e.allDay ? `${e.end.slice(0, 10)}T00:00:00` : e.end, timeZone: TZ },
+    location: e.location ? { displayName: e.location } : undefined,
+    body: e.body ? { contentType: "text", content: e.body } : undefined,
+  };
 }
 
 export function useAgendaEvents(startIso: string, endIso: string) {
-  return useQuery({
+  const { graphFetch } = useGraphApi();
+  const { isConnected } = useMicrosoftAuth();
+
+  const query = useQuery({
     queryKey: ["agenda", startIso, endIso],
-    queryFn: async () => {
-      const res = await invokeAgenda({ action: "list", start: startIso, end: endIso });
-      return { status: res.status as AgendaStatus, events: res.events ?? [] };
-    },
+    enabled: isConnected,
     staleTime: 60_000,
+    queryFn: async () => {
+      const select = "id,subject,start,end,isAllDay,location,bodyPreview,organizer,webLink";
+      const path = `/me/calendarView?startDateTime=${encodeURIComponent(startIso)}&endDateTime=${encodeURIComponent(endIso)}` +
+        `&$top=250&$orderby=start/dateTime&$select=${select}`;
+      const res = await graphFetch(path, { headers: PREFER_TZ });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((res?.value ?? []) as any[]).map(mapEvent);
+    },
   });
+
+  const status: AgendaStatus = !isConnected ? "not_connected" : query.isError ? "error" : "connected";
+  return {
+    status,
+    events: query.data ?? [],
+    isLoading: isConnected && query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
 
 export function useAgendaMutation() {
+  const { graphFetch } = useGraphApi();
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input:
+  const [pending, setPending] = useState(false);
+
+  const run = useCallback(
+    async (input:
       | { action: "create"; event: AgendaEventInput }
       | { action: "update"; id: string; event: AgendaEventInput }
-      | { action: "delete"; id: string }) => invokeAgenda(input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["agenda"] }),
-  });
+      | { action: "delete"; id: string }) => {
+      setPending(true);
+      try {
+        if (input.action === "create") {
+          await graphFetch(`/me/events`, { method: "POST", headers: PREFER_TZ, body: JSON.stringify(toGraphEvent(input.event)) });
+        } else if (input.action === "update") {
+          await graphFetch(`/me/events/${encodeURIComponent(input.id)}`, { method: "PATCH", headers: PREFER_TZ, body: JSON.stringify(toGraphEvent(input.event)) });
+        } else {
+          await graphFetch(`/me/events/${encodeURIComponent(input.id)}`, { method: "DELETE" });
+        }
+        await qc.invalidateQueries({ queryKey: ["agenda"] });
+      } finally {
+        setPending(false);
+      }
+    },
+    [graphFetch, qc],
+  );
+
+  return useMemo(() => ({ mutateAsync: run, isPending: pending }), [run, pending]);
 }
