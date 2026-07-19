@@ -10,8 +10,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarDays, Euro, ListChecks, MapPin, PlugZap, Target, TrendingUp, Users, Zap, Crosshair } from "lucide-react";
+import { CalendarDays, Euro, ListChecks, MapPin, PlugZap, Target, Users, Crosshair } from "lucide-react";
 import { KpiTile } from "@/components/admin/KpiTile";
+import { OnboardingOverview } from "@/components/directie/OnboardingOverview";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
 import { useLeadStats } from "@/hooks/useLeads";
 import { useAllChargePoints, useAllClients } from "@/hooks/useAdminData";
@@ -104,20 +105,14 @@ export default function DirectieDashboard() {
         </Card>
       )}
       {kpiLoading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[92px] w-full rounded-xl" />)}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[92px] w-full rounded-xl" />)}
         </div>
       ) : (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile label="Omzet deze maand" value={formatKpiValue(kpis.monthRevenue ?? 0, "eur")}
           subtitle={kpis.revenueChange != null ? `${kpis.revenueChange >= 0 ? "+" : ""}${kpis.revenueChange}% t.o.v. vorige maand` : null}
           icon={<Euro className="h-5 w-5" />} accent="primary" />
-        <KpiTile label="Marge deze maand" value={formatKpiValue(isCurrentYear ? months.marge[monthIdx] ?? 0 : cumulativeActual(months.marge, 12), "eur")}
-          subtitle={isCurrentYear ? null : `heel ${year}`}
-          icon={<TrendingUp className="h-5 w-5" />} accent="green" />
-        <KpiTile label="kWh deze maand" value={formatKpiValue(isCurrentYear ? months.kwh[monthIdx] ?? 0 : cumulativeActual(months.kwh, 12), "kwh")}
-          subtitle={isCurrentYear ? null : `heel ${year}`}
-          icon={<Zap className="h-5 w-5" />} accent="blue" />
         <KpiTile label="Gewonnen leads" value={String(leadStats.data?.wonThisMonth ?? 0)}
           subtitle={leadStats.data?.winRate != null ? `winrate ${leadStats.data.winRate}%` : null}
           icon={<Target className="h-5 w-5" />} accent="amber" />
@@ -193,6 +188,9 @@ export default function DirectieDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Onboarding-statusoverzicht: pijplijn + wat aandacht vraagt */}
+      <OnboardingOverview />
 
       {/* Doelenvoortgang */}
       <Card>
