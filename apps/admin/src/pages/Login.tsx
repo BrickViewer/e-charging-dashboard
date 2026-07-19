@@ -340,7 +340,7 @@ function LoginForm(props: {
 function IgnitionSequence({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-10 animate-ignition-fade">
-      <div className="flex items-center gap-8 sm:gap-14">
+      <div className="flex items-center gap-4 sm:gap-14">
         <SweepGauge color="hsl(var(--gauge-red))" delay="0ms" />
         <SweepGauge color="hsl(var(--gauge-blue))" delay="120ms" big />
         <SweepGauge color="hsl(var(--gauge-green))" delay="240ms" />
@@ -369,9 +369,14 @@ function SweepGauge({ color, delay, big = false }: { color: string; delay: strin
 
   const trackPath = describeArc(cx, cy, startAngle, endAngle, r);
 
+  // Vloeiende maat: op smalle/lage schermen (telefoon, landscape) krimpt de meter
+  // mee zodat de rij van drie altijd binnen het scherm past; desktop haalt de
+  // px-cap en blijft exact 140/200px. `size` blijft de viewBox-geometrie.
+  const cssSize = big ? "min(33vw, 30vh, 200px)" : "min(23vw, 24vh, 140px)";
+
   return (
-    <div className="relative" style={{ width: size, height: size, animation: `gauge-pop 600ms ${delay} backwards`, animationTimingFunction: "cubic-bezier(0.34, 1.6, 0.64, 1)" }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
+    <div className="relative" style={{ width: cssSize, aspectRatio: "1", animation: `gauge-pop 600ms ${delay} backwards`, animationTimingFunction: "cubic-bezier(0.34, 1.6, 0.64, 1)" }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
         <defs>
           <filter id={`glow-${delay}`}>
             <feGaussianBlur stdDeviation={big ? 6 : 4} />
