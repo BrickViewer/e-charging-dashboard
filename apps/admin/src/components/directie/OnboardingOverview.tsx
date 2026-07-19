@@ -9,9 +9,21 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarClock, CheckCircle2, ChevronRight, Rocket } from "lucide-react";
 import { ONBOARDING_STAGES, useOnboardingClients, useOnboardingOrders } from "@/hooks/useOnboarding";
+import { useSignedQuotesAwaitingClient } from "@/hooks/useQuotes";
 import { onboardingName, summarizeOnboarding, type AttentionTone } from "@/services/onboardingOverview";
 
 const STAGE_META = new Map(ONBOARDING_STAGES.map((s) => [s.key, s]));
+const GETEKEND = STAGE_META.get("getekend");
+
+interface ActionRow {
+  key: string;
+  name: string;
+  stageLabel?: string;
+  stageColor?: string;
+  tone: AttentionTone;
+  label: string;
+  priority: number;
+}
 
 const TONE_CLASS: Record<AttentionTone, string> = {
   red: "bg-destructive/10 text-destructive",
@@ -30,12 +42,32 @@ function formatPlanDate(date: string): string {
 export function OnboardingOverview() {
   const clientsQ = useOnboardingClients();
   const ordersQ = useOnboardingOrders();
-  const isLoading = clientsQ.isLoading || ordersQ.isLoading;
+  // Getekende offertes zonder klantaccount (nog géén klant/order) — de eerste
+  // onboardingstap. Vallen anders buiten clients + order-only, dus expliciet erbij.
+  const awaitingQ = useSignedQuotesAwaitingClient();
+  const isLoading = clientsQ.isLoading || ordersQ.isLoading || awaitingQ.isLoading;
 
   const summary = useMemo(
     () => summarizeOnboarding([...(clientsQ.data ?? []), ...(ordersQ.data ?? [])]),
     [clientsQ.data, ordersQ.data],
   );
+
+  const awaiting = useMemo(
+    () => (awaitingQ.data ?? []).map((q) => ({
+      id: q.id,
+      name: (q.prospect_company ?? "").trim() || (q.prospect_contact ?? "").trim() || q.quote_number || "Getekende offerte",
+    })),
+    [awaitingQ.data],
+  );
+
+  // Getekende-offertes tellen als fase "getekend" en hebben altijd actie nodig
+  // (klantaccount aanmaken). Samen met de aandachtslijst gesorteerd op urgentie.
+  const total = summary.total + awaiting.length;
+  const getekenedCount = summary.stageCounts.getekend + awaiting.length;
+  const actionRows: ActionRow[] = [
+    ...awaiting.map((a) => ({ key: `q-${a.id}`, name: a.name, stageLabel: GETEKEND?.label, stageColor: GETEKEND?.color, tone: "amber" as AttentionTone, label: "Klant account aanmaken", priority: 6 })),
+    ...summary.attention.map((a) => ({ key: `c-${a.item.id}`, name: onboardingName(a.item), stageLabel: STAGE_META.get(a.stage)?.label, stageColor: STAGE_META.get(a.stage)?.color, tone: a.tone, label: a.label, priority: a.priority })),
+  ].sort((x, y) => x.priority - y.priority);
 
   // Actieve fases (archief apart onderaan getoond).
   const pipelineStages = ONBOARDING_STAGES.filter((s) => s.key !== "archief");
@@ -46,7 +78,7 @@ export function OnboardingOverview() {
         <div className="flex items-center justify-between gap-3">
           <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             <Rocket className="h-3.5 w-3.5" /> Onboarding
-            {!isLoading && <span className="text-foreground">· {summary.total} lopend</span>}
+            {!isLoading && <span className="text-foreground">· {total} lopend</span>}
           </p>
           <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link to="/sales/onboarding">Naar onboarding</Link></Button>
         </div>
@@ -61,7 +93,7 @@ export function OnboardingOverview() {
             {/* Pijplijn: aantal per fase */}
             <div className="flex flex-wrap gap-1.5">
               {pipelineStages.map((s) => {
-                const n = summary.stageCounts[s.key];
+                const n = s.key === "getekend" ? getekenedCount : summary.stageCounts[s.key];
                 return (
                   <span
                     key={s.key}
@@ -106,32 +138,29 @@ export function OnboardingOverview() {
             )}
 
             {/* Aandacht nodig */}
-            {summary.attention.length === 0 ? (
+            {actionRows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                {summary.total === 0 ? "Geen lopende onboardings." : "Alles op koers — niets dat op ons wacht."}
+                {total === 0 ? "Geen lopende onboardings." : "Alles op koers — niets dat op ons wacht."}
               </p>
             ) : (
               <div className="space-y-1.5">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Aandacht nodig</p>
-                {summary.attention.slice(0, MAX_ATTENTION).map((a) => {
-                  const meta = STAGE_META.get(a.stage);
-                  return (
-                    <Link
-                      key={a.item.id}
-                      to="/sales/onboarding"
-                      className="group flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:bg-muted/40"
-                    >
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: meta?.color }} />
-                      <span className="flex-1 truncate font-medium">{onboardingName(a.item)}</span>
-                      <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{meta?.label}</span>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_CLASS[a.tone]}`}>{a.label}</span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                    </Link>
-                  );
-                })}
-                {summary.attention.length > MAX_ATTENTION && (
+                {actionRows.slice(0, MAX_ATTENTION).map((a) => (
+                  <Link
+                    key={a.key}
+                    to="/sales/onboarding"
+                    className="group flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:bg-muted/40"
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: a.stageColor }} />
+                    <span className="flex-1 truncate font-medium">{a.name}</span>
+                    <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{a.stageLabel}</span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_CLASS[a.tone]}`}>{a.label}</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  </Link>
+                ))}
+                {actionRows.length > MAX_ATTENTION && (
                   <Link to="/sales/onboarding" className="block px-1 pt-0.5 text-xs text-muted-foreground hover:text-foreground">
-                    +{summary.attention.length - MAX_ATTENTION} meer met openstaande actie…
+                    +{actionRows.length - MAX_ATTENTION} meer met openstaande actie…
                   </Link>
                 )}
               </div>
