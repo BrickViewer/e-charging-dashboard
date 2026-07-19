@@ -9,11 +9,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { Euro, TrendingUp, Zap, Users, PlugZap, Target, Crosshair } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CalendarDays, Euro, ListChecks, MapPin, PlugZap, Target, TrendingUp, Users, Zap, Crosshair } from "lucide-react";
 import { KpiTile } from "@/components/admin/KpiTile";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
 import { useLeadStats } from "@/hooks/useLeads";
 import { useDirectieActuals, useKpiTargets } from "@/hooks/useKpiTargets";
+import { useAgendaEvents } from "@/hooks/useAgenda";
+import { useAllTasks, useToggleTask } from "@/hooks/useTasks";
 import {
   KPI_METRICS, cumulativeActual, formatKpiValue, monthTarget, progressPct, yearTarget,
 } from "@/services/kpiTargets";
@@ -48,6 +51,18 @@ export default function DirectieDashboard() {
   const { months, kpis, isLoading } = useDirectieActuals(year);
   const targetsQ = useKpiTargets(year);
   const leadStats = useLeadStats();
+
+  // Vandaag-blok: afspraken (M365) + open taken t/m vandaag, afvinkbaar.
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const todayEventsQ = useAgendaEvents(`${todayKey}T00:00:00`, `${todayKey}T23:59:59`);
+  const tasksQ = useAllTasks("all");
+  const toggleTask = useToggleTask();
+  const agendaConnected = todayEventsQ.data?.status === "ok";
+  const todayEvents = todayEventsQ.data?.events ?? [];
+  const todayTasks = (tasksQ.data ?? [])
+    .filter((t) => !t.done && t.due_date && t.due_date <= todayKey)
+    .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
 
   const targets = useMemo(() => targetsQ.data ?? [], [targetsQ.data]);
   const isCurrentYear = year === curYear;
@@ -94,6 +109,68 @@ export default function DirectieDashboard() {
         <KpiTile label="Palen online" value={String(kpis.onlineChargePoints ?? 0)}
           subtitle={kpis.offlineChargePoints ? `${kpis.offlineChargePoints} offline` : "alles online"}
           icon={<PlugZap className="h-5 w-5" />} accent={kpis.offlineChargePoints ? "red" : "green"} />
+      </div>
+
+      {/* Vandaag: afspraken + taken op één plek */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" /> Vandaag in de agenda</p>
+              <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link to="/admin/agenda">Naar agenda</Link></Button>
+            </div>
+            {todayEventsQ.isLoading ? (
+              <Skeleton className="h-16 w-full rounded-lg" />
+            ) : !agendaConnected ? (
+              <p className="text-sm text-muted-foreground">Outlook-koppeling nog niet actief — zie <Link to="/admin/agenda" className="text-primary hover:underline">Agenda</Link> voor de setup.</p>
+            ) : todayEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Geen afspraken vandaag.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {todayEvents.slice(0, 4).map((e) => (
+                  <div key={e.id} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                    <span className="w-[88px] shrink-0 tabular-nums text-xs text-muted-foreground">
+                      {e.isAllDay ? "Hele dag" : `${e.start.slice(11, 16)} – ${e.end.slice(11, 16)}`}
+                    </span>
+                    <span className="flex-1 truncate">{e.subject}</span>
+                    {e.location && <span className="hidden items-center gap-1 text-xs text-muted-foreground xl:flex"><MapPin className="h-3 w-3" />{e.location}</span>}
+                  </div>
+                ))}
+                {todayEvents.length > 4 && (
+                  <Link to="/admin/agenda" className="block px-1 text-xs text-muted-foreground hover:text-foreground">+{todayEvents.length - 4} meer…</Link>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"><ListChecks className="h-3.5 w-3.5" /> Taken voor vandaag</p>
+              <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link to="/admin/taken">Naar taken</Link></Button>
+            </div>
+            {tasksQ.isLoading ? (
+              <Skeleton className="h-16 w-full rounded-lg" />
+            ) : todayTasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Niets open voor vandaag — alles bij.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {todayTasks.slice(0, 5).map((t) => (
+                  <div key={t.id} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                    <Checkbox checked={t.done} onCheckedChange={(c) => toggleTask.mutate({ id: t.id, done: !!c, leadId: t.lead_id })} />
+                    <Link to={`/admin/taken?task=${t.id}`} className="flex-1 truncate hover:underline">{t.title}</Link>
+                    {t.due_date && t.due_date < todayKey && (
+                      <span className="shrink-0 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">te laat</span>
+                    )}
+                  </div>
+                ))}
+                {todayTasks.length > 5 && (
+                  <Link to="/admin/taken" className="block px-1 text-xs text-muted-foreground hover:text-foreground">+{todayTasks.length - 5} meer…</Link>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Doelenvoortgang */}
