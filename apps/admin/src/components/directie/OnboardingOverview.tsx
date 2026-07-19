@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, ChevronRight, Rocket } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronRight, Rocket } from "lucide-react";
 import { ONBOARDING_STAGES, useOnboardingClients, useOnboardingOrders } from "@/hooks/useOnboarding";
 import { onboardingName, summarizeOnboarding, type AttentionTone } from "@/services/onboardingOverview";
 
@@ -21,6 +21,11 @@ const TONE_CLASS: Record<AttentionTone, string> = {
 };
 
 const MAX_ATTENTION = 6;
+
+function formatPlanDate(date: string): string {
+  const d = new Date(`${date}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? date : d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" });
+}
 
 export function OnboardingOverview() {
   const clientsQ = useOnboardingClients();
@@ -75,6 +80,30 @@ export function OnboardingOverview() {
                 </span>
               )}
             </div>
+
+            {/* Ingepland: aankomende installaties met datum */}
+            {summary.planned.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ingepland</p>
+                {summary.planned.slice(0, MAX_ATTENTION).map((p) => (
+                  <Link
+                    key={p.item.id}
+                    to="/sales/onboarding"
+                    className="group flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:bg-muted/40"
+                  >
+                    <CalendarClock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 truncate font-medium">{onboardingName(p.item)}</span>
+                    <span className="shrink-0 text-xs font-medium tabular-nums text-primary">{formatPlanDate(p.date)}</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  </Link>
+                ))}
+                {summary.planned.length > MAX_ATTENTION && (
+                  <Link to="/sales/onboarding" className="block px-1 pt-0.5 text-xs text-muted-foreground hover:text-foreground">
+                    +{summary.planned.length - MAX_ATTENTION} meer ingepland…
+                  </Link>
+                )}
+              </div>
+            )}
 
             {/* Aandacht nodig */}
             {summary.attention.length === 0 ? (

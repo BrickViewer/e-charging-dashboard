@@ -27,37 +27,46 @@ function mkItem(order: OnbOrder, over: Partial<OnboardingClient> = {}): Onboardi
   };
 }
 
+const TODAY = "2026-07-19";
 const opgeleverd = mkItem(mkOrder({ egroup_order_id: "e", completed_at: "2026-07-15T00:00:00Z" }));
 const nietIngepland = mkItem(mkOrder({ egroup_order_id: "e" }));
 const ingepland = mkItem(mkOrder({ egroup_order_id: "e", scheduled_date: "2026-07-20" }));
+const verstreken = mkItem(mkOrder({ egroup_order_id: "e", scheduled_date: "2026-07-10" }));
 const syncFout = mkItem(mkOrder({ egroup_order_id: "e", last_sync_error: "boom" }));
 const materialen = mkItem(mkOrder({ work_prep_started_at: "2026-07-10T00:00:00Z", installation_order_materials: [{ status: "te_bestellen" }, { status: "besteld" }] }));
 
 describe("attentionFor", () => {
   it("opgeleverd → te factureren (actie)", () => {
-    const a = attentionFor(opgeleverd);
+    const a = attentionFor(opgeleverd, TODAY);
     expect(a.stage).toBe("opgeleverd");
     expect(a.actionable).toBe(true);
     expect(a.label).toBe("Te factureren");
   });
   it("bij installateur zonder datum → nog in te plannen (actie)", () => {
-    const a = attentionFor(nietIngepland);
+    const a = attentionFor(nietIngepland, TODAY);
     expect(a.stage).toBe("bij_installateur");
     expect(a.actionable).toBe(true);
     expect(a.label).toBe("Nog in te plannen");
   });
-  it("bij installateur mét datum → passief (op koers)", () => {
-    const a = attentionFor(ingepland);
+  it("bij installateur mét toekomstige datum → passief (op koers)", () => {
+    const a = attentionFor(ingepland, TODAY);
     expect(a.actionable).toBe(false);
     expect(a.label).toMatch(/^Ingepland ·/);
   });
+  it("bij installateur met verstreken datum → actiepunt (rood)", () => {
+    const a = attentionFor(verstreken, TODAY);
+    expect(a.actionable).toBe(true);
+    expect(a.tone).toBe("red");
+    expect(a.label).toMatch(/verstreken/i);
+    expect(a.priority).toBe(1);
+  });
   it("sync-fout wint van alles, hoogste prioriteit", () => {
-    const a = attentionFor(syncFout);
+    const a = attentionFor(syncFout, TODAY);
     expect(a.priority).toBe(0);
     expect(a.label).toMatch(/Sync-fout/);
   });
   it("werkvoorbereiding met open materiaal telt de openstaande regels", () => {
-    const a = attentionFor(materialen);
+    const a = attentionFor(materialen, TODAY);
     expect(a.stage).toBe("werkvoorbereiding");
     expect(a.label).toBe("Materialen: 1 te bestellen");
   });
@@ -65,18 +74,23 @@ describe("attentionFor", () => {
 
 describe("summarizeOnboarding", () => {
   it("telt per fase en sorteert de aandachtslijst op urgentie", () => {
-    const s = summarizeOnboarding([ingepland, opgeleverd, syncFout, nietIngepland, materialen]);
+    const s = summarizeOnboarding([ingepland, opgeleverd, syncFout, nietIngepland, materialen], TODAY);
     expect(s.stageCounts.opgeleverd).toBe(1);
     expect(s.stageCounts.bij_installateur).toBe(3); // ingepland + nietIngepland + syncFout
     expect(s.stageCounts.werkvoorbereiding).toBe(1);
     expect(s.total).toBe(5); // geen archief
     // Alleen actionable in de aandachtslijst → 'ingepland' (passief) valt weg.
     expect(s.attention.map((a) => a.item)).not.toContain(ingepland);
-    // Volgorde: sync-fout (0) < te factureren (1) < nog in te plannen (2) < materialen (3).
+    // Volgorde: sync-fout (0) < te factureren (2) < nog in te plannen (3) < materialen (4).
     expect(s.attention[0].item).toBe(syncFout);
     expect(s.attention[1].item).toBe(opgeleverd);
     expect(s.attention[2].item).toBe(nietIngepland);
     expect(s.attention[3].item).toBe(materialen);
+  });
+  it("planned-lijst bevat alleen toekomstige geplande installaties, oplopend", () => {
+    const s = summarizeOnboarding([ingepland, verstreken, nietIngepland, opgeleverd], TODAY);
+    expect(s.planned.map((p) => p.item)).toEqual([ingepland]); // verstreken valt af (< vandaag)
+    expect(s.planned[0].date).toBe("2026-07-20");
   });
 });
 

@@ -1,8 +1,8 @@
-// Agenda van het directie-werkblad: maandraster met twee lagen — je eigen
-// Outlook-afspraken (delegated Microsoft Graph, /me) én taken met een deadline
-// (lead_tasks, alle categorieën). Taken zijn hier afvinkbaar, aan te maken per
-// dag en in te plannen als agenda-blok. De takenlaag werkt ook zolang je
-// Microsoft-agenda nog niet gekoppeld is; er staat dan een koppel-banner.
+// Agenda van het directie-werkblad: maandraster met drie lagen — je eigen
+// Outlook-afspraken (delegated Microsoft Graph, /me), taken met een deadline
+// (lead_tasks) én geplande installaties met de omzet van die dag. Taken zijn
+// hier afvinkbaar en in te plannen als agenda-blok. De taken-/installatielaag
+// werkt ook zolang je Microsoft-agenda nog niet gekoppeld is.
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -15,14 +15,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  AlertTriangle, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, ListChecks, MapPin, Plus, Trash2,
+  AlertTriangle, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, ListChecks, MapPin, Plus, Trash2, Wrench,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useAdminData";
 import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
 import { useAgendaEvents, useAgendaMutation, type AgendaEvent } from "@/hooks/useAgenda";
 import { useAddTask, useAllTasks, useToggleTask, type TaskWithLead } from "@/hooks/useTasks";
+import { usePlannedInstallations, type PlannedInstallation } from "@/hooks/usePlannedInstallations";
 import { PRIORITY_CHIP_CLASSES, PRIORITY_LABELS, normalizePriority } from "@/services/tasks";
+import { formatEuro } from "@/services/calculations";
 
 const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 const WEEKDAYS = ["ma", "di", "wo", "do", "vr", "za", "zo"];
@@ -72,6 +74,7 @@ export default function DirectieAgenda() {
   const { login } = useMicrosoftAuth();
   const [linking, setLinking] = useState(false);
   const tasksQ = useAllTasks("all");
+  const plannedQ = usePlannedInstallations();
   const toggleTask = useToggleTask();
   const addTask = useAddTask();
 
@@ -124,8 +127,22 @@ export default function DirectieAgenda() {
     return map;
   }, [tasksQ.data]);
 
+  // Installatielaag: geplande installaties per dag + de dag-omzet (verdiend die dag).
+  const installsByDay = useMemo(() => {
+    const map = new Map<string, { items: PlannedInstallation[]; revenue: number }>();
+    for (const p of plannedQ.data ?? []) {
+      const cur = map.get(p.date) ?? { items: [] as PlannedInstallation[], revenue: 0 };
+      cur.items.push(p);
+      cur.revenue += p.revenue;
+      map.set(p.date, cur);
+    }
+    for (const v of map.values()) v.items.sort((a, b) => b.revenue - a.revenue);
+    return map;
+  }, [plannedQ.data]);
+
   const dayEvents = eventsByDay.get(selectedDay) ?? [];
   const dayTasks = tasksByDay.get(selectedDay) ?? [];
+  const dayInstalls = installsByDay.get(selectedDay) ?? { items: [] as PlannedInstallation[], revenue: 0 };
 
   const openEdit = (e: AgendaEvent) => setDraft({
     id: e.id,
@@ -199,7 +216,7 @@ export default function DirectieAgenda() {
   };
 
   const monthLabel = `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
-  const isLoading = eventsQ.isLoading || tasksQ.isLoading;
+  const isLoading = eventsQ.isLoading || tasksQ.isLoading || plannedQ.isLoading;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -259,11 +276,17 @@ export default function DirectieAgenda() {
                   const inMonth = d.getMonth() === cursor.getMonth();
                   const events = eventsByDay.get(key) ?? [];
                   const openTasks = (tasksByDay.get(key) ?? []).filter((t) => !t.done);
+                  const installs = installsByDay.get(key);
                   const items = [
+                    ...(installs?.items ?? []).map((p) => ({ kind: "install" as const, id: p.id, label: p.name })),
                     ...events.map((e) => ({ kind: "event" as const, id: e.id, label: e.isAllDay ? e.subject : `${timeOf(e.start)} ${e.subject}` })),
                     ...openTasks.map((t) => ({ kind: "task" as const, id: t.id, label: t.title })),
                   ];
-                  const parts = [events.length ? `${events.length} afspra${events.length === 1 ? "ak" : "ken"}` : "", openTasks.length ? `${openTasks.length} ta${openTasks.length === 1 ? "ak" : "ken"}` : ""].filter(Boolean).join(", ");
+                  const parts = [
+                    installs ? `${installs.items.length} installatie${installs.items.length === 1 ? "" : "s"} (${formatEuro(installs.revenue)})` : "",
+                    events.length ? `${events.length} afspra${events.length === 1 ? "ak" : "ken"}` : "",
+                    openTasks.length ? `${openTasks.length} ta${openTasks.length === 1 ? "ak" : "ken"}` : "",
+                  ].filter(Boolean).join(", ");
                   const isSelected = key === selectedDay;
                   return (
                     <button
@@ -285,22 +308,28 @@ export default function DirectieAgenda() {
                             className={`truncate rounded px-1 py-px text-[10px] leading-4 ${
                               it.kind === "event"
                                 ? "bg-primary/10 text-primary"
+                                : it.kind === "install"
+                                ? "bg-[hsl(var(--status-blue)/0.14)] text-[hsl(var(--status-blue))]"
                                 : "bg-[hsl(var(--status-amber)/0.14)] text-[hsl(var(--status-amber))]"
                             }`}
                           >
-                            {it.kind === "task" ? "☐ " : ""}{it.label}
+                            {it.kind === "task" ? "☐ " : it.kind === "install" ? "🔧 " : ""}{it.label}
                           </div>
                         ))}
                         {items.length > 3 && <div className="px-1 text-[10px] text-muted-foreground">+{items.length - 3} meer</div>}
+                        {installs && (
+                          <div className="px-1 pt-0.5 text-[10px] font-semibold tabular-nums text-[hsl(var(--status-green,152_60%_40%))]">{formatEuro(installs.revenue)}</div>
+                        )}
                       </div>
                     </button>
                   );
                 })}
               </div>
             )}
-            <div className="mt-3 flex items-center gap-4 px-1 text-[11px] text-muted-foreground">
+            <div className="mt-3 flex flex-wrap items-center gap-4 px-1 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-primary/60" /> Afspraak</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-[hsl(var(--status-amber))]" /> Taak (deadline)</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-[hsl(var(--status-blue))]" /> Installatie (omzet)</span>
             </div>
           </CardContent>
         </Card>
@@ -349,6 +378,27 @@ export default function DirectieAgenda() {
                 ))
               )}
             </div>
+
+            {/* Geplande installaties op deze dag + de omzet die dag */}
+            {dayInstalls.items.length > 0 && (
+              <div className="space-y-2 border-t pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><Wrench className="h-3.5 w-3.5" /> Installaties</p>
+                  <span className="rounded-full bg-[hsl(var(--status-green,152_60%_40%)/0.14)] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[hsl(var(--status-green,152_60%_40%))]">Verwacht: {formatEuro(dayInstalls.revenue)}</span>
+                </div>
+                {dayInstalls.items.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => navigate("/sales/onboarding")}
+                    className="flex w-full items-center gap-2 rounded-lg border bg-card p-2.5 text-left transition-colors hover:bg-muted/40"
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-[hsl(var(--status-blue))]" />
+                    <span className="flex-1 truncate text-sm font-medium">{p.name}</span>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums">{formatEuro(p.revenue)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Taken met deadline op deze dag */}
             <div className="space-y-2 border-t pt-3">
