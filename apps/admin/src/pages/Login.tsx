@@ -105,7 +105,7 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
   };
 
   return (
-    <div className={`portal-theme${isLight ? " light" : ""} relative min-h-screen overflow-hidden bg-background text-foreground`}>
+    <div className={`portal-theme${isLight ? " light" : ""} relative min-h-[100dvh] overflow-hidden bg-background text-foreground`}>
       {/* Cockpit-kap bovenaan */}
       <div className="absolute top-0 left-0 right-0 pointer-events-none">
         <CockpitArc className="h-[clamp(120px,22vh,320px)]" />
@@ -124,15 +124,24 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
         </div>
       )}
 
-      {/* Scrolling scan-line — alleen actief tijdens ignition */}
+      {/* Scrolling scan-line — alleen actief tijdens ignition; op mobiel verborgen
+          (de lijn snijdt daar dwars door de solo-meter en oogt als een glitch) */}
       {phase === "ignition" && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden hidden sm:block">
           <div className="ignition-scan absolute inset-x-0 h-1" />
         </div>
       )}
 
-      {/* Centrale gauge-cluster decoratie + form */}
-      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-20">
+      {/* Centrale gauge-cluster decoratie + form. Tijdens de splash centreert
+          mobiel in de vrije ruimte ónder de cockpit-kap (100dvh = zichtbare
+          hoogte, dus het midden klopt ook met een iOS-adresbalk in beeld). */}
+      <div
+        className={`relative min-h-[100dvh] flex flex-col items-center justify-center px-4 ${
+          phase === "ignition" || phase === "ready"
+            ? "pt-[clamp(96px,18dvh,200px)] pb-20 sm:py-20"
+            : "py-20"
+        }`}
+      >
         {phase === "ignition" || phase === "ready" ? (
           <IgnitionSequence label={role === "client" ? "WELKOM" : "BEHEER"} />
         ) : (
@@ -154,7 +163,7 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
           />
         )}
 
-        <p className="absolute bottom-6 inset-x-0 text-center text-[10px] uppercase tracking-[0.4em] text-muted-foreground/60 select-none">
+        <p className="absolute bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))] inset-x-0 text-center text-[10px] uppercase tracking-[0.4em] text-muted-foreground/60 select-none">
           E-Charging · onderdeel van E-Group BV
         </p>
       </div>
@@ -364,6 +373,7 @@ function IgnitionSequence({ label }: { label: string }) {
 }
 
 function SweepGauge({ color, delay, big = false }: { color: string; delay: string; big?: boolean }) {
+  const { isLight } = usePortalTheme();
   const r = big ? 80 : 56;
   const size = big ? 200 : 140;
   const cx = size / 2;
@@ -410,8 +420,9 @@ function SweepGauge({ color, delay, big = false }: { color: string; delay: strin
           }}
         />
 
-        {/* Inner pulse */}
+        {/* Inner pulse — op mobiel neemt het merk-icoon deze rol over */}
         <circle
+          className={big ? "hidden sm:inline" : undefined}
           cx={cx}
           cy={cy}
           r={big ? 6 : 4}
@@ -422,6 +433,25 @@ function SweepGauge({ color, delay, big = false }: { color: string; delay: strin
           }}
         />
       </svg>
+
+      {/* Mobiel: E-Charging-icoon dat in de meter "oplaadt" */}
+      {big && (
+        <div
+          className="absolute inset-0 flex items-center justify-center sm:hidden"
+          style={{ animation: `pulse-dot 800ms ${delay} ease-in backwards` }}
+        >
+          <img
+            src={isLight ? logoFullColor : logoBright}
+            alt=""
+            className="w-[34%]"
+            style={{
+              filter: isLight
+                ? "drop-shadow(0 1px 2px rgba(0,0,0,0.10))"
+                : "drop-shadow(0 0 16px rgba(255,255,255,0.28))",
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
