@@ -6,8 +6,11 @@ import type { MaterialStatus } from "@/services/installationHandoff";
 import type { QuoteForClient } from "@/components/sales/CreateClientFromQuoteDialog";
 
 // De onboarding-fase wordt AFGELEID uit de echte status (geen handmatig bijhouden).
-// Pijplijn: getekend → werkvoorbereiding → bij installateur → opgeleverd →
-// locaties koppelen → klant uitnodigen → gegevens toevoegen → archief.
+// Pijplijn: klantaccount aanmaken + uitnodigen komen DIRECT NA TEKENEN (zodat de
+// klant alvast zijn account maakt terwijl de installateur nog moet komen), en
+// uitnodigen gaat VÓÓR het koppelen van de locaties/palen. Volgorde:
+// getekend → klant aanmaken → klant uitnodigen → werkvoorbereiding → bij
+// installateur → opgeleverd → locaties koppelen → gegevens toevoegen → archief.
 export type OnboardingStage =
   | "getekend"
   | "werkvoorbereiding"
@@ -21,22 +24,24 @@ export type OnboardingStage =
 
 export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: string; hint: string }[] = [
   { key: "getekend", label: "Getekend", color: "#6366f1", hint: "Werkvoorbereiding starten" },
+  { key: "klant_aanmaken", label: "Klant account aanmaken", color: "#a855f7", hint: "Maak het beheer-klantaccount aan" },
+  { key: "klant_uitnodigen", label: "Klant uitnodigen", color: "#ec4899", hint: "Portaal-uitnodiging versturen" },
   { key: "werkvoorbereiding", label: "Werkvoorbereiding", color: "#0ea5e9", hint: "Materialen bestellen" },
   { key: "bij_installateur", label: "Bij installateur", color: "#f59e0b", hint: "Wacht op oplevering" },
   { key: "opgeleverd", label: "Opgeleverd", color: "#06b6d4", hint: "Factureren" },
-  { key: "klant_aanmaken", label: "Klant account aanmaken", color: "#a855f7", hint: "Maak het beheer-klantaccount aan" },
   { key: "locaties_koppelen", label: "Locaties koppelen", color: "#8b5cf6", hint: "Laadlocatie koppelen" },
-  { key: "klant_uitnodigen", label: "Klant uitnodigen", color: "#ec4899", hint: "Portaal-uitnodiging versturen" },
   { key: "gegevens", label: "Gegevens toevoegen", color: "#14b8a6", hint: "Wacht op gegevens van klant" },
   { key: "archief", label: "Archief", color: "#22c55e", hint: "Onboarding afgerond" },
 ];
 
-// Welke fases relevant zijn per scope. Installatie+beheer = volledige pijplijn; alleen-installatie stopt na
-// opleveren/factureren (geen portaal/beheer); alleen-beheer slaat de installateur-fases over.
+// Welke fases relevant zijn per scope. Installatie+beheer: klantaccount + uitnodigen eerst (direct na
+// tekenen), dan de installateur-track, dan locaties koppelen. Alleen-installatie stopt na opleveren/
+// factureren (geen portaal/beheer). Alleen-beheer slaat de installateur-fases over (getekend = de
+// klant-aanmaken-intake van een getekende offerte).
 export const STAGES_BY_SCOPE: Record<QuoteScope, OnboardingStage[]> = {
-  installatie_beheer: ["getekend", "werkvoorbereiding", "bij_installateur", "opgeleverd", "klant_aanmaken", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
+  installatie_beheer: ["klant_aanmaken", "klant_uitnodigen", "werkvoorbereiding", "bij_installateur", "opgeleverd", "locaties_koppelen", "gegevens", "archief"],
   alleen_installatie: ["getekend", "werkvoorbereiding", "bij_installateur", "opgeleverd", "archief"],
-  alleen_beheer: ["getekend", "locaties_koppelen", "klant_uitnodigen", "gegevens", "archief"],
+  alleen_beheer: ["getekend", "klant_uitnodigen", "locaties_koppelen", "gegevens", "archief"],
 };
 
 export type OnbOrder = {
@@ -234,10 +239,13 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
   const managed = c.managed !== false;
   const needsInstall = c.needs_installation !== false;
 
-  // Order-only (clientloos): installateur-flow; bij beheer-scope wordt ná facturering eerst het klantaccount
-  // aangemaakt (klant_aanmaken), bij alleen-installatie is het daarna klaar (archief).
+  // Order-only (clientloos): bij beheer-scope is de EERSTE stap direct na tekenen
+  // het klantaccount aanmaken (klant_aanmaken) — dat koppelt de order en maakt er
+  // een echte klant van, die daarna via het beheer-pad verder loopt. Alleen-
+  // installatie blijft de installateur-flow.
   if (c.is_order_only) {
-    if (invoiced) return managed ? "klant_aanmaken" : "archief";
+    if (managed) return "klant_aanmaken";
+    if (invoiced) return "archief";
     if (delivered) return "opgeleverd";
     if (handedOff) return "bij_installateur";
     if (inWorkPrep) return "werkvoorbereiding";
@@ -253,17 +261,24 @@ export function deriveStage(c: OnboardingClient): OnboardingStage {
     return "getekend";
   }
 
-  // Beheer-scopes (installatie+beheer of alleen-beheer):
-  if (isDetailsComplete(c)) return "archief";
-  if (c.portal_user_id) return "gegevens";        // uitnodiging geaccepteerd, gegevens nog niet compleet
-  if (hasLocation) return "klant_uitnodigen";
-  // Alleen-beheer (geen installatie): sla de installateur-stappen (bij installateur/opgeleverd/factureren) over.
-  if (!needsInstall) return "locaties_koppelen";
-  if (invoiced) return "locaties_koppelen";
-  if (delivered) return "opgeleverd";
-  if (handedOff) return "bij_installateur";
-  if (inWorkPrep) return "werkvoorbereiding";
-  return "getekend";
+  // Beheer-scopes (echte klant). Nieuwe volgorde: eerst UITNODIGEN (direct na het
+  // account, vóór installatie en locaties), dan de installateur-track (alleen bij
+  // installatie), dan locaties koppelen, dan wachten op gegevens, dan archief.
+  const invited = hasPendingInvite(c) || !!c.portal_user_id;
+  if (!invited) return "klant_uitnodigen";
+
+  if (needsInstall) {
+    if (inWorkPrep) return "werkvoorbereiding";
+    if (handedOff && !delivered) return "bij_installateur";
+    if (delivered && !invoiced) return "opgeleverd";
+    if (!invoiced) return "werkvoorbereiding";      // nog niets gestart → start-prep (in de werkvoorbereiding-actie)
+    if (!hasLocation) return "locaties_koppelen";   // ná facturering: palen/locaties koppelen
+  } else if (!hasLocation) {
+    return "locaties_koppelen";                     // alleen-beheer: koppelen ná uitnodigen
+  }
+
+  if (!isDetailsComplete(c)) return "gegevens";     // uitnodiging geaccepteerd, gegevens nog niet compleet
+  return "archief";
 }
 
 /** De installatie-order van de klant (de eerste/primaire). */

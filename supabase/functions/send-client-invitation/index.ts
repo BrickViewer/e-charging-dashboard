@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
     // Klant ophalen
     const { data: client, error: clientErr } = await supabase
       .from("clients")
-      .select("id, client_number, company_name, contact_name, contact_email, portal_user_id, person_id")
+      .select("id, client_number, company_name, contact_name, contact_email, portal_user_id, person_id, needs_installation, managed")
       .eq("id", client_id)
       .maybeSingle();
     if (clientErr) throw clientErr;
@@ -142,6 +142,12 @@ Deno.serve(async (req: Request) => {
       (new Date(invitation.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
     );
 
+    // Scope bepaalt de toon van de mail. installatie+beheer (managed + needs_installation)
+    // wordt nu DIRECT na tekenen uitgenodigd — vóór de installateur de palen koppelt — dus
+    // een begeleidende "maak alvast je account aan; wij koppelen straks je palen"-tekst.
+    // Alleen-beheer (managed, geen installatie) houdt de standaard "portaal staat klaar".
+    const needsInstallation = client.needs_installation === true;
+
     const { subject, html, text } = renderInviteEmail({
       companyName: client.company_name,
       contactName: client.contact_name ?? "klant",
@@ -150,9 +156,11 @@ Deno.serve(async (req: Request) => {
       fromName: FROM_NAME,
       heroUrl: heroV2Url, // on-domain (dashboard.e-charging.nl) i.p.v. supabase.co
       clientNumber: client.client_number,
+      needsInstallation,
     });
 
-    // Send via Resend API
+    // Send via Resend API — uitnodiging blijft systematisch vanuit noreply@ (reply_to = info@),
+    // conform de vastgelegde afzender-identiteiten; alleen de toon van de tekst is scope-bewust.
     const resendRes = await sendEmail({
       to: [recipientEmail],
       subject,

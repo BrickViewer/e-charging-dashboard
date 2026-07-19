@@ -64,22 +64,23 @@ export function attentionFor(item: OnboardingClient, todayStr: string = todayISO
     }
     case "opgeleverd":
       return { ...base, actionable: true, tone: "amber", label: "Te factureren", priority: 2 };
-    case "werkvoorbereiding": {
-      const open = materialsGate(order?.installation_order_materials ?? []).open;
-      return open > 0
-        ? { ...base, actionable: true, tone: "amber", label: `Materialen: ${open} te bestellen`, priority: 4 }
-        : { ...base, actionable: true, tone: "green", label: "Klaar om te versturen", priority: 5 };
-    }
-    case "getekend":
-      return { ...base, actionable: true, tone: "amber", label: "Werkvoorbereiding starten", priority: 6 };
+    // Klant-onboarding komt vroeg (direct na tekenen), uitnodigen vóór koppelen.
     case "klant_aanmaken":
-      return { ...base, actionable: true, tone: "amber", label: "Klantaccount aanmaken", priority: 7 };
-    case "locaties_koppelen":
-      return { ...base, actionable: true, tone: "amber", label: "Locaties koppelen", priority: 8 };
+      return { ...base, actionable: true, tone: "amber", label: "Klantaccount aanmaken", priority: 4 };
     case "klant_uitnodigen":
       return hasPendingInvite(item)
         ? { ...base, actionable: false, tone: "muted", label: "Uitnodiging verstuurd", priority: 91 }
-        : { ...base, actionable: true, tone: "amber", label: "Klant uitnodigen", priority: 9 };
+        : { ...base, actionable: true, tone: "amber", label: "Klant uitnodigen", priority: 5 };
+    case "werkvoorbereiding": {
+      const open = materialsGate(order?.installation_order_materials ?? []).open;
+      return open > 0
+        ? { ...base, actionable: true, tone: "amber", label: `Materialen: ${open} te bestellen`, priority: 6 }
+        : { ...base, actionable: true, tone: "green", label: "Klaar om te versturen", priority: 7 };
+    }
+    case "getekend":
+      return { ...base, actionable: true, tone: "amber", label: "Werkvoorbereiding starten", priority: 7 };
+    case "locaties_koppelen":
+      return { ...base, actionable: true, tone: "amber", label: "Locaties koppelen", priority: 8 };
     case "gegevens":
       return { ...base, actionable: false, tone: "muted", label: "Wacht op klantgegevens", priority: 92 };
     case "archief":

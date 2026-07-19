@@ -9,10 +9,16 @@ interface InviteEmailParams {
   fromName: string;
   heroUrl: string;
   clientNumber?: number | null;
+  /** installatie+beheer (managed + needs_installation): begeleidende "maak alvast je account
+   *  aan, wij koppelen straks je palen"-tekst, want de uitnodiging gaat nu vóór het koppelen. */
+  needsInstallation?: boolean;
 }
 
 export function renderInviteEmail(p: InviteEmailParams): { subject: string; html: string; text: string } {
-  const subject = "Activeer uw E-Charging klantportaal";
+  // installatie+beheer: klant wordt direct na tekenen uitgenodigd, vóór de installateur de
+  // palen plaatst/koppelt → begeleidende toon. Alleen-beheer houdt "portaal staat klaar".
+  const guiding = p.needsInstallation === true;
+  const subject = guiding ? "Maak alvast uw E-Charging account aan" : "Activeer uw E-Charging klantportaal";
   const companyName = escapeHtml(p.companyName);
   const contactName = escapeHtml(p.contactName);
   const inviteUrl = escapeHtml(p.inviteUrl);
@@ -24,12 +30,21 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
   const isPrivate =
     !!p.companyName && !!p.contactName &&
     p.companyName.trim().toLowerCase() === p.contactName.trim().toLowerCase();
-  const introHtml = isPrivate
+  const introHtml = guiding
+    ? "Uw offerte is getekend — u kunt nu alvast uw E-Charging account aanmaken. Zodra wij uw laadpalen hebben geplaatst en gekoppeld, ziet u meteen live sessies, geleverde kWh en uw maandafrekeningen in het portaal."
+    : isPrivate
     ? "Uw E-Charging klantportaal staat klaar. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd."
     : `Voor ${companyName} is het E-Charging klantportaal voorbereid. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd.`;
-  const introText = isPrivate
+  const introText = guiding
+    ? "Uw offerte is getekend — u kunt nu alvast uw E-Charging account aanmaken. Zodra wij uw laadpalen hebben gekoppeld, ziet u alles live in het portaal."
+    : isPrivate
     ? "Uw E-Charging klantportaal staat klaar."
     : `Voor ${p.companyName} is het E-Charging klantportaal voorbereid.`;
+  // De laatste "na activatie"-stap verschilt per scope: bij installatie+beheer koppelen
+  // wij binnenkort de palen; bij alleen-beheer koppelen wij de bestaande locaties.
+  const step3Html = guiding
+    ? "3. Wij plaatsen en koppelen binnenkort uw laadpalen; daarna staat alles live in uw portaal."
+    : "3. E-Charging koppelt de juiste locaties aan uw klantprofiel.";
 
   const html = `<!DOCTYPE html>
 <html lang="nl">
@@ -218,7 +233,7 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
                     <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">2. U vult contact-, factuur- en bankgegevens aan in het portaal.</td>
                   </tr>
                   <tr>
-                    <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">3. E-Charging koppelt de juiste locaties aan uw klantprofiel.</td>
+                    <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">${step3Html}</td>
                   </tr>
                 </table>
               </div>
@@ -260,7 +275,7 @@ ${p.inviteUrl}
 Na activatie:
 1. U kiest een wachtwoord en activeert het account.
 2. U vult contact-, factuur- en bankgegevens aan in het portaal.
-3. E-Charging koppelt de juiste locaties aan uw klantprofiel.
+${guiding ? "3. Wij plaatsen en koppelen binnenkort uw laadpalen; daarna staat alles live in uw portaal." : "3. E-Charging koppelt de juiste locaties aan uw klantprofiel."}
 
 Deze uitnodiging vervalt over ${p.expiresInDays} dagen.
 

@@ -30,64 +30,61 @@ const complete: OnboardingClient = {
   billing_address_street: "Straat 1", billing_address_postal: "1234AB", billing_address_city: "Eindhoven",
   payment_onboarding_status: "saved",
 };
+// base = beheer-klant (managed + needsInstall = null → true). Uitgenodigd = er staat een pending invite.
+const invited: OnboardingClient = { ...base, client_invitations: [{ id: "i", status: "pending" }] };
 
 describe("deriveStage", () => {
-  it("geen order → getekend", () => {
-    expect(deriveStage(base)).toBe("getekend");
+  // Order-only (clientloos): beheer → account eerst (direct na tekenen); alleen-installatie → installateur-track.
+  it("order-only, beheer → klant_aanmaken (account direct na tekenen)", () => {
+    expect(deriveStage({ ...base, is_order_only: true, installation_orders: [order({ status: "nieuw" })] })).toBe("klant_aanmaken");
   });
-  it("order 'nieuw' (niet doorgestuurd) → getekend", () => {
-    expect(deriveStage({ ...base, installation_orders: [order({ status: "nieuw" })] })).toBe("getekend");
+  it("order-only, alleen-installatie, niets gestart → getekend", () => {
+    expect(deriveStage({ ...base, is_order_only: true, managed: false, installation_orders: [order({ status: "nieuw" })] })).toBe("getekend");
   });
-  it("doorgestuurd (egroup_order_id) → bij_installateur", () => {
-    expect(deriveStage({ ...base, installation_orders: [order({ status: "overgedragen", egroup_order_id: "EG1" })] })).toBe("bij_installateur");
+  it("order-only, alleen-installatie, werkvoorbereiding → werkvoorbereiding", () => {
+    expect(deriveStage({ ...base, is_order_only: true, managed: false, installation_orders: [order({ work_prep_started_at: "2026-07-14" })] })).toBe("werkvoorbereiding");
   });
-  it("werkvoorbereiding gestart, nog niet doorgestuurd → werkvoorbereiding", () => {
-    expect(deriveStage({ ...base, installation_orders: [order({ status: "nieuw", work_prep_started_at: "2026-07-14" })] })).toBe("werkvoorbereiding");
+  it("order-only, alleen-installatie, doorgestuurd → bij_installateur", () => {
+    expect(deriveStage({ ...base, is_order_only: true, managed: false, installation_orders: [order({ egroup_order_id: "EG1" })] })).toBe("bij_installateur");
   });
-  it("werkvoorbereiding + doorgestuurd → bij_installateur (geen terugval)", () => {
-    expect(deriveStage({
-      ...base,
-      installation_orders: [order({ status: "overgedragen", work_prep_started_at: "2026-07-14", egroup_order_id: "EG1" })],
-    })).toBe("bij_installateur");
+  it("order-only, alleen-installatie, gefactureerd → archief", () => {
+    expect(deriveStage({ ...base, is_order_only: true, managed: false, installation_orders: [order({ completed_at: "2026-06-01", invoiced_at: "2026-06-02" })] })).toBe("archief");
   });
-  it("werkvoorbereiding + opgeleverd → opgeleverd (geen terugval)", () => {
-    expect(deriveStage({
-      ...base,
-      installation_orders: [order({ status: "afgerond", work_prep_started_at: "2026-07-14", egroup_order_id: "EG1", completed_at: "2026-07-20" })],
-    })).toBe("opgeleverd");
+
+  // Beheer (echte klant): UITNODIGEN komt eerst, vóór installatie en locaties.
+  it("beheer-klant nog niet uitgenodigd → klant_uitnodigen (ongeacht order)", () => {
+    expect(deriveStage(base)).toBe("klant_uitnodigen");
+    expect(deriveStage({ ...base, installation_orders: [order({ status: "nieuw" })] })).toBe("klant_uitnodigen");
   });
-  it("order-only: werkvoorbereiding gestart → werkvoorbereiding", () => {
-    expect(deriveStage({
-      ...base, is_order_only: true, managed: false,
-      installation_orders: [order({ status: "nieuw", work_prep_started_at: "2026-07-14" })],
-    })).toBe("werkvoorbereiding");
+  it("uitgenodigd, installatie nog niet gestart → werkvoorbereiding (start-prep)", () => {
+    expect(deriveStage({ ...invited, installation_orders: [order({ status: "nieuw" })] })).toBe("werkvoorbereiding");
   });
-  it("tweede, al verstuurde order trekt de fase niet terug naar werkvoorbereiding", () => {
-    expect(deriveStage({
-      ...base,
-      installation_orders: [
-        order({ id: "o1", status: "overgedragen", work_prep_started_at: "2026-07-01", egroup_order_id: "EG1" }),
-      ],
-    })).toBe("bij_installateur");
+  it("uitgenodigd + werkvoorbereiding gestart → werkvoorbereiding", () => {
+    expect(deriveStage({ ...invited, installation_orders: [order({ work_prep_started_at: "2026-07-14" })] })).toBe("werkvoorbereiding");
   });
-  it("opgeleverd (afgerond), niet gefactureerd → opgeleverd", () => {
-    expect(deriveStage({ ...base, installation_orders: [order({ status: "afgerond", egroup_order_id: "EG1", completed_at: "2026-06-01" })] })).toBe("opgeleverd");
+  it("uitgenodigd + doorgestuurd → bij_installateur", () => {
+    expect(deriveStage({ ...invited, installation_orders: [order({ egroup_order_id: "EG1" })] })).toBe("bij_installateur");
   });
-  it("gefactureerd, geen locatie → locaties_koppelen", () => {
-    expect(deriveStage({ ...base, installation_orders: [order({ status: "afgerond", completed_at: "2026-06-01", invoiced_at: "2026-06-02" })] })).toBe("locaties_koppelen");
+  it("uitgenodigd + opgeleverd (niet gefactureerd) → opgeleverd", () => {
+    expect(deriveStage({ ...invited, installation_orders: [order({ egroup_order_id: "EG1", completed_at: "2026-06-01" })] })).toBe("opgeleverd");
   });
-  it("locatie gekoppeld, nog niet geaccepteerd → klant_uitnodigen", () => {
-    expect(deriveStage({
-      ...base,
-      installation_orders: [order({ status: "afgerond", completed_at: "2026-06-01", invoiced_at: "2026-06-02" })],
-      locations: [{ id: "l1" }],
-    })).toBe("klant_uitnodigen");
+  it("uitgenodigd + werkvoorbereiding + opgeleverd → opgeleverd (geen terugval)", () => {
+    expect(deriveStage({ ...invited, installation_orders: [order({ work_prep_started_at: "2026-07-14", egroup_order_id: "EG1", completed_at: "2026-07-20" })] })).toBe("opgeleverd");
   });
-  it("uitnodiging geaccepteerd (portal_user_id), gegevens incompleet → gegevens", () => {
-    expect(deriveStage({ ...base, portal_user_id: "u1", locations: [{ id: "l1" }] })).toBe("gegevens");
+  it("uitgenodigd + gefactureerd, geen locatie → locaties_koppelen (ná uitnodigen)", () => {
+    expect(deriveStage({ ...invited, installation_orders: [order({ completed_at: "2026-06-01", invoiced_at: "2026-06-02" })] })).toBe("locaties_koppelen");
   });
-  it("gegevens compleet → archief (ongeacht de rest)", () => {
-    expect(deriveStage(complete)).toBe("archief");
+  it("alleen-beheer, uitgenodigd, geen locatie → locaties_koppelen", () => {
+    expect(deriveStage({ ...invited, needs_installation: false })).toBe("locaties_koppelen");
+  });
+  it("geaccepteerd (portal_user_id), alleen-beheer, locatie gekoppeld, gegevens incompleet → gegevens", () => {
+    expect(deriveStage({ ...base, portal_user_id: "u1", needs_installation: false, locations: [{ id: "l1" }] })).toBe("gegevens");
+  });
+  it("alleen-beheer volledig compleet → archief", () => {
+    expect(deriveStage({ ...complete, needs_installation: false, locations: [{ id: "l1" }] })).toBe("archief");
+  });
+  it("installatie+beheer volledig klaar (uitgenodigd + gefactureerd + locatie + gegevens) → archief", () => {
+    expect(deriveStage({ ...complete, installation_orders: [order({ egroup_order_id: "EG1", completed_at: "2026-06-01", invoiced_at: "2026-06-02" })], locations: [{ id: "l1" }] })).toBe("archief");
   });
 });
 

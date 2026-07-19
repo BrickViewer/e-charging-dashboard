@@ -82,6 +82,15 @@ function NextAction({
         </Button>
       );
     case "werkvoorbereiding":
+      // Bij installatie+beheer komt de klant (aanmaken/uitnodigen) vóór de
+      // installateur-track, dus er is geen aparte "getekend"-kolom meer: zolang de
+      // werkvoorbereiding nog niet gestart is, tonen we hier de start-actie.
+      if (!order?.work_prep_started_at)
+        return (
+          <Button size="sm" className={btn} disabled={!order || startingPrep} onClick={() => onStartPrep(client)}>
+            <PackageOpen className={ico} /> Werkvoorbereiding starten
+          </Button>
+        );
       return (
         <div className="space-y-1.5">
           <MaterialsStatusLine order={order} />

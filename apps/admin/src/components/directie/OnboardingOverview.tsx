@@ -65,7 +65,7 @@ export function OnboardingOverview() {
   const total = summary.total + awaiting.length;
   const getekenedCount = summary.stageCounts.getekend + awaiting.length;
   const actionRows: ActionRow[] = [
-    ...awaiting.map((a) => ({ key: `q-${a.id}`, name: a.name, stageLabel: GETEKEND?.label, stageColor: GETEKEND?.color, tone: "amber" as AttentionTone, label: "Klant account aanmaken", priority: 6 })),
+    ...awaiting.map((a) => ({ key: `q-${a.id}`, name: a.name, stageLabel: GETEKEND?.label, stageColor: GETEKEND?.color, tone: "amber" as AttentionTone, label: "Klant account aanmaken", priority: 4 })),
     ...summary.attention.map((a) => ({ key: `c-${a.item.id}`, name: onboardingName(a.item), stageLabel: STAGE_META.get(a.stage)?.label, stageColor: STAGE_META.get(a.stage)?.color, tone: a.tone, label: a.label, priority: a.priority })),
   ].sort((x, y) => x.priority - y.priority);
 
