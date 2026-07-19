@@ -34,6 +34,8 @@ const fmtDateTime = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("nl-NL", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
 type Props = {
+  // Directie-weergave: toon en bewerk de taakcategorie (sales/algemeen).
+  showCategory?: boolean;
   task: TaskWithLead | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,7 +43,7 @@ type Props = {
   leadOptions: { id: string; name: string }[];
 };
 
-export function TaskDetailSheet({ task, open, onOpenChange, profiles, leadOptions }: Props) {
+export function TaskDetailSheet({ task, open, onOpenChange, profiles, leadOptions, showCategory = false }: Props) {
   const navigate = useNavigate();
   const updateTask = useUpdateTask();
   const toggleTask = useToggleTask();
@@ -229,7 +231,8 @@ export function TaskDetailSheet({ task, open, onOpenChange, profiles, leadOption
           <div className="space-y-1">
             <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Building2 className="h-3.5 w-3.5" /> Gekoppelde lead</span>
             <div className="flex items-center gap-2">
-              <Select value={task.lead_id ?? "none"} onValueChange={(v) => patch({ lead_id: v === "none" ? null : v })}>
+              {/* Lead koppelen impliceert sales (DB-constraint lead_tasks_lead_implies_sales) */}
+              <Select value={task.lead_id ?? "none"} onValueChange={(v) => patch(v === "none" ? { lead_id: null } : { lead_id: v, category: "sales" })}>
                 <SelectTrigger className="h-9 flex-1"><SelectValue placeholder="Geen lead" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Geen lead</SelectItem>
@@ -243,6 +246,25 @@ export function TaskDetailSheet({ task, open, onOpenChange, profiles, leadOption
               )}
             </div>
           </div>
+
+          {/* Categorie (directie-weergave): lead-gebonden taken zijn altijd sales */}
+          {showCategory && (
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">Categorie</span>
+              <Select
+                value={task.category ?? "sales"}
+                onValueChange={(v) => patch({ category: v as "sales" | "algemeen" })}
+                disabled={!!task.lead_id}
+              >
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="algemeen">Algemeen</SelectItem>
+                  <SelectItem value="sales">Sales</SelectItem>
+                </SelectContent>
+              </Select>
+              {task.lead_id && <p className="text-xs text-muted-foreground">Gekoppeld aan een lead — daarmee automatisch een sales-taak.</p>}
+            </div>
+          )}
 
           {/* Omschrijving */}
           <div className="space-y-1">

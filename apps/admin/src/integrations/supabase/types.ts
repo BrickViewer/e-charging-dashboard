@@ -228,6 +228,7 @@ export type Database = {
       blog_posts: {
         Row: {
           aeo_score: number | null
+          archived_reason: string | null
           author_name: string | null
           canonical_url: string | null
           category: string | null
@@ -271,6 +272,7 @@ export type Database = {
         }
         Insert: {
           aeo_score?: number | null
+          archived_reason?: string | null
           author_name?: string | null
           canonical_url?: string | null
           category?: string | null
@@ -314,6 +316,7 @@ export type Database = {
         }
         Update: {
           aeo_score?: number | null
+          archived_reason?: string | null
           author_name?: string | null
           canonical_url?: string | null
           category?: string | null
@@ -1871,6 +1874,8 @@ export type Database = {
           assigned_category_slug: string | null
           background: string | null
           blog_post_id: string | null
+          brand_fit: number | null
+          brand_fit_reason: string | null
           brief_generated_at: string | null
           conversation_question: string | null
           created_at: string
@@ -1909,6 +1914,8 @@ export type Database = {
           assigned_category_slug?: string | null
           background?: string | null
           blog_post_id?: string | null
+          brand_fit?: number | null
+          brand_fit_reason?: string | null
           brief_generated_at?: string | null
           conversation_question?: string | null
           created_at?: string
@@ -1947,6 +1954,8 @@ export type Database = {
           assigned_category_slug?: string | null
           background?: string | null
           blog_post_id?: string | null
+          brand_fit?: number | null
+          brand_fit_reason?: string | null
           brief_generated_at?: string | null
           conversation_question?: string | null
           created_at?: string
@@ -2802,6 +2811,7 @@ export type Database = {
       lead_tasks: {
         Row: {
           assigned_to: string | null
+          category: string
           checklist: Json
           completed_at: string | null
           created_at: string
@@ -2822,6 +2832,7 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          category?: string
           checklist?: Json
           completed_at?: string | null
           created_at?: string
@@ -2842,6 +2853,7 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          category?: string
           checklist?: Json
           completed_at?: string | null
           created_at?: string
@@ -3268,12 +3280,12 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          rsin: string | null
+          sbi_code: string | null
           sharepoint_drive_id: string | null
           sharepoint_root_item_id: string | null
           sharepoint_site_id: string | null
           sharepoint_site_name: string | null
-          rsin: string | null
-          sbi_code: string | null
           sharepoint_site_url: string | null
           updated_at: string | null
           vestigingsnummer: string | null
@@ -3315,12 +3327,12 @@ export type Database = {
           logo_url?: string | null
           name: string
           phone?: string | null
+          rsin?: string | null
+          sbi_code?: string | null
           sharepoint_drive_id?: string | null
           sharepoint_root_item_id?: string | null
           sharepoint_site_id?: string | null
           sharepoint_site_name?: string | null
-          rsin?: string | null
-          sbi_code?: string | null
           sharepoint_site_url?: string | null
           updated_at?: string | null
           vestigingsnummer?: string | null
@@ -3362,12 +3374,12 @@ export type Database = {
           logo_url?: string | null
           name?: string
           phone?: string | null
+          rsin?: string | null
+          sbi_code?: string | null
           sharepoint_drive_id?: string | null
           sharepoint_root_item_id?: string | null
           sharepoint_site_id?: string | null
           sharepoint_site_name?: string | null
-          rsin?: string | null
-          sbi_code?: string | null
           sharepoint_site_url?: string | null
           updated_at?: string | null
           vestigingsnummer?: string | null
@@ -4823,6 +4835,8 @@ export type Database = {
           assigned_category_slug: string | null
           background: string | null
           blog_post_id: string | null
+          brand_fit: number | null
+          brand_fit_reason: string | null
           brief_generated_at: string | null
           conversation_question: string | null
           created_at: string

@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     if (!taskId) return json({ status: "error", message: "task_id ontbreekt" }, 400);
 
     const { data: task } = await sb.from("lead_tasks")
-      .select("id, title, description, priority, due_date, assigned_to, lead_id").eq("id", taskId).maybeSingle();
+      .select("id, title, description, priority, due_date, assigned_to, lead_id, category").eq("id", taskId).maybeSingle();
     if (!task || !task.assigned_to) return json({ status: "ignored" });
 
     const { data: userRes } = await sb.auth.admin.getUserById(task.assigned_to);
@@ -44,7 +44,8 @@ Deno.serve(async (req) => {
     }
 
     const appUrl = (Deno.env.get("PUBLIC_APP_URL") ?? "https://dashboard.e-charging.nl").replace(/\/+$/, "");
-    const tasksUrl = `${appUrl}/sales/taken`;
+    // Algemene taken leven in het directie-werkblad; sales-taken op /sales/taken.
+    const tasksUrl = `${appUrl}${task.category === "algemeen" ? "/admin/taken" : "/sales/taken"}?task=${task.id}`;
     const due = task.due_date ? new Date(task.due_date as string).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }) : null;
     // Alleen hoge prioriteit expliciet benoemen; normaal/laag is ruis in een toewijzingsmail.
     const isHigh = task.priority === "high";

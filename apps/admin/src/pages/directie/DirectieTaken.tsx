@@ -1,11 +1,7 @@
-// Centrale takenbeheerder (alle categorieën) — wordt gevuld in de taken-fase.
+// Centrale takenbeheerder van het directie-werkblad: alle categorieën
+// (algemeen + sales), inclusief categoriefilter en -beheer.
+import { TasksManager } from "@/components/tasks/TasksManager";
+
 export default function DirectieTaken() {
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-semibold">Taken</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Alle taken — sales én algemeen</p>
-      </div>
-    </div>
-  );
+  return <TasksManager scope="all" />;
 }

@@ -10,10 +10,16 @@ import type { ChecklistItem, TaskPriority, TaskRecurrence } from "@/services/tas
 export type LeadTask = Database["public"]["Tables"]["lead_tasks"]["Row"];
 export type TaskWithLead = LeadTask & { leads: { company_name: string | null } | null };
 
+// Takensplit: 'sales' (lead-gerelateerd, /sales/taken) vs 'algemeen'
+// (bedrijfsbreed, directie-werkblad). Lead-gebonden taken zijn altijd sales
+// (DB-constraint lead_tasks_lead_implies_sales).
+export type TaskCategory = "sales" | "algemeen";
+export type TaskScope = "all" | "sales";
+
 type TaskUpdate = Database["public"]["Tables"]["lead_tasks"]["Update"];
 export type TaskPatch = Pick<
   TaskUpdate,
-  "title" | "description" | "due_date" | "assigned_to" | "priority" | "recurrence" | "lead_id" | "checklist"
+  "title" | "description" | "due_date" | "assigned_to" | "priority" | "recurrence" | "lead_id" | "checklist" | "category"
 >;
 
 export function useLeadTasks(leadId: string | undefined) {
@@ -35,16 +41,20 @@ export function useLeadTasks(leadId: string | undefined) {
 }
 
 // Alle taken (over leads heen) voor het centrale Taken-overzicht; los = leads null.
-export function useAllTasks() {
+// scope "sales" filtert server-side op categorie (het sales-werkblad toont
+// alleen sales-taken); scope "all" is de volledige directie-lijst.
+export function useAllTasks(scope: TaskScope = "all") {
   return useQuery({
-    queryKey: ["all-tasks"],
+    queryKey: ["all-tasks", scope],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("lead_tasks")
         .select("*, leads(company_name)")
         .order("done", { ascending: true })
         .order("due_date", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true });
+      if (scope === "sales") query = query.eq("category", "sales");
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as unknown as TaskWithLead[];
     },
@@ -55,7 +65,7 @@ export function useAddTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      leadId, organizationId, title, dueDate, assignedTo, priority, description, recurrence, checklist,
+      leadId, organizationId, title, dueDate, assignedTo, priority, description, recurrence, checklist, category,
     }: {
       leadId?: string | null;
       organizationId: string;
@@ -66,6 +76,7 @@ export function useAddTask() {
       description?: string | null;
       recurrence?: TaskRecurrence | null;
       checklist?: ChecklistItem[];
+      category?: TaskCategory;
     }) => {
       const uid = await currentUserId();
       const payload = {
@@ -79,6 +90,8 @@ export function useAddTask() {
         recurrence: recurrence ?? null,
         checklist: checklist ?? [],
         created_by: uid,
+        // Lead-gebonden = altijd sales (DB-constraint); anders de gevraagde categorie.
+        category: leadId ? "sales" : category ?? "sales",
       };
       const { error } = await supabase
         .from("lead_tasks")
@@ -126,8 +139,9 @@ export function useToggleTask() {
     onMutate: async ({ id, done, leadId }) => {
       const prevLeads = qc.getQueryData<LeadWithTasks[]>(["leads", "open"]);
       await qc.cancelQueries({ queryKey: ["all-tasks"] });
-      const prevAll = qc.getQueryData<TaskWithLead[]>(["all-tasks"]);
-      qc.setQueryData<TaskWithLead[]>(["all-tasks"], (old) =>
+      // Prefix-matched: dekt beide scope-caches (["all-tasks","all"] en …,"sales").
+      const prevAll = qc.getQueriesData<TaskWithLead[]>({ queryKey: ["all-tasks"] });
+      qc.setQueriesData<TaskWithLead[]>({ queryKey: ["all-tasks"] }, (old) =>
         (old ?? []).map((t) => (t.id === id ? { ...t, done } : t)),
       );
       let prevTasks: LeadTask[] | undefined;
@@ -146,7 +160,7 @@ export function useToggleTask() {
     onError: (_e, _v, ctx) => {
       if (ctx?.leadId && ctx.prevTasks) qc.setQueryData(["lead-tasks", ctx.leadId], ctx.prevTasks);
       if (ctx?.prevLeads) qc.setQueryData(["leads", "open"], ctx.prevLeads);
-      if (ctx?.prevAll) qc.setQueryData(["all-tasks"], ctx.prevAll);
+      for (const [key, data] of ctx?.prevAll ?? []) qc.setQueryData(key, data);
     },
     onSettled: (_d, _e, { leadId }) => {
       if (leadId) qc.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
@@ -167,8 +181,9 @@ export function useUpdateTaskChecklist() {
     },
     onMutate: async ({ id, checklist, leadId }) => {
       await qc.cancelQueries({ queryKey: ["all-tasks"] });
-      const prevAll = qc.getQueryData<TaskWithLead[]>(["all-tasks"]);
-      qc.setQueryData<TaskWithLead[]>(["all-tasks"], (old) =>
+      // Prefix-matched: dekt beide scope-caches (["all-tasks","all"] en …,"sales").
+      const prevAll = qc.getQueriesData<TaskWithLead[]>({ queryKey: ["all-tasks"] });
+      qc.setQueriesData<TaskWithLead[]>({ queryKey: ["all-tasks"] }, (old) =>
         (old ?? []).map((t) => (t.id === id ? { ...t, checklist } : t)),
       );
       let prevTasks: LeadTask[] | undefined;
@@ -182,7 +197,7 @@ export function useUpdateTaskChecklist() {
       return { prevAll, prevTasks, leadId };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prevAll) qc.setQueryData(["all-tasks"], ctx.prevAll);
+      for (const [key, data] of ctx?.prevAll ?? []) qc.setQueryData(key, data);
       if (ctx?.leadId && ctx.prevTasks) qc.setQueryData(["lead-tasks", ctx.leadId], ctx.prevTasks);
     },
     onSettled: (_d, _e, { leadId }) => {
