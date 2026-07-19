@@ -340,10 +340,16 @@ function LoginForm(props: {
 function IgnitionSequence({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-10 animate-ignition-fade">
-      <div className="flex items-center gap-4 sm:gap-14">
-        <SweepGauge color="hsl(var(--gauge-red))" delay="0ms" />
+      {/* Mobiel (<sm): alleen de grote middenmeter — drie naast elkaar oogt
+          rommelig op een smal verticaal scherm. Desktop: de volledige rij. */}
+      <div className="flex items-center gap-14">
+        <div className="hidden sm:block">
+          <SweepGauge color="hsl(var(--gauge-red))" delay="0ms" />
+        </div>
         <SweepGauge color="hsl(var(--gauge-blue))" delay="120ms" big />
-        <SweepGauge color="hsl(var(--gauge-green))" delay="240ms" />
+        <div className="hidden sm:block">
+          <SweepGauge color="hsl(var(--gauge-green))" delay="240ms" />
+        </div>
       </div>
 
       <div className="text-center">
@@ -369,13 +375,15 @@ function SweepGauge({ color, delay, big = false }: { color: string; delay: strin
 
   const trackPath = describeArc(cx, cy, startAngle, endAngle, r);
 
-  // Vloeiende maat: op smalle/lage schermen (telefoon, landscape) krimpt de meter
-  // mee zodat de rij van drie altijd binnen het scherm past; desktop haalt de
-  // px-cap en blijft exact 140/200px. `size` blijft de viewBox-geometrie.
-  const cssSize = big ? "min(33vw, 30vh, 200px)" : "min(23vw, 24vh, 140px)";
+  // Vloeiende maat, per breakpoint: mobiel staat de grote meter alleen en mag
+  // dus fors zijn (~62vw); vanaf sm geldt de rij-maat met px-cap zodat desktop
+  // exact 140/200px blijft. `size` blijft de viewBox-geometrie.
+  const widthClass = big
+    ? "w-[min(62vw,32vh,250px)] sm:w-[min(33vw,30vh,200px)]"
+    : "w-[min(23vw,24vh,140px)]";
 
   return (
-    <div className="relative" style={{ width: cssSize, aspectRatio: "1", animation: `gauge-pop 600ms ${delay} backwards`, animationTimingFunction: "cubic-bezier(0.34, 1.6, 0.64, 1)" }}>
+    <div className={`relative ${widthClass}`} style={{ aspectRatio: "1", animation: `gauge-pop 600ms ${delay} backwards`, animationTimingFunction: "cubic-bezier(0.34, 1.6, 0.64, 1)" }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
         <defs>
           <filter id={`glow-${delay}`}>
