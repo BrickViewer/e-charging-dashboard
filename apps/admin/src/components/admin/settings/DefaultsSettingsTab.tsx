@@ -23,6 +23,7 @@ export function DefaultsSettingsTab() {
     handoff_notification_email: "",
     default_labor_cost_rate: "",
     default_labor_sell_rate: "",
+    agenda_mailbox: "",
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
 
@@ -35,6 +36,7 @@ export function DefaultsSettingsTab() {
       handoff_notification_email: org.handoff_notification_email ?? "willi-jan.jonkers@e-group.nl",
       default_labor_cost_rate: String(org.default_labor_cost_rate ?? "50"),
       default_labor_sell_rate: String(org.default_labor_sell_rate ?? "75"),
+      agenda_mailbox: org.agenda_mailbox ?? "",
     });
   }, [org]);
 
@@ -59,6 +61,7 @@ export function DefaultsSettingsTab() {
           handoff_notification_email: defaults.handoff_notification_email.trim() || "willi-jan.jonkers@e-group.nl",
           default_labor_cost_rate: Number.isFinite(laborCostParsed) && laborCostParsed > 0 ? laborCostParsed : 50,
           default_labor_sell_rate: Number.isFinite(laborSellParsed) && laborSellParsed > 0 ? laborSellParsed : 75,
+          agenda_mailbox: defaults.agenda_mailbox.trim() || null,
         },
       });
       queryClient.invalidateQueries({ queryKey: ["admin-avg-revenue-per-cp"] });
@@ -156,6 +159,21 @@ export function DefaultsSettingsTab() {
               <Label htmlFor="handoff-email">Notificatie-mailadres</Label>
               <Input id="handoff-email" type="email" value={defaults.handoff_notification_email} onChange={e => setDefaults(p => ({ ...p, handoff_notification_email: e.target.value }))} placeholder="willi-jan.jonkers@e-group.nl" />
               <p className="text-[11px] text-muted-foreground mt-1.5">Standaard willi-jan.jonkers@e-group.nl. De opdracht wordt niet geblokkeerd als de mail onverhoopt faalt.</p>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3 rounded-md border border-border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Bedrijfsagenda (Microsoft 365)</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              De agenda in het Admin-werkblad toont en beheert de Outlook-agenda van deze mailbox (UPN of gedeelde mailbox in de e-group-tenant).
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="agenda-mailbox">Agenda-mailbox</Label>
+              <Input id="agenda-mailbox" type="email" value={defaults.agenda_mailbox} onChange={e => setDefaults(p => ({ ...p, agenda_mailbox: e.target.value }))} placeholder="naam@e-group.nl" />
+              <p className="text-[11px] text-muted-foreground mt-1.5">Vereist eenmalig de application-permissie Calendars.ReadWrite (+ admin-consent) op de bestaande Azure-app.</p>
             </div>
           </div>
         </div>
