@@ -16,7 +16,7 @@ function loggedIn(): boolean {
 test.describe("Publieke token-pagina's (geen login)", () => {
   test("ongeldige offerte-link toont nette melding", async ({ page }) => {
     await page.goto("/offerte/ongeldige-token-xyz");
-    await expect(page.getByText(/niet beschikbaar|niet \(meer\) geldig|ongeldig|verlopen/i).first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/niet beschikbaar|niet geldig|niet gevonden|ongeldig|verlopen/i).first()).toBeVisible({ timeout: 15000 });
   });
   test("ongeldige uitnodiging-link toont nette melding", async ({ page }) => {
     await page.goto("/uitnodiging/ongeldige-token-xyz");

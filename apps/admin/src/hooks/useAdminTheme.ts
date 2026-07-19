@@ -14,9 +14,9 @@ export type AdminTheme = "dark" | "light";
 
 let theme: AdminTheme = (() => {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "light" ? "light" : "dark";
+    return localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
   } catch {
-    return "dark"; // localStorage onbeschikbaar (private mode) → standaard donker
+    return "light"; // localStorage onbeschikbaar (private mode) → standaard licht
   }
 })();
 
@@ -38,7 +38,7 @@ function applyTheme(next: AdminTheme) {
  *  uitloggen (user = null) behouden we het laatste thema. */
 export function syncAdminThemeFromUser(user: User | null) {
   if (!user) return;
-  const next: AdminTheme = user.user_metadata?.admin_theme === "light" ? "light" : "dark";
+  const next: AdminTheme = user.user_metadata?.admin_theme === "dark" ? "dark" : "light";
   if (next !== theme) applyTheme(next);
 }
 

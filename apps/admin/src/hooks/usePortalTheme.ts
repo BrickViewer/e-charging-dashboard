@@ -1,6 +1,6 @@
 // Portal-thema (dag/nacht) — module-store + useSyncExternalStore, zodat
 // elke component (layout, nav, instellingen) dezelfde state deelt zonder
-// provider of prop-drilling. Donker is de standaard; de voorkeur wordt
+// provider of prop-drilling. Licht is de standaard; de voorkeur wordt
 // bewaard in localStorage en bij module-init gelezen (vóór de eerste render).
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 
@@ -10,9 +10,9 @@ export type PortalTheme = "dark" | "light";
 
 let theme: PortalTheme = (() => {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "light" ? "light" : "dark";
+    return localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
   } catch {
-    return "dark"; // localStorage onbeschikbaar (bv. private mode) → standaard donker
+    return "light"; // localStorage onbeschikbaar (bv. private mode) → standaard licht
   }
 })();
 
