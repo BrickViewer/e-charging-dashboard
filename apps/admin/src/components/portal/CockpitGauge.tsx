@@ -288,3 +288,82 @@ export function CockpitGauge({
     </div>
   );
 }
+
+/** Opstart-skelet van de XL-gauge voor de login-splash: exact dezelfde
+ *  geometrie en maatvoering als CockpitGauge size="xl" (samen wijzigen!),
+ *  maar zonder data — track + vegende boog + centrale tekst. Zo staat de
+ *  dashboard-meter na het inloggen pixelgelijk op de plek van de splash. */
+export function CockpitGaugeBoot({ centerText, label }: { centerText: string; label: string }) {
+  const id = useId();
+  const svgSize = 440;
+  const cx = svgSize / 2;
+  const cy = svgSize / 2;
+  const radius = 175;
+  const strokeWidth = 6;
+  const renderWidth = "var(--gauge-w-xl, min(clamp(460px, 67vh, 760px), calc(100vw - 40px)))";
+  const trackPath = describeArc(cx, cy, -135, 135, radius);
+
+  return (
+    <div className="flex flex-col items-center select-none">
+      <style>{`
+        @keyframes gauge-boot-sweep { to { stroke-dashoffset: 0; } }
+        @keyframes gauge-boot-pulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.4; } }
+      `}</style>
+      <svg
+        style={{ width: renderWidth, height: `calc(${renderWidth} * 0.78)` }}
+        viewBox={`0 0 ${svgSize} ${svgSize * 0.82}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="overflow-visible"
+      >
+        <defs>
+          <filter id={`boot-glow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation={4} />
+          </filter>
+        </defs>
+
+        <path d={trackPath} fill="none" stroke="hsl(var(--gauge-track))" strokeWidth={strokeWidth} strokeLinecap="round" />
+
+        {/* Vegende boog: gloedlaag (dimbaar per thema) + scherpe laag */}
+        {[true, false].map((isGlow) => (
+          <path
+            key={isGlow ? "glow" : "sharp"}
+            d={trackPath}
+            fill="none"
+            stroke="hsl(var(--gauge-blue))"
+            strokeWidth={strokeWidth + 1}
+            strokeLinecap="round"
+            pathLength={1}
+            strokeDasharray={1}
+            filter={isGlow ? `url(#boot-glow-${id})` : undefined}
+            style={{
+              strokeDashoffset: 1,
+              animation: "gauge-boot-sweep 1400ms 120ms cubic-bezier(0.34, 1.1, 0.64, 1) forwards",
+              ...(isGlow ? { opacity: "var(--gauge-glow-opacity)" } : undefined),
+            }}
+          />
+        ))}
+
+        {/* Centrale tekst op de waarde-positie van de echte gauge */}
+        <text
+          x={cx}
+          y={cy + 8}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="hsl(var(--foreground))"
+          fontSize={44}
+          fontWeight="600"
+          fontFamily="var(--font-family)"
+          letterSpacing="0.3em"
+        >
+          {centerText}
+        </text>
+      </svg>
+      <span
+        className="text-sm mt-8 font-medium uppercase tracking-wider text-muted-foreground/85 text-center px-2 leading-relaxed"
+        style={{ letterSpacing: "0.14em", maxWidth: renderWidth, animation: "gauge-boot-pulse 2200ms ease-in-out infinite" }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}

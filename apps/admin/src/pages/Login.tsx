@@ -6,9 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Power, Loader2 } from "lucide-react";
 import { CockpitArc } from "@/components/portal/CockpitArc";
+import { CockpitGaugeBoot } from "@/components/portal/CockpitGauge";
 import { usePortalTheme, usePortalThemeSync } from "@/hooks/usePortalTheme";
 import logoBright from "@/assets/icon-bright.svg";
 import logoFullColor from "@/assets/icon-full-color.svg";
+import wordmarkBright from "@/assets/logo-bright.svg";
+import wordmarkFullColor from "@/assets/logo-full-color.svg";
 import { requestPasswordReset } from "@/services/clientPaymentDetails";
 import { toast } from "sonner";
 
@@ -104,11 +107,22 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
     }
   };
 
+  const isSplash = phase === "ignition" || phase === "ready";
+  const splashLabel = role === "client" ? "WELKOM" : "BEHEER";
+  const footer = (
+    <p className="absolute bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))] inset-x-0 text-center text-[10px] uppercase tracking-[0.4em] text-muted-foreground/60 select-none">
+      E-Charging · onderdeel van E-Group BV
+    </p>
+  );
+
   return (
     <div className={`portal-theme${isLight ? " light" : ""} relative min-h-[100dvh] overflow-hidden bg-background text-foreground`}>
-      {/* Cockpit-kap bovenaan */}
-      <div className="absolute top-0 left-0 right-0 pointer-events-none">
-        <CockpitArc className="h-[clamp(120px,22vh,320px)]" />
+      {/* Cockpit-kap bovenaan — zelfde hoogte-clamp als het portaal, zodat de
+          kap bij formulier → splash → dashboard nooit verspringt. Tijdens de
+          mobiele splash rendert het dashboard-skelet zijn eigen (identieke)
+          in-flow kap; dan verbergen we deze overlay-variant. */}
+      <div className={`absolute top-0 left-0 right-0 pointer-events-none ${isSplash ? "hidden lg:block max-lg:landscape:block" : ""}`}>
+        <CockpitArc className="h-[clamp(100px,18vh,300px)]" />
       </div>
 
       {/* Ambient grid — nachtdecor; dagmodus is vlak */}
@@ -124,27 +138,52 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
         </div>
       )}
 
-      {/* Scrolling scan-line — alleen actief tijdens ignition; op mobiel verborgen
-          (de lijn snijdt daar dwars door de solo-meter en oogt als een glitch) */}
+      {/* Scrolling scan-line — alleen actief tijdens ignition, alleen desktop
+          (op het mobiele dashboard-skelet zou de lijn door de meter snijden) */}
       {phase === "ignition" && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden hidden sm:block">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden hidden lg:block">
           <div className="ignition-scan absolute inset-x-0 h-1" />
         </div>
       )}
 
-      {/* Centrale gauge-cluster decoratie + form. Tijdens de splash centreert
-          mobiel in de vrije ruimte ónder de cockpit-kap (100dvh = zichtbare
-          hoogte, dus het midden klopt ook met een iOS-adresbalk in beeld). */}
-      <div
-        className={`relative min-h-[100dvh] flex flex-col items-center justify-center px-4 ${
-          phase === "ignition" || phase === "ready"
-            ? "pt-[clamp(96px,18dvh,200px)] pb-20 sm:py-20"
-            : "py-20"
-        }`}
-      >
-        {phase === "ignition" || phase === "ready" ? (
-          <IgnitionSequence label={role === "client" ? "WELKOM" : "BEHEER"} />
-        ) : (
+      {isSplash ? (
+        <>
+          {/* Mobiel/tablet portrait (<lg): skelet van het portaal-dashboard —
+              zelfde kap + woordmerk en dezelfde verticale opbouw als
+              ClientLayout + ClientDashboard (main px-4 pt-1 pb-24 →
+              selectorrij → carrouselzone → dots), zodat de boot-meter exact
+              op de plek van de echte XL-meter staat en het inloggen naadloos
+              overvloeit in het dashboard. */}
+          <div className="lg:hidden landscape:hidden flex flex-col h-[100dvh] overflow-hidden">
+            <div className="relative flex-shrink-0 w-full pt-0">
+              <CockpitArc className="h-[clamp(100px,18vh,300px)]" />
+              <div className="absolute inset-x-0 top-[clamp(17px,3.4vh,65px)] h-[clamp(20px,3vh,32px)] flex items-center justify-center px-4 pointer-events-none">
+                <img src={isLight ? wordmarkFullColor : wordmarkBright} alt="e-charging" className="w-[clamp(130px,20vh,210px)]" />
+              </div>
+            </div>
+            <div className="flex-1 min-h-0 w-full px-4 pt-1 pb-24 overflow-hidden">
+              <div className="h-full flex flex-col">
+                {/* Placeholder voor de selector-/statusrij van het dashboard */}
+                <div className="flex items-center justify-between px-4 pt-1">
+                  <div className="h-11" />
+                </div>
+                <div className="flex-1 min-h-0 flex items-center justify-center px-4 animate-ignition-fade">
+                  <CockpitGaugeBoot centerText={splashLabel} label="Live data wordt geladen" />
+                </div>
+                {/* Placeholder voor de carrousel-dots */}
+                <div className="h-10" />
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop (≥lg) + telefoon-landscape: gecentreerde drie-meter-cluster */}
+          <div className="relative min-h-[100dvh] flex-col items-center justify-center px-4 py-20 hidden lg:flex max-lg:landscape:flex">
+            <IgnitionSequence label={splashLabel} />
+            {footer}
+          </div>
+        </>
+      ) : (
+        <div className="relative min-h-[100dvh] flex flex-col items-center justify-center px-4 py-20">
           <LoginForm
             email={email}
             setEmail={setEmail}
@@ -161,12 +200,9 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
             msStarting={msStarting}
             mode={mode}
           />
-        )}
-
-        <p className="absolute bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))] inset-x-0 text-center text-[10px] uppercase tracking-[0.4em] text-muted-foreground/60 select-none">
-          E-Charging · onderdeel van E-Group BV
-        </p>
-      </div>
+          {footer}
+        </div>
+      )}
 
       {/* Animation styles inline */}
       <style>{loginStyles}</style>
@@ -349,16 +385,10 @@ function LoginForm(props: {
 function IgnitionSequence({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-10 animate-ignition-fade">
-      {/* Mobiel (<sm): alleen de grote middenmeter — drie naast elkaar oogt
-          rommelig op een smal verticaal scherm. Desktop: de volledige rij. */}
       <div className="flex items-center gap-14">
-        <div className="hidden sm:block">
-          <SweepGauge color="hsl(var(--gauge-red))" delay="0ms" />
-        </div>
+        <SweepGauge color="hsl(var(--gauge-red))" delay="0ms" />
         <SweepGauge color="hsl(var(--gauge-blue))" delay="120ms" big />
-        <div className="hidden sm:block">
-          <SweepGauge color="hsl(var(--gauge-green))" delay="240ms" />
-        </div>
+        <SweepGauge color="hsl(var(--gauge-green))" delay="240ms" />
       </div>
 
       <div className="text-center">
@@ -373,7 +403,6 @@ function IgnitionSequence({ label }: { label: string }) {
 }
 
 function SweepGauge({ color, delay, big = false }: { color: string; delay: string; big?: boolean }) {
-  const { isLight } = usePortalTheme();
   const r = big ? 80 : 56;
   const size = big ? 200 : 140;
   const cx = size / 2;
@@ -385,12 +414,9 @@ function SweepGauge({ color, delay, big = false }: { color: string; delay: strin
 
   const trackPath = describeArc(cx, cy, startAngle, endAngle, r);
 
-  // Vloeiende maat, per breakpoint: mobiel staat de grote meter alleen en mag
-  // dus fors zijn (~62vw); vanaf sm geldt de rij-maat met px-cap zodat desktop
-  // exact 140/200px blijft. `size` blijft de viewBox-geometrie.
-  const widthClass = big
-    ? "w-[min(62vw,32vh,250px)] sm:w-[min(33vw,30vh,200px)]"
-    : "w-[min(23vw,24vh,140px)]";
+  // Vloeiende maat met px-cap: op een normale desktop exact 140/200px, op
+  // lage/smalle vensters krimpt de rij mee. `size` blijft de viewBox-geometrie.
+  const widthClass = big ? "w-[min(33vw,30vh,200px)]" : "w-[min(23vw,24vh,140px)]";
 
   return (
     <div className={`relative ${widthClass}`} style={{ aspectRatio: "1", animation: `gauge-pop 600ms ${delay} backwards`, animationTimingFunction: "cubic-bezier(0.34, 1.6, 0.64, 1)" }}>
@@ -420,9 +446,8 @@ function SweepGauge({ color, delay, big = false }: { color: string; delay: strin
           }}
         />
 
-        {/* Inner pulse — op mobiel neemt het merk-icoon deze rol over */}
+        {/* Inner pulse */}
         <circle
-          className={big ? "hidden sm:inline" : undefined}
           cx={cx}
           cy={cy}
           r={big ? 6 : 4}
@@ -433,25 +458,6 @@ function SweepGauge({ color, delay, big = false }: { color: string; delay: strin
           }}
         />
       </svg>
-
-      {/* Mobiel: E-Charging-icoon dat in de meter "oplaadt" */}
-      {big && (
-        <div
-          className="absolute inset-0 flex items-center justify-center sm:hidden"
-          style={{ animation: `pulse-dot 800ms ${delay} ease-in backwards` }}
-        >
-          <img
-            src={isLight ? logoFullColor : logoBright}
-            alt=""
-            className="w-[34%]"
-            style={{
-              filter: isLight
-                ? "drop-shadow(0 1px 2px rgba(0,0,0,0.10))"
-                : "drop-shadow(0 0 16px rgba(255,255,255,0.28))",
-            }}
-          />
-        </div>
-      )}
     </div>
   );
 }
