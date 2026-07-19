@@ -23,7 +23,7 @@ export function ClientLocationsTab({
               Locatie koppelen
             </Button>
           )}
-          <Button variant="outline" onClick={() => onNavigate("/admin/locaties?filter=unlinked")}>
+          <Button variant="outline" onClick={() => onNavigate("/beheer/locaties?filter=unlinked")}>
             <MapPin className="w-4 h-4 mr-1" />
             Naar Locaties-overzicht
           </Button>
@@ -39,7 +39,7 @@ export function ClientLocationsTab({
                 Koppel een locatie
               </button>
             ) : (
-              <button onClick={() => onNavigate("/admin/locaties")} className="text-primary hover:underline">
+              <button onClick={() => onNavigate("/beheer/locaties")} className="text-primary hover:underline">
                 Locaties-overzicht
               </button>
             )}
@@ -58,7 +58,7 @@ export function ClientLocationsTab({
             <Card
               key={loc.id}
               className="cursor-pointer hover:border-primary/40 transition-colors"
-              onClick={() => onNavigate(`/admin/locaties/${loc.id}`)}
+              onClick={() => onNavigate(`/beheer/locaties/${loc.id}`)}
             >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">

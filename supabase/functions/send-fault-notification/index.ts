@@ -83,12 +83,12 @@ Deno.serve(async (req) => {
         reason: REASON_LABELS[String(f.fault_reason)] ?? String(f.fault_reason),
         contactName: (cl.contact_name as string) || "Geen contact bekend",
         contactPhone: (cl.contact_phone as string) || "",
-        detailUrl: `${PUBLIC_URL}/admin/storingen/${f.id}`,
+        detailUrl: `${PUBLIC_URL}/beheer/storingen/${f.id}`,
       };
     });
 
     const firstLoc = items[0]?.locationName ?? "locatie";
-    const overviewUrl = `${PUBLIC_URL}/admin/storingen`;
+    const overviewUrl = `${PUBLIC_URL}/beheer/storingen`;
     const { subject, html, text } = renderFaultEmail({ items, locationName: firstLoc, overviewUrl, logoUrl });
 
     // Dry-run: render zonder te versturen of email_sent_at te zetten (voor tests).

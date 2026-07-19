@@ -16,14 +16,17 @@ import {
   BarChart3,
   Tags,
   Package,
+  CalendarDays,
+  Crosshair,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/contexts/authContextValue";
 
-// Top-level werkbladen (Beheer / Sales). Eén bron van waarheid voor zowel de
-// navigatie als de rol-gebaseerde toegang + de switcher.
+// Top-level werkbladen. Eén bron van waarheid voor zowel de navigatie als de
+// rol-gebaseerde toegang + de switcher. NB: het werkblad met label "Admin"
+// (directie-cockpit) woont op /admin; het klassieke beheer op /beheer.
 
-export type WorkspaceKey = "beheer" | "sales" | "marketing";
+export type WorkspaceKey = "directie" | "beheer" | "sales" | "marketing";
 
 export type NavItem = { to: string; icon: LucideIcon; label: string; end?: boolean; newTab?: boolean };
 
@@ -36,17 +39,30 @@ export type Workspace = {
 };
 
 export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
+  // Directie-cockpit: bedrijfsbrede sturing (KPI's/doelen, agenda, alle taken).
+  directie: {
+    key: "directie",
+    label: "Admin",
+    home: "/admin",
+    roles: ["admin"],
+    items: [
+      { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
+      { to: "/admin/agenda", icon: CalendarDays, label: "Agenda" },
+      { to: "/admin/taken", icon: ListChecks, label: "Taken" },
+      { to: "/admin/doelen", icon: Crosshair, label: "Doelen" },
+    ],
+  },
   beheer: {
     key: "beheer",
     label: "Beheer",
-    home: "/admin",
+    home: "/beheer",
     roles: ["admin", "manager", "viewer"],
     items: [
-      { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
-      { to: "/admin/klanten", icon: Users, label: "Klanten" },
-      { to: "/admin/locaties", icon: MapPin, label: "Locaties" },
-      { to: "/admin/storingen", icon: AlertTriangle, label: "Storingen" },
-      { to: "/admin/financieel", icon: Wallet, label: "Financieel" },
+      { to: "/beheer", icon: LayoutDashboard, label: "Dashboard", end: true },
+      { to: "/beheer/klanten", icon: Users, label: "Klanten" },
+      { to: "/beheer/locaties", icon: MapPin, label: "Locaties" },
+      { to: "/beheer/storingen", icon: AlertTriangle, label: "Storingen" },
+      { to: "/beheer/financieel", icon: Wallet, label: "Financieel" },
     ],
   },
   sales: {
@@ -82,7 +98,7 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
   },
 };
 
-export const WORKSPACE_ORDER: WorkspaceKey[] = ["beheer", "sales", "marketing"];
+export const WORKSPACE_ORDER: WorkspaceKey[] = ["directie", "beheer", "sales", "marketing"];
 
 // De rollen die een werkblad mogen openen — één bron voor zowel de navigatie als de
 // route-gating (RequireAuth in App.tsx), zodat de toegangsmatrix niet kan divergeren.
@@ -100,6 +116,7 @@ export function workspacesForRole(role: UserRole): WorkspaceKey[] {
 export function workspaceForPath(pathname: string): WorkspaceKey {
   if (pathname.startsWith("/sales")) return "sales";
   if (pathname.startsWith("/marketing")) return "marketing";
+  if (pathname.startsWith("/admin")) return "directie";
   return "beheer";
 }
 

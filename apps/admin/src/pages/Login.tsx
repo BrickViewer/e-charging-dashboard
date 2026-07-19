@@ -35,9 +35,10 @@ export default function Login({ mode = "client" }: { mode?: "client" | "admin" }
   // zonder "Laden…"-flits (zelfde dynamic imports als de lazy routes in App.tsx).
   useEffect(() => {
     if (phase !== "ignition") return;
-    if (isInternal) void import("@/pages/admin/AdminDashboard");
+    if (role === "admin") void import("@/pages/directie/DirectieDashboard");
+    else if (isInternal) void import("@/pages/admin/AdminDashboard");
     else void import("@/pages/portal/PortalHome");
-  }, [phase, isInternal]);
+  }, [phase, isInternal, role]);
 
   // Bij ignition: na 2.6s pulseringssequentie redirect uitvoeren
   useEffect(() => {

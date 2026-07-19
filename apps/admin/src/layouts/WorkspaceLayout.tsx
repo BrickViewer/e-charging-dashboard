@@ -237,7 +237,7 @@ export default function WorkspaceLayout() {
             </p>
             {canAccessBeheer(role) && (
               <Link
-                to="/admin/instellingen"
+                to="/beheer/instellingen"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Instellingen"
                 title="Instellingen"

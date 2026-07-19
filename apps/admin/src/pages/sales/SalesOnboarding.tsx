@@ -128,7 +128,7 @@ function NextAction({
     case "archief":
       if (client.is_order_only)
         return <div className="flex min-h-8 items-center justify-center rounded-md bg-muted/60 px-2 py-1 text-center text-[11px] leading-tight text-muted-foreground">Afgerond</div>;
-      return <Button size="sm" variant="ghost" className={btn} onClick={() => navigate(`/admin/klanten/${client.id}`)}><ExternalLink className={ico} /> Bekijk klant</Button>;
+      return <Button size="sm" variant="ghost" className={btn} onClick={() => navigate(`/beheer/klanten/${client.id}`)}><ExternalLink className={ico} /> Bekijk klant</Button>;
   }
 }
 
@@ -331,7 +331,7 @@ export default function SalesOnboarding() {
                           </span>
                         </div>
                         {!c.is_order_only && (
-                          <button type="button" onClick={() => navigate(`/admin/klanten/${c.id}`)} aria-label="Open klant" className="shrink-0 text-muted-foreground hover:text-foreground">
+                          <button type="button" onClick={() => navigate(`/beheer/klanten/${c.id}`)} aria-label="Open klant" className="shrink-0 text-muted-foreground hover:text-foreground">
                             <ArrowRight className="h-4 w-4" />
                           </button>
                         )}
@@ -369,7 +369,7 @@ export default function SalesOnboarding() {
       />
       <OnboardingHandoffDialog client={handoffFor} onClose={() => setHandoffFor(null)} />
       <OnboardingInvoiceDialog client={invoiceFor} onClose={() => setInvoiceFor(null)} />
-      <CreateClientFromQuoteDialog quote={createFor} open={!!createFor} onClose={() => setCreateFor(null)} onCreated={(id) => navigate(`/admin/klanten/${id}`)} />
+      <CreateClientFromQuoteDialog quote={createFor} open={!!createFor} onClose={() => setCreateFor(null)} onCreated={(id) => navigate(`/beheer/klanten/${id}`)} />
     </div>
   );
 }

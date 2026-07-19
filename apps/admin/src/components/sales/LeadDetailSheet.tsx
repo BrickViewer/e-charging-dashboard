@@ -336,7 +336,7 @@ export function LeadDetailSheet({
                         {!lead.converted_client_id && <DropdownMenuItem onClick={() => setConfirmConvert(true)}><UserPlus className="mr-2 h-4 w-4" />Converteer naar klant</DropdownMenuItem>}
                         <DropdownMenuItem onClick={launchConfigurator}><WandSparkles className="mr-2 h-4 w-4" />{hasConfiguration ? "Configuratie bewerken" : "Start configurator"}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setObjectCreateOpen(true)}><MapPin className="mr-2 h-4 w-4" />Object toevoegen</DropdownMenuItem>
-                        {lead.converted_client_id && canBeheer && <DropdownMenuItem onClick={() => navigate(`/admin/klanten/${lead.converted_client_id}`)}><ExternalLink className="mr-2 h-4 w-4" />Bekijk klant</DropdownMenuItem>}
+                        {lead.converted_client_id && canBeheer && <DropdownMenuItem onClick={() => navigate(`/beheer/klanten/${lead.converted_client_id}`)}><ExternalLink className="mr-2 h-4 w-4" />Bekijk klant</DropdownMenuItem>}
                         <DropdownMenuSeparator />
                         {wonStage && <DropdownMenuItem onClick={() => moveToStage(wonStage.id)}><Trophy className="mr-2 h-4 w-4 text-green-600" />Markeer gewonnen</DropdownMenuItem>}
                         {lostStage && <DropdownMenuItem onClick={() => requestMoveToStage(lostStage.id)}><XCircle className="mr-2 h-4 w-4 text-red-600" />Markeer verloren</DropdownMenuItem>}

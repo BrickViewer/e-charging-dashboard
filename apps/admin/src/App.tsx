@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useParams, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -30,7 +30,13 @@ const OnboardingWizard = lazy(() => import("./pages/portal/OnboardingWizard"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
 const DemoLayout = lazy(() => import("./layouts/DemoLayout"));
 
-// Admin pages — lazy loaded
+// Directie-werkblad (label "Admin") — lazy loaded
+const DirectieDashboard = lazy(() => import("./pages/directie/DirectieDashboard"));
+const DirectieAgenda = lazy(() => import("./pages/directie/DirectieAgenda"));
+const DirectieTaken = lazy(() => import("./pages/directie/DirectieTaken"));
+const DirectieDoelen = lazy(() => import("./pages/directie/DirectieDoelen"));
+
+// Beheer pages — lazy loaded
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminClients = lazy(() => import("./pages/admin/AdminClients"));
 const AdminClientWizard = lazy(() => import("./pages/admin/AdminClientWizard"));
@@ -80,7 +86,8 @@ function AuthRedirect() {
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Laden...</div>;
   if (!user) return <Navigate to="/login" replace />;
   const workspaces = workspacesForRole(role);
-  if (workspaces.includes("beheer")) return <Navigate to="/admin" replace />;
+  if (workspaces.includes("directie")) return <Navigate to="/admin" replace />;
+  if (workspaces.includes("beheer")) return <Navigate to="/beheer" replace />;
   if (workspaces.includes("sales")) return <Navigate to="/sales" replace />;
   if (workspaces.includes("marketing")) return <Navigate to="/marketing" replace />;
   if (role === "client") return <Navigate to="/portal" replace />;
@@ -92,6 +99,14 @@ function AuthRedirect() {
 function ObjectRedirect() {
   const { id } = useParams();
   return <Navigate to={`/sales/contacten?object=${id ?? ""}`} replace />;
+}
+
+// Beheer is van /admin naar /beheer verhuisd (het directie-werkblad nam /admin
+// over). Oude maillinks/bookmarks (/admin/klanten/:id, /admin/storingen/:id, …)
+// blijven werken via deze pad-herschrijver.
+function LegacyBeheerRedirect() {
+  const location = useLocation();
+  return <Navigate to={location.pathname.replace(/^\/admin/, "/beheer") + location.search} replace />;
 }
 
 function InactiveAccountRedirect() {
@@ -175,8 +190,28 @@ const App = () => (
                 <Route path="locatie/:id" element={<ClientLocationDetail />} />
               </Route>
 
-              {/* Beheer-werkblad */}
+              {/* Directie-werkblad (label "Admin") — CEO-cockpit op /admin */}
               <Route path="/admin" element={
+                <RequireAuth allowedRoles={rolesForWorkspace("directie")} loginPath="/login/admin">
+                  <WorkspaceLayout />
+                </RequireAuth>
+              }>
+                <Route index element={<DirectieDashboard />} />
+                <Route path="agenda" element={<DirectieAgenda />} />
+                <Route path="taken" element={<DirectieTaken />} />
+                <Route path="doelen" element={<DirectieDoelen />} />
+              </Route>
+
+              {/* Oude beheer-paden onder /admin → /beheer (maillinks/bookmarks) */}
+              <Route path="/admin/klanten/*" element={<LegacyBeheerRedirect />} />
+              <Route path="/admin/locaties/*" element={<LegacyBeheerRedirect />} />
+              <Route path="/admin/storingen/*" element={<LegacyBeheerRedirect />} />
+              <Route path="/admin/financieel" element={<LegacyBeheerRedirect />} />
+              <Route path="/admin/instellingen/*" element={<LegacyBeheerRedirect />} />
+              <Route path="/admin/installaties" element={<Navigate to="/sales/onboarding" replace />} />
+
+              {/* Beheer-werkblad */}
+              <Route path="/beheer" element={
                 <RequireAuth allowedRoles={rolesForWorkspace("beheer")} loginPath="/login/admin">
                   <WorkspaceLayout />
                 </RequireAuth>

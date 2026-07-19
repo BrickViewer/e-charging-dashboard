@@ -141,7 +141,7 @@ function HeadlineStrip({ tot }: { tot: FinancialsTotals }) {
           value={formatEuro(tot.unassignedExcl)}
           amber={tot.unassignedExcl > 0.005}
           action={tot.unassignedExcl > 0.005
-            ? <Link to="/admin/locaties" className="inline-flex items-center gap-0.5 font-medium text-[hsl(var(--status-amber))] hover:underline">koppel locaties <ChevronRight className="h-3.5 w-3.5" /></Link>
+            ? <Link to="/beheer/locaties" className="inline-flex items-center gap-0.5 font-medium text-[hsl(var(--status-amber))] hover:underline">koppel locaties <ChevronRight className="h-3.5 w-3.5" /></Link>
             : undefined}
         />
         <StripStat

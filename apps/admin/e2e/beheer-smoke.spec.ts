@@ -17,12 +17,12 @@ function loggedIn(): boolean {
 
 // Route → een heading die de pagina uniek en betrouwbaar markeert.
 const BEHEER_ROUTES: { path: string; heading: RegExp }[] = [
-  { path: "/admin", heading: /^dashboard$/i },
-  { path: "/admin/klanten", heading: /^klanten$/i },
-  { path: "/admin/locaties", heading: /^locaties$/i },
-  { path: "/admin/storingen", heading: /^storingen$/i },
-  { path: "/admin/financieel", heading: /financieel/i },
-  { path: "/admin/instellingen", heading: /^instellingen$/i },
+  { path: "/beheer", heading: /^dashboard$/i },
+  { path: "/beheer/klanten", heading: /^klanten$/i },
+  { path: "/beheer/locaties", heading: /^locaties$/i },
+  { path: "/beheer/storingen", heading: /^storingen$/i },
+  { path: "/beheer/financieel", heading: /financieel/i },
+  { path: "/beheer/instellingen", heading: /^instellingen$/i },
 ];
 
 test.describe("Beheer — smoke", () => {
@@ -45,7 +45,7 @@ test.describe("Beheer — smoke", () => {
   }
 
   test("Klanten toont een tabel of een lege/foutstatus + gelabeld zoekveld", async ({ page }) => {
-    await page.goto("/admin/klanten");
+    await page.goto("/beheer/klanten");
     await expect(page.getByRole("heading", { name: /^klanten$/i })).toBeVisible({ timeout: 20000 });
 
     // Zoekveld aanwezig en gelabeld (placeholder fungeert als toegankelijke naam).
@@ -59,7 +59,7 @@ test.describe("Beheer — smoke", () => {
   });
 
   test("Klant-rij navigeert naar de volledige detailpagina", async ({ page }) => {
-    await page.goto("/admin/klanten");
+    await page.goto("/beheer/klanten");
     await expect(page.getByRole("heading", { name: /^klanten$/i })).toBeVisible({ timeout: 20000 });
 
     // Rij = role=button met aria-label "Open klant …". Zonder data niets te openen → skip.
@@ -68,11 +68,11 @@ test.describe("Beheer — smoke", () => {
 
     await firstRow.click();
     // Klik gaat naar de volledige route-pagina (geen zijpaneel).
-    await expect(page).toHaveURL(/\/admin\/klanten\/[^/]+$/, { timeout: 20000 });
+    await expect(page).toHaveURL(/\/beheer\/klanten\/[^/]+$/, { timeout: 20000 });
   });
 
   test("Storingen toont een determinate status (storingen, leeg of fout)", async ({ page }) => {
-    await page.goto("/admin/storingen");
+    await page.goto("/beheer/storingen");
     await expect(page.getByRole("heading", { name: /^storingen$/i })).toBeVisible({ timeout: 20000 });
 
     const table = page.getByRole("table");
@@ -82,7 +82,7 @@ test.describe("Beheer — smoke", () => {
   });
 
   test("MSP Locaties is weg: geen navlink en geen werkende pagina", async ({ page }) => {
-    await page.goto("/admin");
+    await page.goto("/beheer");
     await expect(page.getByRole("heading", { name: /^dashboard$/i })).toBeVisible({ timeout: 20000 });
 
     // De sidebar heeft geen "MSP Locaties"-link; de echte "Locaties"-link staat er wél.
@@ -91,7 +91,7 @@ test.describe("Beheer — smoke", () => {
 
     // Direct navigeren levert geen werkende "MSP Locaties"-pagina op (404 of leeg,
     // maar nooit een heading die de oude pagina zou markeren).
-    await page.goto("/admin/msp-locaties");
+    await page.goto("/beheer/msp-locaties");
     await expect(page.getByRole("heading", { name: /msp locaties/i })).toHaveCount(0);
   });
 });

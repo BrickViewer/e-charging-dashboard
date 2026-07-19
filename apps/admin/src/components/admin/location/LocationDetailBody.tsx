@@ -325,7 +325,7 @@ export function LocationDetailBody({
                     Gekoppeld aan klant
                   </p>
                   <Link
-                    to={`/admin/klanten/${locationDetail.client_id}`}
+                    to={`/beheer/klanten/${locationDetail.client_id}`}
                     className="font-semibold hover:text-primary inline-flex items-center gap-1"
                   >
                     {locationDetail.clients?.client_number && (

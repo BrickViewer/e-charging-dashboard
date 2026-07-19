@@ -137,7 +137,7 @@ export default function AdminClientWizard() {
       }
       if (!client?.id) {
         toast.warning("Klant aangemaakt maar ID niet ontvangen");
-        navigate("/admin/klanten");
+        navigate("/beheer/klanten");
         return;
       }
 
@@ -154,7 +154,7 @@ export default function AdminClientWizard() {
       queryClient.invalidateQueries({ queryKey: ["companies"] });
       queryClient.invalidateQueries({ queryKey: ["persons"] });
       toast.success(client.client_number ? `Klant #${client.client_number} aangemaakt` : "Klant aangemaakt");
-      navigate(`/admin/klanten/${client.id}`);
+      navigate(`/beheer/klanten/${client.id}`);
     } catch (err) {
       // De DB dwingt "1 bedrijf = 1 klantaccount" af met een unieke index; vang de 23505 op met een
       // duidelijke melding (de client-side check kan een gelijktijdig aangemaakt account missen).
@@ -173,7 +173,7 @@ export default function AdminClientWizard() {
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/admin/klanten")}>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/beheer/klanten")}>
           <ArrowLeft className="w-4 h-4 mr-1" />
           Terug
         </Button>
@@ -238,7 +238,7 @@ export default function AdminClientWizard() {
                     <span className="text-amber-900">
                       Dit bedrijf heeft al een klantaccount{existingClient.client_number ? ` (#${existingClient.client_number})` : ""}.
                     </span>
-                    <Button size="sm" variant="outline" onClick={() => navigate(`/admin/klanten/${existingClient.id}`)}>
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/beheer/klanten/${existingClient.id}`)}>
                       Open klant
                     </Button>
                   </div>
@@ -320,7 +320,7 @@ export default function AdminClientWizard() {
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-2 pt-4">
-        <Button variant="outline" onClick={() => navigate("/admin/klanten")} disabled={saving}>
+        <Button variant="outline" onClick={() => navigate("/beheer/klanten")} disabled={saving}>
           Annuleren
         </Button>
         <Button onClick={handleSave} disabled={!canSubmit || saving}>

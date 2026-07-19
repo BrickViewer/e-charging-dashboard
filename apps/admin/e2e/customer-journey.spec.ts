@@ -63,7 +63,7 @@ test.describe("Beheer — klantdetail uitnodiging-gating", () => {
   test.skip(!loggedIn(), "Geen testlogin (zet E2E_USER_EMAIL/PASSWORD)");
 
   test("klant zonder e-mailadres toont een duidelijke hint i.p.v. dode knop", async ({ page }) => {
-    await page.goto("/admin/klanten");
+    await page.goto("/beheer/klanten");
     await expect(page.getByRole("heading", { name: /klanten/i })).toBeVisible({ timeout: 20000 });
     const search = page.getByPlaceholder(/zoek/i).first();
     if (await search.count()) await search.fill("Kragt");

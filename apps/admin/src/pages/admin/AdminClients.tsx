@@ -193,7 +193,7 @@ export default function AdminClients() {
             Vastgoedeigenaren met laadpunten via E-Charging
           </p>
         </div>
-        <Link to="/admin/klanten/nieuw">
+        <Link to="/beheer/klanten/nieuw">
           <Button>
             <Plus className="w-4 h-4 mr-2" />
             Klant toevoegen
@@ -341,11 +341,11 @@ export default function AdminClients() {
                         className={`border-b border-border last:border-0 hover:bg-accent/40 focus-visible:bg-accent/60 focus-visible:outline-none cursor-pointer transition-colors group ${
                           isDeleted ? "opacity-60" : ""
                         }`}
-                        onClick={() => navigate(`/admin/klanten/${c.id}`)}
+                        onClick={() => navigate(`/beheer/klanten/${c.id}`)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            navigate(`/admin/klanten/${c.id}`);
+                            navigate(`/beheer/klanten/${c.id}`);
                           }
                         }}
                       >

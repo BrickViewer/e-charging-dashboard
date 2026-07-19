@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     const naam = (client.company_name as string | null)?.trim() || "(zonder naam)";
     const nummer = client.client_number ? `#${client.client_number}` : "onbekend";
     const appUrl = (Deno.env.get("PUBLIC_APP_URL") ?? "https://dashboard.e-charging.nl").replace(/\/+$/, "");
-    const clientUrl = `${appUrl}/admin/klanten/${client.id}`;
+    const clientUrl = `${appUrl}/beheer/klanten/${client.id}`;
 
     const rows = [
       ["Klant", naam],

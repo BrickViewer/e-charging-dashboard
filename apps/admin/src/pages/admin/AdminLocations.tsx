@@ -244,11 +244,11 @@ export default function AdminLocations() {
                         tabIndex={0}
                         aria-label={`Open locatie ${loc.name || loc.address || ""}`}
                         className="border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors group focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50"
-                        onClick={() => navigate(`/admin/locaties/${loc.id}`)}
+                        onClick={() => navigate(`/beheer/locaties/${loc.id}`)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            navigate(`/admin/locaties/${loc.id}`);
+                            navigate(`/beheer/locaties/${loc.id}`);
                           }
                         }}
                       >

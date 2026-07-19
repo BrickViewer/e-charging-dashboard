@@ -5,5 +5,5 @@ import { LocationDetailBody } from "@/components/admin/location/LocationDetailBo
 export default function AdminLocationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  return <LocationDetailBody locationId={id!} onClose={() => navigate("/admin/locaties")} />;
+  return <LocationDetailBody locationId={id!} onClose={() => navigate("/beheer/locaties")} />;
 }

@@ -139,7 +139,7 @@ export default function AdminStoringen() {
             </thead>
             <tbody>
               {filtered.map((f: FaultRow) => {
-                const goToDetail = () => navigate(`/admin/storingen/${f.id}`);
+                const goToDetail = () => navigate(`/beheer/storingen/${f.id}`);
                 return (
                 <tr
                   key={f.id}

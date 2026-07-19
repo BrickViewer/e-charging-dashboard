@@ -144,7 +144,7 @@ export function CompanyDetailSheet({
                     </p>
                     <p className="text-[11px] text-muted-foreground">Status: {account.data.status ?? "—"}</p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => navigate(`/admin/klanten/${account.data!.id}`)}>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/beheer/klanten/${account.data!.id}`)}>
                     <ExternalLink className="mr-1.5 h-4 w-4" /> Open klant
                   </Button>
                 </div>
@@ -168,7 +168,7 @@ export function CompanyDetailSheet({
                     {(locations.data ?? []).map((l) => (
                       <button
                         key={l.id}
-                        onClick={() => navigate(`/admin/locaties/${l.id}`)}
+                        onClick={() => navigate(`/beheer/locaties/${l.id}`)}
                         className="flex w-full items-center gap-2 rounded-lg border p-2 text-left text-sm hover:bg-muted/40"
                       >
                         <MapPin className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
