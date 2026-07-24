@@ -1116,6 +1116,11 @@ export type Database = {
           vat_status: string | null
           vat_status_confirmed_at: string | null
           vat_status_confirmed_by: string | null
+          wefact_creditor_code: string | null
+          wefact_creditor_id: string | null
+          activation_invoiced_total: number
+          activation_invoiced_at: string | null
+          activation_invoice_code: string | null
         }
         Insert: {
           activation_fee_total?: number
@@ -1168,6 +1173,11 @@ export type Database = {
           vat_status?: string | null
           vat_status_confirmed_at?: string | null
           vat_status_confirmed_by?: string | null
+          wefact_creditor_code?: string | null
+          wefact_creditor_id?: string | null
+          activation_invoiced_total?: number
+          activation_invoiced_at?: string | null
+          activation_invoice_code?: string | null
         }
         Update: {
           activation_fee_total?: number
@@ -1220,6 +1230,11 @@ export type Database = {
           vat_status?: string | null
           vat_status_confirmed_at?: string | null
           vat_status_confirmed_by?: string | null
+          wefact_creditor_code?: string | null
+          wefact_creditor_id?: string | null
+          activation_invoiced_total?: number
+          activation_invoiced_at?: string | null
+          activation_invoice_code?: string | null
         }
         Relationships: [
           {
@@ -1263,6 +1278,8 @@ export type Database = {
           sector: string | null
           updated_at: string
           website: string | null
+          wefact_debtor_code: string | null
+          wefact_debtor_id: string | null
         }
         Insert: {
           address_street?: string | null
@@ -1281,6 +1298,8 @@ export type Database = {
           sector?: string | null
           updated_at?: string
           website?: string | null
+          wefact_debtor_code?: string | null
+          wefact_debtor_id?: string | null
         }
         Update: {
           address_street?: string | null
@@ -1299,6 +1318,8 @@ export type Database = {
           sector?: string | null
           updated_at?: string
           website?: string | null
+          wefact_debtor_code?: string | null
+          wefact_debtor_id?: string | null
         }
         Relationships: [
           {
@@ -2369,6 +2390,8 @@ export type Database = {
           site_street: string | null
           status: string
           updated_at: string
+          wefact_invoice_code: string | null
+          wefact_invoice_id: string | null
           work_prep_started_at: string | null
         }
         Insert: {
@@ -2406,6 +2429,8 @@ export type Database = {
           site_street?: string | null
           status?: string
           updated_at?: string
+          wefact_invoice_code?: string | null
+          wefact_invoice_id?: string | null
           work_prep_started_at?: string | null
         }
         Update: {
@@ -2443,6 +2468,8 @@ export type Database = {
           site_street?: string | null
           status?: string
           updated_at?: string
+          wefact_invoice_code?: string | null
+          wefact_invoice_id?: string | null
           work_prep_started_at?: string | null
         }
         Relationships: [
@@ -3286,6 +3313,61 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_step_skips: {
+        Row: {
+          client_id: string | null
+          id: string
+          installation_order_id: string | null
+          quote_id: string | null
+          reason: string
+          skipped_at: string
+          skipped_by: string | null
+          step_key: string
+        }
+        Insert: {
+          client_id?: string | null
+          id?: string
+          installation_order_id?: string | null
+          quote_id?: string | null
+          reason: string
+          skipped_at?: string
+          skipped_by?: string | null
+          step_key: string
+        }
+        Update: {
+          client_id?: string | null
+          id?: string
+          installation_order_id?: string | null
+          quote_id?: string | null
+          reason?: string
+          skipped_at?: string
+          skipped_by?: string | null
+          step_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_step_skips_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_step_skips_installation_order_id_fkey"
+            columns: ["installation_order_id"]
+            isOneToOne: false
+            referencedRelation: "installation_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_step_skips_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           address: string | null
@@ -3334,6 +3416,11 @@ export type Database = {
           sharepoint_site_url: string | null
           updated_at: string | null
           vestigingsnummer: string | null
+          wefact_debtor_group_id: string | null
+          wefact_enabled: boolean
+          wefact_product_code_activation: string | null
+          wefact_tax_code_purchase: string | null
+          wefact_tax_code_sale: string | null
         }
         Insert: {
           address?: string | null
@@ -3382,6 +3469,11 @@ export type Database = {
           sharepoint_site_url?: string | null
           updated_at?: string | null
           vestigingsnummer?: string | null
+          wefact_debtor_group_id?: string | null
+          wefact_enabled?: boolean
+          wefact_product_code_activation?: string | null
+          wefact_tax_code_purchase?: string | null
+          wefact_tax_code_sale?: string | null
         }
         Update: {
           address?: string | null
@@ -3430,6 +3522,11 @@ export type Database = {
           sharepoint_site_url?: string | null
           updated_at?: string | null
           vestigingsnummer?: string | null
+          wefact_debtor_group_id?: string | null
+          wefact_enabled?: boolean
+          wefact_product_code_activation?: string | null
+          wefact_tax_code_purchase?: string | null
+          wefact_tax_code_sale?: string | null
         }
         Relationships: []
       }
@@ -3472,6 +3569,8 @@ export type Database = {
           postal_code: string | null
           role: string | null
           updated_at: string
+          wefact_debtor_code: string | null
+          wefact_debtor_id: string | null
         }
         Insert: {
           address_street?: string | null
@@ -3490,6 +3589,8 @@ export type Database = {
           postal_code?: string | null
           role?: string | null
           updated_at?: string
+          wefact_debtor_code?: string | null
+          wefact_debtor_id?: string | null
         }
         Update: {
           address_street?: string | null
@@ -3508,6 +3609,8 @@ export type Database = {
           postal_code?: string | null
           role?: string | null
           updated_at?: string
+          wefact_debtor_code?: string | null
+          wefact_debtor_id?: string | null
         }
         Relationships: [
           {
@@ -4415,6 +4518,13 @@ export type Database = {
           updated_at: string
           vat_rate: number
           vat_status: string | null
+          wefact_amount_paid: number | null
+          wefact_creditinvoice_code: string | null
+          wefact_creditinvoice_id: string | null
+          wefact_paid_at: string | null
+          wefact_status: string | null
+          wefact_sync_error: string | null
+          wefact_synced_at: string | null
           year: number
         }
         Insert: {
@@ -4441,6 +4551,13 @@ export type Database = {
           updated_at?: string
           vat_rate?: number
           vat_status?: string | null
+          wefact_amount_paid?: number | null
+          wefact_creditinvoice_code?: string | null
+          wefact_creditinvoice_id?: string | null
+          wefact_paid_at?: string | null
+          wefact_status?: string | null
+          wefact_sync_error?: string | null
+          wefact_synced_at?: string | null
           year: number
         }
         Update: {
@@ -4467,6 +4584,13 @@ export type Database = {
           updated_at?: string
           vat_rate?: number
           vat_status?: string | null
+          wefact_amount_paid?: number | null
+          wefact_creditinvoice_code?: string | null
+          wefact_creditinvoice_id?: string | null
+          wefact_paid_at?: string | null
+          wefact_status?: string | null
+          wefact_sync_error?: string | null
+          wefact_synced_at?: string | null
           year?: number
         }
         Relationships: [
@@ -4557,6 +4681,224 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      wefact_invoices: {
+        Row: {
+          amount_excl: number | null
+          amount_incl: number | null
+          amount_outstanding: number | null
+          amount_paid: number | null
+          client_id: string | null
+          company_id: string | null
+          created_at: string
+          currency: string | null
+          debtor_code: string | null
+          debtor_name: string | null
+          id: string
+          installation_order_id: string | null
+          invoice_code: string | null
+          invoice_date: string | null
+          kind: string
+          pay_before: string | null
+          pay_date: string | null
+          payment_url: string | null
+          person_id: string | null
+          raw_data: Json | null
+          sent: number | null
+          status: string | null
+          status_code: number | null
+          synced_at: string
+          updated_at: string
+          wefact_invoice_id: string
+          activation_amount_excl: number | null
+          activation_client_id: string | null
+        }
+        Insert: {
+          amount_excl?: number | null
+          amount_incl?: number | null
+          amount_outstanding?: number | null
+          amount_paid?: number | null
+          client_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          currency?: string | null
+          debtor_code?: string | null
+          debtor_name?: string | null
+          id?: string
+          installation_order_id?: string | null
+          invoice_code?: string | null
+          invoice_date?: string | null
+          kind?: string
+          pay_before?: string | null
+          pay_date?: string | null
+          payment_url?: string | null
+          person_id?: string | null
+          raw_data?: Json | null
+          sent?: number | null
+          status?: string | null
+          status_code?: number | null
+          synced_at?: string
+          updated_at?: string
+          wefact_invoice_id: string
+          activation_amount_excl?: number | null
+          activation_client_id?: string | null
+        }
+        Update: {
+          amount_excl?: number | null
+          amount_incl?: number | null
+          amount_outstanding?: number | null
+          amount_paid?: number | null
+          client_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          currency?: string | null
+          debtor_code?: string | null
+          debtor_name?: string | null
+          id?: string
+          installation_order_id?: string | null
+          invoice_code?: string | null
+          invoice_date?: string | null
+          kind?: string
+          pay_before?: string | null
+          pay_date?: string | null
+          payment_url?: string | null
+          person_id?: string | null
+          raw_data?: Json | null
+          sent?: number | null
+          status?: string | null
+          status_code?: number | null
+          synced_at?: string
+          updated_at?: string
+          wefact_invoice_id?: string
+          activation_amount_excl?: number | null
+          activation_client_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wefact_invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wefact_invoices_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wefact_invoices_installation_order_id_fkey"
+            columns: ["installation_order_id"]
+            isOneToOne: false
+            referencedRelation: "installation_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wefact_invoices_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wefact_purchase_invoices: {
+        Row: {
+          amount_excl: number | null
+          amount_incl: number | null
+          amount_outstanding: number | null
+          amount_paid: number | null
+          created_at: string
+          creditinvoice_code: string | null
+          creditor_code: string | null
+          creditor_name: string | null
+          id: string
+          invoice_code: string | null
+          invoice_date: string | null
+          is_self_billing: boolean
+          pay_before: string | null
+          pay_date: string | null
+          raw_data: Json | null
+          status: string | null
+          status_code: number | null
+          synced_at: string | null
+          updated_at: string
+          wefact_creditinvoice_id: string
+        }
+        Insert: {
+          amount_excl?: number | null
+          amount_incl?: number | null
+          amount_outstanding?: number | null
+          amount_paid?: number | null
+          created_at?: string
+          creditinvoice_code?: string | null
+          creditor_code?: string | null
+          creditor_name?: string | null
+          id?: string
+          invoice_code?: string | null
+          invoice_date?: string | null
+          is_self_billing?: boolean
+          pay_before?: string | null
+          pay_date?: string | null
+          raw_data?: Json | null
+          status?: string | null
+          status_code?: number | null
+          synced_at?: string | null
+          updated_at?: string
+          wefact_creditinvoice_id: string
+        }
+        Update: {
+          amount_excl?: number | null
+          amount_incl?: number | null
+          amount_outstanding?: number | null
+          amount_paid?: number | null
+          created_at?: string
+          creditinvoice_code?: string | null
+          creditor_code?: string | null
+          creditor_name?: string | null
+          id?: string
+          invoice_code?: string | null
+          invoice_date?: string | null
+          is_self_billing?: boolean
+          pay_before?: string | null
+          pay_date?: string | null
+          raw_data?: Json | null
+          status?: string | null
+          status_code?: number | null
+          synced_at?: string | null
+          updated_at?: string
+          wefact_creditinvoice_id?: string
+        }
+        Relationships: []
+      }
+      wefact_sync_state: {
+        Row: {
+          entity_type: string
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          last_synced_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          entity_type: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          entity_type?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -5210,6 +5552,23 @@ export type Database = {
       upsert_location_tariff: {
         Args: { p_location_id: string; p_quote_id: string }
         Returns: Json
+      }
+      wefact_monthly_overview: {
+        Args: { p_year?: number }
+        Returns: {
+          activatie_excl: number
+          cost_paid: number
+          cost_payout: number
+          handmatig_excl: number
+          installatie_excl: number
+          invoiced_excl: number
+          invoiced_incl: number
+          month: number
+          net_excl: number
+          outstanding_incl: number
+          paid_incl: number
+          year: number
+        }[]
       }
     }
     Enums: {

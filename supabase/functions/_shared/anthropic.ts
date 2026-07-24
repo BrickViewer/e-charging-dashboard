@@ -1,11 +1,21 @@
 // Gedeelde Claude-helper voor de content-machine (Laag C/D van de SEO-blogmotor). Slaapt netjes als er
 // geen sleutel is: getAnthropicKey geeft dan null en de aanroeper valt terug. Geen SDK; raw /v1/messages.
-// We sturen bewust alleen model/max_tokens/system/messages (geen thinking/temperature/top_p) zodat het op
-// elk model werkt (sommige parameters geven een 400 op Opus 4.8).
+// We sturen nooit temperature/top_p mee (400 op de 4.7+-generatie). `thinking` en `output_config.effort`
+// gaan alleen mee als de aanroeper erom vraagt EN het model ze kent; zie de capability-guards hieronder.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { resolveSecret } from "./secrets.ts";
 
-export const DEFAULT_MODEL = "claude-opus-4-8";
+export const DEFAULT_MODEL = "claude-sonnet-5";
+
+// LET OP: Sonnet 5 zet adaptief denken AAN zodra je het thinking-veld weglaat (Opus 4.8 deed het
+// omgekeerde). Denk-tokens tellen mee in max_tokens, dus een krap budget kan volledig opgaan aan
+// denken en niets overlaten voor het antwoord. Daarom zetten korte JSON-aanroepen 'disabled'.
+// Beide standen worden alleen geaccepteerd door de 4.6+/5-generatie: Haiku 4.5 en ouder kennen
+// het veld niet en Fable 5 weigert 'disabled'. Buiten die set sturen we niets mee, zodat de helper
+// op elk model blijft werken.
+const SUPPORTS_THINKING = /^claude-(opus-4-[678]|sonnet-(5|4-6))\b/;
+// output_config.effort bestaat vanaf Opus 4.5; Haiku 4.5 geeft er een 400 op.
+const SUPPORTS_EFFORT = /^claude-(opus-4-[5678]|sonnet-(5|4-6)|fable-5|mythos-5)\b/;
 
 // Eén poging mag nooit onbegrensd hangen: de edge-wandklok (400 s) is hard, en een
 // isolate die daarop sneuvelt laat niets achter — geen blog, geen log, geen mail.
@@ -30,6 +40,10 @@ export async function anthropicMessage(opts: {
   maxTokens?: number;
   retries?: number;
   tools?: unknown[];
+  // "disabled" voor korte, gestructureerde JSON-antwoorden (denken vreet daar alleen budget op),
+  // "adaptive" voor schrijf- en factcheck-beurten waar het de kwaliteit echt draagt.
+  thinking?: "adaptive" | "disabled";
+  effort?: "low" | "medium" | "high";
 }): Promise<string> {
   const model = opts.model || DEFAULT_MODEL;
   const retries = opts.retries ?? 3;
@@ -45,6 +59,9 @@ export async function anthropicMessage(opts: {
   };
   // Optionele server-tools (bv. web_search); alleen meesturen indien opgegeven zodat andere calls identiek blijven.
   if (opts.tools && opts.tools.length > 0) body.tools = opts.tools;
+  // Denk-stand en effort alleen meesturen als het model ze kent; anders is het een 400.
+  if (opts.thinking && SUPPORTS_THINKING.test(model)) body.thinking = { type: opts.thinking };
+  if (opts.effort && SUPPORTS_EFFORT.test(model)) body.output_config = { effort: opts.effort };
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     body.max_tokens = budget;

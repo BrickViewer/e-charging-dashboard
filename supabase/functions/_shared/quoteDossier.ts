@@ -8,6 +8,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { resolveSecret } from "./secrets.ts";
 import { resolveProjectLocation } from "./projectLocation.ts";
+import { joinStreetAndHouse } from "./installationHandoff.ts";
 import { GraphClient, sanitizeName, ensureDossierFolder } from "./sharepoint.ts";
 
 export type QuoteDossier =
@@ -39,8 +40,9 @@ export async function resolveQuoteDossier(sb: any, quoteId: string): Promise<Quo
   let city = String(od.addressCity ?? "").trim();
   let postal = String(od.addressPostalCode ?? "").trim();
   if ((!street || !city) && quote.lead_id) {
-    const { data: lead } = await sb.from("leads").select("address_street, postal_code, city").eq("id", quote.lead_id).maybeSingle();
-    if (lead) { street = street || (lead.address_street ?? ""); city = city || (lead.city ?? ""); postal = postal || (lead.postal_code ?? ""); }
+    const { data: lead } = await sb.from("leads").select("address_street, house_number, postal_code, city").eq("id", quote.lead_id).maybeSingle();
+    // leads slaan straat en huisnummer los op; hieronder is `street` één volledige regel.
+    if (lead) { street = street || joinStreetAndHouse(lead.address_street, lead.house_number); city = city || (lead.city ?? ""); postal = postal || (lead.postal_code ?? ""); }
   }
   const addrLabel = [street, city].filter(Boolean).join(" ") || (quote.prospect_company ?? "Onbekende locatie");
 

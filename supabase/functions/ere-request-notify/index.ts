@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { renderSlots } from "../_shared/emailRender.ts";
 
 // ere-request-notify: mailt het team (info@e-charging.nl) dat een klant in het portaal ERE-certificaten wil.
 // Wordt aangeroepen door de DB-trigger op clients (via invoke_edge_function, x-internal-secret). verify_jwt = false.
@@ -44,27 +45,33 @@ Deno.serve(async (req) => {
       client.contact_phone ? ["Telefoon", client.contact_phone as string] : null,
     ].filter(Boolean) as [string, string][];
 
+    const tplVars = { klantnaam: naam };
+    const tpl = await renderSlots(sb, "ere-aangevraagd", tplVars);
+    const tplText = await renderSlots(sb, "ere-aangevraagd", tplVars, { escape: false });
+    const S = (n: string, d: string) => tpl[n] ?? d;
+    const T = (n: string, d: string) => tplText[n] ?? d;
+
     const text = [
-      `${naam} wil ERE-certificaten aanmelden (aangevinkt in het klantportaal).`,
+      `${naam} ${T("intro", "wil ERE-certificaten aanmelden (aangevinkt in het klantportaal).")}`,
       ...rows.map(([k, v]) => `${k}: ${v}`),
       ``,
-      `Neem contact op om de ERE's voor deze klant aan te melden.`,
-      `Klant openen: ${clientUrl}`,
+      T("oproep", "Neem contact op om de ERE's voor deze klant aan te melden."),
+      `${T("knoptekst", "Klant openen")}: ${clientUrl}`,
     ].join("\n");
 
     const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111827;line-height:1.6">
-      <p><strong>${esc(naam)}</strong> wil ERE-certificaten aanmelden (aangevinkt in het klantportaal).</p>
+      <p><strong>${esc(naam)}</strong> ${S("intro", "wil ERE-certificaten aanmelden (aangevinkt in het klantportaal).")}</p>
       <table style="border-collapse:collapse;margin:8px 0">
         ${rows.map(([k, v]) => `<tr><td style="color:#6b7280;padding:2px 12px 2px 0">${esc(k)}</td><td style="font-weight:600">${esc(v)}</td></tr>`).join("")}
       </table>
-      <p>Neem contact op om de ERE's voor deze klant aan te melden.</p>
-      <p><a href="${clientUrl}" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;border-radius:8px;text-decoration:none">Klant openen</a></p>
-      <p style="color:#6b7280">Automatisch verstuurd door het E-Charging dashboard.</p>
+      <p>${S("oproep", "Neem contact op om de ERE's voor deze klant aan te melden.")}</p>
+      <p><a href="${clientUrl}" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;border-radius:8px;text-decoration:none">${S("knoptekst", "Klant openen")}</a></p>
+      <p style="color:#6b7280">${S("voettekst", "Automatisch verstuurd door het E-Charging dashboard.")}</p>
     </div>`;
 
     const res = await sendEmail({
       to: ["info@e-charging.nl"],
-      subject: `ERE aangevraagd: ${naam}`,
+      subject: T("onderwerp", `ERE aangevraagd: ${naam}`),
       html, text,
       tags: [{ name: "type", value: "ere_requested" }],
     });

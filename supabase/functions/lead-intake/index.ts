@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveOrCreateCompany, resolveOrCreatePerson, linkPersonToCompany } from "../_shared/contacts.ts";
 import { CORS_INTAKE } from "../_shared/cors.ts";
+import { splitDutchAddress } from "../_shared/installationHandoff.ts";
 
 // lead-intake — publieke endpoint waar de website nieuwe leads naartoe POST't.
 // Beveiliging: gedeelde sleutel in de header `x-intake-secret` (timing-safe) +
@@ -85,6 +86,7 @@ Deno.serve(async (req: Request) => {
     });
     if (companyId && personId) await linkPersonToCompany(supabase, companyId, personId, true);
 
+    const leadAddr = splitDutchAddress(str(body.address_street));
     const { data: lead, error } = await supabase
       .from("leads")
       .insert({
@@ -102,7 +104,9 @@ Deno.serve(async (req: Request) => {
         contact_role: str(body.contact_role),
         contact_email: str(body.contact_email) ?? str(body.email),
         contact_phone: str(body.contact_phone) ?? str(body.phone),
-        address_street: str(body.address_street),
+        // Intake levert één adresregel; leads slaat straat en huisnummer los op.
+        address_street: leadAddr.street || null,
+        house_number: leadAddr.house_number || null,
         postal_code: str(body.postal_code),
         city: str(body.city),
         location_type: str(body.location_type),

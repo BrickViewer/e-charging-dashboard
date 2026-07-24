@@ -69,6 +69,20 @@ export interface OfferDetails {
   // Tariefregels in de offerte: geordende lijst van zichtbare keys (in de lijst = zichtbaar; laatst
   // aangezette regel bovenaan). Afwezig = standaard (laadkosten/blokkeer/start + uurtarief bij >0; nieuwe uit).
   tariffOrder?: string[] | null;
+  // Documentopbouw (uitzonderingspad): sectie-ids die BUITEN dit document vallen — die pagina's
+  // gaan niet naar de klant, niet in de PDF-bijlage en niet naar de online offerte.
+  // Afwezig / null / [] = het volledige sjabloon → byte-gelijk aan vóór deze functie bestond.
+  // Ids zijn BEVROREN identifiers (OFFER_SECTIONS in offerTemplate.ts, nooit hernoemen); onbekende,
+  // niet-bestaande en vergrendelde ids zijn inert. Bewust een UITsluitlijst en geen insluitlijst:
+  // een later toegevoegde sectie mag nooit stil wegvallen uit een bestaande offerte.
+  docSections?: string[] | null;
+  // Losse zinnen — fijnere korrel dan docSections: ids van individuele, hard-gecodeerde
+  // verkoopzinnen (slogans, het rekenvoorbeeld, de afsluitende contactvraag) die buiten dit
+  // document vallen. In de UI heet dit "Zinnen"; in dit systeem is "quote" een OFFERTE, vandaar
+  // phrase. Afwezig / null / [] = het volledige sjabloon → byte-gelijk aan vóór deze functie.
+  // Ids zijn BEVROREN identifiers (OFFER_PHRASES in offerTemplate.ts); onbekende en
+  // scope-vreemde ids zijn inert. Uitsluitlijst, net als docSections.
+  docPhrases?: string[] | null;
   serviceFeePerKwh?: number | null;
   servicemonteurPerHour?: number | null;
   voorrijkostenPerKm?: number | null;

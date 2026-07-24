@@ -3,8 +3,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import logoBright from "@/assets/logo-bright.svg";
 import logoFullColor from "@/assets/logo-full-color.svg";
-import { Settings, LogOut, Menu, X, ChevronLeft, ChevronRight, type LucideIcon } from "lucide-react";
+import { Settings, LogOut, Menu, X, Check, ChevronsUpDown, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FeedbackButton } from "@/components/feedback/FeedbackButton";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -170,37 +176,32 @@ export default function WorkspaceLayout() {
           <img src={logo} alt="E-Charging" className="w-40 max-w-none" />
         </div>
         {accessible.length > 1 ? (
-          (() => {
-            const idx = Math.max(0, accessible.indexOf(workspace));
-            const go = (d: number) =>
-              switchWorkspace(WORKSPACES[accessible[(idx + d + accessible.length) % accessible.length]].home);
-            return (
-              <div className="mt-4 flex items-center gap-1 rounded-xl bg-foreground/[0.04] p-1">
-                <button
-                  type="button"
-                  onClick={() => go(-1)}
-                  aria-label="Vorig werkblad"
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground/80 transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <span
-                  className="flex-1 rounded-lg bg-foreground/[0.08] px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-foreground shadow-[inset_0_0_0_1px_hsl(var(--gauge-green)/0.3)]"
-                  aria-current="page"
-                >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Werkblad kiezen"
+                className="mt-4 flex w-full items-center gap-2 rounded-xl bg-foreground/[0.04] p-1 text-left transition-colors hover:bg-foreground/[0.06]"
+              >
+                <span className="flex-1 rounded-lg bg-foreground/[0.08] px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-foreground shadow-[inset_0_0_0_1px_hsl(var(--gauge-green)/0.3)]">
                   {activeWorkspace.label}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => go(1)}
-                  aria-label="Volgend werkblad"
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground/80 transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                <ChevronsUpDown className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/80" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+              {accessible.map((key) => (
+                <DropdownMenuItem
+                  key={key}
+                  onSelect={() => switchWorkspace(WORKSPACES[key].home)}
+                  className="text-[11px] font-bold uppercase tracking-[0.14em]"
                 >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            );
-          })()
+                  <span className="flex-1">{WORKSPACES[key].label}</span>
+                  {key === workspace && <Check className="ml-2 h-3.5 w-3.5 text-primary" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80 mt-3">
             {activeWorkspace.label}

@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { CORS_STD } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { renderSlots } from "../_shared/emailRender.ts";
 import { logoBrightUrl } from "../_shared/email-assets.ts";
 
 // invite-team-member — nodigt een intern teamlid (admin/manager/viewer) uit voor het
@@ -23,17 +24,18 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function renderTeamInviteHtml(opts: { name: string; role: string; actionLink: string; logoUrl: string }) {
-  const greeting = opts.name ? `Hoi ${opts.name},` : "Hoi,";
+function renderTeamInviteHtml(opts: { name: string; role: string; actionLink: string; logoUrl: string; slots?: Record<string, string> }) {
+  const S = (n: string, d: string) => opts.slots?.[n] ?? d;
+  const greeting = opts.name ? S("aanhef", `Hoi ${opts.name},`) : "Hoi,";
   return `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
   <div style="max-width:520px;margin:0 auto;padding:32px 24px;">
     <img src="${opts.logoUrl}" alt="E-Charging" height="30" style="display:block;margin-bottom:28px;" />
-    <h1 style="font-size:20px;color:#ffffff;margin:0 0 12px;">Je bent uitgenodigd voor het beheer-portaal</h1>
+    <h1 style="font-size:20px;color:#ffffff;margin:0 0 12px;">${S("kop", "Je bent uitgenodigd voor het beheer-portaal")}</h1>
     <p style="font-size:14px;line-height:1.6;margin:0 0 8px;">${greeting}</p>
-    <p style="font-size:14px;line-height:1.6;margin:0 0 20px;">Je hebt toegang gekregen tot het E-Charging beheer-portaal met de rol <strong style="color:#ffffff;text-transform:capitalize;">${opts.role}</strong>. Activeer je account en stel een wachtwoord in:</p>
-    <a href="${opts.actionLink}" style="display:inline-block;background:#05A500;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:8px;">Account activeren</a>
+    <p style="font-size:14px;line-height:1.6;margin:0 0 20px;">${S("intro", `Je hebt toegang gekregen tot het E-Charging beheer-portaal met de rol <strong style="color:#ffffff;text-transform:capitalize;">${opts.role}</strong>. Activeer je account en stel een wachtwoord in:`)}</p>
+    <a href="${opts.actionLink}" style="display:inline-block;background:#05A500;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:8px;">${S("knoptekst", "Account activeren")}</a>
     <p style="font-size:12px;line-height:1.6;color:#9ca3af;margin:24px 0 0;">Werkt de knop niet? Kopieer deze link in je browser:<br/><span style="color:#6b7280;word-break:break-all;">${opts.actionLink}</span></p>
-    <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:24px 0 0;">Heb je deze uitnodiging niet verwacht? Negeer deze e-mail dan.</p>
+    <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:24px 0 0;">${S("naschrift", "Heb je deze uitnodiging niet verwacht? Negeer deze e-mail dan.")}</p>
   </div></body></html>`;
 }
 
@@ -105,11 +107,16 @@ Deno.serve(async (req: Request) => {
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (RESEND_API_KEY) {
       const logoUrl = logoBrightUrl; // on-domain i.p.v. supabase.co
-      const html = renderTeamInviteHtml({ name, role, actionLink, logoUrl });
-      const text = `Je bent uitgenodigd voor het E-Charging beheer-portaal (rol: ${role}). Activeer je account: ${actionLink}`;
+      const tplVars = { naam: name, rol: role };
+      const tpl = await renderSlots(admin, "team-uitnodiging", tplVars);
+      const tplText = await renderSlots(admin, "team-uitnodiging", tplVars, { escape: false });
+      const html = renderTeamInviteHtml({ name, role, actionLink, logoUrl, slots: tpl });
+      const text = `${tplText["kop"] ?? "Je bent uitgenodigd voor het E-Charging beheer-portaal"} (rol: ${role}). ${tplText["knoptekst"] ?? "Activeer je account"}: ${actionLink}`;
       const res = await sendEmail({
         to: [email],
-        subject: reinvite ? "Je toegang tot het E-Charging beheer-portaal" : "Uitnodiging — E-Charging beheer-portaal",
+        subject: reinvite
+          ? (tplText["onderwerp_opnieuw"] ?? "Je toegang tot het E-Charging beheer-portaal")
+          : (tplText["onderwerp_nieuw"] ?? "Uitnodiging — E-Charging beheer-portaal"),
         html,
         text,
         tags: [{ name: "type", value: "team_invitation" }],

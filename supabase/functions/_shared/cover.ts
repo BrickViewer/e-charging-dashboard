@@ -176,6 +176,14 @@ export async function renderCoverWithPhoto(opts: { title: string; category?: str
   return await renderCoverPng({ title: opts.title, category: opts.category, photoDataUri: dataUri });
 }
 
+// Best-effort event-regel bij een terugval. Zonder dit is de terugval volledig stil (alleen console) en gaat
+// een blog met de kop-in-het-beeld als hero ongemerkt live: de site doet hero_image_url ?? cover_image_url,
+// en de vlakke kaart bevat de kop al. Mag nooit gooien; beeldgeneratie gaat altijd voor.
+// deno-lint-ignore no-explicit-any
+async function logCoverEvent(sb: any, step: string, detail: Record<string, unknown>): Promise<void> {
+  try { await sb.from("content_engine_events").insert({ fn: "blog-cover", step, detail }); } catch { /* nooit blokkeren */ }
+}
+
 // Orchestrator: probeer een Imagen-foto (Claude-brief + Imagen), compositeer met de kop; val bij ELKE fout
 // (geen sleutel, API-fout, policy-block) terug op de vlakke kaart. Retourneert ook de beschrijvende alt-tekst.
 export async function buildBlogCover(
@@ -195,10 +203,20 @@ export async function buildBlogCover(
       heroBytes = b64ToBytes(photo.b64); // de rauwe foto zonder tekst, voor de artikel-hero
       heroMime = photo.mime;
       alt = brief.alt;
+    } else {
+      // Ontbrekende sleutel is GEEN exception, dus zonder deze regel zou dit pad helemaal niets achterlaten.
+      await logCoverEvent(sb, "cover_fallback", {
+        title: opts.title,
+        reason: "sleutel ontbreekt",
+        anthropic_key: !!anthropicKey,
+        gemini_key: !!geminiKey,
+      });
     }
   } catch (e) {
-    console.error("Foto-brief/Imagen mislukt, terugval op vlakke kaart:", e instanceof Error ? e.message : e);
+    const reden = e instanceof Error ? e.message : String(e);
+    console.error("Foto-brief/Imagen mislukt, terugval op vlakke kaart:", reden);
     photoDataUri = undefined; heroBytes = undefined; heroMime = undefined;
+    await logCoverEvent(sb, "cover_fallback", { title: opts.title, reason: reden.slice(0, 300) });
   }
   try {
     const r = await renderCoverPng({ title: opts.title, category: opts.category, photoDataUri });
@@ -206,7 +224,11 @@ export async function buildBlogCover(
   } catch (e) {
     // Composiet-render mislukt (bv. resvg-image): vlakke kaart als omslag, maar de rauwe hero-foto blijft geldig.
     if (photoDataUri) {
-      console.error("Composiet-render mislukt, vlakke kaart:", e instanceof Error ? e.message : e);
+      const reden = e instanceof Error ? e.message : String(e);
+      console.error("Composiet-render mislukt, vlakke kaart:", reden);
+      // De rauwe hero-foto blijft hier wél geldig, dus de site toont geen kop-in-beeld; alleen de
+      // og:image valt terug. Aparte step zodat je de twee gevallen uit elkaar kunt houden.
+      await logCoverEvent(sb, "cover_composite_failed", { title: opts.title, reason: reden.slice(0, 300) });
       const r = await renderCoverPng({ title: opts.title, category: opts.category });
       return { bytes: r.bytes, width: r.width, height: r.height, alt, heroBytes, heroMime };
     }

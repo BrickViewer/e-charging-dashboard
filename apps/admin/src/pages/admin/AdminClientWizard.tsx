@@ -76,25 +76,42 @@ export default function AdminClientWizard() {
       // de sync-trigger vult daarna company_name/contact_* op de klant vanuit company_id/person_id.
       // Alleen schrijven wat de gebruiker daadwerkelijk wijzigde t.o.v. de canonieke persoonsvelden —
       // zo overschrijven we een bestaand e-mail/telefoon niet met een (ongewijzigde) prefill.
+      // Het factuuradres hoort bij het contact: buildDebtorParams (WeFact) leest het adres
+      // UITSLUITEND van company/person, dus zonder deze doorschrijving krijgt de debiteur
+      // geen adresregel. Alleen schrijven als er écht een adres is ingevuld.
+      const addressPatch = billingAddr.postalCode.trim() || billingAddr.street.trim()
+        ? {
+            address_street: billingAddr.street.trim() || null,
+            house_number: billingAddr.houseNumber.trim() || null,
+            postal_code: billingAddr.postalCode.trim() || null,
+            city: billingAddr.city.trim() || null,
+          }
+        : {};
+
       if (company.person_id) {
-        const personPatch: { email?: string; phone?: string } = {};
+        const personPatch: Record<string, string | null> = {};
         const origEmail = (selectedPerson?.email ?? "").trim();
         const origPhone = (selectedPerson?.phone ?? "").trim();
         const newEmail = company.contact_email.trim();
         const newPhone = company.contact_phone.trim();
         if (newEmail && newEmail !== origEmail) personPatch.email = newEmail;
         if (newPhone && newPhone !== origPhone) personPatch.phone = newPhone;
+        // Particulier: het factuuradres ís het persoonsadres. Bij een zakelijke klant blijft
+        // het bedrijfsadres leidend en laten we de persoon met rust.
+        if (isParticulier) Object.assign(personPatch, addressPatch);
         if (Object.keys(personPatch).length > 0) {
           await updatePerson.mutateAsync({ id: company.person_id, patch: personPatch });
         }
       }
       // KvK/BTW horen bij het bedrijf (bron van waarheid) → daarheen schrijven; de propagate-trigger
       // synct ze daarna naar de klant. Zo ontstaat geen client-only KvK die afwijkt van het bedrijf.
-      if (!isParticulier && company.company_id && (company.kvk.trim() || company.btw_number.trim())) {
-        const companyPatch: { kvk?: string; btw_number?: string } = {};
+      if (!isParticulier && company.company_id) {
+        const companyPatch: Record<string, string | null> = { ...addressPatch };
         if (company.kvk.trim()) companyPatch.kvk = company.kvk.trim();
         if (company.btw_number.trim()) companyPatch.btw_number = company.btw_number.trim();
-        await updateCompany.mutateAsync({ id: company.company_id, patch: companyPatch });
+        if (Object.keys(companyPatch).length > 0) {
+          await updateCompany.mutateAsync({ id: company.company_id, patch: companyPatch });
+        }
       }
 
       // Factuuradres: AddressFields levert straat + huisnummer los; clients heeft één billing-straat-kolom.

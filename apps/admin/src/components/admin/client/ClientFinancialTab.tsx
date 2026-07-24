@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { formatEuro } from "@/services/calculations";
 import type { ClientPaymentDetails, ClientWithRelations, Organization, Settlement } from "@/types/db";
 import { ClientSettlementCard } from "./ClientSettlementCard";
+import { WefactClientBillingCard } from "./WefactClientBillingCard";
 
 export function ClientFinancialTab({
   settlements,
@@ -68,6 +69,8 @@ export function ClientFinancialTab({
           <p className="text-xs text-muted-foreground mt-1">Lopende/concept tellen niet mee</p>
         </CardContent></Card>
       </div>
+
+      <WefactClientBillingCard client={client} />
 
       {settlementsLoading && (
         <Card><CardContent className="py-12 text-center text-muted-foreground">

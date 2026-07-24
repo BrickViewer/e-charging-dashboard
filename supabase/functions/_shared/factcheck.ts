@@ -7,6 +7,7 @@
 import { clampScore, stripFaqSection } from "./blog.ts";
 import type { BlogSource } from "./blog.ts";
 import { validateSources } from "./blog.ts";
+import { TRUSTED_DOMAINS_TEXT, isTrustedSource } from "./sources.ts";
 
 export const FACTCHECK_SYSTEM = `Je bent een uiterst strenge, onafhankelijke FACTCHECKER voor een Nederlands B2B-bedrijf in laadinfrastructuur. Er staat reputatie op het spel: één aantoonbaar onjuist feit in een gepubliceerde blog schaadt de geloofwaardigheid van het bedrijf. Jij bent de laatste poort vóór publicatie. Je hebt de blog NIET geschreven; wees kritisch, niet welwillend. Controleer in het Nederlands en GEBRUIK web search om claims echt te verifiëren, niet alleen je parate kennis.
 
@@ -20,18 +21,22 @@ Controleer systematisch:
 5. MERKRISICO: alles wat bij publicatie gênant of schadelijk zou zijn (aantoonbare onzin, tegenstrijdigheden binnen de tekst, beweringen over concurrenten of instanties die niet hard te maken zijn).
 6. COMMERCIEEL RISICO: het bedrijf levert zelf laadpalen, installatie en beheer. Elke concrete prijs of prijsrange daarvoor in de blog (aanschaf laadpaal of laadstation, installatiekosten, meterkastwerk, beheer of abonnementen; ook "vanaf"-bedragen en marktgemiddelden) werkt als prijsanker en schaadt het bedrijf commercieel. Hetzelfde geldt voor adviezen om het aanbod te omzeilen (zelf online kopen, installeren zonder erkend installateur, beheer overslaan) en voor duur/goedkoop-framing van laadpalen of de diensten. Markeer zo'n claim met "commercial_risk": true, OOK ALS HET BEDRAG FEITELIJK KLOPT met de bron: feitelijke juistheid maakt een prijsanker niet minder schadelijk. Geef als correction altijd: verwijder het bedrag of advies en herschrijf naar de prijsbepalende factoren met een verwijzing naar een vrijblijvende offerte. Subsidie-, energie- en fiscale bedragen met bron en jaartal zijn GEEN commercieel risico.
 
-Wees proportioneel — de lat voor "critical" is AANTOONBAARHEID, niet twijfel:
-- severity "critical" UITSLUITEND bij: (a) een claim die aantoonbaar in strijd is met een gezaghebbende primaire bron (wet- en regelgeving, ACM, RVO, CBS, officiële publicaties); (b) een verzonnen bron, citaat of cijfer; (c) juridisch/financieel advies dat aantoonbaar onjuist is en de lezer kan schaden; (d) een dode of verkeerd toegeschreven PRIMAIRE bron.
-- Bij tegenstrijdige, onduidelijke of nog niet uitgekristalliseerde informatie (bv. aanstaande wetgeving, datums die bronnen verschillend noemen, regelingen in beweging): NIET blokkeren. Dat is severity "minor" met als correctie een concrete voorbehoud-formulering ("schrijf: naar verwachting / nog niet definitief / bronnen noemen verschillende datums").
-- Een onnauwkeurige toeschrijving aan een SECUNDAIRE bron (nieuwssites, blogs, brancheportalen): severity "minor" met als fix de link vervangen of de toeschrijving verwijderen; in sources_check géén "onjuist_toegeschreven" voor secundaire bronnen tenzij de blog de bron iets wezenlijks in de mond legt.
+DE LAT IS BEVESTIGING, NIET AANTOONBARE ONJUISTHEID. Je web-search is technisch beperkt tot deze gezaghebbende domeinen, en ALLEEN deze tellen als verificatie:
+${TRUSTED_DOMAINS_TEXT}
+
+- verdict "correct" UITSLUITEND als je de claim daadwerkelijk hebt teruggevonden op zo'n toegestane bron én die bron zegt wat de blog beweert. Niet gezocht, niet gevonden, alleen uit je parate kennis, of alleen aangetroffen op een site buiten de lijst: dat is NIET correct.
+- verdict "unverifiable" voor alles wat je niet op een toegestane bron bevestigd krijgt, hoe plausibel of algemeen bekend het ook klinkt. Dit is GEEN mildere categorie: een onbevestigde bewering mag niet gepubliceerd worden. Geef als correction ALTIJD "verwijder deze claim" en benoem precies welk zinsdeel weg moet.
+- verdict "incorrect" als een toegestane bron iets anders zegt dan de blog.
+- severity: "critical" voor alles wat feitelijk, juridisch, financieel, getalsmatig of datum-gebonden is. "minor" uitsluitend voor niet-feitelijke, stilistische opmerkingen. Twijfel je tussen beide, kies dan "critical".
+- Aanstaande wetgeving, datums die bronnen verschillend noemen en regelingen in beweging mogen ALLEEN blijven staan als een toegestane bron die status expliciet bevestigt, en dan uitsluitend mét dat voorbehoud in de tekst. Kun je de status niet bevestigen, dan is het "unverifiable" en moet het weg.
+- Elke bron in de blog van een domein BUITEN de lijst hoort in sources_check met status "onjuist_toegeschreven": zulke verwijzingen moeten verdwijnen, ook als de inhoud toevallig klopt. Concurrenten, commerciële laadpaalsites, Wikipedia en vakmedia zijn nooit een geldige onderbouwing.
 - brand_risk is alleen voor daadwerkelijk gênante, aantoonbare missers (evidente onzin, interne tegenspraak, onhoudbare claims over instanties of concurrenten) — geen speculatie over hoe een kritische lezer iets zóú kunnen opvatten.
-Een blog zonder critical-punten krijgt verdict "pass", ook als er minors zijn.
 
-Lever bovendien voor elke bron die je tijdens het controleren hebt geverifieerd (ook nieuwe die je vond als betere onderbouwing) de echte url aan in verified_sources — nooit een verzonnen of gegokte url.
+Een blog krijgt alleen verdict "pass" als er GEEN ENKELE claim overblijft met verdict "incorrect" of "unverifiable" en geen enkele bron buiten de lijst. Bij twijfel: "fail".
 
-Geef per incorrect/unverifiable punt een concrete, direct bruikbare correctie (hoe de zin feitelijk juist zou worden, of "verwijder deze claim").
+Lever voor elke bron die je hebt geverifieerd de echte url aan in verified_sources — uitsluitend urls van de toegestane domeinen, nooit een verzonnen of gegokte url.
 
-Houd het rapport COMPACT (het moet binnen het antwoordbudget passen): rapporteer maximaal de 12 belangrijkste claims (prioriteer incorrect en critical; bundel identieke punten), houd elke correction beknopt (maximaal ~40 woorden, bij voorkeur één vervangzin), maximaal 8 verified_sources, en citeer nooit hele passages uit bronnen.
+Houd het rapport COMPACT (het moet binnen het antwoordbudget passen): rapporteer maximaal de 18 belangrijkste claims (prioriteer incorrect en unverifiable; bundel identieke punten), houd elke correction beknopt (maximaal ~40 woorden), maximaal 8 verified_sources, en citeer nooit hele passages uit bronnen.
 
 Antwoord UITSLUITEND met geldige JSON, exact dit schema, zonder tekst eromheen:
 {"claims": [{"claim": string, "verdict": "correct" | "incorrect" | "unverifiable", "severity": "critical" | "minor", "commercial_risk": boolean, "evidence_url": string, "correction": string}], "sources_check": [{"name": string, "url": string, "status": "bevestigd" | "dood" | "onjuist_toegeschreven"}], "date_issues": [string], "brand_risk": [string], "verified_sources": [{"name": string, "url": string, "publisher": string, "date": string}], "confidence": number, "verdict": "pass" | "fail"}`;
@@ -53,6 +58,8 @@ export interface FactcheckReport {
   date_issues: string[];
   brand_risk: string[];
   verified_sources: BlogSource[];
+  /** Bronnen die de blog aanhaalt maar die buiten TRUSTED_DOMAINS vallen. Blokkeren altijd. */
+  untrusted_sources: BlogSource[];
   confidence: number | null;
   verdict: "pass" | "fail";
   critical_count: number;
@@ -61,10 +68,11 @@ export interface FactcheckReport {
 
 const asStr = (v: any, max = 500): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
 
-export function validateFactcheckJson(p: any): FactcheckReport {
+/** `postSources` zijn de bronnen die in de blog staan; die worden tegen de vertrouwde lijst gehouden. */
+export function validateFactcheckJson(p: any, postSources: BlogSource[] = []): FactcheckReport {
   const claims: FactcheckClaim[] = (Array.isArray(p?.claims) ? p.claims : [])
     .filter((c: any) => c && typeof c.claim === "string")
-    .slice(0, 15)
+    .slice(0, 25)
     .map((c: any) => ({
       claim: c.claim.trim().slice(0, 500),
       verdict: c.verdict === "correct" ? "correct" : c.verdict === "incorrect" ? "incorrect" : "unverifiable",
@@ -83,17 +91,25 @@ export function validateFactcheckJson(p: any): FactcheckReport {
     }));
   const asList = (x: any) => (Array.isArray(x) ? x.filter((s: any) => typeof s === "string" && s.trim()).slice(0, 10) : []);
 
-  // Blokkade UITSLUITEND op aantoonbaar onjuiste kritieke claims — precies wat de prompt
-  // belooft ("een blog zonder critical-punten krijgt pass, ook met minors"). Verkeerd
-  // toegeschreven/dode bronnen, datumpunten en merkrisico's zijn FIXABLE: ze gaan als
-  // concrete correcties de chirurgische fix-stap in, maar vellen het verdict niet meer.
-  // (De oude telling liet blogs met nul feitenfouten terminaal stranden op 15 juli.)
-  const critical_count = claims.filter((c) => (c.severity === "critical" && c.verdict !== "correct") || c.commercial_risk).length;
-  const badSources = sources_check.filter((s: { status: string }) => s.status !== "bevestigd").length;
+  // ALLES wat niet bevestigd is, blokkeert. Severity speelt geen rol meer in de telling:
+  // een claim die de controleur niet op een vertrouwd domein terugvond mag simpelweg niet
+  // gepubliceerd worden, ook niet als "minor". Idem voor dode of verkeerd toegeschreven
+  // bronnen en voor elke bron buiten TRUSTED_DOMAINS.
+  //
+  // Dit draait de versoepeling van 15 juli bewust terug. Die was nodig omdat blogs anders
+  // bleven stranden; dat risico is nu ondervangen doordat VERWIJDEREN de standaardremedie is
+  // (zie factcheckCorrections + FACTCHECK_FIX_SYSTEM): schrappen convergeert altijd, een
+  // betere bron vinden niet.
   const brand_risk = asList(p?.brand_risk);
   const date_issues = asList(p?.date_issues);
-  const fixable_count = badSources + brand_risk.length + date_issues.length
-    + claims.filter((c) => c.severity !== "critical" && c.verdict !== "correct").length;
+  const untrusted_sources = postSources.filter((s) => !isTrustedSource(s.url));
+  const badSources = sources_check.filter((s: { status: string }) => s.status !== "bevestigd").length;
+  const critical_count =
+    claims.filter((c) => c.verdict !== "correct" || c.commercial_risk).length
+    + badSources
+    + untrusted_sources.length;
+  // Nog uitsluitend informatief (verschijnt in events/meldingen); stuurt het verdict niet.
+  const fixable_count = brand_risk.length + date_issues.length;
 
   // Fail-safe: het model-verdict blijft leidend naar beneden (model zegt fail → fail) en
   // critical-claims overrulen een (te) mild "pass". Onverwachte JSON → fail (nooit per
@@ -106,7 +122,10 @@ export function validateFactcheckJson(p: any): FactcheckReport {
     sources_check,
     date_issues,
     brand_risk,
-    verified_sources: validateSources(p?.verified_sources),
+    // Ook de door het model aangedragen bronnen langs de lijst: een verified_source van een
+    // niet-toegestaan domein mag nooit als onderbouwing in de blog belanden.
+    verified_sources: validateSources(p?.verified_sources).filter((s) => isTrustedSource(s.url)),
+    untrusted_sources,
     confidence: clampScore(p?.confidence),
     verdict,
     critical_count,
@@ -123,16 +142,19 @@ export function factcheckIssues(report: FactcheckReport): string[] {
       continue;
     }
     if (c.verdict === "correct") continue;
-    const kop = c.severity === "critical" ? "FEITENFOUT (verplicht corrigeren)" : "Feitelijk aandachtspunt";
-    out.push(`${kop}: "${c.claim}" — ${c.correction ?? "verifieer of verwijder deze claim"}${c.evidence_url ? ` (bron: ${c.evidence_url})` : ""}`);
+    const kop = c.verdict === "incorrect" ? "FEITENFOUT (verplicht corrigeren)" : "ONBEVESTIGD (verplicht verwijderen)";
+    out.push(`${kop}: "${c.claim}" — ${c.correction ?? "verwijder deze claim"}${c.evidence_url ? ` (bron: ${c.evidence_url})` : ""}`);
   }
   for (const s of report.sources_check) {
     if (s.status === "onjuist_toegeschreven") out.push(`BRONFOUT (verplicht corrigeren): "${s.name}" zegt niet wat de blog beweert — herschrijf de claim naar wat de bron werkelijk zegt, of verwijder hem.`);
-    if (s.status === "dood") out.push(`Dode bronlink: "${s.name}" (${s.url}) — vervang door een werkende url of verwijder de link.`);
+    if (s.status === "dood") out.push(`Dode bronlink: "${s.name}" (${s.url}) — verwijder de link en de claim die erop leunt.`);
+  }
+  for (const s of report.untrusted_sources) {
+    out.push(`NIET-TOEGESTANE BRON (verplicht verwijderen): "${s.name}" (${s.url}) valt buiten de vertrouwde bronnenlijst — verwijder de link én elke bewering die alleen op deze bron steunt.`);
   }
   for (const d of report.date_issues) out.push(`Datumprobleem: ${d}`);
   for (const b of report.brand_risk) out.push(`MERKRISICO (verplicht corrigeren): ${b}`);
-  return out.slice(0, 15);
+  return out.slice(0, 20);
 }
 
 /** Correctielijst voor de CHIRURGISCHE fix-stap: elk punt is een concrete, lokale ingreep.
@@ -146,15 +168,20 @@ export function factcheckCorrections(report: FactcheckReport): string[] {
       continue;
     }
     if (c.verdict === "correct") continue;
-    out.push(`CLAIM: "${c.claim}" → ${c.correction ?? "verwijder deze claim of verzwak hem met een voorbehoud ('naar verwachting', 'nog niet definitief')"}`);
+    // Onbevestigd = weg. Bewust GEEN uitwijk meer naar een voorbehoud-formulering: die liet
+    // onbevestigde beweringen in de tekst staan en dat mag niet meer.
+    out.push(`CLAIM: "${c.claim}" → ${c.correction ?? "VERWIJDER deze claim volledig"}`);
   }
   for (const s of report.sources_check) {
-    if (s.status === "onjuist_toegeschreven") out.push(`BRON: "${s.name}" (${s.url}) zegt niet wat de blog beweert → herschrijf de betreffende zin naar wat de bron werkelijk zegt, of verwijder de bronverwijzing daar.`);
-    if (s.status === "dood") out.push(`BRON: "${s.name}" (${s.url}) is onbereikbaar → verwijder de link (laat de bron desnoods alleen bij naam staan).`);
+    if (s.status === "onjuist_toegeschreven") out.push(`BRON: "${s.name}" (${s.url}) zegt niet wat de blog beweert → herschrijf de betreffende zin naar wat de bron werkelijk zegt, of verwijder de zin.`);
+    if (s.status === "dood") out.push(`BRON: "${s.name}" (${s.url}) is onbereikbaar → verwijder de link en de bewering die erop steunt.`);
+  }
+  for (const s of report.untrusted_sources) {
+    out.push(`BRON BUITEN DE LIJST: "${s.name}" (${s.url}) → verwijder de link en elke bewering die alleen hierop steunt.`);
   }
   for (const d of report.date_issues) out.push(`DATUM: ${d}`);
   for (const b of report.brand_risk) out.push(`MERKRISICO: ${b} → herschrijf of verwijder de betreffende passage.`);
-  return out.slice(0, 12);
+  return out.slice(0, 18);
 }
 
 // ── CHIRURGISCHE CORRECTIE ─────────────────────────────────────────────────────
@@ -165,8 +192,10 @@ export function factcheckCorrections(report: FactcheckReport): string[] {
 export const FACTCHECK_FIX_SYSTEM = `Je bent een uiterst precieze CORRECTOR voor een Nederlandse B2B-blog over laadinfrastructuur. Je krijgt een blog (titel + HTML-content + FAQ) en een CORRECTIELIJST uit een feitencontrole.
 
 IJZEREN REGELS:
-- Pas UITSLUITEND de punten uit de CORRECTIELIJST toe. Wijzig de betreffende zin(nen) minimaal en laat ALLE overige tekst LETTERLIJK ongemoeid: koppen, alinea's, tabellen, links, opsommingen, lengte en structuur blijven identiek.
-- Verzin GEEN nieuwe feiten, cijfers, bronnen of urls. Is er voor een punt geen concrete correctie gegeven, verwijder de claim dan of verzwak hem met een voorbehoud ("naar verwachting", "nog niet definitief", "bronnen noemen verschillende datums").
+- Pas UITSLUITEND de punten uit de CORRECTIELIJST toe. Wijzig de betreffende zin(nen) minimaal en laat ALLE overige tekst LETTERLIJK ongemoeid: koppen, alinea's, tabellen, links, opsommingen en structuur blijven identiek.
+- Verzin GEEN nieuwe feiten, cijfers, bronnen of urls. Zoek ook geen vervangende onderbouwing: je hebt geen web-toegang.
+- ONBEVESTIGDE BEWERINGEN GAAN ERUIT. Staat er "VERWIJDER" of "ONBEVESTIGD" bij een punt, schrap de bewering dan echt: haal de zin of het zinsdeel weg en laat de rest lopend. Zwak hem NIET af met "naar verwachting", "mogelijk" of "circa" — een onbevestigde bewering met een slag om de arm is nog steeds een onbevestigde bewering. Alleen bij punten die expliciet als DATUM-kwestie zijn aangemerkt mag een voorbehoud blijven staan.
+- Het artikel mag door dit schrappen korter worden. Dat is de bedoeling; lever nooit opvulling aan om de lengte te behouden.
 - Raakt een correctie een FAQ-antwoord, corrigeer dan ook dat antwoord; geef anders de FAQ ongewijzigd terug.
 - Geen herformuleringen "voor de leesbaarheid", geen stijlverbeteringen, geen nieuwe zinnen buiten de correcties.
 
@@ -182,14 +211,16 @@ export interface FactcheckFix {
   changes: string[];
 }
 
-/** Valideert de output van de chirurgische fix. De lengte-guard weigert output die >30% korter
- *  is dan het origineel: dat duidt op een stiekeme full rewrite of een afgekapte emissie. */
+/** Valideert de output van de chirurgische fix. De lengte-guard vangt een stiekeme full rewrite of
+ *  een afgekapte emissie. Sinds verwijderen de standaardremedie is, is fors inkorten juist correct
+ *  gedrag: de grens ging daarom van 70% naar 50%. Zakt een artikel daaronder, dan bestond het
+ *  grotendeels uit onbevestigde beweringen en hoort het niet gepubliceerd te worden. */
 export function validateFixJson(p: any, originalContent: string): FactcheckFix {
   if (!p || typeof p.content !== "string" || !p.content.trim()) {
     throw new Error("Ongeldige fix-JSON: content ontbreekt");
   }
   const content = stripFaqSection(p.content);
-  if (content.length < originalContent.length * 0.7) {
+  if (content.length < originalContent.length * 0.5) {
     throw new Error(`Fix-output verdacht kort (${content.length} vs ${originalContent.length} tekens) — geweigerd`);
   }
   const faq = Array.isArray(p.faq)

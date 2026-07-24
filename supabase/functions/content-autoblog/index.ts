@@ -8,6 +8,7 @@ import { BLOG_SYSTEM, BLOG_AUDIT_SYSTEM, INTENT_NL, validateBlogJson, validateAu
 import { buildBlogCover } from "../_shared/cover.ts";
 import { fetchProofBlock } from "../_shared/proof.ts";
 import { notifyContentEngine } from "../_shared/content-notify.ts";
+import { TRUSTED_DOMAINS } from "../_shared/sources.ts";
 
 // Content-autoblog: de AUTONOME blog-tak naast de opname/podcast-machine. Pakt zelf de best-scorende
 // SEO-onderwerpen (content_topics.seo_opportunity), laat Claude met web-search een publicatieklaar
@@ -199,7 +200,8 @@ Deno.serve(async (req) => {
             // (zelfde maat als de feitencontrole, die stabiel draait met 8 searches).
             maxTokens: 8000,
             retries: 1,
-            tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+            tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4, allowed_domains: TRUSTED_DOMAINS }],
+            thinking: "adaptive", effort: "medium",
           });
           await ev("research_ok", { topic: t.id, ms: Date.now() - resT0, chars: research.length });
 
@@ -260,6 +262,7 @@ Deno.serve(async (req) => {
               apiKey, system: BLOG_SYSTEM, user, model,
               maxTokens: Math.max(12000, maxTokens),
               retries: 1,
+              thinking: "adaptive", effort: "medium",
             });
             await ev("generate_ok", { topic: t.id, ms: Date.now() - genT0, chars: raw0.length });
             draft = validateBlogJson(extractJson<any>(raw0), validSlugs, validCategorySlugs);
@@ -270,7 +273,7 @@ Deno.serve(async (req) => {
           if (!draft && raw0) {
             try {
               const repaired = await anthropicMessage({
-                apiKey, model, maxTokens,
+                apiKey, model, maxTokens, thinking: "disabled",
                 system: "Je krijgt tekst die geldige JSON had moeten zijn maar dat niet is (meestal een niet-ge-escapet teken in een lange HTML-string). Geef UITSLUITEND de gecorrigeerde, geldige JSON terug: exact dezelfde velden en inhoud, alleen hersteld naar geldige JSON. Geen uitleg, geen extra tekst.",
                 user: raw0,
               });
@@ -337,7 +340,7 @@ Deno.serve(async (req) => {
               `BLOG (HTML):\n${draft.content}`,
               faqTekst ? `FAQ (apart veld):\n${faqTekst}` : null,
             ].filter(Boolean).join("\n\n");
-            const auditRaw = await anthropicMessage({ apiKey, system: BLOG_AUDIT_SYSTEM, user: auditUser, model: auditModel, maxTokens: 1500 });
+            const auditRaw = await anthropicMessage({ apiKey, system: BLOG_AUDIT_SYSTEM, user: auditUser, model: auditModel, maxTokens: 1500, thinking: "disabled" });
             audit = validateAuditJson(extractJson<any>(auditRaw));
           } catch (auditErr) {
             console.error("Kwaliteitsaudit mislukt, terugval op zelf-scores + revise:", auditErr instanceof Error ? auditErr.message : auditErr);

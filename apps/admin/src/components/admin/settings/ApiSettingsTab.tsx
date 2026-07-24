@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { Microsoft365Card } from "@/components/admin/Microsoft365Card";
+import { WefactSettingsCard } from "@/components/admin/settings/WefactSettingsCard";
 
 export interface ConnectionTestResult {
   status: "ok" | "not_configured" | "road_error" | "error";
@@ -178,6 +179,7 @@ export function ApiSettingsTab({
           )}
         </CardContent>
       </Card>
+      <WefactSettingsCard />
       {/* SharePoint-instelling is org-breed en alleen voor de superadmin; admins werken automatisch mee. */}
       {isSuperadmin && <Microsoft365Card />}
     </>

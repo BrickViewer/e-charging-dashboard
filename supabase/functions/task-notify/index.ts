@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { renderSlots } from "../_shared/emailRender.ts";
 
 // task-notify: stuurt de toegewezen persoon een e-mail dat er een taak voor hem klaarstaat. Wordt aangeroepen
 // door de DB-trigger op lead_tasks (via invoke_edge_function, x-internal-secret). verify_jwt = false.
@@ -51,19 +52,25 @@ Deno.serve(async (req) => {
     const isHigh = task.priority === "high";
     const description = ((task.description as string | null) ?? "").trim();
 
+    const tplVars = { naam: name, taak: task.title as string };
+    const tpl = await renderSlots(sb, "taak-toegewezen", tplVars);
+    const tplText = await renderSlots(sb, "taak-toegewezen", tplVars, { escape: false });
+    const S = (n: string, d: string) => tpl[n] ?? d;
+    const T = (n: string, d: string) => tplText[n] ?? d;
+
     const lines = [
-      `Er is een taak aan je toegewezen:`,
+      T("intro", "Er is een taak aan je toegewezen:"),
       `Taak: ${task.title}`,
       isHigh ? `Prioriteit: Hoog` : null,
       due ? `Deadline: ${due}` : null,
       company ? `Lead: ${company}` : null,
       description ? `\n${description}` : null,
-      `Bekijk je taken: ${tasksUrl}`,
+      `${T("knoptekst", "Bekijk je taken")}: ${tasksUrl}`,
     ].filter(Boolean) as string[];
-    const text = `Hoi ${name},\n\n${lines.join("\n")}\n\nGroet, E-Charging`;
+    const text = `${T("aanhef", `Hoi ${name},`)}\n\n${lines.join("\n")}\n\n${T("afsluiting", "Groet, E-Charging")}`;
     const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111827;line-height:1.6">
-      <p>Hoi ${esc(name)},</p>
-      <p>Er is een taak aan je toegewezen:</p>
+      <p>${S("aanhef", `Hoi ${esc(name)},`)}</p>
+      <p>${S("intro", "Er is een taak aan je toegewezen:")}</p>
       <p style="padding:12px 14px;background:#f3f4f6;border-radius:8px">
         <strong>${esc(task.title as string)}</strong>
         ${isHigh ? `<br/><span style="color:#dc2626;font-weight:600">Prioriteit: Hoog</span>` : ""}
@@ -71,13 +78,13 @@ Deno.serve(async (req) => {
         ${company ? `<br/>Lead: ${esc(company)}` : ""}
         ${description ? `<br/><br/><span style="color:#374151">${esc(description)}</span>` : ""}
       </p>
-      <p><a href="${tasksUrl}" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;border-radius:8px;text-decoration:none">Bekijk je taken</a></p>
-      <p style="color:#6b7280">Groet, E-Charging</p>
+      <p><a href="${tasksUrl}" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;border-radius:8px;text-decoration:none">${S("knoptekst", "Bekijk je taken")}</a></p>
+      <p style="color:#6b7280">${S("afsluiting", "Groet, E-Charging")}</p>
     </div>`;
 
     const res = await sendEmail({
       to: [email],
-      subject: `Nieuwe taak voor jou: ${task.title}`,
+      subject: T("onderwerp", `Nieuwe taak voor jou: ${task.title}`),
       html, text,
       tags: [{ name: "type", value: "task_assigned" }],
     });

@@ -1,111 +1,55 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { linkLocationToClient } from "@/services/locations";
-import { type QuoteScope } from "@/lib/quoteScope";
+import {
+  ONBOARDING_STEPS, activeOrder, currentStep, stepStates, buildSkipIndex,
+  type OnboardingClient, type OnbOrder, type OnboardingStage, type SkipIndex,
+  type OnboardingStepSkip, type StepAnchor,
+} from "@/services/onboardingPipeline";
 import type { MaterialStatus } from "@/services/installationHandoff";
-import type { QuoteForClient } from "@/components/sales/CreateClientFromQuoteDialog";
+import type { AwaitingClientQuote } from "@/hooks/useQuotes";
+import { useSignedQuotesAwaitingClient } from "@/hooks/useQuotes";
 
-// De onboarding-fase wordt AFGELEID uit de echte status (geen handmatig bijhouden).
-// Pijplijn: klantaccount aanmaken + uitnodigen komen DIRECT NA TEKENEN (zodat de
-// klant alvast zijn account maakt terwijl de installateur nog moet komen), en
-// uitnodigen gaat VÓÓR het koppelen van de locaties/palen. Volgorde:
-// getekend → klant aanmaken → klant uitnodigen → werkvoorbereiding → bij
-// installateur → opgeleverd → locaties koppelen → gegevens toevoegen → archief.
-export type OnboardingStage =
-  | "getekend"
-  | "werkvoorbereiding"
-  | "bij_installateur"
-  | "opgeleverd"
-  | "klant_aanmaken"
-  | "locaties_koppelen"
-  | "klant_uitnodigen"
-  | "gegevens"
-  | "archief";
+// HET model woont in services/onboardingPipeline.ts (puur + testbaar). Deze hook-laag
+// haalt de drie bronnen op (klanten, clientloze orders, getekende offertes zonder klant)
+// en voegt ze samen tot ÉÉN lijst onboardings. Er is geen aparte flow per scope meer.
+export {
+  ONBOARDING_STEPS, activeOrder, currentStep, stepStates, buildSkipIndex,
+  deriveStage, isDetailsComplete, hasPendingInvite, isOnboardingDone,
+  onboardingFacts,
+} from "@/services/onboardingPipeline";
+export type {
+  OnboardingClient, OnbOrder, OnboardingStage, OnboardingStep, StepState, StepStatus,
+  OnboardingFacts, OnboardingKind, SkipIndex, OnboardingStepSkip, StepAnchor,
+} from "@/services/onboardingPipeline";
 
-export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: string; hint: string }[] = [
-  { key: "getekend", label: "Getekend", color: "#6366f1", hint: "Werkvoorbereiding starten" },
-  { key: "klant_aanmaken", label: "Klant account aanmaken", color: "#a855f7", hint: "Maak het beheer-klantaccount aan" },
-  { key: "klant_uitnodigen", label: "Klant uitnodigen", color: "#ec4899", hint: "Portaal-uitnodiging versturen" },
-  { key: "werkvoorbereiding", label: "Werkvoorbereiding", color: "#0ea5e9", hint: "Materialen bestellen" },
-  { key: "bij_installateur", label: "Bij installateur", color: "#f59e0b", hint: "Wacht op oplevering" },
-  { key: "opgeleverd", label: "Opgeleverd", color: "#06b6d4", hint: "Factureren" },
-  { key: "locaties_koppelen", label: "Locaties koppelen", color: "#8b5cf6", hint: "Laadlocatie koppelen" },
-  { key: "gegevens", label: "Gegevens toevoegen", color: "#14b8a6", hint: "Wacht op gegevens van klant" },
-  { key: "archief", label: "Archief", color: "#22c55e", hint: "Onboarding afgerond" },
-];
+// Compat-vorm voor bestaande consumenten (directie-dashboard, kolomkoppen).
+export const ONBOARDING_STAGES: { key: OnboardingStage; label: string; color: string; hint: string }[] =
+  ONBOARDING_STEPS.map(({ key, label, color, hint }) => ({ key, label, color, hint }));
 
-// Welke fases relevant zijn per scope. Installatie+beheer: klantaccount + uitnodigen eerst (direct na
-// tekenen), dan de installateur-track, dan locaties koppelen. Alleen-installatie stopt na opleveren/
-// factureren (geen portaal/beheer). Alleen-beheer slaat de installateur-fases over (getekend = de
-// klant-aanmaken-intake van een getekende offerte).
-export const STAGES_BY_SCOPE: Record<QuoteScope, OnboardingStage[]> = {
-  installatie_beheer: ["klant_aanmaken", "klant_uitnodigen", "werkvoorbereiding", "bij_installateur", "opgeleverd", "locaties_koppelen", "gegevens", "archief"],
-  alleen_installatie: ["getekend", "werkvoorbereiding", "bij_installateur", "opgeleverd", "archief"],
-  alleen_beheer: ["getekend", "klant_uitnodigen", "locaties_koppelen", "gegevens", "archief"],
-};
-
-export type OnbOrder = {
-  id: string;
-  quote_id: string | null;
-  status: string | null;
-  egroup_order_id: string | null;
-  egroup_order_number: string | null;
-  external_status: string | null;
-  completed_at: string | null;
-  invoiced_at: string | null;
-  scheduled_date: string | null;
-  work_prep_started_at: string | null;
-  materials_expected_at: string | null;
-  preparation_notes: string | null;
-  materials_synced_at: string | null;
-  last_sync_error: string | null;
-  site_street: string | null;
-  site_house_number: string | null;
-  site_postal: string | null;
-  site_city: string | null;
-  site_contact_name: string | null;
-  site_contact_email: string | null;
-  site_contact_phone: string | null;
-  service_summary: string | null;
-  notes: string | null;
-  /** Alleen de statussen — voedt de voortgangsteller op de kaart. */
-  installation_order_materials?: { status: MaterialStatus }[] | null;
-};
-type OnbLocation = { id: string };
-type OnbInvite = { id: string; status: string | null };
-
-export type OnboardingClient = {
-  id: string;
-  company_name: string;
-  client_number: number | null;
-  status: string | null;
-  portal_user_id: string | null;
-  contact_email: string | null;
-  contact_name: string | null;
-  contact_phone: string | null;
-  created_at: string;
-  payment_onboarding_status: string | null;
-  needs_installation: boolean | null;
-  managed: boolean | null;
-  vat_status: string | null;
-  kvk: string | null;
-  btw_number: string | null;
-  billing_address_street: string | null;
-  billing_address_postal: string | null;
-  billing_address_city: string | null;
-  installation_orders: OnbOrder[] | null;
-  locations: OnbLocation[] | null;
-  client_invitations: OnbInvite[] | null;
-  // True voor het "order-only" pad (installatie zonder klantaccount): de kaart is geen echte client.
-  is_order_only?: boolean;
-  // Voor order-only inst+beheer: de offerte om ná oplevering het klantaccount mee aan te maken (en de order te koppelen).
-  _quoteForClient?: QuoteForClient;
-};
+// Elke onboarding-mutatie raakt meerdere views (bord, order-only kaarten, offertes,
+// losse locaties, installatie-orders). Eén plek zodat een nieuwe actie er nooit één
+// vergeet — zelfde patroon als invalidateMaterialViews in useOrderMaterials.ts.
+export function invalidateOnboarding(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
+  qc.invalidateQueries({ queryKey: ["onboarding-orders"] });
+  qc.invalidateQueries({ queryKey: ["onboarding-skips"] });
+  qc.invalidateQueries({ queryKey: ["quotes"] });
+  qc.invalidateQueries({ queryKey: ["unlinked-locations"] });
+  qc.invalidateQueries({ queryKey: ["installation-orders"] });
+  // De directie-agenda leest dezelfde orders (usePlannedInstallations); zonder deze
+  // regel bleef die per constructie verouderd na handoff/oplevering/facturatie.
+  qc.invalidateQueries({ queryKey: ["planned-installations"] });
+  // Concept aangemaakt/verstuurd/verwijderd verandert het "concept klaar"-signaal op de kaart.
+  qc.invalidateQueries({ queryKey: ["open-invoice-concepts"] });
+}
 
 const CLIENT_SELECT =
   "id, company_name, client_number, status, portal_user_id, contact_email, contact_name, contact_phone, created_at, " +
   "payment_onboarding_status, needs_installation, managed, vat_status, kvk, btw_number, billing_address_street, billing_address_postal, billing_address_city, " +
-  "installation_orders(id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, scheduled_date, " +
+  "activation_fee_total, activation_invoiced_total, " +
+  "installation_orders(id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, wefact_invoice_code, wefact_invoice_id, scheduled_date," +
   "work_prep_started_at, materials_expected_at, preparation_notes, materials_synced_at, last_sync_error, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes, " +
   "installation_order_materials(status)), " +
@@ -119,12 +63,13 @@ export function useOnboardingClients() {
         .from("clients")
         .select(CLIENT_SELECT)
         .neq("status", "verwijderd")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        // Nieuwste order eerst: activeOrder() rekent op deze volgorde (PostgREST
+        // geeft geneste rijen anders in willekeurige volgorde terug).
+        .order("created_at", { referencedTable: "installation_orders", ascending: false });
       if (error) throw error;
       // Gearchiveerde (in e-Flux verwijderde) locaties niet meetellen voor de onboarding-fase.
-      const rows = (data ?? []) as unknown as Array<
-        OnboardingClient & { locations?: { id: string; archived_at?: string | null }[] }
-      >;
+      const rows = (data ?? []) as unknown as OnboardingClient[];
       return rows.map((c) => ({
         ...c,
         locations: (c.locations ?? []).filter((l) => !l.archived_at),
@@ -139,7 +84,7 @@ export function useOnboardingClients() {
 type RawOrderOnly = {
   id: string; quote_id: string | null; status: string | null; egroup_order_id: string | null;
   egroup_order_number: string | null; external_status: string | null; completed_at: string | null;
-  invoiced_at: string | null; scheduled_date: string | null; work_prep_started_at: string | null; materials_expected_at: string | null;
+  invoiced_at: string | null; wefact_invoice_code: string | null; wefact_invoice_id: string | null; scheduled_date: string | null; work_prep_started_at: string | null; materials_expected_at: string | null;
   preparation_notes: string | null; materials_synced_at: string | null; last_sync_error: string | null;
   installation_order_materials: { status: MaterialStatus }[] | null;
   site_street: string | null; site_house_number: string | null;
@@ -155,7 +100,7 @@ type RawOrderOnly = {
 };
 
 const ORDER_ONLY_SELECT =
-  "id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, scheduled_date, " +
+  "id, quote_id, status, egroup_order_id, egroup_order_number, external_status, completed_at, invoiced_at, wefact_invoice_code, wefact_invoice_id, scheduled_date," +
   "work_prep_started_at, materials_expected_at, preparation_notes, materials_synced_at, last_sync_error, " +
   "site_street, site_house_number, site_postal, site_city, site_contact_name, site_contact_email, site_contact_phone, service_summary, notes, created_at, " +
   "installation_order_materials(status), " +
@@ -169,7 +114,7 @@ function mapOrderToClient(o: RawOrderOnly): OnboardingClient {
   const order: OnbOrder = {
     id: o.id, quote_id: o.quote_id, status: o.status, egroup_order_id: o.egroup_order_id,
     egroup_order_number: o.egroup_order_number, external_status: o.external_status, completed_at: o.completed_at,
-    invoiced_at: o.invoiced_at, scheduled_date: o.scheduled_date, work_prep_started_at: o.work_prep_started_at,
+    invoiced_at: o.invoiced_at, wefact_invoice_code: o.wefact_invoice_code, wefact_invoice_id: o.wefact_invoice_id, scheduled_date: o.scheduled_date, work_prep_started_at: o.work_prep_started_at,
     materials_expected_at: o.materials_expected_at, preparation_notes: o.preparation_notes,
     materials_synced_at: o.materials_synced_at, last_sync_error: o.last_sync_error,
     installation_order_materials: o.installation_order_materials,
@@ -184,12 +129,16 @@ function mapOrderToClient(o: RawOrderOnly): OnboardingClient {
     contact_name: lead?.contact_name ?? q?.prospect_contact ?? null,
     contact_phone: lead?.contact_phone ?? null,
     created_at: o.created_at, payment_onboarding_status: null,
-    // Scope uit de offerte: bepaalt of dit order-only item onder alleen-installatie of installatie+beheer valt.
-    needs_installation: q?.with_installation !== false, managed: q?.with_management === true,
+    // Scope uit de offerte. Zónder offerte-join weten we niets: dan is beheer niet
+    // aan te tonen en is dit per definitie een losse installatie-opdracht (anders
+    // zou zo'n order ineens om een klantaccount vragen dat nergens uit volgt).
+    needs_installation: q ? q.with_installation !== false : true,
+    managed: q ? q.with_management !== false : false,
     vat_status: null, kvk: null, btw_number: null,
     billing_address_street: lead?.address_street ?? null, billing_address_postal: lead?.postal_code ?? null,
     billing_address_city: lead?.city ?? null,
-    installation_orders: [order], locations: [], client_invitations: [], is_order_only: true,
+    installation_orders: [order], locations: [], client_invitations: [],
+    kind: "order", is_order_only: true, quote_number: q?.quote_number ?? null,
     _quoteForClient: q ? {
       id: o.quote_id ?? "", quote_number: q.quote_number, prospect_company: q.prospect_company,
       prospect_contact: q.prospect_contact, prospect_email: q.prospect_email, company_id: q.company_id,
@@ -215,79 +164,193 @@ export function useOnboardingOrders() {
   });
 }
 
-/** Klant heeft betaal- (IBAN) + bedrijfsgegevens compleet → onboarding klaar. */
-export function isDetailsComplete(c: OnboardingClient): boolean {
-  const company =
-    !!c.company_name && !!c.vat_status &&
-    !!c.billing_address_street && !!c.billing_address_postal && !!c.billing_address_city;
-  const kvkOk = c.vat_status === "private" || !!c.kvk;
-  const btwOk = c.vat_status !== "vat_liable" || !!c.btw_number;
-  const bankOk = ["saved", "needs_review", "verified"].includes(c.payment_onboarding_status ?? "");
-  return company && kvkOk && btwOk && bankOk;
-}
-
-/** Leidt de huidige onboarding-stage af uit installatie-/factuur-/locatie-/portaalstatus. */
-export function deriveStage(c: OnboardingClient): OnboardingStage {
-  const orders = c.installation_orders ?? [];
-  const handedOff = orders.some((o) => !!o.egroup_order_id);
-  const delivered = orders.some((o) => !!o.completed_at || o.status === "afgerond");
-  const invoiced = orders.some((o) => !!o.invoiced_at);
-  // Werkvoorbereiding gestart maar nog niet verstuurd. De !egroup_order_id-check
-  // voorkomt dat een tweede, al verstuurde order de fase terugtrekt.
-  const inWorkPrep = orders.some((o) => !!o.work_prep_started_at && !o.egroup_order_id);
-  const hasLocation = (c.locations ?? []).length > 0;
-  const managed = c.managed !== false;
-  const needsInstall = c.needs_installation !== false;
-
-  // Order-only (clientloos): bij beheer-scope is de EERSTE stap direct na tekenen
-  // het klantaccount aanmaken (klant_aanmaken) — dat koppelt de order en maakt er
-  // een echte klant van, die daarna via het beheer-pad verder loopt. Alleen-
-  // installatie blijft de installateur-flow.
-  if (c.is_order_only) {
-    if (managed) return "klant_aanmaken";
-    if (invoiced) return "archief";
-    if (delivered) return "opgeleverd";
-    if (handedOff) return "bij_installateur";
-    if (inWorkPrep) return "werkvoorbereiding";
-    return "getekend";
-  }
-
-  // Alleen installatie (geen beheer): geen portaal/locaties — klaar zodra opgeleverd + gefactureerd.
-  if (!managed) {
-    if (invoiced) return "archief";
-    if (delivered) return "opgeleverd";
-    if (handedOff) return "bij_installateur";
-    if (inWorkPrep) return "werkvoorbereiding";
-    return "getekend";
-  }
-
-  // Beheer-scopes (echte klant). Nieuwe volgorde: eerst UITNODIGEN (direct na het
-  // account, vóór installatie en locaties), dan de installateur-track (alleen bij
-  // installatie), dan locaties koppelen, dan wachten op gegevens, dan archief.
-  const invited = hasPendingInvite(c) || !!c.portal_user_id;
-  if (!invited) return "klant_uitnodigen";
-
-  if (needsInstall) {
-    if (inWorkPrep) return "werkvoorbereiding";
-    if (handedOff && !delivered) return "bij_installateur";
-    if (delivered && !invoiced) return "opgeleverd";
-    if (!invoiced) return "werkvoorbereiding";      // nog niets gestart → start-prep (in de werkvoorbereiding-actie)
-    if (!hasLocation) return "locaties_koppelen";   // ná facturering: palen/locaties koppelen
-  } else if (!hasLocation) {
-    return "locaties_koppelen";                     // alleen-beheer: koppelen ná uitnodigen
-  }
-
-  if (!isDetailsComplete(c)) return "gegevens";     // uitnodiging geaccepteerd, gegevens nog niet compleet
-  return "archief";
-}
-
-/** De installatie-order van de klant (de eerste/primaire). */
+/** De installatie-order waar de kaart nú over gaat (zie activeOrder). */
 export function primaryOrder(c: OnboardingClient): OnbOrder | null {
-  return (c.installation_orders ?? [])[0] ?? null;
+  return activeOrder(c);
 }
 
-export function hasPendingInvite(c: OnboardingClient): boolean {
-  return (c.client_invitations ?? []).some((i) => i.status === "pending");
+// --- Getekende offertes zonder klant én zonder order -------------------------------------------
+// Vroeger een apart kaarttype in de 'Getekend'-kolom; nu een gewone kaart die instroomt
+// op 'Klant account aanmaken'. AwaitingClientQuote is een superset van QuoteForClient,
+// dus CreateClientFromQuoteDialog werkt hier ongewijzigd op.
+function mapQuoteToItem(q: AwaitingClientQuote): OnboardingClient {
+  return {
+    id: q.id,
+    company_name: (q.prospect_company ?? "").trim() || (q.prospect_contact ?? "").trim() || q.quote_number || "Getekende offerte",
+    client_number: null, status: "getekend", portal_user_id: null,
+    contact_email: q.prospect_email, contact_name: q.prospect_contact, contact_phone: null,
+    created_at: q.created_at, payment_onboarding_status: null,
+    needs_installation: q.with_installation !== false,
+    managed: q.with_management !== false,
+    vat_status: null, kvk: null, btw_number: null,
+    billing_address_street: null, billing_address_postal: null, billing_address_city: null,
+    installation_orders: [], locations: [], client_invitations: [],
+    kind: "quote", is_order_only: true, quote_number: q.quote_number,
+    _quoteForClient: {
+      id: q.id, quote_number: q.quote_number, prospect_company: q.prospect_company,
+      prospect_contact: q.prospect_contact, prospect_email: q.prospect_email,
+      company_id: q.company_id, person_id: q.person_id,
+      with_management: q.with_management, with_installation: q.with_installation,
+      charge_rate_per_kwh: q.charge_rate_per_kwh, energy_cost_per_kwh: q.energy_cost_per_kwh,
+      calculation_snapshot: q.calculation_snapshot, offer_details: q.offer_details,
+    },
+  };
+}
+
+/** Handmatig overgeslagen stappen (kleine tabel, in één keer opgehaald). */
+export function useOnboardingSkips() {
+  return useQuery({
+    queryKey: ["onboarding-skips"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("onboarding_step_skips")
+        .select("step_key, client_id, installation_order_id, quote_id, reason");
+      if (error) throw error;
+      return (data ?? []) as unknown as OnboardingStepSkip[];
+    },
+  });
+}
+
+/**
+ * DE onboarding-lijst: klanten + clientloze orders + getekende offertes zonder klant,
+ * samengevoegd tot één reeks kaarten. Een offerte die al een order of klant heeft valt
+ * weg, zodat er nooit twee kaarten voor dezelfde onboarding staan.
+ */
+/**
+ * Onverstuurde WeFact-concepten, opzoekbaar per klant en per installatie-order.
+ *
+ * Zonder dit ziet een kaart met een klaarstaand concept er identiek uit als een kaart waar nog
+ * niets is gebeurd — je kunt niet zien dat de factuur al klaarstaat en alleen nog verstuurd
+ * hoeft te worden. Eén kleine query voor het hele bord (de spiegeltabel is klein).
+ */
+export type OpenConcept = { wefactInvoiceId: string; invoiceCode: string | null; amountIncl: number | null };
+
+export function useOpenInvoiceConcepts() {
+  return useQuery({
+    queryKey: ["open-invoice-concepts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wefact_invoices")
+        .select("wefact_invoice_id, invoice_code, amount_incl, activation_client_id, installation_order_id, sent, status_code")
+        .eq("status_code", 0);
+      if (error) throw error;
+      const byClient = new Map<string, OpenConcept>();
+      const byOrder = new Map<string, OpenConcept>();
+      for (const r of data ?? []) {
+        if (Number(r.sent ?? 0) > 0) continue;
+        const c: OpenConcept = {
+          wefactInvoiceId: String(r.wefact_invoice_id),
+          // WeFact geeft een concept een placeholdercode ("[concept]0001"); die zegt de
+          // gebruiker niets, dus alleen een echt factuurnummer tonen.
+          invoiceCode: r.invoice_code && !r.invoice_code.startsWith("[") ? r.invoice_code : null,
+          amountIncl: r.amount_incl == null ? null : Number(r.amount_incl),
+        };
+        if (r.activation_client_id) byClient.set(r.activation_client_id, c);
+        if (r.installation_order_id) byOrder.set(r.installation_order_id, c);
+      }
+      return { byClient, byOrder };
+    },
+  });
+}
+
+export function useOnboardingPipeline() {
+  const clientsQ = useOnboardingClients();
+  const ordersQ = useOnboardingOrders();
+  const quotesQ = useSignedQuotesAwaitingClient();
+  const skipsQ = useOnboardingSkips();
+  const conceptsQ = useOpenInvoiceConcepts();
+
+  // Stabiele referenties: het bord memo-ïseert hierop, dus een nieuwe array/Map per
+  // render zou elke afleiding opnieuw laten draaien.
+  const items = useMemo(() => {
+    const clients = clientsQ.data ?? [];
+    const orders = ordersQ.data ?? [];
+
+    const claimed = new Set<string>();
+    for (const c of clients) for (const o of c.installation_orders ?? []) if (o.quote_id) claimed.add(o.quote_id);
+    for (const o of orders) for (const oo of o.installation_orders ?? []) if (oo.quote_id) claimed.add(oo.quote_id);
+
+    const quotes = (quotesQ.data ?? []).filter((q) => !claimed.has(q.id)).map(mapQuoteToItem);
+    return [...clients, ...orders, ...quotes] as OnboardingClient[];
+  }, [clientsQ.data, ordersQ.data, quotesQ.data]);
+
+  const skips = useMemo(() => buildSkipIndex(skipsQ.data), [skipsQ.data]);
+
+  const concepts = conceptsQ.data ?? { byClient: new Map(), byOrder: new Map() };
+
+  return {
+    items,
+    skips,
+    concepts,
+    isLoading: clientsQ.isLoading || ordersQ.isLoading || quotesQ.isLoading,
+  };
+}
+
+// --- Stappen overslaan / onboarding afsluiten ---------------------------------------------------
+
+export type SkipTarget = { stepKey: string; anchor: StepAnchor | undefined; anchorId: string };
+
+const ANCHOR_COLUMN: Record<StepAnchor, "client_id" | "installation_order_id" | "quote_id"> = {
+  client: "client_id", order: "installation_order_id", quote: "quote_id",
+};
+
+async function deleteSkips(targets: readonly SkipTarget[]) {
+  for (const t of targets) {
+    if (!t.anchor) continue;
+    const { error } = await supabase
+      .from("onboarding_step_skips")
+      .delete()
+      .eq(ANCHOR_COLUMN[t.anchor], t.anchorId)
+      .eq("step_key", t.stepKey);
+    if (error) throw error;
+  }
+}
+
+/** Slaat één stap over (of, met meerdere targets, sluit de hele onboarding af). */
+export function useSkipSteps() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ targets, reason }: { targets: SkipTarget[]; reason: string }) => {
+      if (targets.length === 0) return;
+      // De unique indexen zijn partieel (één per anker), dus geen upsert: eerst weg,
+      // dan nieuw. Zo is 'nogmaals overslaan met een andere reden' ook idempotent.
+      await deleteSkips(targets);
+      const rows = targets.map((t) => ({
+        step_key: t.stepKey,
+        reason,
+        client_id: t.anchor === "client" ? t.anchorId : null,
+        installation_order_id: t.anchor === "order" ? t.anchorId : null,
+        quote_id: t.anchor === "quote" ? t.anchorId : null,
+      }));
+      const { error } = await supabase.from("onboarding_step_skips").insert(rows);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateOnboarding(qc),
+  });
+}
+
+/** Maakt een overgeslagen stap (of de hele afsluiting) weer ongedaan. */
+export function useUnskipSteps() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (targets: SkipTarget[]) => deleteSkips(targets),
+    onSuccess: () => invalidateOnboarding(qc),
+  });
+}
+
+/** Scope-vlaggen van een klant bijstellen (bepaalt welke stappen van toepassing zijn). */
+export function useUpdateOnboardingScope() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ clientId, managed, needsInstallation }: { clientId: string; managed: boolean; needsInstallation: boolean }) => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ managed, needs_installation: needsInstallation })
+        .eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateOnboarding(qc),
+  });
 }
 
 // Nog niet aan een klant gekoppelde locaties (voor de 'locaties koppelen'-dialog).
@@ -315,10 +378,7 @@ export function useLinkLocationToClient() {
   return useMutation({
     mutationFn: async ({ locationId, clientId }: { locationId: string; clientId: string }) =>
       linkLocationToClient(locationId, clientId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
-      qc.invalidateQueries({ queryKey: ["unlinked-locations"] });
-    },
+    onSuccess: () => invalidateOnboarding(qc),
   });
 }
 
@@ -330,10 +390,7 @@ export function useMarkInvoiced() {
       const { error } = await supabase.from("installation_orders").update({ invoiced_at: new Date().toISOString() }).eq("id", orderId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
-      qc.invalidateQueries({ queryKey: ["installation-orders"] });
-    },
+    onSuccess: () => invalidateOnboarding(qc),
   });
 }
 
@@ -347,8 +404,6 @@ export function useSendOnboardingInvite() {
       if (error) throw error;
       return (data ?? {}) as InviteResult;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
-    },
+    onSuccess: () => invalidateOnboarding(qc),
   });
 }

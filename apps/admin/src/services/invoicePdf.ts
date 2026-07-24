@@ -644,6 +644,13 @@ export async function buildSelfBillingInvoicePdf(
 
 /** Genereert en downloadt de factuur (browser). Werpt InvoiceValidationError
  *  met een NL-veldenlijst zolang verplichte gegevens ontbreken. */
+function selfBillingFilename(settlement: SelfBillingSettlement, client: SelfBillingClient): string {
+  const mm = String(settlement.month).padStart(2, "0");
+  const safeName = (client.company_name || "klant").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  const kind = isBetaalspecificatie(settlement.vat_status ?? client.vat_status) ? "betaalspecificatie" : "vergoedingsfactuur";
+  return `${kind}-${safeName}-${settlement.year}-${mm}.pdf`;
+}
+
 export async function generateSelfBillingInvoicePdf(
   settlement: SelfBillingSettlement,
   client: SelfBillingClient,
@@ -652,8 +659,21 @@ export async function generateSelfBillingInvoicePdf(
   sessionLines?: InvoiceSessionLine[] | null,
 ): Promise<void> {
   const doc = await buildSelfBillingInvoicePdf(settlement, client, org, paymentDetails, sessionLines);
-  const mm = String(settlement.month).padStart(2, "0");
-  const safeName = (client.company_name || "klant").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-  const kind = isBetaalspecificatie(settlement.vat_status ?? client.vat_status) ? "betaalspecificatie" : "vergoedingsfactuur";
-  doc.save(`${kind}-${safeName}-${settlement.year}-${mm}.pdf`);
+  doc.save(selfBillingFilename(settlement, client));
+}
+
+// Rendert dezelfde (bevroren, compliant) S-/B-PDF maar geeft 'm als base64 terug —
+// voor de WeFact-inkoopfactuur-bijlage. Zo blijft er één renderer voor download én
+// koppeling; geen aparte server-side implementatie die uit de pas kan lopen.
+export async function renderSelfBillingInvoicePdfBase64(
+  settlement: SelfBillingSettlement,
+  client: SelfBillingClient,
+  org?: SelfBillingOrg | null,
+  paymentDetails?: SelfBillingPaymentDetails | null,
+  sessionLines?: InvoiceSessionLine[] | null,
+): Promise<{ base64: string; filename: string }> {
+  const doc = await buildSelfBillingInvoicePdf(settlement, client, org, paymentDetails, sessionLines);
+  const uri = doc.output("datauristring");
+  const base64 = uri.substring(uri.indexOf(",") + 1);
+  return { base64, filename: selfBillingFilename(settlement, client) };
 }

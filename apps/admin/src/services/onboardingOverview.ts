@@ -1,12 +1,12 @@
 // Puur en framework-vrij: vat de onboarding-pijplijn samen voor het directie-
 // dashboard. Bepaalt per onboarding de fase, of er actie/aandacht nodig is en
 // hoe dringend (priority), zodat de CEO in één oogopslag ziet wat er nog moet
-// gebeuren en niets vergeten wordt. Hergebruikt de afgeleide-fase-logica van de
-// onboardingmodule; geen backend nodig.
+// gebeuren en niets vergeten wordt. Leunt op HET stappenmodel in
+// services/onboardingPipeline.ts — bord en dashboard delen dus één waarheid.
 import {
-  ONBOARDING_STAGES, deriveStage, hasPendingInvite, primaryOrder,
-  type OnboardingClient, type OnboardingStage,
-} from "@/hooks/useOnboarding";
+  ONBOARDING_STEPS, activeOrder, currentStep, onboardingFacts, stepStates,
+  type OnboardingClient, type OnboardingStage, type SkipIndex,
+} from "@/services/onboardingPipeline";
 import { materialsGate } from "@/services/workPreparation";
 
 export type AttentionTone = "red" | "amber" | "green" | "muted";
@@ -28,7 +28,7 @@ export interface OnboardingAttention {
 export function onboardingName(item: OnboardingClient): string {
   const name = (item.company_name ?? "").trim();
   if (name) return name;
-  const nr = primaryOrder(item)?.egroup_order_number;
+  const nr = activeOrder(item)?.egroup_order_number;
   return nr ? `Order ${nr}` : "Naamloze onboarding";
 }
 
@@ -40,17 +40,28 @@ export function todayISO(): string {
 }
 
 // Bepaal fase + aandacht voor één onboarding. De volgorde hieronder bepaalt de
-// prioriteit: sync-fout eerst (er ging iets echt mis), dan een verstreken
-// installatiedatum, dan geld dat blijft liggen (te factureren), planning,
-// materialen en overige acties.
-export function attentionFor(item: OnboardingClient, todayStr: string = todayISO()): OnboardingAttention {
-  const stage = deriveStage(item);
-  const order = primaryOrder(item);
+// prioriteit: sync-fout eerst (er ging iets echt mis), dan een ontbrekende order,
+// dan een verstreken installatiedatum, dan geld dat blijft liggen (te factureren),
+// planning, materialen en overige acties.
+export function attentionFor(
+  item: OnboardingClient,
+  todayStr: string = todayISO(),
+  skips?: SkipIndex,
+): OnboardingAttention {
+  const states = stepStates(item, skips);
+  const stage = currentStep(states)?.step.key ?? "archief";
+  const f = onboardingFacts(item);
+  const order = f.order;
   const base = { item, stage };
 
   // Sync-fout op de e-portal-koppeling — hoogste urgentie, ongeacht fase.
   if (order?.last_sync_error) {
     return { ...base, actionable: true, tone: "red", label: "Sync-fout — opnieuw syncen", priority: 0 };
+  }
+  // Getekende installatie-offerte zonder installatie-order: de sign-trigger heeft
+  // niet gedraaid. Dat is een storing, geen scope-keuze — en anders onzichtbaar.
+  if (stage !== "archief" && f.needsInstall && f.hasQuote && !f.hasOrder) {
+    return { ...base, actionable: true, tone: "red", label: "Installatie-order ontbreekt", priority: 0 };
   }
 
   switch (stage) {
@@ -68,17 +79,18 @@ export function attentionFor(item: OnboardingClient, todayStr: string = todayISO
     case "klant_aanmaken":
       return { ...base, actionable: true, tone: "amber", label: "Klantaccount aanmaken", priority: 4 };
     case "klant_uitnodigen":
-      return hasPendingInvite(item)
+      return hasPendingInviteFlag(item)
         ? { ...base, actionable: false, tone: "muted", label: "Uitnodiging verstuurd", priority: 91 }
         : { ...base, actionable: true, tone: "amber", label: "Klant uitnodigen", priority: 5 };
     case "werkvoorbereiding": {
+      if (!order?.work_prep_started_at) {
+        return { ...base, actionable: true, tone: "amber", label: "Werkvoorbereiding starten", priority: 7 };
+      }
       const open = materialsGate(order?.installation_order_materials ?? []).open;
       return open > 0
         ? { ...base, actionable: true, tone: "amber", label: `Materialen: ${open} te bestellen`, priority: 6 }
         : { ...base, actionable: true, tone: "green", label: "Klaar om te versturen", priority: 7 };
     }
-    case "getekend":
-      return { ...base, actionable: true, tone: "amber", label: "Werkvoorbereiding starten", priority: 7 };
     case "locaties_koppelen":
       return { ...base, actionable: true, tone: "amber", label: "Locaties koppelen", priority: 8 };
     case "gegevens":
@@ -87,6 +99,10 @@ export function attentionFor(item: OnboardingClient, todayStr: string = todayISO
     default:
       return { ...base, actionable: false, tone: "muted", label: "Afgerond", priority: 99 };
   }
+}
+
+function hasPendingInviteFlag(item: OnboardingClient): boolean {
+  return (item.client_invitations ?? []).some((i) => i.status === "pending");
 }
 
 export interface PlannedInstallation {
@@ -106,17 +122,25 @@ export interface OnboardingSummary {
   planned: PlannedInstallation[];
 }
 
-export function summarizeOnboarding(items: readonly OnboardingClient[], todayStr: string = todayISO()): OnboardingSummary {
-  const stageCounts = Object.fromEntries(ONBOARDING_STAGES.map((s) => [s.key, 0])) as Record<OnboardingStage, number>;
+export function summarizeOnboarding(
+  items: readonly OnboardingClient[],
+  todayStr: string = todayISO(),
+  skips?: SkipIndex,
+): OnboardingSummary {
+  const stageCounts = Object.fromEntries(ONBOARDING_STEPS.map((s) => [s.key, 0])) as Record<OnboardingStage, number>;
   const attention: OnboardingAttention[] = [];
   const planned: PlannedInstallation[] = [];
 
   for (const item of items) {
-    const a = attentionFor(item, todayStr);
+    const a = attentionFor(item, todayStr, skips);
     stageCounts[a.stage] += 1;
     if (a.actionable) attention.push(a);
-    const date = primaryOrder(item)?.scheduled_date;
-    if (a.stage === "bij_installateur" && date && date >= todayStr) planned.push({ item, date });
+    // Ingepland = de actieve order heeft een datum en is nog niet opgeleverd/gefactureerd.
+    // (Niet op de fase gekoppeld: een installatie+beheer-order die nog op zijn klantaccount
+    // wacht staat in 'klant_aanmaken' maar is wél gewoon ingepland.)
+    const order = activeOrder(item);
+    const date = order?.scheduled_date;
+    if (date && date >= todayStr && !order?.completed_at && !order?.invoiced_at) planned.push({ item, date });
   }
   attention.sort((x, y) => x.priority - y.priority);
   planned.sort((x, y) => x.date.localeCompare(y.date));

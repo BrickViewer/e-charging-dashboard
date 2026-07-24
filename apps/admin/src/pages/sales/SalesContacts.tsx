@@ -39,6 +39,16 @@ function Kpi({ icon: Icon, label, value }: { icon: typeof Users; label: string; 
   );
 }
 
+// Groene chip als het contact aan een WeFact-debiteur is gekoppeld (code in de tooltip).
+function WefactBadge({ code }: { code?: string | null }) {
+  if (!code) return null;
+  return (
+    <span title={`WeFact-debiteur ${code}`} className="rounded border border-emerald-300 px-1.5 py-0.5 text-[10px] font-medium leading-none text-emerald-700">
+      WeFact
+    </span>
+  );
+}
+
 export default function SalesContacts() {
   const companies = useCompanies();
   const persons = usePersons();
@@ -181,7 +191,9 @@ export default function SalesContacts() {
             <tbody>
               {filteredCompanies.map((c) => (
                 <tr key={c.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => setSelCompany(c)}>
-                  <td className="px-4 py-2.5 font-medium text-foreground">{c.name}</td>
+                  <td className="px-4 py-2.5 font-medium text-foreground">
+                    <span className="inline-flex items-center gap-2">{c.name}<WefactBadge code={c.wefact_debtor_code} /></span>
+                  </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{c.kvk || "—"}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{c.city || "—"}</td>
                   <td className="px-4 py-2.5 text-right text-muted-foreground">{c.company_persons?.[0]?.count ?? 0}</td>
@@ -209,7 +221,9 @@ export default function SalesContacts() {
             <tbody>
               {filteredPersons.map((p) => (
                 <tr key={p.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => setSelPerson(p)}>
-                  <td className="px-4 py-2.5 font-medium text-foreground">{p.full_name || "(naamloos)"}</td>
+                  <td className="px-4 py-2.5 font-medium text-foreground">
+                    <span className="inline-flex items-center gap-2">{p.full_name || "(naamloos)"}<WefactBadge code={p.wefact_debtor_code} /></span>
+                  </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{p.email || "—"}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{p.phone ? formatPhone(p.phone) : "—"}</td>
                   <td className="px-4 py-2.5 text-right text-muted-foreground">{p.company_persons?.[0]?.count ?? 0}</td>

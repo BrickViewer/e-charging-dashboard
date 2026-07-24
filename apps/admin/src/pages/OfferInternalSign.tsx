@@ -13,6 +13,9 @@ import { defaultOfferEmail, type OfferDetails, type OfferTemplateValues } from "
 import { OfferPreview } from "@/components/sales/OfferPreview";
 import { SignaturePad } from "@/components/SignaturePad";
 import { mdBoldToHtml } from "@/lib/emailBody";
+import { offerSections, offerPhrases } from "@/services/offerTemplate";
+import { OFFER_SECTION_LABELS, offerSectionLabel } from "@/services/offerSectionLabels";
+import { phraseSnippet } from "@/services/offerPhraseLabels";
 
 type QuoteSummary = {
   quoteNumber: string;
@@ -201,6 +204,17 @@ export default function OfferInternalSign() {
   const sigName = quote.internalSignerName || quote.signerProfileName || "—";
   const emailGreeting = quote.offerDetails?.emailGreeting?.trim() || `Beste ${quote.contact || "klant"},`;
   const emailClosing = quote.offerDetails?.emailClosingName?.trim() || quote.internalSignerName || quote.signerProfileName || "Team E-Charging";
+  // Documentopbouw: je tekent hier namens E-Charging B.V., dus je moet zien of er onderdelen
+  // buiten het klantdocument zijn gelaten. Alleen-lezen — herstellen doe je in het sales-werkblad.
+  let sectionInfo: ReturnType<typeof offerSections> = [];
+  let phraseInfo: ReturnType<typeof offerPhrases> = [];
+  try {
+    sectionInfo = offerSections(toPdfData(quote));
+    phraseInfo = offerPhrases(toPdfData(quote));
+  } catch { sectionInfo = []; phraseInfo = []; }
+  const omittedLabels = sectionInfo.filter((s) => s.omitted).map((s) => offerSectionLabel(s.id));
+  const omittedPhraseLabels = phraseInfo.filter((p) => p.omitted).map((p) => `"${phraseSnippet(p.text, 60)}"`);
+  const omittedAll = [...omittedLabels, ...omittedPhraseLabels];
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-muted/30 lg:h-[100dvh] lg:overflow-hidden">
@@ -212,7 +226,13 @@ export default function OfferInternalSign() {
       <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[1.65fr_1fr]">
         {/* Links: de offerte als schaalbare viewer (met E-Charging-handtekening vooraf ingevuld) */}
         <div className="flex min-h-0 flex-col gap-2 bg-muted/40 p-3 sm:p-5">
-          <OfferPreview data={toPdfData(quote)} signature={echargingSig(quote, effectiveSig) as OfferSignature} className="h-[65vh] w-full lg:h-auto lg:flex-1" />
+          <OfferPreview
+            data={toPdfData(quote)}
+            signature={echargingSig(quote, effectiveSig) as OfferSignature}
+            className="h-[65vh] w-full lg:h-auto lg:flex-1"
+            sections={sectionInfo}
+            sectionLabels={OFFER_SECTION_LABELS}
+          />
           <div className="text-center">
             <button type="button" onClick={openPdf} disabled={pdfBusy} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-60">
               {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -233,6 +253,14 @@ export default function OfferInternalSign() {
             {/* Ondertekening: ter plekke tekenen of de opgeslagen handtekening gebruiken */}
             <div className="space-y-2">
               <h2 className="text-base font-bold">Jouw ondertekening</h2>
+              {omittedAll.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <span className="font-medium">
+                    {omittedAll.length === 1 ? "1 onderdeel gaat niet" : `${omittedAll.length} onderdelen gaan niet`} naar de klant
+                  </span>
+                  : {omittedAll.join(", ")}. Je tekent dus een ingekorte versie. Terugzetten kan in het sales-werkblad via "Wijziging vragen".
+                </div>
+              )}
               {showPad ? (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Teken hieronder je handtekening. Klopt de offerte? Keur goed - dan gaat 'm direct naar de klant.</p>

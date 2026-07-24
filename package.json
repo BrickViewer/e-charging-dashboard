@@ -18,6 +18,7 @@
     "build:packages": "npm run build -w @echarging/pricing-engine && npm run build -w @echarging/api-client && npm run build -w @echarging/ui-kit",
     "deploy:dashboard": "npm run build:dashboard && sh scripts/deploy-dashboard.sh",
     "lint": "eslint .",
+    "typecheck": "npm run typecheck -w @echarging/admin",
     "preview": "npm run preview -w @echarging/admin",
     "security:probe:live": "node scripts/security/live-rls-probe.mjs",
     "test": "vitest run",

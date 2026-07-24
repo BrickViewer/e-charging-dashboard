@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { invalidateOnboarding } from "@/hooks/useOnboarding";
 
 export type Quote = Database["public"]["Tables"]["quotes"]["Row"];
 export type QuoteUpdate = Database["public"]["Tables"]["quotes"]["Update"];
@@ -245,9 +246,10 @@ export function useCreateClientFromQuote() {
       return data;
     },
     onSuccess: (_d, { quoteId }) => {
-      qc.invalidateQueries({ queryKey: ["quotes"] });
+      // De kaart verhuist hier van 'offerte'/'order' naar 'klant': alle drie de
+      // onboarding-bronnen moeten opnieuw, anders blijft de oude kaart staan.
+      invalidateOnboarding(qc);
       qc.invalidateQueries({ queryKey: ["quote", quoteId] });
-      qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
       qc.invalidateQueries({ queryKey: ["leads"] });
     },

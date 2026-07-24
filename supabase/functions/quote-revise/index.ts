@@ -13,7 +13,11 @@ const corsHeaders = CORS_STD;
 
 // Deze offer_details-keys worden pas bij verzenden bevroren; in een concept volgen ze het
 // gekoppelde object weer live, dus die nemen we bewust NIET mee in de kopie.
-const FREEZE_KEYS = ["addressStreet", "addressPostalCode", "addressCity"];
+// De documentopbouw (docSections = weggelaten onderdelen, docPhrases = weggelaten zinnen) hoort
+// hier ook thuis: een revisie ontstaat juist omdat het vorige document niet klopte, dus die begint
+// altijd met het VOLLEDIGE sjabloon. Een stil doorgeërfde inkorting zou ongemerkt opnieuw naar de
+// klant gaan. Elke volgende korrel toevoegen aan deze lijst.
+const FREEZE_KEYS = ["addressStreet", "addressPostalCode", "addressCity", "docSections", "docPhrases"];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });

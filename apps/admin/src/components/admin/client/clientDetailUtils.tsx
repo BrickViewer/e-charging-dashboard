@@ -1,10 +1,46 @@
 import { monthFullLabel } from "@/lib/period";
 import { settlementNetExcl } from "@/services/calculations";
+import type { OnbOrder, OnboardingClient } from "@/services/onboardingPipeline";
 import type {
   ClientPaymentDetails,
   ClientWithRelations,
   Settlement,
 } from "@/types/db";
+
+// De klantpagina rekent met dezelfde ladder als het onboarding-bord
+// (services/onboardingPipeline.ts). Deze mapping is de enige plek waar de clients-rij
+// naar dat model wordt vertaald; wat je op de klantpagina ziet is dus exact wat de kaart
+// op /sales/onboarding laat zien.
+export function toOnboardingItem(client: ClientWithRelations, orders: OnbOrder[]): OnboardingClient {
+  return {
+    id: client.id,
+    company_name: client.company_name,
+    client_number: client.client_number,
+    status: client.status,
+    portal_user_id: client.portal_user_id,
+    contact_email: client.contact_email,
+    contact_name: client.contact_name,
+    contact_phone: client.contact_phone,
+    created_at: client.created_at,
+    payment_onboarding_status: client.payment_onboarding_status,
+    needs_installation: client.needs_installation,
+    managed: client.managed,
+    vat_status: client.vat_status,
+    kvk: client.kvk,
+    btw_number: client.btw_number,
+    billing_address_street: client.billing_address_street,
+    billing_address_postal: client.billing_address_postal,
+    billing_address_city: client.billing_address_city,
+    // Zonder deze twee is activationOpen hier altijd 0 en viel de factuurstap voor een
+    // alleen-beheer-klant terug op 'n.v.t.' — terwijl het bord hem wél als openstaand toont.
+    activation_fee_total: client.activation_fee_total,
+    activation_invoiced_total: client.activation_invoiced_total,
+    installation_orders: orders,
+    locations: (client.locations ?? []).map((l) => ({ id: l.id, archived_at: l.archived_at })),
+    client_invitations: client.client_invitations ?? [],
+    kind: "client",
+  };
+}
 
 export function splitContactName(name?: string | null) {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);

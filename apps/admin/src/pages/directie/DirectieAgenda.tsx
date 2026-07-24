@@ -71,7 +71,7 @@ export default function DirectieAgenda() {
 
   const { user } = useAuth();
   const org = useOrganization();
-  const { login } = useMicrosoftAuth();
+  const { login, reconnect } = useMicrosoftAuth();
   const [linking, setLinking] = useState(false);
   const tasksQ = useAllTasks("all");
   const plannedQ = usePlannedInstallations();
@@ -174,6 +174,21 @@ export default function DirectieAgenda() {
     }
   }, [login, eventsQ]);
 
+  // Toestemming vernieuwen. Moet uit een KLIK komen: alleen dan mag de browser de popup openen.
+  // Nodig sinds de agenda-scope (Calendars.ReadWrite) aan de koppeling is toegevoegd — bestaande
+  // sessies hebben die niet en kunnen hem niet stil bijkrijgen.
+  const reconnectAgenda = useCallback(async () => {
+    setLinking(true);
+    try {
+      await reconnect();
+      await eventsQ.refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Opnieuw koppelen met Microsoft mislukt");
+    } finally {
+      setLinking(false);
+    }
+  }, [reconnect, eventsQ]);
+
   const saveDraft = async () => {
     if (!draft || !draft.subject.trim()) return;
     if (!draft.allDay && draft.endTime <= draft.startTime) {
@@ -248,12 +263,25 @@ export default function DirectieAgenda() {
           </CardContent>
         </Card>
       )}
+      {status === "reauth_required" && (
+        <Card className="border-[hsl(var(--status-amber)/0.4)]">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="flex items-start gap-3">
+              <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--status-amber))]" />
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                Je Microsoft-koppeling mist de rechten voor je agenda. Koppel eenmalig opnieuw om toestemming te geven; je taken hieronder werken gewoon door.
+              </p>
+            </div>
+            <Button size="sm" onClick={reconnectAgenda} disabled={linking}>{linking ? "Koppelen…" : "Opnieuw koppelen"}</Button>
+          </CardContent>
+        </Card>
+      )}
       {status === "error" && (
         <Card className="border-destructive/40">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-              <p className="max-w-2xl text-sm text-muted-foreground">Je afspraken konden niet worden geladen. Controleer je verbinding en probeer het opnieuw.</p>
+              <p className="max-w-2xl text-sm text-muted-foreground">{eventsQ.errorMessage ?? "Je afspraken konden niet worden geladen. Controleer je verbinding en probeer het opnieuw."}</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => eventsQ.refetch()}>Opnieuw proberen</Button>
           </CardContent>
@@ -346,6 +374,8 @@ export default function DirectieAgenda() {
               <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" /> Afspraken</p>
               {status === "not_connected" ? (
                 <p className="text-xs text-muted-foreground">Koppel je Microsoft-agenda om je afspraken te zien.</p>
+              ) : status === "reauth_required" ? (
+                <p className="text-xs text-muted-foreground">Koppel opnieuw om je afspraken te zien.</p>
               ) : status === "error" ? (
                 <p className="text-xs text-muted-foreground">Kon de afspraken niet laden.</p>
               ) : dayEvents.length === 0 ? (

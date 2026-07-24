@@ -4,6 +4,7 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { GraphClient, sanitizeName } from "../_shared/sharepoint.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
+import { joinStreetAndHouse } from "../_shared/installationHandoff.ts";
 
 // Cron-functie: uploadt getekende offertes (OPD) die nog niet in SharePoint staan,
 // vanuit de Supabase-storage naar de Opdracht-submap. Alleen via x-internal-secret.
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
     for (const q of (quotes ?? [])) {
       try {
         const { data: loc } = await sb.from("project_locations")
-          .select("opdracht_item_id, location_number, address_street, city").eq("id", q.project_location_id!).maybeSingle();
+          .select("opdracht_item_id, location_number, address_street, house_number, city").eq("id", q.project_location_id!).maybeSingle();
         if (!loc?.opdracht_item_id) { skipped++; continue; }
         const { data: org } = await sb.from("organizations").select("sharepoint_drive_id").eq("id", q.organization_id).maybeSingle();
         const driveId = org?.sharepoint_drive_id as string | null;
@@ -58,7 +59,7 @@ Deno.serve(async (req) => {
         if (dErr || !blob) { skipped++; continue; }
         const bytes = new Uint8Array(await blob.arrayBuffer());
 
-        const addrLabel = [loc.address_street, loc.city].filter(Boolean).join(" ") || String(q.prospect_company ?? "");
+        const addrLabel = [joinStreetAndHouse(loc.address_street, loc.house_number), loc.city].filter(Boolean).join(" ") || String(q.prospect_company ?? "");
         const opdNumber = q.quote_number ?? `${loc.location_number}-${String(q.document_number ?? 1).padStart(2, "0")}-${String(new Date(q.sent_at ?? new Date().toISOString()).getFullYear()).slice(-2)}`;
         const opdName = sanitizeName(`${opdNumber} OPD ${addrLabel}`) + ".pdf";
         const opd = await gc.uploadFile(driveId, loc.opdracht_item_id, opdName, bytes);

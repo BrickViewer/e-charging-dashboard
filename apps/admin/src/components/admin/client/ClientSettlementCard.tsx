@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Loader2, RotateCcw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, FileText, Loader2, RotateCcw, Upload } from "lucide-react";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { formatEuro, formatNumber, settlementVat } from "@/services/calculations";
 import { generateSelfBillingInvoicePdf, InvoiceValidationError } from "@/services/invoicePdf";
+import { pushSettlementToWefact } from "@/services/wefactSettlementPush";
+import { useQueryClient } from "@tanstack/react-query";
 import { FeeWaiverControl } from "@/components/admin/financial/FeeWaiverControl";
 import { toast } from "sonner";
 import type { ClientPaymentDetails, ClientWithRelations, Organization, Settlement } from "@/types/db";
@@ -32,6 +36,8 @@ export function ClientSettlementCard({
   executeMoneyFlow: (settlement: Settlement) => void;
   markEfluxReimbursed: (id: string) => void;
 }) {
+  const queryClient = useQueryClient();
+  const [pushingWefact, setPushingWefact] = useState(false);
   const grossRevenue = Number(s.gross_revenue || 0);
   const totalKwh = Number(s.total_kwh || 0);
   const feePerKwh = Number(s.echarging_fee_per_kwh || 0);
@@ -50,6 +56,33 @@ export function ClientSettlementCard({
   const canMarkBankPaid = s.status === "approved" && clientPayout >= 0 && efluxReimbursed;
   const canMarkInvoiceSent = s.status === "approved" && clientPayout < 0;
   const canMarkInvoicePaid = s.status === "invoice_sent";
+
+  // WeFact-inkoopfactuur (self-billing): pas relevant zodra de afrekening definitief is
+  // (approved+) en positief uitbetaalt. Gekoppeld = ref aanwezig én PDF gehangen.
+  const isFinal = !isLive && !isCalculated;
+  const wefactRef = s.wefact_creditinvoice_code ?? null;
+  const wefactPdfPending = s.wefact_sync_error === "pdf_pending";
+  const wefactDone = !!wefactRef && !wefactPdfPending;
+  const canPushWefact = isFinal && clientPayout >= 0 && !wefactDone;
+
+  const pushToWefact = async () => {
+    setPushingWefact(true);
+    try {
+      const res = await pushSettlementToWefact(s.id, s, client, org, paymentDetails);
+      if (res.status === "skipped") toast.info(res.message ?? "Overgeslagen");
+      else toast.success(`In WeFact gezet${res.creditInvoiceCode ? ` (${res.creditInvoiceCode})` : ""} met factuur als bijlage`);
+      queryClient.invalidateQueries({ queryKey: ["admin-client-settlements"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-settlements"] });
+    } catch (err) {
+      if (err instanceof InvoiceValidationError) {
+        toast.error(`Factuur geblokkeerd — ontbrekend: ${err.issues.map((i) => i.label).join(", ")}`);
+      } else {
+        toast.error(err instanceof Error ? err.message : "Naar WeFact sturen mislukt");
+      }
+    } finally {
+      setPushingWefact(false);
+    }
+  };
 
   return (
     <Card key={s.id}>
@@ -114,6 +147,17 @@ export function ClientSettlementCard({
               >
                 <FileText className="w-3.5 h-3.5 mr-1.5" />
                 Factuur
+              </Button>
+            )}
+            {isFinal && wefactDone && (
+              <Badge variant="outline" className="gap-1 border-emerald-300 text-emerald-700">
+                <CheckCircle2 className="w-3.5 h-3.5" /> WeFact {wefactRef}
+              </Badge>
+            )}
+            {canPushWefact && (
+              <Button size="sm" variant="outline" onClick={pushToWefact} disabled={pushingWefact} title="Als inkoopfactuur in WeFact zetten (met onze PDF als bijlage)">
+                {pushingWefact ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
+                {wefactPdfPending ? "PDF aanhangen" : "Naar WeFact"}
               </Button>
             )}
           </div>

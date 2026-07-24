@@ -18,6 +18,7 @@ import {
   Package,
   CalendarDays,
   Crosshair,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/contexts/authContextValue";
@@ -49,6 +50,7 @@ export const WORKSPACES: Record<WorkspaceKey, Workspace> = {
       { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
       { to: "/admin/agenda", icon: CalendarDays, label: "Agenda" },
       { to: "/admin/taken", icon: ListChecks, label: "Taken" },
+      { to: "/admin/facturatie", icon: Receipt, label: "Facturatie" },
       { to: "/admin/doelen", icon: Crosshair, label: "Doelen" },
     ],
   },

@@ -6,6 +6,7 @@ import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { getAnthropicKey, anthropicMessage, extractJson } from "../_shared/anthropic.ts";
 import { FACTCHECK_SYSTEM, factcheckCorrections, factcheckIssues, validateFactcheckJson } from "../_shared/factcheck.ts";
 import { validateSources, type BlogSource } from "../_shared/blog.ts";
+import { TRUSTED_DOMAINS, isTrustedSource } from "../_shared/sources.ts";
 import { notifyContentEngine } from "../_shared/content-notify.ts";
 
 // content-factcheck: de laatste poort vóór publicatie. Elke blog die de kwaliteitsketen
@@ -64,6 +65,11 @@ Deno.serve(async (req) => {
     const model = typeof settings.factcheck_model === "string" ? settings.factcheck_model : "claude-sonnet-5";
     // Drie rondes: check → chirurgische fix → check → fix → check → terminaal.
     const MAX_FACTCHECK_ROUNDS = Number.isFinite(settings.factcheck_max_rounds) ? Math.max(1, Number(settings.factcheck_max_rounds)) : 3;
+    // Backfill draait op LIVE content. Drie rondes: bij de canary (Netcongestie-kosten) ging het
+    // van 14 blokkerende punten naar 3 in één correctieronde, dus twee rondes lieten het net te
+    // vaak op "needs review" stranden. Meer dan drie loont niet: de fix-stap convergeert daarna
+    // nauwelijks nog en elke ronde kost een volledige web-search-run.
+    const MAX_BACKFILL_ROUNDS = 3;
 
     const apiKey = await getAnthropicKey(sb);
     if (!apiKey) return json({ status: "no_key", message: "ANTHROPIC_API_KEY ontbreekt" });
@@ -98,16 +104,23 @@ Deno.serve(async (req) => {
       // escaleert bovendien het budget in anthropicMessage (×1,5).
       const raw = await anthropicMessage({
         apiKey, system: FACTCHECK_SYSTEM, user, model, maxTokens: 16000,
-        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }],
+        // Harde bronbeperking: de controleur kán alleen binnen de vertrouwde domeinen zoeken.
+        // Wat daar niet te bevestigen is, is per definitie unverifiable en gaat het artikel uit.
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8, allowed_domains: TRUSTED_DOMAINS }],
         retries: 1,
+        thinking: "adaptive", effort: "medium",
       });
-      const report = validateFactcheckJson(extractJson<any>(raw));
-      await ev("check_ok", { ms: Date.now() - fcT0, verdict: report.verdict, critical: report.critical_count });
+      // De bronnen van de post gaan mee: alles buiten TRUSTED_DOMAINS telt als blokkerend.
+      const report = validateFactcheckJson(extractJson<any>(raw), bronnen);
+      await ev("check_ok", { ms: Date.now() - fcT0, verdict: report.verdict, critical: report.critical_count, untrusted: report.untrusted_sources.length });
 
-      // Rapport altijd vastleggen + geverifieerde bronnen mergen (dedup op url).
+      // Rapport altijd vastleggen + geverifieerde bronnen mergen (dedup op url). Niet-toegestane
+      // bronnen gaan er DETERMINISTISCH uit (geen LLM nodig): concurrenten, Wikipedia en obscure
+      // domeinen horen niet in de bronnenlijst van een kennisbankartikel. De inline links in de
+      // HTML haalt de chirurgische fix weg, aangestuurd door untrusted_sources.
       const bestaandeUrls = new Set(bronnen.map((s) => s.url));
       const nieuweBronnen: BlogSource[] = report.verified_sources.filter((s) => !bestaandeUrls.has(s.url));
-      const sources = [...bronnen, ...nieuweBronnen].slice(0, 12);
+      const sources = [...bronnen, ...nieuweBronnen].filter((s) => isTrustedSource(s.url)).slice(0, 12);
       await sb.from("blog_posts").update({
         factcheck: { ...report, round: factcheckRound, model, checked_at: new Date().toISOString() },
         factchecked_at: new Date().toISOString(),
@@ -115,17 +128,38 @@ Deno.serve(async (req) => {
       }).eq("id", blogPostId);
 
       if (backfill) {
-        // Bestaande (gepubliceerde) blog: nooit de status aanraken; wel waarschuwen bij echte fouten.
-        if (report.critical_count > 0) {
-          await notifyContentEngine(settings, {
-            kind: "run_failed",
-            title: post.title,
-            reason: `Feitencontrole van een REEDS GEPUBLICEERDE blog vond ${report.critical_count} kritiek punt(en)`,
-            details: factcheckIssues(report),
-            blogPostId,
-          }).catch(() => {});
+        // Bestaande (gepubliceerde) blog. De status blijft ALTIJD 'gepubliceerd': een machine
+        // haalt geen live pagina offline (SEO-schade is niet terug te draaien). Wel automatisch
+        // corrigeren: de chirurgische fix schrapt onbevestigde beweringen en niet-toegestane
+        // bronlinks en koppelt terug naar deze controle. Twee rondes, want dit is live content.
+        if (report.critical_count === 0) {
+          await ev("backfill_clean", { sources: sources.length });
+          return { status: "ok", action: "backfill_clean", verdict: report.verdict, sources: sources.length };
         }
-        return { status: "ok", action: "backfill", verdict: report.verdict, critical: report.critical_count, sources: sources.length };
+        const backfillCorrections = factcheckCorrections(report);
+        if (factcheckRound < MAX_BACKFILL_ROUNDS && backfillCorrections.length > 0) {
+          await sb.rpc("invoke_edge_function", {
+            fn_name: "content-revise",
+            body: {
+              blog_post_id: blogPostId, surgical: true, corrections: backfillCorrections,
+              iteration, factcheck_round: factcheckRound + 1, backfill: true,
+            },
+          });
+          await ev("backfill_surgical", { critical: report.critical_count, corrections: backfillCorrections.length });
+          return { status: "ok", action: "backfill_fixing", round: factcheckRound, critical: report.critical_count };
+        }
+        // Rondes op (of niets concreets te corrigeren): markeren voor menselijke beoordeling en
+        // melden, maar het artikel blijft online. Jij beslist of het eraf moet.
+        await sb.from("blog_posts").update({ review_state: "changes_requested" }).eq("id", blogPostId);
+        await notifyContentEngine(settings, {
+          kind: "run_failed",
+          title: post.title,
+          reason: `Feitencontrole van een GEPUBLICEERDE blog vond na ${factcheckRound} ronde(s) nog ${report.critical_count} onbevestigd punt(en). Het artikel staat nog online en is gemarkeerd voor jouw beoordeling.`,
+          details: factcheckIssues(report),
+          blogPostId,
+        }).catch(() => {});
+        await ev("backfill_needs_review", { critical: report.critical_count, round: factcheckRound });
+        return { status: "ok", action: "backfill_needs_review", verdict: report.verdict, critical: report.critical_count };
       }
 
       if (report.verdict === "pass") {

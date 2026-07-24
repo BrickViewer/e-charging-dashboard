@@ -1,6 +1,11 @@
 // Geplande installaties voor de agenda: installatie-opdrachten met een plandatum
 // die nog niet opgeleverd/gefactureerd zijn, met de omzet (eenmalige commerciële
 // offerteprijs) erbij zodat de directie per dag ziet hoeveel er verdiend wordt.
+//
+// Zelfde definitie als summarizeOnboarding().planned in services/onboardingOverview.ts
+// (plandatum + niet opgeleverd + niet gefactureerd); deze variant bestaat apart omdat
+// de agenda óók de offertebedragen nodig heeft én terugkijkt in de tijd. Wijzig je de
+// ene, wijzig dan de andere mee. invalidateOnboarding() ververst deze query.
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 

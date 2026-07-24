@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ExternalLink, MapPin, Plus, Star, Target, Trash2, X } from "lucide-react";
 import { PersonPicker } from "./PersonPicker";
+import { WefactDebtorPanel } from "./WefactDebtorPanel";
+import { WefactContactInvoices } from "./WefactContactInvoices";
+import { useAuth } from "@/hooks/useAuth";
 import { ObjectCreateDialog } from "./ObjectCreateDialog";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
 import { formatPhone } from "@/lib/phone";
@@ -46,6 +49,8 @@ export function CompanyDetailSheet({
   const herkomst = useLeadsForClient(open ? account.data?.id : undefined);
   const link = useLinkPersonToCompany();
   const unlink = useUnlinkPersonFromCompany();
+  const { role, isSuperadmin } = useAuth();
+  const canBill = role === "admin" || role === "manager" || isSuperadmin;
   const navigate = useNavigate();
   const [objCreateOpen, setObjCreateOpen] = useState(false);
 
@@ -132,6 +137,8 @@ export function CompanyDetailSheet({
               <Button variant="ghost" size="sm" className="text-red-600" onClick={remove}><Trash2 className="mr-1.5 h-4 w-4" />Verwijderen</Button>
               <Button onClick={save} disabled={update.isPending}>{update.isPending ? "Opslaan…" : "Opslaan"}</Button>
             </div>
+            {canBill && <WefactDebtorPanel table="companies" subjectId={company.id} allowInvoice />}
+            {canBill && <WefactContactInvoices table="companies" subjectId={company.id} />}
           </TabsContent>
 
           <TabsContent value="account" className="mt-4 space-y-3">

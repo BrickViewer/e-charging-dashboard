@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ScopeSelector } from "@/components/sales/ScopeSelector";
 import { PhoneField } from "@/components/contacts/PhoneField";
 import { AddressFields, type AddressValue } from "@/components/contacts/AddressFields";
+import { splitStreetAndHouse, joinStreetAndHouse } from "@/lib/houseNumber";
 import { useCompany, usePerson } from "@/hooks/useContacts";
 import { useConfiguratorSettings } from "@/hooks/useConfiguratorSettings";
 import { useCreateClientFromQuote } from "@/hooks/useQuotes";
@@ -34,11 +35,6 @@ export type QuoteForClient = {
 
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
 const EMPTY_ADDR: AddressValue = { street: "", houseNumber: "", postalCode: "", city: "" };
-// Splits een gecombineerd "Straat 3D" in straat + huisnummer voor het gestructureerde AddressFields.
-const splitStreetHouse = (s: string): { street: string; house: string } => {
-  const m = (s ?? "").trim().match(/^(.*?)\s+(\d.*)$/);
-  return m ? { street: m[1].trim(), house: m[2].trim() } : { street: (s ?? "").trim(), house: "" };
-};
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1"><Label className="text-xs">{label}</Label>{children}</div>;
@@ -107,7 +103,7 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
     const cd = company.data;
     setBilling(cd?.address_street
       ? { street: cd.address_street, houseNumber: cd.house_number ?? "", postalCode: cd.postal_code ?? "", city: cd.city ?? "" }
-      : (() => { const sh = splitStreetHouse(od.addressStreet ?? ""); return { street: sh.street, houseNumber: sh.house, postalCode: od.addressPostalCode ?? "", city: od.addressCity ?? "" }; })());
+      : (() => { const [street, houseNumber] = splitStreetAndHouse(od.addressStreet ?? ""); return { street, houseNumber, postalCode: od.addressPostalCode ?? "", city: od.addressCity ?? "" }; })());
     setManaged(quote.with_management !== false);
     setNeedsInstall(quote.with_installation !== false);
   }, [open, quote?.id, company.data, person.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -138,7 +134,7 @@ export function CreateClientFromQuoteDialog({ quote, open, onClose, onCreated }:
           contact_name: (isParticulier ? t("company_name") : t("contact_name")).trim() || null,
           contact_email: t("contact_email").trim() || null,
           contact_phone: t("contact_phone").trim() || null,
-          billing_address_street: [billing.street.trim(), billing.houseNumber.trim()].filter(Boolean).join(" ") || null,
+          billing_address_street: joinStreetAndHouse(billing.street, billing.houseNumber) || null,
           billing_address_postal: billing.postalCode.trim() || null,
           billing_address_city: billing.city.trim() || null,
           contract_duration_months: numOr(t("contract_duration_months")),

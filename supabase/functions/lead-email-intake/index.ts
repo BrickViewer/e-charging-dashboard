@@ -5,6 +5,7 @@ import { resolveOrCreateCompany, resolveOrCreatePerson, linkPersonToCompany } fr
 import { buildCors } from "../_shared/cors.ts";
 import { resolveSecret } from "../_shared/secrets.ts";
 import { getAnthropicKey, anthropicMessage, extractJson, DEFAULT_MODEL } from "../_shared/anthropic.ts";
+import { splitDutchAddress } from "../_shared/installationHandoff.ts";
 
 // lead-email-intake: een doorgestuurde aanvraag-mail wordt een lead onder "Nieuw", met door Claude uitgelezen
 // velden. Twee ingangen: (1) Resend Inbound-webhook (email.received) met Svix-handtekening -> body via de Resend
@@ -115,7 +116,7 @@ Deno.serve(async (req: Request) => {
         const settingsRow = await sb.from("content_engine_settings").select("settings").eq("is_active", true).limit(1).maybeSingle();
         const model = typeof (settingsRow.data?.settings as any)?.generation_model === "string" ? (settingsRow.data!.settings as any).generation_model : DEFAULT_MODEL;
         const user = `Doorgestuurd door (negeren): ${mail.from ?? "onbekend"}\nOnderwerp: ${mail.subject ?? ""}\n\n${mail.text ?? ""}`;
-        ai = extractJson(await anthropicMessage({ apiKey, system: SYSTEM, user, model, maxTokens: 2000 }));
+        ai = extractJson(await anthropicMessage({ apiKey, system: SYSTEM, user, model, maxTokens: 2000, thinking: "disabled" }));
       } catch (_) { /* AI optioneel */ }
     }
 
@@ -132,6 +133,7 @@ Deno.serve(async (req: Request) => {
     const personId = await resolveOrCreatePerson(sb, org.id, { name: contactName, email: contactEmail, phone: contactPhone, role: contactRole });
     if (companyId && personId) await linkPersonToCompany(sb, companyId, personId, true);
 
+    const leadAddr = splitDutchAddress(str(ai.address_street));
     const { data: lead, error } = await sb.from("leads").insert({
       organization_id: org.id,
       stage_id: stage?.id ?? null,
@@ -147,7 +149,9 @@ Deno.serve(async (req: Request) => {
       contact_role: contactRole,
       contact_email: contactEmail,
       contact_phone: contactPhone,
-      address_street: str(ai.address_street),
+      // Intake levert één adresregel; leads slaat straat en huisnummer los op.
+      address_street: leadAddr.street || null,
+      house_number: leadAddr.house_number || null,
       postal_code: str(ai.postal_code),
       city: str(ai.city),
       location_type: str(ai.location_type),

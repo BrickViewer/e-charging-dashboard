@@ -1,25 +1,25 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { MapPin, Plus, Trash2, X } from "lucide-react";
+import { ExternalLink, MapPin, Plus, Trash2, X } from "lucide-react";
 import { CompanyPicker } from "./CompanyPicker";
-import { PhoneField } from "./PhoneField";
+import { PersonFields } from "./PersonFields";
+import { WefactDebtorPanel } from "./WefactDebtorPanel";
+import { WefactContactInvoices } from "./WefactContactInvoices";
+import { useAuth } from "@/hooks/useAuth";
 import { ObjectCreateDialog } from "./ObjectCreateDialog";
 import { useProjectLocationsByPerson } from "@/hooks/useProjectLocations";
 import { formatObjectAddress } from "@/lib/objectLabel";
 import {
-  useUpdatePerson,
   useDeletePerson,
   usePersonCompanies,
   useLinkPersonToCompany,
   useUnlinkPersonFromCompany,
   useLeadsForContact,
+  useClientForPerson,
   type Person,
 } from "@/hooks/useContacts";
 
@@ -32,52 +32,19 @@ export function PersonDetailSheet({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const update = useUpdatePerson();
   const del = useDeletePerson();
   const companies = usePersonCompanies(open ? person?.id : undefined);
   const leads = useLeadsForContact("person_id", open ? person?.id : undefined);
   const link = useLinkPersonToCompany();
   const unlink = useUnlinkPersonFromCompany();
+  const { role, isSuperadmin } = useAuth();
+  const canBill = role === "admin" || role === "manager" || isSuperadmin;
   const objecten = useProjectLocationsByPerson(open ? person?.id : undefined);
+  const account = useClientForPerson(open ? person?.id : undefined);
   const navigate = useNavigate();
   const [objCreateOpen, setObjCreateOpen] = useState(false);
 
-  const [form, setForm] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (person) {
-      setForm({
-        first_name: person.first_name ?? "",
-        last_name: person.last_name ?? "",
-        email: person.email ?? "",
-        phone: person.phone ?? "",
-        role: person.role ?? "",
-        notes: person.notes ?? "",
-      });
-    }
-  }, [person]);
-
   if (!person) return null;
-  const set = (k: string) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const t = (k: string) => form[k] ?? "";
-
-  const save = async () => {
-    try {
-      await update.mutateAsync({
-        id: person.id,
-        patch: {
-          first_name: t("first_name").trim() || null,
-          last_name: t("last_name").trim() || null,
-          email: t("email").trim() || null,
-          phone: t("phone").trim() || null,
-          role: t("role").trim() || null,
-          notes: t("notes").trim() || null,
-        },
-      });
-      toast.success("Persoon opgeslagen");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Opslaan mislukt");
-    }
-  };
 
   const remove = async () => {
     if (!window.confirm(`Persoon "${person.full_name}" verwijderen?`)) return;
@@ -102,18 +69,31 @@ export function PersonDetailSheet({
           </TabsList>
 
           <TabsContent value="gegevens" className="mt-4 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Voornaam"><Input value={t("first_name")} onChange={(e) => set("first_name")(e.target.value)} /></Field>
-              <Field label="Achternaam"><Input value={t("last_name")} onChange={(e) => set("last_name")(e.target.value)} /></Field>
-              <Field label="E-mail"><Input type="email" value={t("email")} onChange={(e) => set("email")(e.target.value)} /></Field>
-              <Field label="Telefoon"><PhoneField value={t("phone")} onChange={(v) => set("phone")(v ?? "")} /></Field>
-              <Field label="Functie"><Input value={t("role")} onChange={(e) => set("role")(e.target.value)} /></Field>
-            </div>
-            <Field label="Notities"><Textarea rows={3} value={t("notes")} onChange={(e) => set("notes")(e.target.value)} /></Field>
-            <div className="flex items-center justify-between border-t pt-4">
+            {/* Particuliere klanten hebben geen bedrijf, dus deze koppeling was nergens
+                zichtbaar — terwijl juist zij zo werken. Bovenaan i.p.v. in een eigen tab,
+                omdat "is dit dezelfde als mijn klant?" de eerste vraag is bij het openen. */}
+            {account.data && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    Klantaccount{account.data.client_number ? ` #${account.data.client_number}` : ""}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Deze persoon is de klant · status: {account.data.status ?? "—"}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" className="shrink-0" onClick={() => navigate(`/beheer/klanten/${account.data!.id}`)}>
+                  <ExternalLink className="mr-1.5 h-4 w-4" /> Open klant
+                </Button>
+              </div>
+            )}
+            {/* Gedeelde persoon-editor (incl. adres — nodig voor de WeFact-debiteur). */}
+            <PersonFields personId={person.id} />
+            <div className="border-t pt-3">
               <Button variant="ghost" size="sm" className="text-red-600" onClick={remove}><Trash2 className="mr-1.5 h-4 w-4" />Verwijderen</Button>
-              <Button onClick={save} disabled={update.isPending}>{update.isPending ? "Opslaan…" : "Opslaan"}</Button>
             </div>
+            {canBill && person && <WefactDebtorPanel table="persons" subjectId={person.id} allowInvoice />}
+            {canBill && person && <WefactContactInvoices table="persons" subjectId={person.id} />}
           </TabsContent>
 
           <TabsContent value="bedrijven" className="mt-4 space-y-3">
@@ -177,14 +157,5 @@ export function PersonDetailSheet({
         />
       </SheetContent>
     </Sheet>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
-    </div>
   );
 }

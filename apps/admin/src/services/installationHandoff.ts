@@ -3,24 +3,18 @@
 // statussen terug naar onze installation_orders-status. Unit-testbaar; de
 // edge functions houden een dunne inline-spiegel van splitDutchAddress en
 // mapEgroupStatus (Deno kan niet uit apps/admin/src importeren).
+import { splitStreetAndHouse, joinStreetAndHouse } from "@/lib/houseNumber";
 
 // ── Adres splitsen ──────────────────────────────────────────────────────────
 // E-Group projects vereisen straat + huisnummer apart; onze data bewaart vaak
-// één adresregel. Best-effort: laatste getal + optionele letter/toevoeging.
-const HOUSE_NUMBER_RE = /\s*(\d+\s*[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)\s*$/;
-
+// één adresregel. De splitser zelf woont in lib/houseNumber.ts (DE canonieke bron);
+// dit is puur de vorm die de handoff-payload verwacht.
 export function splitDutchAddress(address: string | null | undefined): {
   street: string;
   house_number: string;
 } {
-  const value = (address ?? "").trim();
-  if (!value) return { street: "", house_number: "" };
-  const match = value.match(HOUSE_NUMBER_RE);
-  if (!match) return { street: value, house_number: "" };
-  return {
-    street: value.slice(0, match.index).trim(),
-    house_number: match[1].replace(/\s+/g, ""),
-  };
+  const [street, house_number] = splitStreetAndHouse(address);
+  return { street, house_number };
 }
 
 // ── Status-mapping E-Group -> e-charging ────────────────────────────────────
@@ -180,6 +174,8 @@ export interface HandoffCompany {
   kvk?: string | null;
   btw_number?: string | null;
   address_street?: string | null;
+  /** Los opgeslagen op companies — meesturen, anders valt het huisnummer weg. */
+  house_number?: string | null;
   postal_code?: string | null;
   city?: string | null;
 }
@@ -192,6 +188,8 @@ export interface HandoffLead {
   contact_phone?: string | null;
   contact_role?: string | null;
   address_street?: string | null;
+  /** Los opgeslagen op leads — meesturen, anders valt het huisnummer weg. */
+  house_number?: string | null;
   postal_code?: string | null;
   city?: string | null;
   estimated_charge_points?: number | null;
@@ -258,16 +256,27 @@ export function buildHandoffPayload(input: BuildHandoffInput): HandoffPayload {
   // Klant-NAW: voorkeur klant, terugval bedrijf, dan lead.
   const customerName =
     firstNonEmpty(client?.company_name, company?.name, lead?.company_name) ?? "Onbekend";
-  const customerStreetFull = firstNonEmpty(client?.billing_address_street, company?.address_street);
+  // clients draagt straat+huisnummer in ÉÉN kolom; companies/leads hebben ze los. Die los
+  // opgeslagen delen eerst samenvoegen, anders valt het huisnummer weg zodra we op het
+  // bedrijf/de lead terugvallen.
+  const customerStreetFull = firstNonEmpty(
+    client?.billing_address_street,
+    joinStreetAndHouse(company?.address_street, company?.house_number),
+  );
   const customerSplit = splitDutchAddress(customerStreetFull);
 
   // Site-adres: het bewerkbare snapshot is leidend (door de gebruiker aangevuld).
   const siteStreet = (order.site_street ?? "").trim();
   const siteHouse = (order.site_house_number ?? "").trim();
   const siteStreetFull = firstNonEmpty(
-    [siteStreet, siteHouse].filter(Boolean).join(" "),
-    lead?.address_street,
+    joinStreetAndHouse(siteStreet, siteHouse),
+    joinStreetAndHouse(lead?.address_street, lead?.house_number),
   );
+  // Valt het site-adres terug op de lead, dan moeten street/house_number dát adres weergeven.
+  // Stond eerder alleen in street_full, waardoor de e-portal een leeg straat/huisnummer kreeg.
+  const siteSplit = siteStreet
+    ? { street: siteStreet, house_number: siteHouse }
+    : splitDutchAddress(siteStreetFull);
 
   // Eén samenvattende werkregel: de e-portal toont één rij per order_line, dus niet per
   // quote-regel splitsen (dat gaf dubbele opdrachtregels). Scope staat in notes, kosten in totals.
@@ -308,8 +317,8 @@ export function buildHandoffPayload(input: BuildHandoffInput): HandoffPayload {
     },
     site: {
       location_name: firstNonEmpty(lead?.company_name, customerName),
-      street: siteStreet,
-      house_number: siteHouse,
+      street: siteSplit.street,
+      house_number: siteSplit.house_number,
       street_full: siteStreetFull,
       postal_code: firstNonEmpty(order.site_postal, lead?.postal_code),
       city: firstNonEmpty(order.site_city, lead?.city),

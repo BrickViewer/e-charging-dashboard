@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { PhoneField } from "@/components/contacts/PhoneField";
 import { useHandoffOrder, useUpdateOrderSite } from "@/hooks/useInstallations";
-import { primaryOrder, type OnboardingClient } from "@/hooks/useOnboarding";
+import { invalidateOnboarding, primaryOrder, type OnboardingClient } from "@/hooks/useOnboarding";
 import { DEFAULT_LEVERING_TEXT } from "@/services/offerTemplate";
+import { splitStreetAndHouse } from "@/lib/houseNumber";
 
 const emptyToNull = (s: string) => { const t = s.trim(); return t === "" ? null : t; };
 
@@ -37,8 +38,9 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
     if (!order) return;
     // Voorgevuld uit het order (door create_client_from_quote uit de offerte gevuld); fallback op de klant.
     setForm({
-      site_street: order.site_street ?? client?.billing_address_street ?? "",
-      site_house_number: order.site_house_number ?? "",
+      // clients draagt straat+huisnummer gecombineerd; site_house_number staat los.
+      site_street: order.site_street ?? splitStreetAndHouse(client?.billing_address_street)[0],
+      site_house_number: order.site_house_number ?? splitStreetAndHouse(client?.billing_address_street)[1],
       site_postal: order.site_postal ?? client?.billing_address_postal ?? "",
       site_city: order.site_city ?? client?.billing_address_city ?? "",
       site_contact_name: order.site_contact_name ?? client?.contact_name ?? "",
@@ -73,7 +75,7 @@ export function OnboardingHandoffDialog({ client, onClose }: { client: Onboardin
       }
       if (res.status === "not_configured") toast.warning("De installateur-koppeling (E-Group) is nog niet geconfigureerd");
       else toast.success(`Opdracht verstuurd naar de installateur${res.egroup_order_number ? ` (${res.egroup_order_number})` : ""}`);
-      qc.invalidateQueries({ queryKey: ["onboarding-clients"] });
+      invalidateOnboarding(qc);
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Versturen mislukt");

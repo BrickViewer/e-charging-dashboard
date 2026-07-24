@@ -174,6 +174,28 @@ export function useClientForCompany(companyId: string | undefined) {
   });
 }
 
+// Het (niet-verwijderde) klantaccount van een PERSOON, of null. Particuliere klanten hebben
+// geen bedrijf, dus useClientForCompany vond ze nooit — daardoor was de koppeling
+// persoon↔klant nergens zichtbaar terwijl juist alle particuliere klanten zo werken.
+export function useClientForPerson(personId: string | undefined) {
+  return useQuery({
+    queryKey: ["person-client", personId],
+    enabled: !!personId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, client_number, company_name, status")
+        .eq("person_id", personId!)
+        .neq("status", "verwijderd")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; client_number: number | null; company_name: string; status: string | null } | null;
+    },
+  });
+}
+
 // Locaties onder een klantaccount (voor het bedrijfsdossier).
 export function useClientLocations(clientId: string | undefined) {
   return useQuery({

@@ -7,6 +7,7 @@ import { resolveSecret } from "../_shared/secrets.ts";
 import { sha256Hex } from "../_shared/hash.ts";
 import { sendEmail as sendViaResend } from "../_shared/email.ts";
 import { CORS_GET_POST_ALT } from "../_shared/cors.ts";
+import { joinStreetAndHouse } from "../_shared/installationHandoff.ts";
 
 // Publieke offerte-accept (verify_jwt=false). GET valideert de token + geeft de
 // offerte-samenvatting (genoeg om de PDF te renderen). POST accordeert: slaat de
@@ -26,11 +27,11 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-async function sendEmail(opts: { to: string; subject: string; html: string; text: string; attachments?: { filename: string; content: string }[] }) {
+async function sendEmail(opts: { to: string; subject: string; html: string; text: string; sender?: "info" | "noreply"; attachments?: { filename: string; content: string }[] }) {
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return;
   try {
-    await sendViaResend({ to: opts.to, subject: opts.subject, html: opts.html, text: opts.text, attachments: opts.attachments });
+    await sendViaResend({ to: opts.to, subject: opts.subject, html: opts.html, text: opts.text, sender: opts.sender, attachments: opts.attachments });
   } catch (_e) { /* mail mag de acceptatie niet blokkeren */ }
 }
 
@@ -70,7 +71,8 @@ Deno.serve(async (req) => {
     const total = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
     const tariffs = (quote.tariff_data ?? {}) as Record<string, any>;
     const snap = (quote.calculation_snapshot ?? {}) as Record<string, any>;
-    const addr = lead ? [lead.address_street, [lead.postal_code, lead.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
+    // leads slaan straat en huisnummer los op — samenvoegen, anders mist de adresregel het huisnummer.
+    const addr = lead ? [joinStreetAndHouse(lead.address_street, lead.house_number), [lead.postal_code, lead.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
 
     // Offerte-sjabloon-standaarden ophalen (voor de placeholders die niet in de offerte zelf staan).
     const { data: settingsRow } = await sb.from("configurator_settings")
@@ -182,9 +184,9 @@ Deno.serve(async (req) => {
       const driveId = org2?.sharepoint_drive_id as string | null;
       if (gc && driveId && quote.project_location_id && signedPdfB64 && !quote.opd_item_id) {
         const { data: loc } = await sb.from("project_locations")
-          .select("opdracht_item_id, location_number, address_street, city").eq("id", quote.project_location_id).maybeSingle();
+          .select("opdracht_item_id, location_number, address_street, house_number, city").eq("id", quote.project_location_id).maybeSingle();
         if (loc?.opdracht_item_id) {
-          const addrLabel = [loc.address_street, loc.city].filter(Boolean).join(" ") || String(quote.prospect_company ?? "");
+          const addrLabel = [joinStreetAndHouse(loc.address_street, loc.house_number), loc.city].filter(Boolean).join(" ") || String(quote.prospect_company ?? "");
           const opdNumber = quote.quote_number ?? `${loc.location_number}-${String(quote.document_number ?? 1).padStart(2, "0")}-${String(new Date(quote.sent_at ?? new Date().toISOString()).getFullYear()).slice(-2)}`;
           const opdName = sanitizeName(`${opdNumber} OPD ${addrLabel}`) + ".pdf";
           const opd = await gc.uploadFile(driveId, loc.opdracht_item_id, opdName, base64ToBytes(signedPdfB64));
@@ -248,11 +250,17 @@ Deno.serve(async (req) => {
     const recipient = (quote.prospect_email ?? lead?.contact_email) as string | null;
     if (recipient) {
       const m = renderSignedConfirmation({ supabaseUrl, quoteNumber: quote.quote_number, signerName, total, hasAttachment, withInstallation: quote.with_installation !== false, isContract });
-      await sendEmail({ to: recipient, subject: `E-Charging · ${isContract ? "Contract" : "Offerte"} ${quote.quote_number} ondertekend`, html: m.html, text: m.text, attachments: attach });
+      // Klantgerichte communicatie gaat vanuit info@ (reply_to blijft info@), conform de
+      // vastgelegde afzender-identiteiten. Stond hier eerder ongemerkt op noreply@.
+      await sendEmail({ to: recipient, sender: "info", subject: `E-Charging · ${isContract ? "Contract" : "Offerte"} ${quote.quote_number} ondertekend`, html: m.html, text: m.text, attachments: attach });
     }
     {
+      // Interne melding naar een INSTELBAAR adres (Instellingen → Storingen/Standaardwaarden),
+      // net als de handoff-melding; was hardgecodeerd op info@e-charging.nl.
+      const { data: org } = await sb.from("organizations").select("signed_notification_email").limit(1).maybeSingle();
+      const internalTo = (org as { signed_notification_email?: string | null } | null)?.signed_notification_email || "info@e-charging.nl";
       const m = renderInternalSignedNotice({ supabaseUrl, quoteNumber: quote.quote_number, company: quote.prospect_company, signerName, total, isContract });
-      await sendEmail({ to: "info@e-charging.nl", subject: `${isContract ? "Contract" : "Offerte"} ${quote.quote_number} ondertekend${quote.prospect_company ? ` — ${quote.prospect_company}` : ""}`, html: m.html, text: m.text, attachments: attach });
+      await sendEmail({ to: internalTo, subject: `${isContract ? "Contract" : "Offerte"} ${quote.quote_number} ondertekend${quote.prospect_company ? ` — ${quote.prospect_company}` : ""}`, html: m.html, text: m.text, attachments: attach });
     }
 
     return json({ status: "accepted", quote: { ...summary, status: "getekend", acceptanceStatus: "accepted" } });

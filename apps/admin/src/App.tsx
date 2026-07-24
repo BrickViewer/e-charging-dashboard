@@ -35,6 +35,7 @@ const DirectieDashboard = lazy(() => import("./pages/directie/DirectieDashboard"
 const DirectieAgenda = lazy(() => import("./pages/directie/DirectieAgenda"));
 const DirectieTaken = lazy(() => import("./pages/directie/DirectieTaken"));
 const DirectieDoelen = lazy(() => import("./pages/directie/DirectieDoelen"));
+const DirectieFacturatie = lazy(() => import("./pages/directie/DirectieFacturatie"));
 
 // Beheer pages — lazy loaded
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -199,6 +200,7 @@ const App = () => (
                 <Route index element={<DirectieDashboard />} />
                 <Route path="agenda" element={<DirectieAgenda />} />
                 <Route path="taken" element={<DirectieTaken />} />
+                <Route path="facturatie" element={<DirectieFacturatie />} />
                 <Route path="doelen" element={<DirectieDoelen />} />
               </Route>
 

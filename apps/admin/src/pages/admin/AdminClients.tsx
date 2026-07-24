@@ -356,13 +356,16 @@ export default function AdminClients() {
                                 #{c.client_number}
                               </span>
                             )}
-                            {c.companies?.name ?? c.company_name}
+                            {/* Contact-first: de gekoppelde bron wint van de klantcache.
+                                Particulier heeft geen bedrijf → dan de persoonsnaam. */}
+                            {c.companies?.name ?? (c.company_id ? null : c.persons?.full_name) ?? c.company_name}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             {(c.companies?.kvk ?? c.kvk) && (
                               <span className="text-xs text-muted-foreground">KvK {c.companies?.kvk ?? c.kvk}</span>
                             )}
-                            {c.company_id && (
+                            {/* Particulier heeft geen bedrijf → dan het persoonsdossier. */}
+                            {c.company_id ? (
                               <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); navigate(`/sales/contacten?company=${c.company_id}`); }}
@@ -371,7 +374,16 @@ export default function AdminClients() {
                               >
                                 → Bedrijfsdossier
                               </button>
-                            )}
+                            ) : c.person_id ? (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); navigate(`/sales/contacten?person=${c.person_id}`); }}
+                                className="text-xs text-primary/80 hover:text-primary hover:underline focus-visible:outline-none focus-visible:underline"
+                                title="Open persoonsdossier"
+                              >
+                                → Persoonsdossier
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                         <td className="p-3 text-muted-foreground">

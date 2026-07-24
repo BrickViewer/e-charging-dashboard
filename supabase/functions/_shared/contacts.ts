@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { splitDutchAddress } from "./installationHandoff.ts";
 
 // Resolve-or-create voor bedrijven/personen vanuit edge-functies (service-role).
 // Zelfde dedupe-logica als de backfill: company op genormaliseerde naam, person
@@ -32,7 +33,13 @@ export async function resolveOrCreateCompany(
   if (c.kvk && c.kvk.trim()) attrs.kvk = c.kvk.trim();
   if (c.website && c.website.trim()) attrs.website = c.website.trim();
   if (c.sector && c.sector.trim()) attrs.sector = c.sector.trim();
-  if (c.street && c.street.trim()) attrs.address_street = c.street.trim();
+  // Intake levert vaak één adresregel ("Statumsedijk 29"); companies slaat straat en
+  // huisnummer los op. Hier splitsen, anders belandt het nummer in het straatveld.
+  if (c.street && c.street.trim()) {
+    const { street, house_number } = splitDutchAddress(c.street);
+    attrs.address_street = street || c.street.trim();
+    if (house_number) attrs.house_number = house_number;
+  }
   if (c.postal && c.postal.trim()) attrs.postal_code = c.postal.trim();
   if (c.city && c.city.trim()) attrs.city = c.city.trim();
 

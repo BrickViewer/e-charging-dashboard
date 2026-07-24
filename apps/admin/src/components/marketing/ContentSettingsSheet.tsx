@@ -192,11 +192,11 @@ export function ContentSettingsSheet({ open, onOpenChange }: { open: boolean; on
                 <Label className="text-xs">Model</Label>
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                  value={s.generation_model ?? "claude-opus-4-8"}
+                  value={s.generation_model ?? "claude-sonnet-5"}
                   onChange={(e) => setField("generation_model", e.target.value)}
                 >
-                  <option value="claude-opus-4-8">Opus 4.8 (beste kwaliteit)</option>
-                  <option value="claude-sonnet-4-6">Sonnet 4.6 (sneller/goedkoper)</option>
+                  <option value="claude-sonnet-5">Sonnet 5 (aanbevolen)</option>
+                  <option value="claude-haiku-4-5-20251001">Haiku 4.5 (snelst/goedkoopst)</option>
                 </select>
               </div>
             </section>

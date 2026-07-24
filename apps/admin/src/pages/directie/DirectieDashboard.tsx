@@ -10,12 +10,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarDays, Euro, ListChecks, MapPin, PlugZap, Target, Users, Crosshair } from "lucide-react";
+import { CalendarDays, Euro, ListChecks, MapPin, PlugZap, Target, Users, Crosshair, Receipt, Clock, ArrowRight } from "lucide-react";
 import { KpiTile } from "@/components/admin/KpiTile";
 import { OnboardingOverview } from "@/components/directie/OnboardingOverview";
 import { PeriodStepper } from "@/components/portal/PeriodStepper";
+import { formatEuro } from "@/services/calculations";
 import { useLeadStats } from "@/hooks/useLeads";
-import { useAllChargePoints, useAllClients } from "@/hooks/useAdminData";
+import { useAllChargePoints, useAllClients, useWefactMonthlyOverview } from "@/hooks/useAdminData";
 import { useDirectieActuals, useKpiTargets } from "@/hooks/useKpiTargets";
 import { useAgendaEvents } from "@/hooks/useAgenda";
 import { useAllTasks, useToggleTask } from "@/hooks/useTasks";
@@ -54,6 +55,15 @@ export default function DirectieDashboard() {
   const { months, kpis, isLoading, isError } = useDirectieActuals(year);
   const targetsQ = useKpiTargets(year);
   const leadStats = useLeadStats();
+  const wefactMonthly = useWefactMonthlyOverview(year);
+  const wefactTotals = useMemo(() => {
+    const rows = wefactMonthly.data ?? [];
+    return {
+      omzet: rows.reduce((a, r) => a + Number(r.invoiced_incl ?? 0), 0),
+      openstaand: rows.reduce((a, r) => a + Number(r.outstanding_incl ?? 0), 0),
+      netto: rows.reduce((a, r) => a + Number(r.net_excl ?? 0), 0),
+    };
+  }, [wefactMonthly.data]);
 
   // KPI-strip hangt op meerdere queries; laat een skeleton/foutbanner zien i.p.v.
   // een flits van nullen (patroon van AdminDashboard).
@@ -125,6 +135,21 @@ export default function DirectieDashboard() {
       </div>
       )}
 
+      {/* Facturatie (WeFact) — klikbaar naar /admin/facturatie */}
+      {(wefactTotals.omzet !== 0 || wefactTotals.openstaand !== 0) && (
+        <Link to="/admin/facturatie" className="block">
+          <Card className="transition-colors hover:border-primary/40">
+            <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 p-5">
+              <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"><Receipt className="h-3.5 w-3.5" /> Facturatie {year}</p>
+              <div><p className="text-[11px] text-muted-foreground">Gefactureerd</p><p className="text-lg font-semibold tabular-nums">{formatEuro(wefactTotals.omzet)}</p></div>
+              <div><p className="text-[11px] text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />Openstaand</p><p className="text-lg font-semibold tabular-nums text-[hsl(var(--status-amber))]">{formatEuro(wefactTotals.openstaand)}</p></div>
+              <div><p className="text-[11px] text-muted-foreground">Netto (omzet − kosten)</p><p className={`text-lg font-semibold tabular-nums ${wefactTotals.netto < 0 ? "text-destructive" : "text-primary"}`}>{formatEuro(wefactTotals.netto)}</p></div>
+              <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">Naar facturatie <ArrowRight className="h-3.5 w-3.5" /></span>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+
       {/* Vandaag: afspraken + taken op één plek */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <Card>
@@ -137,6 +162,8 @@ export default function DirectieDashboard() {
               <Skeleton className="h-16 w-full rounded-lg" />
             ) : todayAgenda.status === "not_connected" ? (
               <p className="text-sm text-muted-foreground">Je Microsoft-agenda is nog niet gekoppeld — koppel 'm in <Link to="/admin/agenda" className="text-primary hover:underline">Agenda</Link>.</p>
+            ) : todayAgenda.status === "reauth_required" ? (
+              <p className="text-sm text-muted-foreground">Je Microsoft-koppeling mist de agenda-rechten — koppel eenmalig opnieuw in <Link to="/admin/agenda" className="text-primary hover:underline">Agenda</Link>.</p>
             ) : todayAgenda.status === "error" ? (
               <p className="text-sm text-muted-foreground">Je afspraken konden niet worden geladen. Zie <Link to="/admin/agenda" className="text-primary hover:underline">Agenda</Link>.</p>
             ) : todayEvents.length === 0 ? (

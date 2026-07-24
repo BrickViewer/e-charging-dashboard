@@ -177,6 +177,29 @@ export function useMonthlyFinancialOverview(year?: number) {
   });
 }
 
+// WeFact maand-omzet/kosten/netto. Kosten = self-billing-uitbetalingen (cost_payout)
+// + overige geboekte WeFact-inkoopfacturen (cost_purchase). Admin-only RPC.
+export interface WefactMonthlyRow {
+  year: number; month: number;
+  invoiced_incl: number; invoiced_excl: number; paid_incl: number; outstanding_incl: number;
+  installatie_excl: number; activatie_excl: number; handmatig_excl: number;
+  cost_payout: number; cost_paid: number; cost_purchase: number; net_excl: number;
+}
+export function useWefactMonthlyOverview(year?: number) {
+  return useQuery({
+    queryKey: ["wefact-monthly-overview", year ?? null],
+    queryFn: async () => {
+      const rpcClient = supabase as unknown as {
+        rpc(name: "wefact_monthly_overview", args: { p_year: number | null }):
+          Promise<{ data: WefactMonthlyRow[] | null; error: Error | null }>;
+      };
+      const { data, error } = await rpcClient.rpc("wefact_monthly_overview", { p_year: year ?? null });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 // Ruwe eFlux-facturen (cpo-credit = vergoeding, cpo-usage = kosten). RLS: admin-only tabel.
 export function useEfluxInvoices() {
   return useQuery({

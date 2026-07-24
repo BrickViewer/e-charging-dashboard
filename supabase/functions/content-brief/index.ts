@@ -101,7 +101,7 @@ Zoekdoel: ${INTENT_NL[kw?.intent ?? "informational"] ?? "informatief"}
 Cluster: ${kw?.cluster ?? "-"}
 Doelgroep: ${kw?.audience ?? "-"}`;
       try {
-        const raw = await anthropicMessage({ apiKey, system: SYSTEM, user, model, maxTokens: 2000 });
+        const raw = await anthropicMessage({ apiKey, system: SYSTEM, user, model, maxTokens: 2000, thinking: "disabled" });
         const parsed = extractJson<{ conversation_question?: string; background?: string; suggested_angle?: string }>(raw);
         if (!parsed.conversation_question) throw new Error("Geen gespreksvraag in respons");
         await sb.from("content_topics").update({

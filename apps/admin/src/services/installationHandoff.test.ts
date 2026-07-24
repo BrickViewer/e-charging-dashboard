@@ -249,3 +249,51 @@ describe("buildHandoffPayload", () => {
     expect(p.site_contact.phone).toBe("+31600000009");
   });
 });
+
+// Regressie bij de adres-opschoning (24-07-2026): companies/leads slaan straat en huisnummer
+// LOS op, clients heeft één gecombineerde kolom. Toen het huisnummer uit de straatvelden werd
+// gehaald, verloor de handoff het huisnummer op elke plek die op bedrijf/lead terugvalt.
+describe("buildHandoffPayload — huisnummer uit losse velden", () => {
+  const order = {
+    id: "order-2", notes: null, service_category: "e_charging", service_summary: null,
+    site_street: null, site_house_number: null, site_postal: null, site_city: null,
+    site_contact_name: null, site_contact_email: null, site_contact_phone: null,
+  };
+
+  it("valt voor het klantadres terug op bedrijf-straat + los huisnummer", () => {
+    const p = buildHandoffPayload({
+      callbackUrl: "https://ec.example/cb",
+      order,
+      client: null,
+      company: { name: "FlexHero BV", address_street: "Stratumsedijk", house_number: "29", postal_code: "5611 NA", city: "Eindhoven" },
+      lead: null,
+      quote: null,
+    });
+    expect(p.customer.street).toBe("Stratumsedijk");
+    expect(p.customer.house_number).toBe("29");
+  });
+
+  it("valt voor het site-adres terug op lead-straat + los huisnummer", () => {
+    const p = buildHandoffPayload({
+      callbackUrl: "https://ec.example/cb",
+      order,
+      client: null,
+      company: null,
+      lead: { company_name: "Albert Vos", address_street: "Alfred Smithlaan", house_number: "37", postal_code: "5301 VE", city: "Zaltbommel" },
+      quote: null,
+    });
+    expect(p.site.street).toBe("Alfred Smithlaan");
+    expect(p.site.house_number).toBe("37");
+  });
+
+  it("laat het gecombineerde klantveld ongemoeid (clients heeft één kolom)", () => {
+    const p = buildHandoffPayload({
+      callbackUrl: "https://ec.example/cb",
+      order,
+      client: { company_name: "Acme BV", billing_address_street: "Dorpsstraat 12A", billing_address_postal: "1234 AB", billing_address_city: "Amsterdam" },
+      company: null, lead: null, quote: null,
+    });
+    expect(p.customer.street).toBe("Dorpsstraat");
+    expect(p.customer.house_number).toBe("12A");
+  });
+});

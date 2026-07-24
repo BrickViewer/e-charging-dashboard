@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { normalizeSettings } from "../_shared/configurator.ts";
 import { CORS_STD } from "../_shared/cors.ts";
+import { joinStreetAndHouse } from "../_shared/installationHandoff.ts";
 
 const corsHeaders = CORS_STD;
 
@@ -57,7 +58,7 @@ async function getSessionSettings(serviceClient: ReturnType<typeof createClient>
 async function getLeadContext(serviceClient: ReturnType<typeof createClient>, leadId: string) {
   const { data: lead } = await serviceClient
     .from("leads")
-    .select("company_name, contact_name, contact_email, contact_phone, address_street, postal_code, city, location_type, estimated_charge_points, configuration")
+    .select("company_name, contact_name, contact_email, contact_phone, address_street, house_number, postal_code, city, location_type, estimated_charge_points, configuration")
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) return undefined;
@@ -66,7 +67,8 @@ async function getLeadContext(serviceClient: ReturnType<typeof createClient>, le
     contactName: lead.contact_name ?? "",
     contactEmail: lead.contact_email ?? "",
     contactPhone: lead.contact_phone ?? "",
-    locationAddress: lead.address_street ?? "",
+    // Eén adresregel voor de configurator; leads slaan straat en huisnummer los op.
+    locationAddress: joinStreetAndHouse(lead.address_street as string | null, lead.house_number as string | null),
     postalCode: lead.postal_code ?? "",
     city: lead.city ?? "",
     locationType: lead.location_type ?? null,

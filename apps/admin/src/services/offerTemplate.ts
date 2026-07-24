@@ -150,6 +150,19 @@ const aanhefLine = (raw: string | null | undefined): string => {
   return /^(geachte|beste|hallo|hoi|dag)\b/i.test(g) ? g : `Geachte ${g},`;
 };
 
+/**
+ * De tekstversie waarop NIEUWE offertes renderen.
+ *
+ * Verhoog dit alleen samen met (a) een tak op `textVersion >= <nieuw>` voor elke gewijzigde zin en
+ * (b) een migratie die alle al verstuurde offertes zonder `offer_details.text_version` op de OUDE
+ * waarde pint. Zonder die migratie verschuift de tekst van reeds verzonden documenten mee — dan is
+ * niet meer te reproduceren wat de klant getekend heeft.
+ *
+ * v1 = oorspronkelijk (bevroren)  ·  v2 = handboek-taalregels  ·  v3 = activatiekosten bij
+ * alleen-beheer uitgesplitst naar aantal × prijs per laadpunt.
+ */
+export const CURRENT_TEXT_VERSION = 3;
+
 // --------------------------------------------------------------------------
 // Eén zichtbare tariefregel in het "afgesproken instellingen"-blok (volgorde = od.tariffOrder).
 export interface TariffLine { label: string; amount: number | null; unit: string; text?: string }
@@ -170,6 +183,8 @@ interface ResolvedModel {
   ingangsdatum: string;
   betaalBijOpdracht: number; betaalBijStart: number; betaalNaWerk: number;
   signerName: string;
+  docSections: OfferSection[];
+  docPhrases: OfferPhrase[];
 }
 
 function firstStr(...vals: Array<string | null | undefined>): string {
@@ -187,7 +202,10 @@ function resolve(data: OfferTemplateData): ResolvedModel {
   const n = firstNum(data.numChargePoints) ?? 0;
   // Tekstversie: afwezig => nieuwste (handboek-conform). Verstuurde offertes dragen 1 (backfill)
   // en her-renderen met de oorspronkelijke teksten — een getekend document mag nooit verschuiven.
-  const textVersion = firstNum(od.text_version) ?? 2;
+  // Nieuwe offertes renderen op de nieuwste tekstversie; verstuurde offertes dragen hun eigen
+  // text_version en blijven daarmee byte-gelijk aan de PDF die de klant heeft ontvangen.
+  // Migratie 20260722170000 heeft alle toen al verstuurde offertes zonder sleutel op 2 gepind.
+  const textVersion = firstNum(od.text_version) ?? CURRENT_TEXT_VERSION;
   // Particulier vroeg berekenen (zelfde afleiding als in de return): stuurt de default-beheer-intro.
   const isPrivate = data.isPrivate ?? !firstStr(data.company);
   // Particulier (v2): betaaltermijnen standaard 50/0/50 (gebruikerskeuze 2026-07-16); het
@@ -281,6 +299,15 @@ function resolve(data: OfferTemplateData): ResolvedModel {
     betaalBijStart: firstNum(od.betaalBijStartPct, privBetaal ? 0 : tpl.betaalBijStartPct) ?? 0,
     betaalNaWerk: firstNum(od.betaalNaWerkPct, privBetaal ? 50 : tpl.betaalNaWerkPct) ?? 0,
     signerName: firstStr(od.echargingSignerName, tpl.echargingSignerName),
+    // Documentopbouw: alleen bekende ids overnemen. De Array.isArray-guard is er net als bij
+    // tariffOrder omdat de jsonb-kolom vrij beschrijfbaar is — een niet-array zou anders de
+    // PUBLIEKE accept-pagina én het ondertekenen laten crashen.
+    docSections: Array.isArray(od.docSections)
+      ? od.docSections.filter((s): s is OfferSection => (OFFER_SECTIONS as readonly unknown[]).includes(s))
+      : [],
+    docPhrases: Array.isArray(od.docPhrases)
+      ? od.docPhrases.filter((s): s is OfferPhrase => (OFFER_PHRASES as readonly unknown[]).includes(s))
+      : [],
   };
 }
 
@@ -437,10 +464,77 @@ const AANHEF_GAP_DEFAULT = 84;
 const GAP_FLOOR = 16;
 const FOOTER_CLEARANCE = 16;
 
+// ---------------------------------------------------------------------------
+// DOCUMENTOPBOUW. De brief valt uiteen in secties die samenvallen met de geforceerde
+// paginabreuken (`brk`): elke sectie begint gegarandeerd boven aan een nieuwe pagina.
+// Via offer_details.docSections kan een sectie BUITEN het klantdocument vallen (zie
+// buildOfferPages). Paginanummers zijn daarvoor ongeschikt — die volgen uit een
+// runtime-hoogtemeting en verschillen per browser; de klant-PDF wordt in de browser
+// van de KLANT gebouwd (OfferAccept). Sectie-ids zijn daarom de stabiele sleutel.
+// De ids zijn BEVROREN identifiers: ze staan opgeslagen in verstuurde offertes.
+export const OFFER_SECTIONS = ["cover", "brief", "beheer", "voorwaarden", "slot"] as const;
+export type OfferSection = typeof OFFER_SECTIONS[number];
+// Nooit weg te laten, ongeacht de documentvorm: zonder geadresseerde/prijs ("brief") of
+// zonder handtekeningblok ("slot") is het geen ondertekenbare offerte meer. De groep die
+// het handtekeningblok feitelijk bevat wordt daarnaast AFGELEID vergrendeld (zie
+// resolveOfferSections) — zo blijft de bescherming staan als de brk-vlaggen ooit wijzigen.
+const ALWAYS_LOCKED = new Set<OfferSection>(["brief", "slot"]);
+
+// LOSSE ZINNEN (offer_details.docPhrases). Fijnere korrel dan de secties hierboven: individuele
+// hard-gecodeerde verkoopzinnen die per offerte uit het klantdocument kunnen vallen. In de UI
+// heten deze "Zinnen" — "quote" betekent in dit werkblad een OFFERTE, vandaar phrase.
+// Ids zijn BEVROREN identifiers: ze staan opgeslagen in verstuurde offertes, nooit hernoemen.
+// HARDE REGEL: zet een qid NOOIT op een blok met sec/brk (dat draagt de sectie-topologie) of op
+// een blok met tag dateGap/aanhefGap (die sturen de auto-fit van de briefkop). phraseDroppable
+// hieronder handhaaft dat, voor zowel de renderer als de UI.
+export const OFFER_PHRASES = ["heroInkomstenbron", "paalWerktKop", "paalWerktSlot", "rekenvoorbeeld", "contactvraag"] as const;
+export type OfferPhrase = typeof OFFER_PHRASES[number];
+
 // Een blok = één atomair stuk brief. marginTop staat LOS van de html zodat we 'm per
 // pagina kunnen resetten (eerste blok op een vervolgpagina krijgt geen gat). keep =
-// "houd bij het volgende blok" (geen weeskop onderaan een pagina).
-interface Block { html: string; mt: number; keep?: boolean; brk?: boolean; tag?: "dateGap" | "aanhefGap" | "centerRest" }
+// "houd bij het volgende blok" (geen weeskop onderaan een pagina). sec = sectie-opener
+// (alleen betekenisvol op blok 0 of op een blok met brk; verandert de html niet).
+// qid = losse zin die weggelaten kan worden (verandert de html evenmin).
+interface Block { html: string; mt: number; keep?: boolean; brk?: boolean; tag?: "dateGap" | "aanhefGap" | "centerRest"; sec?: OfferSection; qid?: OfferPhrase }
+
+// Mag dit blok als losse zin verdwijnen? Zelfde rol als `locked` bij secties: renderer én UI
+// beslissen met DEZELFDE functie, zodat het scherm nooit iets anders belooft dan de PDF doet.
+const phraseDroppable = (b: Block): b is Block & { qid: OfferPhrase } =>
+  !!b.qid && !b.sec && !b.brk && b.tag !== "dateGap" && b.tag !== "aanhefGap";
+
+const PHRASE_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", nbsp: " ", ldquo: "“", rdquo: "”", ndash: "–", aacute: "á" };
+const BLOCK_TAG = /^<\/?(?:div|p|br|tr|td|th|li|ul|ol|table|tbody)\b/i;
+// De letterlijke tekst van een blok, voor het keuzemenu in het sales-werkblad. Inline-opmaak
+// (span) valt weg ZONDER spatie, zodat de punt direct achter het laatste woord blijft staan;
+// blokgrenzen worden juist een spatie, anders plakken de twee regels van de contactvraag aaneen.
+// Draait bewust alleen in de UI-export, nooit op het renderpad van de klant.
+function blockText(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, (t) => (BLOCK_TAG.test(t) ? " " : ""))
+    .replace(/&([a-z]+);/gi, (m, e: string) => PHRASE_ENTITIES[e.toLowerCase()] ?? m)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Deelt de blokkenlijst in secties in. ENIGE waarheid voor zowel de renderer
+// (buildOfferPages) als de UI (offerSections) — twee kopieën zouden onvermijdelijk
+// uit elkaar lopen en dan verbergt het scherm iets anders dan de PDF.
+function resolveOfferSections(blocks: Block[]) {
+  const secOf = new Map<Block, OfferSection>();
+  const order: OfferSection[] = ["cover"];
+  let cur: OfferSection = "brief";
+  blocks.forEach((b, i) => {
+    // Een sectie start ALLEEN bij een blok dat zijn eigen groep opent (blok 0 of een brk).
+    // Een sec zonder brk vloeit mee in de lopende groep — dat is precies wat er op het
+    // particuliere contractblad gebeurt, waar "slot" (r. ~880) brk:false heeft.
+    if (b.sec && (i === 0 || b.brk)) { cur = b.sec; if (!order.includes(cur)) order.push(cur); }
+    secOf.set(b, cur);
+  });
+  // De groep waarin het laatste blok (het handtekeningblok) landt, is per definitie
+  // onmisbaar — ook wanneer die groep door contractV2 met "voorwaarden" is samengevloeid.
+  const lastSec = blocks.length ? secOf.get(blocks[blocks.length - 1])! : "slot";
+  return { secOf, order, locked: new Set<OfferSection>([...ALWAYS_LOCKED, lastSec]) };
+}
 
 const bSec = (t: string, mt = 24, color: string = GREEN): Block =>
   ({ html: `<div style="font-weight:700;color:${color};text-decoration:underline">${esc(t)}</div>`, mt, keep: true });
@@ -532,7 +626,9 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   // (datum-regel, aanhef, dank-zin) en de hero-kop + beheerIntro-alinea's vervallen daar; de
   // beheermodule-sectie opent direct met de kernzin waarvoor getekend wordt.
   const contractV2 = privV2 && m.withManagement && !m.withInstallation;
-  blocks.push(bRaw(`<div style="line-height:1.5">${recipient}</div>`, 14));
+  // Sectie "brief" opent het document (blok 0). Vergrendeld: hier staan de geadresseerde,
+  // de referentie en de prijs.
+  blocks.push({ ...bRaw(`<div style="line-height:1.5">${recipient}</div>`, 14), sec: "brief" });
   if (!contractV2) blocks.push({ ...bRaw(`<div>${SENDER_CITY}, ${esc(m.dateLong)}</div>`, m.dateGap), tag: "dateGap" });
   // Referentieblok: op het contractblad met kleinere binnengap (8 i.p.v. 20) en iets meer lucht
   // na het naamblok (mt 24) — de datum staat daar al in de paginakop rechtsboven.
@@ -564,7 +660,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
 
   // --- Levering en installatie (alleen bij installatie-scope) ---
   if (m.withInstallation) {
-    if (m.withManagement) blocks.push(bBig(heroKop, 30));
+    if (m.withManagement) blocks.push({ ...bBig(heroKop, 30), qid: "heroInkomstenbron" });
     blocks.push(bSec("Levering en installatie", 30, GREEN));
     // De scope-tekst is bewerkbare vrije tekst (offer_details.leveringText); alinea's
     // gescheiden door een lege regel → losse blokken zodat alles netjes herpagineert.
@@ -604,7 +700,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   } else if (m.withManagement && !contractV2) {
     // Zakelijk (en v1) alleen-beheer: hero + begeleidende tekst op pagina 1. Het particuliere
     // contractblad (contractV2) slaat dit over — de beheermodule volgt daar direct.
-    blocks.push(bBig(heroKop, 30));
+    blocks.push({ ...bBig(heroKop, 30), qid: "heroInkomstenbron" });
     // Begeleidende aanpak-tekst (vrije tekst, alinea's gescheiden door een lege regel) zodat pagina 1 netjes
     // vult i.p.v. enkel de kop; zelfde herpaginering als leveringText.
     m.beheerIntroText.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
@@ -623,7 +719,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   // --- Beheermodule (alleen bij beheer-scope) — eigen pagina, behalve op het contractblad
   // (particulier alleen-beheer, v2): daar vloeit de sectie direct onder het referentieblok. ---
   if (m.withManagement) {
-    blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", contractV2 ? 24 : 0, GREEN), brk: !contractV2 });
+    // SECTIEGRENS "beheer" — deze brk begrenst een sectie uit OFFER_SECTIONS. Verplaats of
+    // conditioneer 'm nooit zonder een tak op text_version én een bijgewerkte topologie-test
+    // in offerTemplate.test.ts: verstuurde offertes dragen sectie-ids in offer_details.docSections.
+    blocks.push({ ...bSec(privV2 ? `Beheermodule ${paalWoord}` : "Beheermodule laadpalen", contractV2 ? 24 : 0, GREEN), brk: !contractV2, sec: "beheer" });
     if (privV2) {
       // Intro (gebruikerskeuze): eerst wat de klant per geladen kWh netto ontvangt, dan de
       // Mark-CASUS — een specifiek, uitgeschreven persoonsvoorbeeld (geen disclaimer —
@@ -654,7 +753,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         const eur0 = (n: number) => `€ ${int0(n)}`;
         const vergoedingJr = 4000 * markRate;
         const overJr = vergoedingJr - 1000; // stroomkosten: 4.000 × € 0,25
-        blocks.push(bP(
+        blocks.push({ ...bP(
           `<span style="font-style:italic">` +
           `Bijvoorbeeld: Mark rijdt ongeveer 25.000 kilometer per jaar en laadt het grootste deel daarvan thuis met zijn zakelijke laadpas: zo'n 4.000 kWh per jaar. ` +
           `Zijn vergoeding is ${money2(markRate)} per geladen kWh. Aan vergoeding ontvangt hij dus ${eur0(vergoedingJr)} per jaar. ` +
@@ -662,7 +761,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
           `Daarmee houdt Mark ${eur0(overJr)} per jaar over. ` +
           `Ook heeft hij zich aangemeld voor de ERE-regeling. Die subsidie levert hem nog eens zo'n € 400 per jaar op. ` +
           `Zo verdient Mark met zijn laadpaal al snel ${eur0(overJr + 400)} per jaar.` +
-          `</span>`, 12));
+          `</span>`, 12), qid: "rekenvoorbeeld" });
       }
       blocks.push(bP("Uw voordelen op een rij:", 16));
     } else {
@@ -697,7 +796,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
         // buildOfferPages centreert hem exact tussen het laatste punt en de footer-streep
         // (mt 64 = fallback; −12px optische correctie). Ook op het contractblad (gebruikerskeuze
         // 2026-07-16: slogan terug onder de opsomming, in plaats van de Mark-casus).
-        blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 64), keep: true, tag: "centerRest" });
+        blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 64), keep: true, tag: "centerRest", qid: "paalWerktSlot" });
       } else {
         blocks.push(bP(
           `Wij nemen het hele traject van het beheer en de optimalisatie van uw laadinfrastructuur uit handen. ` +
@@ -711,7 +810,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // alleen-beheer staat dit blok (gestapeld) al op pagina 1. Particulier (v2) heeft de kop al vóór de
     // prijs-alinea en toont nooit een instellingen-lijst (enkel stroomvergoeding).
     if (m.withInstallation && !privV2) {
-      blocks.push(bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22));
+      // Zelfde woorden als paalWerktSlot, maar een andere layoutrol (tussenkop i.p.v. het
+      // gecentreerde slotstatement) → bewust een EIGEN id: privV2 kantelt live zodra iemand
+      // het bedrijf koppelt/ontkoppelt, en een gedeeld id zou dan van blok verhuizen.
+      blocks.push({ ...bBig(`Een ${g("laadpaal")} ${g("die")} voor u ${g("werkt")}`, 22), qid: "paalWerktKop" });
       if (m.tariffLines.length) {
         blocks.push(bP("De volgende afgesproken instellingen worden in het portaal ingesteld:", 22));
         // 170px label-kolom past "Laadkosten eigen gebruik:" (was 95px voor de korte labels).
@@ -735,11 +837,13 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // losse btw-regel vervallen; overige contractbedragen labelen hun btw al expliciet).
     // Toeslagen op twee regels en derden/materialen als één alinea (inhoudelijk verbatim);
     // labelkolom 400px zodat de lange toeslag-regel niet omslaat.
+    // SECTIEGRENS "voorwaarden" (contract-tak) — zie de waarschuwing bij "beheer" hierboven.
+    // De grens verhuist mee met heeftOverleg: zonder overleg opent "Storingen" de sectie.
     if (heeftOverleg) {
-      blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
+      blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true, sec: "voorwaarden" });
       blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
     }
-    blocks.push({ ...bSec("Storingen", heeftOverleg ? 16 : 0, HEAD), brk: !heeftOverleg });
+    blocks.push({ ...bSec("Storingen", heeftOverleg ? 16 : 0, HEAD), brk: !heeftOverleg, sec: "voorwaarden" });
     blocks.push(bP("Storingsmeldingen vanuit het portaal worden opgepakt op basis van de onderstaande tarieven; genoemde bedragen zijn exclusief btw.", 8));
     const rowC = (l: string, r: string) => `<div style="display:flex"><div style="width:400px">${l}</div><div>${r}</div></div>`;
     blocks.push(bRaw(rowC("Servicemonteur E-Charging", `${mEur(m.servicemonteurPerHour)} per uur`), 8));
@@ -751,11 +855,12 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     blocks.push(bFb("De Algemene voorwaarden en de Regeling gegevensuitwisseling van E-Charging B.V.", 8));
     blocks.push(bFb("Dit contract is 30 dagen geldig na dagtekening."));
   } else {
+    // SECTIEGRENS "voorwaarden" (reguliere tak) — zie de waarschuwing bij "beheer" hierboven.
     if (heeftOverleg) {
-      blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true });
+      blocks.push({ ...bSec("Uitgangspunten", 0, HEAD), brk: true, sec: "voorwaarden" });
       blocks.push(bFb(`Overleg met ${mStr(m.overlegNaam, "naam")} d.d. ${m.overlegDatum ? esc(m.overlegDatum) : yel("datum")}.`, 8));
     }
-    blocks.push({ ...bSec("Prijsstelling", heeftOverleg ? 19 : 0, HEAD), brk: !heeftOverleg });
+    blocks.push({ ...bSec("Prijsstelling", heeftOverleg ? 19 : 0, HEAD), brk: !heeftOverleg, sec: "voorwaarden" });
     blocks.push(bFb("Genoemde netto bedragen zijn exclusief BTW.", 8));
     if (m.withInstallation) blocks.push(bFb("Levering en installatie is inclusief reis- en autokosten.", 5));
     if (m.withManagement) {
@@ -792,9 +897,15 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
       : (privV2 && afname != null)
         ? "Vergoeding, activatiekosten, ingangsdatum, contractduur en opzegging beheermodule"
         : "Activatiekosten, ingangsdatum, contractduur en opzegging beheermodule", contractV2 ? 16 : 19, HEAD));
+    // v3 (alleen-beheer): het bedrag wordt uitgesplitst naar aantal × prijs per laadpunt, zodat de
+    // offerte exact zegt wat er straks op de factuurregel komt te staan. v1/v2 blijven bevroren:
+    // die noemden één totaalbedrag uit totalInvestment, en zo staan ze bij de klant op papier.
+    const actTotaal = m.activatiekostenPerSocket * m.numChargePoints;
     blocks.push(m.withInstallation
       ? bFb(`De activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per socket.`, 8)
-      : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
+      : (m.textVersion >= 3 && m.activatiekostenPerSocket > 0 && m.numChargePoints > 0)
+        ? bFb(`De eenmalige activatiekosten bedragen ${mEur(m.activatiekostenPerSocket)} per laadpunt: ${m.numChargePoints} × ${mEur(m.activatiekostenPerSocket)} = ${mEur(actTotaal)} (excl. BTW).`, 8)
+        : bFb(`De eenmalige activatie- en onboardingkosten bedragen ${mEur(m.totalInvestment)} (excl. BTW).`, 8));
     // v2 (alle klanttypen én scopes): ingang bij ondertekening; v1 behoudt per scope de
     // oorspronkelijke zin (bevroren — verstuurde offertes).
     blocks.push(bFb(m.textVersion <= 1
@@ -830,7 +941,10 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
   const sigDate = signature?.date ? fmtDateShort(signature.date) : "";
   const dots = "………………….…………";
   // Contract: aansprakelijkheid + ondertekening vloeien onder de voorwaarden op dezelfde pagina.
-  blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", contractV2 ? 16 : 0, HEAD), brk: !contractV2 });
+  // SECTIEGRENS "slot" — bevat het handtekeningblok en is daarmee altijd vergrendeld. Op het
+  // contractblad (contractV2) staat brk op false, waardoor "slot" in "voorwaarden" vloeit; de
+  // afgeleide lastSec-vergrendeling in resolveOfferSections vangt dat op.
+  blocks.push({ ...bSec("Aansprakelijkheid en betalingsregeling", contractV2 ? 16 : 0, HEAD), brk: !contractV2, sec: "slot" });
   blocks.push(bFb(esc(AANSPRAKELIJKHEID), 9));
   if (m.withInstallation) {
     if (m.textVersion <= 1) {
@@ -860,7 +974,7 @@ function letterBlocks(m: ResolvedModel, signature?: OfferTemplateSignature): Blo
     // beheer-contract bewust vervallen (gebruikerskeuze 2026-07-16 — contact staat in de footer).
     blocks.push(bSec("Onze aanpak", 24, HEAD));
     blocks.push(bP(esc(AANPAK), 9));
-    blocks.push(bRaw(`<div style="text-align:center"><div>Heeft u nog vragen of opmerkingen naar aanleiding van ${m.textVersion <= 1 ? "deze aanbieding" : "deze offerte"}?</div><div style="margin-top:4px">Neem dan gerust contact met ons op.</div></div>`, 40));
+    blocks.push({ ...bRaw(`<div style="text-align:center"><div>Heeft u nog vragen of opmerkingen naar aanleiding van ${m.textVersion <= 1 ? "deze aanbieding" : "deze offerte"}?</div><div style="margin-top:4px">Neem dan gerust contact met ons op.</div></div>`, 40), qid: "contactvraag" });
   }
   blocks.push(bRaw(`<div style="display:flex;gap:40px"><div style="flex:1"><div>Met vriendelijke groet,</div><div style="height:72px;display:flex;align-items:flex-end">${ecSigImg}</div><div style="font-weight:600">${esc(ecName) || "Naam ondertekenaar"}</div><div style="margin-top:2px">E-Charging B.V.</div></div><div style="flex:1"><div>Voor akkoord getekend,</div><div style="height:72px;display:flex;align-items:flex-end">${sigImg}</div><div>Dhr./Mevr: ${esc(signature?.signerName) || dots}</div><div style="margin-top:6px">d.d. ${esc(sigDate) || dots}</div></div></div>`, contractV2 ? 24 : 44));
 
@@ -909,8 +1023,25 @@ export function buildOfferPages(
   // offertes én verstuurde v1-documenten houden het "Offerte"-voorblad. Fallback op de
   // offerte-cover wanneer de contract-cover niet is meegegeven/geladen.
   const isContract = m.isPrivate && m.textVersion >= 2 && m.withManagement && !m.withInstallation;
-  const cover = coverPage(m, assets.logoUrl, (isContract ? assets.contractCoverUrl : null) ?? assets.coverUrl);
-  const blocks = letterBlocks(m, signature);
+
+  // Documentopbouw. Weggelaten secties worden HIER uitgefilterd — vóór het meten — zodat
+  // heights[] index-parallel blijft aan blocks[] en de auto-fit, de centerRest-centrering en
+  // `total = pages.length` ongewijzigd blijven werken. header() hernummert vanzelf, dus de
+  // klant krijgt een sluitend doorgenummerd document zonder gat.
+  // Zonder docSections is `omit` leeg en is dit letterlijk hetzelfde codepad als voorheen —
+  // dat is wat verstuurde offertes byte-gelijk houdt.
+  const raw = letterBlocks(m, signature);
+  const { secOf, order, locked } = resolveOfferSections(raw);
+  const omit = new Set(m.docSections.filter((id) => order.includes(id) && !locked.has(id)));
+  const cover = omit.has("cover") ? null : coverPage(m, assets.logoUrl, (isContract ? assets.contractCoverUrl : null) ?? assets.coverUrl);
+  if (cover) cover.dataset.section = "cover";
+  const kept = raw.filter((b) => !omit.has(secOf.get(b)!));
+  // Losse zinnen NA de secties: een zin in een weggelaten sectie is al verdwenen. De size-check
+  // is geen optimalisatie maar een bewijsmiddel — zonder de sleutel IS `blocks` dezelfde array
+  // als `kept`, dus letterlijk hetzelfde codepad als voorheen. Geen tekstextractie hier: die
+  // hoort in offerPhrases(), niet op het renderpad dat ook de klant draait.
+  const omitPhrase = new Set<OfferPhrase>(m.docPhrases);
+  const blocks = omitPhrase.size ? kept.filter((b) => !(phraseDroppable(b) && omitPhrase.has(b.qid))) : kept;
 
   const measure = document.createElement("div");
   measure.style.cssText = `position:fixed;left:-10000px;top:0;width:${CONTENT_W}px;font-family:'Outfit',Arial,sans-serif;font-size:${LETTER_FONT}px;line-height:1.4;color:${INK}`;
@@ -925,7 +1056,10 @@ export function buildOfferPages(
   // (particulier v2): de opgetelde offsetHeight-afronding verstoorde de exacte centrering.
   // v1/zakelijk blijven op offsetHeight zodat de paginering van verstuurde offertes
   // gegarandeerd identiek blijft aan hoe ze ooit zijn gerenderd.
-  const fractional = blocks.some((b) => b.tag === "centerRest");
+  // Meetmodus bewust op de ONGEFILTERDE lijst: anders klapt `fractional` om zodra de
+  // beheersectie (die het centerRest-blok draagt) wordt weggelaten, en verspringt pagina 1
+  // zichtbaar door de andere afrondingswijze.
+  const fractional = raw.some((b) => b.tag === "centerRest");
   const heights = nodes.map((d) => (fractional ? d.getBoundingClientRect().height : d.offsetHeight));
   document.body.removeChild(measure);
 
@@ -989,6 +1123,55 @@ export function buildOfferPages(
 
   const pages = paginateLetter(blocks, heights);
   const total = pages.length;
-  const letterNodes = pages.map((pageBlocks, idx) => assembleLetterPage(m, assets.logoUrl, idx + 1, total, pageBlocks));
-  return [cover, ...letterNodes];
+  const letterNodes = pages.map((pageBlocks, idx) => {
+    const el = assembleLetterPage(m, assets.logoUrl, idx + 1, total, pageBlocks);
+    // Alleen voor de preview (naadstroken op de juiste plek invoegen). Een data-attribuut op de
+    // page-root staat niet in innerHTML en is inert voor html2canvas — de PDF verandert er niet van.
+    el.dataset.section = secOf.get(pageBlocks[0])!;
+    return el;
+  });
+  return cover ? [cover, ...letterNodes] : letterNodes;
+}
+
+// De secties die DIT document heeft, met hun toestand. DOM-vrij (resolve + letterBlocks bouwen
+// alleen strings), zodat de UI hem in een useMemo kan aanroepen. Zo hoeft de UI nooit de
+// scope-logica (withInstallation / privV2 / contractV2 / heeftOverleg) te dupliceren: het
+// sjabloon zegt zelf welke secties bestaan en welke daarvan onmisbaar zijn.
+export interface OfferSectionInfo { id: OfferSection; locked: boolean; omitted: boolean }
+export function offerSections(data: OfferTemplateData): OfferSectionInfo[] {
+  const m = resolve(data);
+  const { order, locked } = resolveOfferSections(letterBlocks(m));
+  return order.map((id) => ({
+    id,
+    locked: locked.has(id),
+    omitted: !locked.has(id) && m.docSections.includes(id),
+  }));
+}
+
+// De losse zinnen die DIT document heeft, in documentvolgorde, met hun letterlijke tekst.
+// Zinnen in een weggelaten sectie vallen af: die zijn al verdwenen, dus ze horen niet
+// nog eens als keuze (en niet dubbel in de waarschuwingen) te verschijnen.
+export interface OfferPhraseInfo { id: OfferPhrase; text: string; section: OfferSection; omitted: boolean }
+export function offerPhrases(data: OfferTemplateData): OfferPhraseInfo[] {
+  const m = resolve(data);
+  const raw = letterBlocks(m);
+  const { secOf, order, locked } = resolveOfferSections(raw);
+  const omitSec = new Set(m.docSections.filter((id) => order.includes(id) && !locked.has(id)));
+  const seen = new Set<OfferPhrase>();
+  const out: OfferPhraseInfo[] = [];
+  for (const b of raw) {
+    if (!phraseDroppable(b) || omitSec.has(secOf.get(b)!) || seen.has(b.qid)) continue;
+    seen.add(b.qid);
+    out.push({ id: b.qid, text: blockText(b.html), section: secOf.get(b)!, omitted: m.docPhrases.includes(b.qid) });
+  }
+  return out;
+}
+
+// ALLEEN voor offerTemplate.test.ts. Bewijst dat geen enkel getagd blok structuur draagt — een
+// zwartedoos-test is daar blind voor op het contractblad, waar een sec-blok géén pagina opent
+// en een verkeerde annotatie dus geen zichtbaar verschil zou maken.
+export function __phraseBlocksForTest(data: OfferTemplateData) {
+  return letterBlocks(resolve(data)).filter((b) => !!b.qid).map((b) => ({
+    q: b.qid!, hasSec: !!b.sec, hasBrk: !!b.brk, tag: b.tag ?? null, droppable: phraseDroppable(b),
+  }));
 }

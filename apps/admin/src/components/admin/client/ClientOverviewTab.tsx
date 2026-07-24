@@ -5,6 +5,7 @@ import type { ClientPaymentDetails, ClientWithRelations } from "@/types/db";
 import { ContactPersonCard } from "./ContactPersonCard";
 import { BusinessDetailsCard } from "./BusinessDetailsCard";
 import { InvoiceAndBankDetailsCard } from "./InvoiceAndBankDetailsCard";
+import { WefactClientSummaryCard } from "./WefactClientSummaryCard";
 
 export function ClientOverviewTab({
   client,
@@ -28,6 +29,7 @@ export function ClientOverviewTab({
       <ContactPersonCard client={client} isEditing={isEditing} ed={ed} setEd={setEd} />
       <BusinessDetailsCard client={client} clientId={clientId} isEditing={isEditing} ed={ed} setEd={setEd} errors={editErrors} />
       <InvoiceAndBankDetailsCard client={client} paymentDetails={paymentDetails} />
+      <WefactClientSummaryCard client={client} />
       <Card className="portal-card">
         <CardHeader><CardTitle className="text-base">Contract</CardTitle></CardHeader>
         <CardContent className="text-sm space-y-2">

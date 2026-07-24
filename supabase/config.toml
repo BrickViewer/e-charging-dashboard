@@ -172,3 +172,27 @@ verify_jwt = false
 
 [functions.quote-uploads-cleanup]
 verify_jwt = false
+
+# WeFact-facturatie-koppeling. Test/debtor/create-invoice = admin/manager-JWT.
+# push-settlement/settlement-sync/status-sync worden (ook) via cron/interne secret
+# aangeroepen -> verify_jwt=false, auth in-functie via requireAdminOrInternal.
+[functions.wefact-test-connection]
+verify_jwt = false
+
+[functions.wefact-debtor-sync]
+verify_jwt = true
+
+[functions.wefact-create-invoice]
+verify_jwt = true
+
+[functions.wefact-invoice-actions]
+verify_jwt = true
+
+[functions.wefact-push-settlement]
+verify_jwt = false
+
+[functions.wefact-settlement-sync]
+verify_jwt = false
+
+[functions.wefact-status-sync]
+verify_jwt = false

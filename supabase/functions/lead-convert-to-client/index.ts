@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_STD } from "../_shared/cors.ts";
+import { joinStreetAndHouse } from "../_shared/installationHandoff.ts";
 
 // Converteert een lead naar een klant. Bestaat er een opgeslagen configuratie op
 // de lead, dan krijgt de klant EXACT die tarieven/contract + een
@@ -80,7 +81,8 @@ Deno.serve(async (req) => {
         contact_name: lead.contact_name ?? null,
         contact_email: lead.contact_email ?? null,
         contact_phone: lead.contact_phone ?? null,
-        billing_address_street: lead.address_street ?? null,
+        // clients draagt straat+huisnummer in ÉÉN kolom; leads hebben ze los.
+        billing_address_street: joinStreetAndHouse(lead.address_street, lead.house_number) || null,
         billing_address_postal: lead.postal_code ?? null,
         billing_address_city: lead.city ?? null,
         status: "actief",

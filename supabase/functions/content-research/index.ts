@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { getAnthropicKey, anthropicMessage, extractJson, DEFAULT_MODEL } from "../_shared/anthropic.ts";
+import { TRUSTED_DOMAINS } from "../_shared/sources.ts";
 
 // Content-research (collector van stap 1): laat Claude met de web-search-tool ECHT internet-research doen naar
 // waar de doelgroep op googelt, gecombineerd met het actuele nieuws + de bekende zoekwoorden, en levert ~10
@@ -78,7 +79,8 @@ Deno.serve(async (req) => {
     try {
       raw = await anthropicMessage({
         apiKey, system: SYSTEM, user, model, maxTokens: 6000,
-        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4, allowed_domains: TRUSTED_DOMAINS }],
+        thinking: "adaptive", effort: "medium",
       });
     } catch (e) {
       return json({ status: "error", message: `Research mislukt: ${(e as Error).message}` }, 502);

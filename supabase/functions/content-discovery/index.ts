@@ -189,7 +189,7 @@ Deno.serve(async (req: Request) => {
           ).join("\n");
           let parsed: any;
           try {
-            parsed = extractJson<any>(await anthropicMessage({ apiKey, system: BRAND_FIT_SYSTEM, user, model: scoreModel, maxTokens: 4000, retries: 1 }));
+            parsed = extractJson<any>(await anthropicMessage({ apiKey, system: BRAND_FIT_SYSTEM, user, model: scoreModel, maxTokens: 4000, retries: 1, thinking: "disabled" }));
           } catch { continue; }
           for (const s of (Array.isArray(parsed?.scores) ? parsed.scores : [])) {
             const t = batch[Number(s?.i)];

@@ -5,6 +5,7 @@ import { heroV2Url, logoBrightUrl } from "../_shared/email-assets.ts";
 import { sha256Hex, generateToken } from "../_shared/hash.ts";
 import { CORS_STD } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { renderSlots } from "../_shared/emailRender.ts";
 
 // Send-client-invitation — verstuurt e-charging-branded uitnodiging via Resend.
 // Body: { client_id: string, resend?: boolean }
@@ -148,6 +149,19 @@ Deno.serve(async (req: Request) => {
     // Alleen-beheer (managed, geen installatie) houdt de standaard "portaal staat klaar".
     const needsInstallation = client.needs_installation === true;
 
+    // Ingestelde teksten (Instellingen → E-mails). Geen rij of leeg slot = de standaardtekst
+    // uit het register, die letterlijk gelijk is aan wat hier altijd al stond.
+    const tplVars = {
+      contactnaam: client.contact_name ?? "klant",
+      bedrijfsnaam: client.company_name,
+      klantnummer: typeof client.client_number === "number" ? `#${client.client_number}` : "Wordt gekoppeld",
+      uitnodigingslink: inviteUrl,
+      vervaltermijn: String(Math.max(expiresInDays, 1)),
+      afzender: FROM_NAME,
+    };
+    const tplSlots = await renderSlots(supabase, "klant-portaaluitnodiging", tplVars);
+    const tplSlotsText = await renderSlots(supabase, "klant-portaaluitnodiging", tplVars, { escape: false });
+
     const { subject, html, text } = renderInviteEmail({
       companyName: client.company_name,
       contactName: client.contact_name ?? "klant",
@@ -157,7 +171,7 @@ Deno.serve(async (req: Request) => {
       heroUrl: heroV2Url, // on-domain (dashboard.e-charging.nl) i.p.v. supabase.co
       clientNumber: client.client_number,
       needsInstallation,
-    });
+    }, tplSlots, tplSlotsText);
 
     // Send via Resend API — uitnodiging blijft systematisch vanuit noreply@ (reply_to = info@),
     // conform de vastgelegde afzender-identiteiten; alleen de toon van de tekst is scope-bewust.

@@ -922,7 +922,13 @@ function EditForm({ lead, form, set, text, updateLead, onLaunchConfigurator }: {
       </InfoCard>
 
       <InfoCard title="Contactpersoon" icon={UserPlus}>
-        <ERow label="Persoon"><PersonPicker value={lead.person_id} valueLabel={lead.contact_name} companyId={lead.company_id} placeholder="Kies of zoek persoon…" onChange={(id) => updateLead.mutate({ id: lead.id, patch: { person_id: id } })} /></ERow>
+        <ERow label="Persoon"><PersonPicker value={lead.person_id} valueLabel={lead.contact_name} companyId={lead.company_id} placeholder="Kies of zoek persoon…" defaults={{
+          email: lead.contact_email,
+          phone: lead.contact_phone,
+          // Particulier: lead-adres = woonadres = factuuradres. Bij een bedrijf is het
+          // lead-adres de uitvoerlocatie, niet het privéadres van de contactpersoon.
+          address: lead.company_id ? null : { street: lead.address_street, houseNumber: lead.house_number, postalCode: lead.postal_code, city: lead.city },
+        }} onChange={(id) => updateLead.mutate({ id: lead.id, patch: { person_id: id } })} /></ERow>
         {lead.person_id ? (
           <div className="pt-3"><PersonFields personId={lead.person_id} /></div>
         ) : (

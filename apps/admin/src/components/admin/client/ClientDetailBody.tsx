@@ -4,6 +4,7 @@ import { useClientById, useClientSettlements, useClientActivity, useClientInvita
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { DossierDocuments } from "@/components/documents/DossierDocuments";
 import { normalizePhone } from "@/lib/phone";
+import { splitStreetAndHouse, joinStreetAndHouse } from "@/lib/houseNumber";
 import { KpiTile } from "@/components/admin/KpiTile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -154,6 +155,7 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
     if (!clientData) return;
     const client = clientData as ClientWithRelations;
     const contactName = splitContactName(client.contact_name);
+    const [billingStreetOnly, billingHouseOnly] = splitStreetAndHouse(client.billing_address_street);
     setEditErrors({});
     setEditData({
       client_number: client.client_number,
@@ -164,10 +166,11 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
       contact_last_name: contactName.lastName,
       contact_email: client.contact_email || "",
       contact_phone: client.contact_phone || "",
-      billing_address_street: client.billing_address_street || "",
-      // clients heeft één billing-straat-kolom (straat + huisnummer); AddressFields splitst huisnummer los.
-      // Het bestaande adres blijft in `billing_address_street`; een nieuw PDOK-huisnummer landt hier.
-      billing_house: "",
+      // clients draagt straat + huisnummer in ÉÉN kolom; AddressFields wil ze los. Splitsen bij
+      // het openen, anders staat "Alfred Smithlaan 37" in het straatveld met Huisnummer leeg.
+      // Bij opslaan worden ze weer samengevoegd, dus de opgeslagen string blijft gelijk.
+      billing_address_street: billingStreetOnly,
+      billing_house: billingHouseOnly,
       billing_address_postal: client.billing_address_postal || "",
       billing_address_city: client.billing_address_city || "",
       contract_start_date: client.contract_start_date || "",
@@ -196,9 +199,7 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
     // verwachten string(| null). Coerce expliciet (runtime-no-op voor strings).
     const asText = (v: string | number | null | undefined): string => (v == null ? "" : String(v));
     // Factuuradres: AddressFields levert straat + huisnummer los; combineer terug naar de ene billing-kolom.
-    const billingStreet = [asText(editData.billing_address_street).trim(), asText(editData.billing_house).trim()]
-      .filter(Boolean)
-      .join(" ");
+    const billingStreet = joinStreetAndHouse(asText(editData.billing_address_street), asText(editData.billing_house));
     try {
       await updateClientMutation.mutateAsync({
         client_number: nextClientNumber,
@@ -229,6 +230,19 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
       // van companies/persons/leads). De propagate-trigger synct daarna alle gekoppelde
       // leads/klanten/offertes. Naam + kvk/btw óók naar het bedrijf schrijven zodat de
       // klant- en bedrijfs-rij niet uit elkaar lopen (kvk/btw worden niet door een trigger gesynct).
+      // Het factuuradres hoort óók bij het contact: buildDebtorParams (WeFact) leest het
+      // adres UITSLUITEND van company/person, dus zonder deze doorschrijving krijgt de
+      // debiteur geen adresregel. AddressFields levert straat/huisnummer al gesplitst.
+      // `billing_address_street` kan het huisnummer al bevatten (bestaande rijen) terwijl
+      // `billing_house` alleen gevuld is na een PDOK-lookup. splitHouse/één bron: splits de
+      // samengevoegde string zodat het contact altijd straat + huisnummer los krijgt.
+      const [addrStreet, addrHouse] = splitStreetAndHouse(billingStreet);
+      const addressPatch = {
+        address_street: addrStreet || null,
+        house_number: addrHouse || null,
+        postal_code: asText(editData.billing_address_postal) || null,
+        city: asText(editData.billing_address_city) || null,
+      };
       if (clientData.company_id) {
         await updateCompany.mutateAsync({
           id: clientData.company_id,
@@ -236,6 +250,7 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
             ...(asText(editData.company_name).trim() ? { name: asText(editData.company_name).trim() } : {}),
             kvk: asText(editData.kvk) || null,
             btw_number: asText(editData.btw_number) || null,
+            ...addressPatch,
           },
         });
       }
@@ -247,6 +262,9 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
             last_name: asText(editData.contact_last_name) || null,
             email: asText(editData.contact_email) || null,
             phone: normalizePhone(asText(editData.contact_phone)),
+            // Particulier: het factuuradres ís het persoonsadres. Bij een zakelijke klant
+            // blijft het adres van het bedrijf leidend en laten we de persoon met rust.
+            ...(clientData.company_id ? {} : addressPatch),
           },
         });
       }
@@ -423,14 +441,23 @@ export function ClientDetailBody({ clientId, onClose }: { clientId: string; onCl
               {client.contact_email}
             </p>
           )}
-          {client.company_id && (
+          {/* Particulier heeft geen bedrijf; dan door naar het persoonsdossier. Zonder deze
+              terugval had een particuliere klant helemaal geen link naar Contacten. */}
+          {client.company_id ? (
             <button
               onClick={() => navigate(`/sales/contacten?company=${client.company_id}`)}
               className="mt-1 block text-xs font-medium text-primary hover:underline"
             >
               → Bedrijfsdossier in Contacten
             </button>
-          )}
+          ) : client.person_id ? (
+            <button
+              onClick={() => navigate(`/sales/contacten?person=${client.person_id}`)}
+              className="mt-1 block text-xs font-medium text-primary hover:underline"
+            >
+              → Persoonsdossier in Contacten
+            </button>
+          ) : null}
           {client.managed === false && (
             <button
               onClick={handleActivateManagement}

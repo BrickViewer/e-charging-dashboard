@@ -20,6 +20,7 @@ import { FaultSettingsTab } from "@/components/admin/settings/FaultSettingsTab";
 import { UsersSettingsTab } from "@/components/admin/settings/UsersSettingsTab";
 import { ApiSettingsTab, type ConnectionTestResult } from "@/components/admin/settings/ApiSettingsTab";
 import { AutomationTab } from "@/components/admin/settings/AutomationTab";
+import { EmailTemplatesTab } from "@/components/admin/settings/EmailTemplatesTab";
 import { PreferencesTab } from "@/components/admin/settings/PreferencesTab";
 
 export default function AdminSettings() {
@@ -137,6 +138,10 @@ export default function AdminSettings() {
           <TabsTrigger value="gebruikers"><Users className="w-4 h-4 mr-1" />Gebruikers</TabsTrigger>
           <TabsTrigger value="api"><KeyRound className="w-4 h-4 mr-1" />API</TabsTrigger>
           <TabsTrigger value="automatisering"><Activity className="w-4 h-4 mr-1" />Automatisering</TabsTrigger>
+          {/* Opslaan loopt via save_email_template, die admin/manager afdwingt — tab dus ook. */}
+          {(role === "admin" || role === "manager" || isSuperadmin) && (
+            <TabsTrigger value="emails"><Mail className="w-4 h-4 mr-1" />E-mails</TabsTrigger>
+          )}
           <TabsTrigger value="handtekening"><PenLine className="w-4 h-4 mr-1" />Mijn handtekening</TabsTrigger>
           <TabsTrigger value="voorkeuren"><SunMoon className="w-4 h-4 mr-1" />Voorkeuren</TabsTrigger>
           {(role === "admin" || isSuperadmin) && <TabsTrigger value="feedback"><MessageSquare className="w-4 h-4 mr-1" />Feedback</TabsTrigger>}
@@ -145,6 +150,12 @@ export default function AdminSettings() {
         <TabsContent value="bedrijf">
           <CompanySettingsTab />
         </TabsContent>
+
+        {(role === "admin" || role === "manager" || isSuperadmin) && (
+          <TabsContent value="emails">
+            <EmailTemplatesTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="standaardwaarden">
           <DefaultsSettingsTab />

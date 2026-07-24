@@ -123,7 +123,8 @@ Deno.serve(async (req) => {
     if (!locId) {
       const resolved = await resolveProjectLocation(serviceClient, {
         org: lead.organization_id, company: lead.company_id ?? null,
-        street: lead.address_street ?? "", postal: lead.postal_code ?? "", city: lead.city ?? "",
+        street: lead.address_street ?? "", house: lead.house_number ?? null,
+        postal: lead.postal_code ?? "", city: lead.city ?? "",
         lead: lead.id, fallbackLabel: lead.company_name ?? undefined,
       });
       locId = resolved.id; locNumber = resolved.location_number;

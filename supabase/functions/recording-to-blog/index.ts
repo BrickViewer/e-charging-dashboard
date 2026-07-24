@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
 
       const model = typeof settings.generation_model === "string" ? settings.generation_model : DEFAULT_MODEL;
       const maxTokens = Number.isFinite(settings.generation_max_tokens) ? settings.generation_max_tokens : 8000;
-      const raw = await anthropicMessage({ apiKey, system: BLOG_SYSTEM, user, model, maxTokens });
+      const raw = await anthropicMessage({ apiKey, system: BLOG_SYSTEM, user, model, maxTokens, thinking: "adaptive", effort: "medium" });
       const draft = validateBlogJson(extractJson<any>(raw), validSlugs);
       usedClaude = true;
       ingestArgs = {

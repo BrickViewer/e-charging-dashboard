@@ -4,6 +4,7 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { renderFaultEmail, type FaultEmailItem } from "./email-template.ts";
 import { CORS_INTERNAL } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { renderSlots } from "../_shared/emailRender.ts";
 import { logoBrightUrl } from "../_shared/email-assets.ts";
 
 // Verstuurt een branded storingsmail (gebundeld per locatie) naar het
@@ -89,7 +90,10 @@ Deno.serve(async (req) => {
 
     const firstLoc = items[0]?.locationName ?? "locatie";
     const overviewUrl = `${PUBLIC_URL}/beheer/storingen`;
-    const { subject, html, text } = renderFaultEmail({ items, locationName: firstLoc, overviewUrl, logoUrl });
+    const tplVars = { aantal: String(items.length), locatie: firstLoc };
+    const tpl = await renderSlots(sb, "storing-gedetecteerd", tplVars);
+    const tplText = await renderSlots(sb, "storing-gedetecteerd", tplVars, { escape: false });
+    const { subject, html, text } = renderFaultEmail({ items, locationName: firstLoc, overviewUrl, logoUrl }, tpl, tplText);
 
     // Dry-run: render zonder te versturen of email_sent_at te zetten (voor tests).
     if (dryRun) {

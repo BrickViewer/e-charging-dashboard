@@ -31,7 +31,7 @@ export async function coverBrief(
     opts.keyword ? `ZOEKWOORD: ${opts.keyword}` : null,
     opts.category ? `CATEGORIE: ${opts.category}` : null,
   ].filter(Boolean).join("\n");
-  const raw = await anthropicMessage({ apiKey: anthropicKey, system: BRIEF_SYSTEM, user, model: DEFAULT_MODEL, maxTokens: 500 });
+  const raw = await anthropicMessage({ apiKey: anthropicKey, system: BRIEF_SYSTEM, user, model: DEFAULT_MODEL, maxTokens: 500, thinking: "disabled" });
   const p = extractJson<any>(raw);
   if (!p || typeof p.image_prompt !== "string" || !p.image_prompt.trim()) {
     throw new Error("Geen geldige beeld-brief van Claude");

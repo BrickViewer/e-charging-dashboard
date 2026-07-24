@@ -1,7 +1,8 @@
-// Deno-spiegel van apps/admin/src/services/installationHandoff.ts.
-// De app-versie is de unit-geteste tweeling (vitest); houd beide in sync.
-
-const HOUSE_NUMBER_RE = /\s*(\d+\s*[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)\s*$/;
+// Deno-spiegel van apps/admin/src/lib/houseNumber.ts (DE canonieke adressplitser).
+// Deno kan niet uit apps/admin/src importeren, dus dit blijft een inline kopie — de pariteit
+// wordt bewaakt door apps/admin/src/services/address.parity.test.ts. Wijzig je hier iets,
+// wijzig het daar ook.
+const HOUSE_NUMBER_RE = /\s*(\d+\s*[A-Za-z]?(?:[-/]\d+\s*[A-Za-z]?)?)\s*$/;
 
 export function splitDutchAddress(address: string | null | undefined): {
   street: string;
@@ -15,6 +16,16 @@ export function splitDutchAddress(address: string | null | undefined): {
     street: value.slice(0, match.index).trim(),
     house_number: match[1].replace(/\s+/g, ""),
   };
+}
+
+// Tegenhanger: straat + los huisnummer weer tot één adresregel. Nodig omdat
+// companies/leads/project_locations ze los opslaan terwijl clients/organizations en externe
+// systemen (WeFact, e-portal) één regel willen.
+export function joinStreetAndHouse(
+  street?: string | null,
+  houseNumber?: string | null,
+): string {
+  return [street, houseNumber].map((v) => (v ?? "").trim()).filter(Boolean).join(" ");
 }
 
 export type InstallationStatus =
@@ -87,12 +98,26 @@ export function buildHandoffPayload(input: any): any {
   const { order, client, company, lead, quote, calculation, callbackUrl } = input;
 
   const customerName = firstNonEmpty(client?.company_name, company?.name, lead?.company_name) ?? "Onbekend";
-  const customerStreetFull = firstNonEmpty(client?.billing_address_street, company?.address_street);
+  // clients draagt straat+huisnummer in ÉÉN kolom; companies/leads hebben ze los. Die los
+  // opgeslagen delen eerst samenvoegen, anders valt het huisnummer weg zodra we op het
+  // bedrijf/de lead terugvallen.
+  const customerStreetFull = firstNonEmpty(
+    client?.billing_address_street,
+    joinStreetAndHouse(company?.address_street, company?.house_number),
+  );
   const customerSplit = splitDutchAddress(customerStreetFull);
 
   const siteStreet = (order.site_street ?? "").trim();
   const siteHouse = (order.site_house_number ?? "").trim();
-  const siteStreetFull = firstNonEmpty([siteStreet, siteHouse].filter(Boolean).join(" "), lead?.address_street);
+  const siteStreetFull = firstNonEmpty(
+    joinStreetAndHouse(siteStreet, siteHouse),
+    joinStreetAndHouse(lead?.address_street, lead?.house_number),
+  );
+  // Valt het site-adres terug op de lead, dan moeten street/house_number dát adres weergeven.
+  // Stond eerder alleen in street_full, waardoor de e-portal een leeg straat/huisnummer kreeg.
+  const siteSplit = siteStreet
+    ? { street: siteStreet, house_number: siteHouse }
+    : splitDutchAddress(siteStreetFull);
 
   // Eén samenvattende werkregel (e-portal toont één rij per order_line). Scope in notes, kosten in totals.
   // Uren uit de calculatie (0 = "geen urenregels" → null, misleidender dan onbekend).
@@ -131,8 +156,8 @@ export function buildHandoffPayload(input: any): any {
     },
     site: {
       location_name: firstNonEmpty(lead?.company_name, customerName),
-      street: siteStreet,
-      house_number: siteHouse,
+      street: siteSplit.street,
+      house_number: siteSplit.house_number,
       street_full: siteStreetFull,
       postal_code: firstNonEmpty(order.site_postal, lead?.postal_code),
       city: firstNonEmpty(order.site_city, lead?.city),

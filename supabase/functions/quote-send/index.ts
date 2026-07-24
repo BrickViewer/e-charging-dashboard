@@ -130,6 +130,12 @@ Deno.serve(async (req) => {
         .select("address_street, postal_code, city").eq("id", quote.project_location_id).maybeSingle();
       if (loc) frozenOd = { ...odSend, addressStreet: loc.address_street ?? null, addressPostalCode: loc.postal_code ?? null, addressCity: loc.city ?? null };
     }
+    // Freeze de TEKSTVERSIE. Zonder dit valt een verstuurde offerte terug op de default in
+    // offerTemplate.ts en verschuift zijn tekst mee met elke volgende copy-wijziging — dan is niet
+    // meer te reproduceren wat de klant heeft ontvangen. HOUD IN SYNC met CURRENT_TEXT_VERSION in
+    // apps/admin/src/services/offerTemplate.ts (daar staat ook wat elke versie inhoudt).
+    const CURRENT_TEXT_VERSION = 3;
+    if (frozenOd.text_version == null) frozenOd = { ...frozenOd, text_version: CURRENT_TEXT_VERSION };
     // Freeze: leg het BTW-regime (particulier?) + het effectieve adres vast bij verzenden, zodat een verstuurde
     // offerte nooit meer mee verandert met latere template-/code-/object-wijzigingen (zie isPrivate-override).
     await serviceClient.from("quotes").update({ status: "verstuurd", sent_at: new Date().toISOString(), prospect_email: recipient, is_private: !((quote.prospect_company ?? "").trim()), offer_details: frozenOd }).eq("id", quoteId);
@@ -149,7 +155,10 @@ Deno.serve(async (req) => {
       await serviceClient.from("lead_activities").insert({
         lead_id: quote.lead_id, organization_id: quote.organization_id, user_id: auth.userId ?? null,
         type: "quote_sent", description: `Offerte ${quote.quote_number} verstuurd naar ${recipient}`,
-        metadata: { quote_id: quoteId },
+        // doc_sections / doc_phrases = de offerte-onderdelen resp. losse zinnen die BUITEN het
+        // verstuurde document vielen. Server-side spoor: achteraf blijft aantoonbaar wat de klant
+        // werkelijk heeft ontvangen, ook als de offerte later wordt herzien.
+        metadata: { quote_id: quoteId, doc_sections: frozenOd.docSections ?? null, doc_phrases: frozenOd.docPhrases ?? null },
       });
     }
 

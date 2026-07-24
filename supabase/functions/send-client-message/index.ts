@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { renderClientMessageEmail } from "./message-email.ts";
+import { renderSlots } from "../_shared/emailRender.ts";
 import { logoBrightUrl } from "../_shared/email-assets.ts";
 import { CORS_STD } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/email.ts";
@@ -91,6 +92,12 @@ Deno.serve(async (req: Request) => {
     let emailDelivered = false;
     let emailError: string | null = null;
     if (recipientEmail) {
+      const tplVars = {
+        aanspreeknaam: (client.contact_name as string | null)?.trim() || (client.company_name as string | null)?.trim() || "daar",
+        afzender: FROM_NAME,
+      };
+      const tplSlots = await renderSlots(supabase, "klant-bericht", tplVars);
+      const tplSlotsText = await renderSlots(supabase, "klant-bericht", tplVars, { escape: false });
       const { subject: mailSubject, html, text } = renderClientMessageEmail({
         companyName: client.company_name ?? "",
         contactName: (client.contact_name as string | null) ?? null,
@@ -99,7 +106,7 @@ Deno.serve(async (req: Request) => {
         portalUrl: hasPortal ? PORTAL_MESSAGES_URL : null,
         logoUrl: logoBrightUrl,
         fromName: FROM_NAME,
-      });
+      }, tplSlots, tplSlotsText);
       const res = await sendEmail({
         to: [recipientEmail],
         subject: mailSubject,

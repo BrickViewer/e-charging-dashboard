@@ -20,7 +20,16 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-export function renderClientMessageEmail(p: ClientMessageEmailParams): { subject: string; html: string; text: string } {
+/** `slots`/`slotsText` komen uit email_templates (sleutel "klant-bericht"), placeholders al
+ *  ingevuld. Niet meegegeven → de standaardteksten hieronder. Onderwerp en berichttekst blijven
+ *  altijd van de medewerker zelf; alleen de omlijsting is instelbaar. */
+export function renderClientMessageEmail(
+  p: ClientMessageEmailParams,
+  slots?: Record<string, string>,
+  slotsText?: Record<string, string>,
+): { subject: string; html: string; text: string } {
+  const S = (n: string, d: string) => slots?.[n] ?? d;
+  const T = (n: string, d: string) => slotsText?.[n] ?? slots?.[n] ?? d;
   const subject = p.subject.trim();
   const greetingName = p.contactName && p.contactName.trim()
     ? p.contactName.trim()
@@ -30,7 +39,7 @@ export function renderClientMessageEmail(p: ClientMessageEmailParams): { subject
 
   const cta = p.portalUrl
     ? `<tr><td style='padding:8px 24px 4px 24px;'>
-          <a href='${escapeHtml(p.portalUrl)}' style='display:inline-block;background:#22c55e;color:#04120a;font-size:14px;font-weight:700;text-decoration:none;padding:11px 22px;border-radius:10px;'>Bekijk in je portaal</a>
+          <a href='${escapeHtml(p.portalUrl)}' style='display:inline-block;background:#22c55e;color:#04120a;font-size:14px;font-weight:700;text-decoration:none;padding:11px 22px;border-radius:10px;'>${S("knoptekst", "Bekijk in je portaal")}</a>
         </td></tr>`
     : '';
 
@@ -44,9 +53,9 @@ export function renderClientMessageEmail(p: ClientMessageEmailParams): { subject
           <img src='${escapeHtml(p.logoUrl)}' alt='E-Charging' height='28' style='height:28px;width:auto;display:block;'>
         </td></tr>
         <tr><td style='padding:8px 24px 0 24px;'>
-          <div style='display:inline-block;background:#0e2a12;color:#7ee08a;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 12px;border-radius:999px;'>Bericht</div>
+          <div style='display:inline-block;background:#0e2a12;color:#7ee08a;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 12px;border-radius:999px;'>${S("label", "Bericht")}</div>
           <h1 style='font-size:20px;line-height:1.3;color:#ffffff;margin:14px 0 6px 0;'>${escapeHtml(subject)}</h1>
-          <p style='font-size:14px;color:#9aa7b0;margin:0 0 14px 0;line-height:1.6;'>Beste ${escapeHtml(greetingName)},</p>
+          <p style='font-size:14px;color:#9aa7b0;margin:0 0 14px 0;line-height:1.6;'>${S("aanhef", `Beste ${escapeHtml(greetingName)},`)}</p>
         </td></tr>
         <tr><td style='padding:0 24px 8px 24px;'>
           <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='background:#0b0f13;border:1px solid #1c252b;border-radius:12px;'>
@@ -55,19 +64,19 @@ export function renderClientMessageEmail(p: ClientMessageEmailParams): { subject
         </td></tr>
         ${cta}
         <tr><td style='padding:14px 24px 26px 24px;'>
-          <p style='font-size:13px;color:#9aa7b0;margin:0;line-height:1.6;'>Met vriendelijke groet,<br><strong style='color:#ffffff;'>${escapeHtml(p.fromName)}</strong></p>
-          <p style='font-size:12px;color:#5e6a73;margin:14px 0 0 0;'>Je kunt op deze e-mail reageren; je bericht komt dan bij ons team binnen.</p>
+          <p style='font-size:13px;color:#9aa7b0;margin:0;line-height:1.6;'>${S("afsluiting", "Met vriendelijke groet,")}<br><strong style='color:#ffffff;'>${escapeHtml(p.fromName)}</strong></p>
+          <p style='font-size:12px;color:#5e6a73;margin:14px 0 0 0;'>${S("naschrift", "Je kunt op deze e-mail reageren; je bericht komt dan bij ons team binnen.")}</p>
         </td></tr>
       </table>
     </td></tr>
   </table>
 </body></html>`;
 
-  const textLines: string[] = [subject, '', `Beste ${greetingName},`, '', p.message.trim(), ''];
+  const textLines: string[] = [subject, '', T("aanhef", `Beste ${greetingName},`), '', p.message.trim(), ''];
   if (p.portalUrl) {
-    textLines.push(`Bekijk in je portaal: ${p.portalUrl}`, '');
+    textLines.push(`${T("knoptekst", "Bekijk in je portaal")}: ${p.portalUrl}`, '');
   }
-  textLines.push('Met vriendelijke groet,', p.fromName, '', 'Je kunt op deze e-mail reageren; je bericht komt dan bij ons team binnen.');
+  textLines.push(T("afsluiting", 'Met vriendelijke groet,'), p.fromName, '', T("naschrift", 'Je kunt op deze e-mail reageren; je bericht komt dan bij ons team binnen.'));
   const text = textLines.join('\n');
 
   return { subject, html, text };

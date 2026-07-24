@@ -27,16 +27,16 @@ const EFLUX_VAT = 1.21;
 // positief = uitbetalen aan klant, negatief = incasso/factuur naar klant.
 export const customerCashflow = (s: AdminSettlement) => Number(s.client_payout || 0);
 
-// Netto / BTW / incl NA verrekening van de activatiekosten (gedeelde bron, zoals de
-// factuur). Positieve maand → netto over te boeken (activatie verrekend); negatieve
-// maand (incasso) → de rauwe BTW-splitsing behouden (geen activatie, bedrag blijft negatief).
+// Netto / BTW / incl van de afrekening. GEEN activatie-aftrek meer: het handboek verbiedt
+// saldering op één document en activatiekosten worden sinds 22-07-2026 apart gefactureerd via
+// WeFact. De afrekening betaalt dus het VOLLE stroombedrag — gelijk aan wat de self-billing
+// inkoopfactuur uitbetaalt. settlements.activation_cost blijft alleen als historie bestaan.
 export function vatInfo(s: AdminSettlement): { vatRate: number; net: number; vatAmount: number; inclVat: number } {
   const payout = Number(s.client_payout || 0);
   const rate = Number(s.vat_rate ?? 0.21);
-  const activationCost = Number(s.activation_cost || 0);
   if (payout < 0) return settlementVat({ clientPayout: payout, vatRate: rate });
-  const net = settlementNetExcl({ clientPayout: payout, activationCost, vatRate: rate });
-  const inclVat = settlementNetToTransfer({ clientPayout: payout, activationCost, vatRate: rate });
+  const net = settlementNetExcl({ clientPayout: payout, activationCost: 0, vatRate: rate });
+  const inclVat = settlementNetToTransfer({ clientPayout: payout, activationCost: 0, vatRate: rate });
   return { vatRate: rate, net, vatAmount: round2(inclVat - net), inclVat };
 }
 

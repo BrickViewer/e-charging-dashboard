@@ -14,11 +14,23 @@ interface InviteEmailParams {
   needsInstallation?: boolean;
 }
 
-export function renderInviteEmail(p: InviteEmailParams): { subject: string; html: string; text: string } {
+/** Ingestelde teksten uit email_templates (sleutel "klant-portaaluitnodiging"), al met
+ *  placeholders ingevuld. Niet meegegeven → de standaardteksten hieronder. Het HTML-ONTWERP
+ *  (hero, samenvattingsblokken, knop, voettekst) blijft hoe dan ook zoals het is. */
+export function renderInviteEmail(
+  p: InviteEmailParams,
+  slots?: Record<string, string>,
+  slotsText?: Record<string, string>,
+): { subject: string; html: string; text: string } {
   // installatie+beheer: klant wordt direct na tekenen uitgenodigd, vóór de installateur de
   // palen plaatst/koppelt → begeleidende toon. Alleen-beheer houdt "portaal staat klaar".
   const guiding = p.needsInstallation === true;
-  const subject = guiding ? "Maak alvast uw E-Charging account aan" : "Activeer uw E-Charging klantportaal";
+  // Slots winnen; ontbreken ze, dan exact de tekst die hier altijd al stond.
+  const S = (naam: string, standaard: string) => slots?.[naam] ?? standaard;
+  const T = (naam: string, standaard: string) => slotsText?.[naam] ?? slots?.[naam] ?? standaard;
+  const subject = guiding
+    ? T("onderwerp_installatie", "Maak alvast uw E-Charging account aan")
+    : T("onderwerp_standaard", "Activeer uw E-Charging klantportaal");
   const companyName = escapeHtml(p.companyName);
   const contactName = escapeHtml(p.contactName);
   const inviteUrl = escapeHtml(p.inviteUrl);
@@ -31,20 +43,23 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
     !!p.companyName && !!p.contactName &&
     p.companyName.trim().toLowerCase() === p.contactName.trim().toLowerCase();
   const introHtml = guiding
-    ? "Uw offerte is getekend — u kunt nu alvast uw E-Charging account aanmaken. Zodra wij uw laadpalen hebben geplaatst en gekoppeld, ziet u meteen live sessies, geleverde kWh en uw maandafrekeningen in het portaal."
+    ? S("intro_installatie", "Uw offerte is getekend — u kunt nu alvast uw E-Charging account aanmaken. Zodra wij uw laadpalen hebben geplaatst en gekoppeld, ziet u meteen live sessies, geleverde kWh en uw maandafrekeningen in het portaal.")
     : isPrivate
-    ? "Uw E-Charging klantportaal staat klaar. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd."
-    : `Voor ${companyName} is het E-Charging klantportaal voorbereid. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd.`;
+    ? S("intro_particulier", "Uw E-Charging klantportaal staat klaar. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd.")
+    : S("intro_zakelijk", `Voor ${companyName} is het E-Charging klantportaal voorbereid. Via dit portaal ziet u live sessies, geleverde kWh en de definitieve maandafrekeningen zodra E-Charging deze heeft goedgekeurd.`);
   const introText = guiding
-    ? "Uw offerte is getekend — u kunt nu alvast uw E-Charging account aanmaken. Zodra wij uw laadpalen hebben gekoppeld, ziet u alles live in het portaal."
+    ? T("intro_installatie", "Uw offerte is getekend — u kunt nu alvast uw E-Charging account aanmaken. Zodra wij uw laadpalen hebben gekoppeld, ziet u alles live in het portaal.")
     : isPrivate
-    ? "Uw E-Charging klantportaal staat klaar."
-    : `Voor ${p.companyName} is het E-Charging klantportaal voorbereid.`;
+    ? T("intro_particulier", "Uw E-Charging klantportaal staat klaar.")
+    : T("intro_zakelijk", `Voor ${p.companyName} is het E-Charging klantportaal voorbereid.`);
   // De laatste "na activatie"-stap verschilt per scope: bij installatie+beheer koppelen
   // wij binnenkort de palen; bij alleen-beheer koppelen wij de bestaande locaties.
   const step3Html = guiding
-    ? "3. Wij plaatsen en koppelen binnenkort uw laadpalen; daarna staat alles live in uw portaal."
-    : "3. E-Charging koppelt de juiste locaties aan uw klantprofiel.";
+    ? S("stap3_installatie", "3. Wij plaatsen en koppelen binnenkort uw laadpalen; daarna staat alles live in uw portaal.")
+    : S("stap3_beheer", "3. E-Charging koppelt de juiste locaties aan uw klantprofiel.");
+  const step3Text = guiding
+    ? T("stap3_installatie", "3. Wij plaatsen en koppelen binnenkort uw laadpalen; daarna staat alles live in uw portaal.")
+    : T("stap3_beheer", "3. E-Charging koppelt de juiste locaties aan uw klantprofiel.");
 
   const html = `<!DOCTYPE html>
 <html lang="nl">
@@ -207,7 +222,7 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
               </table>
 
               <p class="mobile-body-copy" style="margin:0 0 16px; color:#e5e7eb; font-size:16px; line-height:1.62;">
-                Beste ${contactName},
+                ${S("aanhef", `Beste ${contactName},`)}
               </p>
               <p class="mobile-body-copy" style="margin:0 0 20px; color:#cbd5e1; font-size:16px; line-height:1.7;">
                 ${introHtml}
@@ -217,20 +232,20 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
                 <tr>
                   <td align="center">
                     <a href="${inviteUrl}" class="cta-link" style="display:inline-block; background:#008000; color:#ffffff; text-decoration:none; padding:15px 30px; border-radius:12px; font-size:15px; font-weight:800; box-shadow:0 12px 32px rgba(0,128,0,0.32);">
-                      Account activeren
+                      ${S("knoptekst", "Account activeren")}
                     </a>
                   </td>
                 </tr>
               </table>
 
               <div class="steps-panel" style="padding:18px 18px 16px; border-radius:14px; border:1px solid #243044; background:#0f151c;">
-                <p class="steps-title" style="margin:0 0 12px; color:#ffffff; font-size:14px; font-weight:800;">Na activatie</p>
+                <p class="steps-title" style="margin:0 0 12px; color:#ffffff; font-size:14px; font-weight:800;">${S("stappen_titel", "Na activatie")}</p>
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                   <tr>
-                    <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">1. U kiest een wachtwoord en activeert het account.</td>
+                    <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">${S("stap1", "1. U kiest een wachtwoord en activeert het account.")}</td>
                   </tr>
                   <tr>
-                    <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">2. U vult contact-, factuur- en bankgegevens aan in het portaal.</td>
+                    <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">${S("stap2", "2. U vult contact-, factuur- en bankgegevens aan in het portaal.")}</td>
                   </tr>
                   <tr>
                     <td class="steps-copy" style="padding:8px 0; color:#cbd5e1; font-size:14px; line-height:1.5;">${step3Html}</td>
@@ -249,8 +264,7 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
           <tr>
             <td class="footer-cell" style="padding:24px 40px 30px; border-top:1px solid #1f2937; background:#080c10; text-align:center;">
               <p class="footer-copy" style="margin:0; color:#94a3b8; font-size:13px; line-height:1.6;">
-                Vragen? Mail naar
-                <a href="mailto:info@e-charging.nl" style="color:#22c55e; text-decoration:none;">info@e-charging.nl</a>.
+                ${S("voettekst", 'Vragen? Mail naar <a href="mailto:info@e-charging.nl" style="color:#22c55e; text-decoration:none;">info@e-charging.nl</a>.')}
               </p>
               <p style="margin:14px 0 0; color:#64748b; font-size:12px;">
                 Verzonden door ${fromName}. E-Charging is onderdeel van E-Group BV.
@@ -264,7 +278,7 @@ export function renderInviteEmail(p: InviteEmailParams): { subject: string; html
 </body>
 </html>`;
 
-  const text = `Beste ${p.contactName},
+  const text = `${T("aanhef", `Beste ${p.contactName},`)}
 
 ${introText}
 Klantnummer: ${clientNumber}
@@ -272,10 +286,10 @@ Klantnummer: ${clientNumber}
 Activeer uw account via deze link:
 ${p.inviteUrl}
 
-Na activatie:
-1. U kiest een wachtwoord en activeert het account.
-2. U vult contact-, factuur- en bankgegevens aan in het portaal.
-${guiding ? "3. Wij plaatsen en koppelen binnenkort uw laadpalen; daarna staat alles live in uw portaal." : "3. E-Charging koppelt de juiste locaties aan uw klantprofiel."}
+${T("stappen_titel", "Na activatie")}:
+${T("stap1", "1. U kiest een wachtwoord en activeert het account.")}
+${T("stap2", "2. U vult contact-, factuur- en bankgegevens aan in het portaal.")}
+${step3Text}
 
 Deze uitnodiging vervalt over ${p.expiresInDays} dagen.
 

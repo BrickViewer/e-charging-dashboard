@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
 
     let parsed: { clusters?: Array<{ cluster?: string; pillar_query?: string; members?: string[] }> };
     try {
-      const raw = await anthropicMessage({ apiKey, system: SYSTEM, user, model, maxTokens: 3000 });
+      const raw = await anthropicMessage({ apiKey, system: SYSTEM, user, model, maxTokens: 3000, thinking: "disabled" });
       parsed = extractJson(raw);
     } catch (e) {
       return json({ status: "error", message: `Clusteren mislukt: ${(e as Error).message}` }, 502);

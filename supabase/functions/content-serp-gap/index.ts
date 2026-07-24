@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
         const serp = await fetchSerp(dfs, k.query);
         if (serp.length === 0) { errors++; continue; }
         const user = `Zoekwoord: ${k.query}\nZoekdoel: ${INTENT_NL[k.intent] ?? "informatief"}\n\nTop-10 van Google:\n${serp.map((s, i) => `${i + 1}. ${s.title} - ${s.domain} - ${s.description}`).join("\n")}`;
-        const raw = await anthropicMessage({ apiKey, system: SYSTEM, user, model, maxTokens: 1500 });
+        const raw = await anthropicMessage({ apiKey, system: SYSTEM, user, model, maxTokens: 1500, thinking: "disabled" });
         const parsed = extractJson<{ serp_gap?: number; weakness_type?: string; serp_notes?: string }>(raw);
         const gap = typeof parsed.serp_gap === "number" ? parsed.serp_gap : null;
         if (gap == null) throw new Error("Geen serp_gap in respons");

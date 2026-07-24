@@ -7,7 +7,7 @@ import type { OnboardingClient, OnbOrder } from "@/hooks/useOnboarding";
 function mkOrder(over: Partial<OnbOrder> = {}): OnbOrder {
   return {
     id: "o", quote_id: null, status: null, egroup_order_id: null, egroup_order_number: null,
-    external_status: null, completed_at: null, invoiced_at: null, scheduled_date: null,
+    external_status: null, completed_at: null, invoiced_at: null, wefact_invoice_code: null, wefact_invoice_id: null, scheduled_date: null,
     work_prep_started_at: null, materials_expected_at: null, preparation_notes: null,
     materials_synced_at: null, last_sync_error: null, site_street: null, site_house_number: null,
     site_postal: null, site_city: null, site_contact_name: null, site_contact_email: null,

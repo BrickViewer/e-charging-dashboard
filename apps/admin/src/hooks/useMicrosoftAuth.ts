@@ -3,6 +3,18 @@ import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { graphScopes, msalConfigured } from "@/lib/msal";
 
+// Gegooid wanneer de opgeslagen toestemming de gevraagde scopes niet meer dekt en er dus een
+// INTERACTIEVE stap nodig is. Bewust een eigen type: de aanroeper (een achtergrond-query) mag
+// daar géén popup voor openen — browsers blokkeren popups die niet uit een klik komen, en die
+// geblokkeerde belofte lost nooit op. Zo'n hangende query liet de agenda eindeloos op een grijze
+// skeleton staan zonder foutmelding. De UI vangt dit af en toont een herkoppel-knop.
+export class MicrosoftReauthRequiredError extends Error {
+  constructor(message = "Microsoft-koppeling moet vernieuwd worden") {
+    super(message);
+    this.name = "MicrosoftReauthRequiredError";
+  }
+}
+
 function getMsalErrorMessage(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error);
   if (/popup_window_error|popup.*block|BrowserAuthError.*popup/i.test(msg)) return "Pop-up geblokkeerd door de browser. Sta pop-ups toe en probeer opnieuw.";
@@ -63,22 +75,33 @@ export function useMicrosoftAuth() {
   }, [instance]);
 
   const getAccessToken = useCallback(async (): Promise<string> => {
-    if (!account) throw new Error("Geen Microsoft-account verbonden");
+    if (!account) throw new MicrosoftReauthRequiredError("Geen Microsoft-account verbonden");
     try {
       const response = await instance.acquireTokenSilent({ scopes: graphScopes, account });
       return response.accessToken;
     } catch (error) {
-      if (error instanceof InteractionRequiredAuthError) {
-        const response = await instance.acquireTokenPopup({
-          scopes: graphScopes,
-          account,
-          redirectUri: window.location.origin + "/redirect.html",
-        });
-        return response.accessToken;
-      }
+      // GEEN acquireTokenPopup hier: dit draait in een achtergrond-query, dus de popup wordt
+      // geblokkeerd en de belofte blijft hangen. Meld het en laat de gebruiker klikken.
+      if (error instanceof InteractionRequiredAuthError) throw new MicrosoftReauthRequiredError();
       throw error;
     }
   }, [instance, account]);
 
-  return { login, logout, getAccessToken, connectSilently, isConnected, microsoftUser, account, configured: msalConfigured };
+  // Interactief token vernieuwen. UITSLUITEND aanroepen vanuit een echte klik (knop), want
+  // alleen dan mag de browser de popup openen. Dit is de tegenhanger van de fout hierboven.
+  const reconnect = useCallback(async () => {
+    if (!msalConfigured) throw new Error("Microsoft-koppeling is nog niet geconfigureerd (VITE_MS_CLIENT_ID ontbreekt).");
+    try {
+      const response = await instance.acquireTokenPopup({
+        scopes: graphScopes,
+        ...(account ? { account } : { prompt: "select_account" as const }),
+        redirectUri: window.location.origin + "/redirect.html",
+      });
+      if (response?.account) instance.setActiveAccount(response.account);
+    } catch (error) {
+      throw new Error(getMsalErrorMessage(error));
+    }
+  }, [instance, account]);
+
+  return { login, logout, reconnect, getAccessToken, connectSilently, isConnected, microsoftUser, account, configured: msalConfigured };
 }

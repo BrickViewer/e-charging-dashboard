@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { EmailBodyEditor } from "@/components/sales/EmailBodyEditor";
 import { toast } from "sonner";
-import { ArrowLeft, Building2, Calculator, Eye, FilePlus2, Loader2, MapPin, Send, Target, Trash2, PenLine, User, UserPlus, XCircle } from "lucide-react";
+import { ArrowLeft, Building2, Calculator, Eye, EyeOff, FilePlus2, Loader2, MapPin, MoreHorizontal, Send, Target, Trash2, PenLine, User, UserPlus, XCircle } from "lucide-react";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useQuote, useUpdateQuote, useSendQuote, useRequestSignoff, useDeleteQuote, useInternalSignLink, useReviseQuote, lineItemsOf, rejectCategoryLabel, type QuoteRevisionFields, type QuoteRejectFields } from "@/hooks/useQuotes";
 import { useQuoteCalculation } from "@/hooks/useQuoteCalculation";
 import { RejectQuoteDialog } from "@/components/sales/RejectQuoteDialog";
@@ -29,11 +30,14 @@ import { PersonPicker } from "@/components/contacts/PersonPicker";
 import { LeadPicker } from "@/components/contacts/LeadPicker";
 import { ObjectPicker } from "@/components/contacts/ObjectPicker";
 import { offerPdfBlob, offerPdfBase64, echargingSignature, type OfferPdfData, type OfferSignature } from "@/services/offerPdf";
-import { DEFAULT_LEVERING_TEXT, defaultBeheerIntro } from "@/services/offerTemplate";
+import { DEFAULT_LEVERING_TEXT, defaultBeheerIntro, offerSections, offerPhrases, OFFER_SECTIONS, OFFER_PHRASES } from "@/services/offerTemplate";
+import { OFFER_SECTION_LABELS, OFFER_SECTION_WARNINGS, offerSectionLabel } from "@/services/offerSectionLabels";
+import { OFFER_PHRASE_KINDS, OFFER_PHRASE_NOTES, phraseSnippet } from "@/services/offerPhraseLabels";
 import { commercialMargin } from "@/services/calcTypes";
 import { formatPercent } from "@/services/calculations";
 import { DEFAULT_OFFER_EMAIL, defaultOfferEmail, type OfferDetails, type OfferTemplateValues } from "@/services/offerTypes";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 const numOr = (v: string): number | null => { const n = Number(String(v).replace(",", ".")); return v.trim() !== "" && Number.isFinite(n) ? n : null; };
@@ -62,7 +66,7 @@ export default function SalesOfferteDetail() {
   const internalSignLink = useInternalSignLink();
   const del = useDeleteQuote();
   const revise = useReviseQuote();
-  const { user } = useAuth();
+  const { user, isSuperadmin } = useAuth();
   const adminsQ = useSignableAdmins();
   const quote = quoteQ.data;
   const tpl = settingsQ.data?.offerTemplate;
@@ -141,10 +145,15 @@ export default function SalesOfferteDetail() {
       const liSum = lineItemsOf(quote).reduce((s, i) => s + (Number(i.total) || 0), 0);
       const totalsSum = (Number(quote.total_hardware_cost) || 0) + (Number(quote.total_installation_cost) || 0);
       const initial = totalsSum || liSum;
+      // BEVROREN: een verstuurde/getekende offerte krijgt GEEN defaults meer opgedrongen. Wat hier
+      // staat moet gelijk zijn aan het document dat de klant heeft ontvangen — anders drift het
+      // scherm weg van de PDF (dat gebeurde met activatiekostenPerSocket: het formulier vulde stil
+      // 18,50 in terwijl de verstuurde beheer-offerte € 0,00 zei).
+      const seedDefaults = quote.status === "concept";
       // Beheer-only: activatiekosten standaard 18,50 per paal (bewerkbaar) wanneer er nog geen totaal is.
       const beheerOnly = quote.with_installation === false;
       const activationTotal = 18.5 * (Number(quote.num_charge_points) || 0);
-      setPrice(initial ? String(initial) : (beheerOnly && activationTotal > 0 ? String(activationTotal) : ""));
+      setPrice(initial ? String(initial) : (seedDefaults && beheerOnly && activationTotal > 0 ? String(activationTotal) : ""));
       setEmail(quote.prospect_email ?? "");
       setWithManagement(quote.with_management !== false);
       setWithInstallation(quote.with_installation !== false);
@@ -157,7 +166,7 @@ export default function SalesOfferteDetail() {
       // Voorgevulde defaults als echte (witte) waarden i.p.v. grijze placeholders — alleen als nog leeg.
       const lastName = splitName(quote.prospect_contact ?? "").last_name;
       const oTpl = settingsQ.data?.offerTemplate;
-      setOd({
+      setOd(seedDefaults ? {
         ...odLoaded,
         aanhef: odLoaded.aanhef && String(odLoaded.aanhef).trim() ? odLoaded.aanhef : `Geachte heer/mevrouw${lastName ? " " + lastName : ""},`,
         tav: odLoaded.tav ?? (quote.prospect_contact || null),
@@ -167,7 +176,7 @@ export default function SalesOfferteDetail() {
           ? `Beheercontract ${(quote.num_charge_points ?? 1) >= 2 ? "laadpalen" : "laadpaal"}`
           : (oTpl?.defaultBetreftTemplate || "Offerte laadinfrastructuur")),
         activatiekostenPerSocket: odLoaded.activatiekostenPerSocket ?? (oTpl?.activatiekostenPerSocket || 18.5),
-      });
+      } : odLoaded);
       setNumDraft({});
       setEmailGreeting(odLoaded.emailGreeting ?? "");
       const seededEmail = defaultOfferEmail({
@@ -317,6 +326,70 @@ export default function SalesOfferteDetail() {
     };
   };
 
+  // --- Documentopbouw (uitzonderingspad) ------------------------------------------------
+  // Welke onderdelen dít document heeft en welke daarvan buiten de klantversie vallen. Het
+  // sjabloon is de bron: zo hoeft hier geen scope-logica gedupliceerd te worden.
+  // MOET vóór de early-returns hieronder staan (hooks-vololgorde) én mag niet op `quote!`
+  // vertrouwen — quote is bij de eerste render nog undefined.
+  const sectionKey = quote ? JSON.stringify(pdfData()) : "";
+  const sectionInfo = useMemo(() => {
+    try { return quote ? offerSections(pdfData()) : []; } catch { return []; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionKey]);
+  // Losse zinnen (fijnere korrel). offerPhrases laat zinnen weg die in een weggelaten sectie
+  // zitten, zodat ze niet dubbel meetellen in de waarschuwingen en niet aanvinkbaar blijven.
+  const phraseInfo = useMemo(() => {
+    try { return quote ? offerPhrases(pdfData()) : []; } catch { return []; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionKey]);
+  const omittedPhrases = phraseInfo.filter((p) => p.omitted);
+  // Afgeleid uit de werkelijk beschikbare secties, niet uit de ruwe od-sleutel: na een
+  // scope-wissel kan er een id in offer_details staan dat dit document niet meer heeft, en
+  // dan mag er ook geen waarschuwing verschijnen.
+  const omittedSections = sectionInfo.filter((s) => s.omitted);
+  const omittedLabels = omittedSections.map((s) => offerSectionLabel(s.id));
+  // Toonbaar in de naadstrook zolang de keuze nog niet in de database staat: pdfData() bouwt
+  // uit lokale state, en "PDF openen" slaat niet eerst op.
+  const savedOd = (quote?.offer_details ?? {}) as OfferDetails;
+  const sameList = (a: unknown, b: unknown) =>
+    JSON.stringify(Array.isArray(a) ? a : null) === JSON.stringify(Array.isArray(b) ? b : null);
+  // Gescheiden houden: sectionNote van de naadstrook hangt aan docSectionsDirty, dus een
+  // gewijzigde ZIN mag daar geen "niet opgeslagen" op een al opgeslagen sectie plakken.
+  const docSectionsDirty = !sameList(od.docSections, savedOd.docSections);
+  const docPhrasesDirty = !sameList(od.docPhrases, savedOd.docPhrases);
+  // Eén setter-vorm voor beide lijsten: canoniek gesorteerd op sjabloonvolgorde (anders meldt de
+  // dirty-vergelijking eeuwig "niet opgeslagen" na aan/uit/aan) en de sleutel verdwijnt volledig
+  // zodra alles weer meegaat — een lege lijst zou onnodig als "aangepast document" blijven staan.
+  const toggleInList = <T extends string>(cur: unknown, all: readonly T[], id: string, omit: boolean): T[] | null => {
+    const base = Array.isArray(cur) ? (cur as string[]) : [];
+    const next = omit ? [...base.filter((x) => x !== id), id] : base.filter((x) => x !== id);
+    const ordered = all.filter((k) => next.includes(k));
+    return ordered.length ? [...ordered] : null;
+  };
+  const setSectionOmitted = (id: string, omit: boolean) =>
+    setOd((o) => ({ ...o, docSections: toggleInList(o.docSections, OFFER_SECTIONS, id, omit) }));
+  const setPhraseOmitted = (id: string, omit: boolean) =>
+    setOd((o) => ({ ...o, docPhrases: toggleInList(o.docPhrases, OFFER_PHRASES, id, omit) }));
+  // Regel voor de bevestiging vlak vóór verzenden. Dit is het vangnet: ook wie de optie niet
+  // kent, ziet hier dat het document is ingekort.
+  const omitConfirmParts = [
+    omittedSections.length ? `${omittedSections.length === 1 ? "1 onderdeel" : `${omittedSections.length} onderdelen`}: ${omittedLabels.join(", ")}` : "",
+    omittedPhrases.length ? `${omittedPhrases.length === 1 ? "1 zin" : `${omittedPhrases.length} zinnen`}: ${omittedPhrases.map((p) => `"${phraseSnippet(p.text, 60)}"`).join(", ")}` : "",
+  ].filter(Boolean);
+  const omitConfirmLine = omitConfirmParts.length
+    ? `\n\nLET OP: dit gaat NIET mee naar de klant — ${omitConfirmParts.join(" · ")}.`
+    : "";
+  // Weglaten is een uitzonderingshandeling (superadmin, concept). TERUGZETTEN mag iedereen die
+  // het concept mag bewerken: een weggelaten zin laat geen naadstrook achter, dus zonder dit pad
+  // kan een collega een per ongeluk uitgezette zin nooit meer herstellen.
+  const canOmitDoc = isSuperadmin && isConcept && (sectionInfo.some((s) => !s.locked) || phraseInfo.length > 0);
+  const canRestoreDoc = isConcept && (omittedSections.length > 0 || omittedPhrases.length > 0);
+  const menuSections = canOmitDoc ? sectionInfo.filter((s) => !s.locked) : omittedSections;
+  const menuPhrases = canOmitDoc ? phraseInfo : omittedPhrases;
+  // Radix unmount't de trigger zodra de conditie omslaat; zonder deze state zou het menu tijdens
+  // het herstellen onder je muis verdwijnen bij de laatste regel.
+  const [docMenuOpen, setDocMenuOpen] = useState(false);
+
   const doPreview = async () => {
     if (!quote) return;
     try {
@@ -353,7 +426,7 @@ export default function SalesOfferteDetail() {
     if (!selfSig) { toast.error("Teken je handtekening of stel er een in bij Instellingen › Mijn handtekening"); return; }
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
     if (grandTotal <= 0 && !window.confirm("Het offertetotaal is €0. Toch versturen?")) return;
-    if (!window.confirm(`Offerte ${quote.quote_number} ondertekenen en versturen naar ${email.trim()}?\nTotaal: ${euro(grandTotal)}`)) return;
+    if (!window.confirm(`Offerte ${quote.quote_number} ondertekenen en versturen naar ${email.trim()}?\nTotaal: ${euro(grandTotal)}${omitConfirmLine}`)) return;
     try {
       setBusy("Opslaan…");
       await save();
@@ -375,7 +448,7 @@ export default function SalesOfferteDetail() {
   const sendForSignoff = async () => {
     if (busy || !quote || !selectedAdmin) return;
     // De collega kan zijn handtekening op de tekenlink-pagina zelf zetten; vooraf instellen is niet meer vereist.
-    if (!window.confirm(`Offerte ${quote.quote_number} ter ondertekening sturen naar ${selectedAdmin.fullName}?`)) return;
+    if (!window.confirm(`Offerte ${quote.quote_number} ter ondertekening sturen naar ${selectedAdmin.fullName}?${omitConfirmLine}`)) return;
     try {
       setBusy("Opslaan…");
       await save();
@@ -399,7 +472,7 @@ export default function SalesOfferteDetail() {
   const resendToCustomer = async () => {
     if (busy || !quote) return;
     if (!email.trim()) { toast.error("Vul een e-mailadres in"); return; }
-    if (!window.confirm(`Offerte ${quote.quote_number} opnieuw versturen naar ${email.trim()}?`)) return;
+    if (!window.confirm(`Offerte ${quote.quote_number} opnieuw versturen naar ${email.trim()}?${omitConfirmLine}`)) return;
     try {
       setBusy("Document voorbereiden…");
       const pdfBase64 = await offerPdfBase64(pdfData(), { ...echargingFromQuote() });
@@ -493,6 +566,17 @@ export default function SalesOfferteDetail() {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold">Offerte {quote.quote_number ?? ""}</h1>
             <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium">{STATUS_LABEL[quote.status ?? ""] ?? quote.status}</span>
+            {/* Ingekort document: zichtbaar voor ELKE interne gebruiker en in elke status — het
+                signaal hangt bewust niet aan de (afgeschermde) bediening. */}
+            {(omittedSections.length > 0 || omittedPhrases.length > 0) && (
+              <span
+                className="shrink-0 text-muted-foreground"
+                title={`Wordt niet meegestuurd: ${[...omittedLabels, ...omittedPhrases.map((p) => `"${phraseSnippet(p.text, 50)}"`)].join(", ")}${(docSectionsDirty || docPhrasesDirty) ? " · nog niet opgeslagen" : ""}`}
+                aria-label="Ingekort document"
+              >
+                <EyeOff className="h-4 w-4" />
+              </span>
+            )}
           </div>
         </div>
         <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setMobilePreview((v) => !v)}>
@@ -524,7 +608,15 @@ export default function SalesOfferteDetail() {
       {/* Mobiel: voorbeeld als toggle */}
       {mobilePreview && (
         <div className="mt-4 lg:hidden">
-          <OfferPreview data={pdfData()} signature={previewSignature} className="h-[80vh]" />
+          <OfferPreview
+            data={pdfData()}
+            signature={previewSignature}
+            className="h-[80vh]"
+            sections={sectionInfo}
+            sectionLabels={OFFER_SECTION_LABELS}
+            sectionNote={docSectionsDirty ? "niet opgeslagen" : undefined}
+            onRestoreSection={isConcept ? (sid) => setSectionOmitted(sid, false) : undefined}
+          />
         </div>
       )}
 
@@ -570,7 +662,10 @@ export default function SalesOfferteDetail() {
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between"><Label className="text-xs">Persoon</Label>{personId ? <Link to={`/sales/contacten?person=${personId}`} className="text-[11px] text-primary hover:underline">bekijken →</Link> : null}</div>
-                  <PersonPicker value={personId} valueLabel={personName || null} companyId={companyId} onChange={(id, p) => { setPersonId(id); setPersonName(id ? (p?.full_name ?? personName) : ""); }} />
+                  <PersonPicker value={personId} valueLabel={personName || null} companyId={companyId} defaults={{
+                    // Particulier: objectadres (uitvoerlocatie) = woonadres = factuuradres.
+                    address: companyId || !object ? null : { street: object.address_street, houseNumber: object.house_number, postalCode: object.postal_code, city: object.city },
+                  }} onChange={(id, p) => { setPersonId(id); setPersonName(id ? (p?.full_name ?? personName) : ""); }} />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between"><Label className="text-xs">Lead</Label>{leadId ? <Link to={`/sales/leads?lead=${leadId}`} className="text-[11px] text-primary hover:underline">bekijken →</Link> : null}</div>
@@ -704,9 +799,11 @@ export default function SalesOfferteDetail() {
           ) : (
             <>
               {/* Particulier alleen-beheer = contractblad: pagina 1+2 samengevoegd, geen begeleidende
-                  tekst meer — het veld verbergen voorkomt bewerken van iets dat niet rendert. */}
+                  tekst meer — het veld verbergen voorkomt bewerken van iets dat niet rendert.
+                  De hint citeert bewust NIET de hero-kop: die zin is via de documentopbouw uitzetbaar,
+                  en dan zou de hint verwijzen naar iets dat er niet staat. */}
               {!isParticulier && (
-                <Section title="Toelichting beheer (pagina 1)" hint="Begeleidende tekst onder 'Wij maken van uw laadpalen een inkomstenbron' — alinea's scheiden met een lege regel. Leeg laten = standaardtekst.">
+                <Section title="Toelichting beheer (pagina 1)" hint="Begeleidende tekst boven aan pagina 1 — alinea's scheiden met een lege regel. Leeg laten = standaardtekst.">
                   <Textarea className="leading-relaxed min-h-[8rem] max-h-[60vh] resize-none overflow-y-auto" value={od.beheerIntroText ?? defaultBeheerIntro({ poles: numOr(numChargePoints), addr1: [object?.address_street, object?.house_number].filter(Boolean).join(" ") || odStr("addressStreet"), addr2: object?.city || odStr("addressCity") }, 2, quote.is_private ?? !companyName.trim())} disabled={!isConcept} onChange={(e) => setStr("beheerIntroText", e.target.value)} />
                 </Section>
               )}
@@ -738,10 +835,28 @@ export default function SalesOfferteDetail() {
                 <div className="space-y-1"><Label className="text-xs">Servicemonteur / uur (€)</Label><Input inputMode="decimal" value={numVal("servicemonteurPerHour")} placeholder={String(tpl?.servicemonteurPerHour ?? "")} disabled={!isConcept} onChange={(e) => setNum("servicemonteurPerHour", e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Voorrijkosten / km (€)</Label><Input inputMode="decimal" value={numVal("voorrijkostenPerKm")} placeholder={String(tpl?.voorrijkostenPerKm ?? "")} disabled={!isConcept} onChange={(e) => setNum("voorrijkostenPerKm", e.target.value)} /></div>
                 {withInstallation && (
-                  <>
-                    <div className="space-y-1"><Label className="text-xs">Toeslag werkuur (€)</Label><Input inputMode="decimal" value={numVal("toeslagWerkuur")} placeholder={String(tpl?.toeslagWerkuur ?? "")} disabled={!isConcept} onChange={(e) => setNum("toeslagWerkuur", e.target.value)} /></div>
-                    <div className="space-y-1"><Label className="text-xs">Activatiekosten / socket (€)</Label><Input inputMode="decimal" value={numVal("activatiekostenPerSocket")} disabled={!isConcept} onChange={(e) => setNum("activatiekostenPerSocket", e.target.value)} /></div>
-                  </>
+                  <div className="space-y-1"><Label className="text-xs">Toeslag werkuur (€)</Label><Input inputMode="decimal" value={numVal("toeslagWerkuur")} placeholder={String(tpl?.toeslagWerkuur ?? "")} disabled={!isConcept} onChange={(e) => setNum("toeslagWerkuur", e.target.value)} /></div>
+                )}
+                {/* Activatiekosten horen bij de BEHEER-module, dus ook zichtbaar bij alleen-beheer.
+                    Stond eerder achter withInstallation, waardoor het veld bij alleen-beheer wél
+                    gevuld werd maar niet te zien of te corrigeren was — en de PDF een ander bedrag
+                    printte dan het scherm. */}
+                {withManagement && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Activatiekosten / laadpunt (€)</Label>
+                    <Input inputMode="decimal" value={numVal("activatiekostenPerSocket")} disabled={!isConcept} onChange={(e) => setNum("activatiekostenPerSocket", e.target.value)} />
+                    {!withInstallation && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {(() => {
+                          const per = numOr(numVal("activatiekostenPerSocket")) ?? 0;
+                          const qty = numOr(numChargePoints) ?? 0;
+                          return per > 0 && qty > 0
+                            ? `${qty} × ${euro(per)} = ${euro(per * qty)} excl. BTW`
+                            : "Vul aantal laadpunten én bedrag in voor de activatieregel";
+                        })()}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="mt-4">
@@ -876,7 +991,89 @@ export default function SalesOfferteDetail() {
           </div>
           {!isConcept && <p className="text-right text-xs text-muted-foreground">Geldig tot {quote.valid_until ?? "—"}</p>}
 
-          <div className="flex justify-end">
+          <div className="group flex items-center justify-end gap-1">
+            {/* Documentopbouw — uitzonderingspad, bewust onopvallend: de knop verschijnt pas bij
+                hover/focus (idioom uit CalcSheet) en alleen voor een superadmin op een concept.
+                Staat er al iets uit, dan is de knop wél gewoon zichtbaar en mag iedereen die het
+                concept bewerkt terugzetten — anders kan een collega een per ongeluk uitgezette
+                zin nooit meer herstellen (zinnen laten, anders dan secties, geen naadstrook na). */}
+            {(canOmitDoc || canRestoreDoc || docMenuOpen) && (
+              <DropdownMenu open={docMenuOpen} onOpenChange={setDocMenuOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title={canRestoreDoc ? "Documentopbouw — er staat iets uit" : "Documentopbouw"}
+                    aria-label="Documentopbouw"
+                    disabled={!!busy}
+                    className={cn(
+                      "h-9 w-9 text-muted-foreground transition-opacity data-[state=open]:opacity-100",
+                      !canRestoreDoc && "opacity-0 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100",
+                    )}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-[70vh] w-80 overflow-y-auto">
+                  {/* In herstelstand (geen superadmin, of geen concept-rechten) tonen we alleen wat
+                      er weggelaten is — terugzetten mag iedereen, weglaten niet. */}
+                  {menuSections.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="text-xs font-medium">Onderdelen in het klantdocument</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {menuSections.map((s) => (
+                        <DropdownMenuCheckboxItem
+                          key={s.id}
+                          checked={!s.omitted}
+                          onSelect={(e) => e.preventDefault()}
+                          onCheckedChange={(v) => setSectionOmitted(s.id, !v)}
+                          className="items-start"
+                        >
+                          <span className="block">
+                            <span className="block text-xs">{offerSectionLabel(s.id)}</span>
+                            {OFFER_SECTION_WARNINGS[s.id] && (
+                              <span className="mt-0.5 block whitespace-normal text-[10px] leading-snug text-muted-foreground">{OFFER_SECTION_WARNINGS[s.id]}</span>
+                            )}
+                          </span>
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </>
+                  )}
+                  {menuPhrases.length > 0 && (
+                    <>
+                      {menuSections.length > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuLabel className="text-xs font-medium">Zinnen in het klantdocument</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {menuPhrases.map((p) => (
+                        <DropdownMenuCheckboxItem
+                          key={p.id}
+                          checked={!p.omitted}
+                          onSelect={(e) => e.preventDefault()}
+                          onCheckedChange={(v) => setPhraseOmitted(p.id, !v)}
+                          className="items-start"
+                        >
+                          <span className="block">
+                            {/* line-clamp-2 ZONDER `block`: in Tailwind 3.4 komt de display-plugin ná
+                                line-clamp, dus `block` zou display:-webkit-box overschrijven en het
+                                lange rekenvoorbeeld het menu laten opblazen. */}
+                            <span className="line-clamp-2 whitespace-normal text-xs leading-snug">{p.text}</span>
+                            <span className="mt-0.5 block whitespace-normal text-[10px] leading-snug text-muted-foreground">
+                              {OFFER_PHRASE_KINDS[p.id]}{OFFER_PHRASE_NOTES[p.id] ? ` · ${OFFER_PHRASE_NOTES[p.id]}` : ""}
+                            </span>
+                          </span>
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
+                  <p className={cn("px-2 py-1.5 text-[10px] leading-snug", (docSectionsDirty || docPhrasesDirty) ? "font-medium text-amber-700" : "text-muted-foreground")}>
+                    {(docSectionsDirty || docPhrasesDirty)
+                      ? "Nog niet opgeslagen — klik op Opslaan voordat je verstuurt."
+                      : "Uitgeschakelde onderdelen en zinnen gaan niet naar de klant — niet in de PDF en niet in de online offerte."}
+                  </p>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={doDelete} disabled={!!busy || del.isPending}>
               <Trash2 className="mr-1.5 h-4 w-4" /> Offerte verwijderen
             </Button>
@@ -885,7 +1082,18 @@ export default function SalesOfferteDetail() {
 
         {/* Rechts: live preview (sticky, desktop) */}
         <aside className="hidden lg:block lg:sticky lg:top-4">
-          <OfferPreview data={pdfData()} signature={previewSignature} className="h-[calc(100vh-2rem)]" />
+          {/* Herstellen kan ELKE sales-gebruiker (klik op de naadstrook) — alleen het weglaten
+              zelf zit achter het documentopbouw-menu. Anders zou een ingekorte offerte bij een
+              collega belanden die 'm niet meer volledig kan maken. */}
+          <OfferPreview
+            data={pdfData()}
+            signature={previewSignature}
+            className="h-[calc(100vh-2rem)]"
+            sections={sectionInfo}
+            sectionLabels={OFFER_SECTION_LABELS}
+            sectionNote={docSectionsDirty ? "niet opgeslagen" : undefined}
+            onRestoreSection={isConcept ? (sid) => setSectionOmitted(sid, false) : undefined}
+          />
         </aside>
       </div>
 

@@ -47,6 +47,8 @@ Deno.serve(async (req) => {
     // platformcijfers + auto-categoriseren, IN PLACE. Geen keten, geen her-audit, geen publish-flip; status en slug
     // blijven. Gebruikt om alle oude blogs definitief op één lijn te brengen.
     const finalize = body.finalize === true;
+    // Correctieronde op een REEDS GEPUBLICEERD artikel (feitencontrole-sweep over de kennisbank).
+    const backfill = body.backfill === true;
     const iteration = Number.isFinite(body.iteration) ? Math.max(1, Math.floor(Number(body.iteration))) : 1;
     const issues: string[] = Array.isArray(body.issues) ? body.issues.filter((x: unknown) => typeof x === "string") : [];
     const missingExp: string[] = Array.isArray(body.missing_experience) ? body.missing_experience.filter((x: unknown) => typeof x === "string") : [];
@@ -72,7 +74,13 @@ Deno.serve(async (req) => {
       .select("id, slug, title, content, faq, sources, category, category_slug, category_slugs, source_topic_id, status, revise_count, cover_image_url, generated_by, factcheck")
       .eq("id", blogPostId).maybeSingle();
     if (!post) return json({ status: "not_found", message: "Post niet gevonden" });
-    if (!finalize && post.status === "gepubliceerd") return json({ status: "already_published", blog_post_id: blogPostId });
+    // Backfill werkt bewust ÓÓK op gepubliceerde posts: de feitencontrole-sweep corrigeert live
+    // artikelen in place (status blijft 'gepubliceerd'; alleen content/sources/faq wijzigen).
+    // Uitsluitend in chirurgische modus: een full rewrite op een live artikel is nooit de bedoeling.
+    if (backfill && body.surgical !== true) {
+      return json({ status: "error", message: "backfill vereist surgical: true" }, 400);
+    }
+    if (!finalize && !backfill && post.status === "gepubliceerd") return json({ status: "already_published", blog_post_id: blogPostId });
 
     const { data: settingsRow } = await sb.from("content_engine_settings").select("id, settings").eq("is_active", true).limit(1).maybeSingle();
     const settings = (settingsRow?.settings ?? {}) as any;
@@ -150,7 +158,9 @@ Deno.serve(async (req) => {
         const naarFactcheckSurgical = async () => {
           await sb.rpc("invoke_edge_function", {
             fn_name: "content-factcheck",
-            body: { blog_post_id: blogPostId, iteration, factcheck_round: factcheckRound, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
+            // backfill MOET mee: zonder die vlag valt de her-check op een gepubliceerd artikel
+            // meteen uit op "already_published" en stopt de correctielus halverwege.
+            body: { blog_post_id: blogPostId, iteration, factcheck_round: factcheckRound, ...(backfill ? { backfill: true } : {}), ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
           });
         };
         if (corrections.length === 0) {
@@ -168,7 +178,7 @@ Deno.serve(async (req) => {
         ].filter(Boolean).join("\n\n");
         await ev("surgical_start", { corrections: corrections.length, retry: surgicalRetry, factcheck_round: factcheckRound });
         try {
-          const raw = await anthropicMessage({ apiKey, system: FACTCHECK_FIX_SYSTEM, user: fixUser, model, maxTokens: 16000, retries: 1 });
+          const raw = await anthropicMessage({ apiKey, system: FACTCHECK_FIX_SYSTEM, user: fixUser, model, maxTokens: 16000, retries: 1, thinking: "adaptive", effort: "medium" });
           const fix = validateFixJson(extractJson<any>(raw), String(post.content ?? ""));
           // Dode bronlinks deterministisch wegfilteren o.b.v. het laatste factcheck-rapport (geen LLM nodig).
           const deadUrls = new Set<string>(
@@ -196,9 +206,21 @@ Deno.serve(async (req) => {
             // een gefaalde re-invoke mag niet stil doorgaan alsof de herkansing gepland staat.
             const { error: retryErr } = await sb.rpc("invoke_edge_function", {
               fn_name: "content-revise",
-              body: { blog_post_id: blogPostId, surgical: true, corrections, iteration, factcheck_round: factcheckRound, surgical_retry: surgicalRetry + 1, ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
+              body: { blog_post_id: blogPostId, surgical: true, corrections, iteration, factcheck_round: factcheckRound, surgical_retry: surgicalRetry + 1, ...(backfill ? { backfill: true } : {}), ...(slotRetry !== null ? { slot_retry: slotRetry } : {}) },
             });
             if (!retryErr) return { status: "ok", action: "surgical_retry", blog_post_id: blogPostId };
+          }
+          // BACKFILL: dit is een LIVE artikel. Nooit archiveren (dat zou een gepubliceerde pagina
+          // offline halen); alleen markeren voor menselijke beoordeling en melden.
+          if (backfill) {
+            await sb.from("blog_posts").update({ review_state: "changes_requested" }).eq("id", blogPostId);
+            await notifyContentEngine(settings, {
+              kind: "run_failed",
+              title: post.title,
+              reason: `Correctie van een GEPUBLICEERD artikel mislukte (${msg}). Het artikel staat nog online en is gemarkeerd voor jouw beoordeling.`,
+              blogPostId,
+            }).catch(() => {});
+            return { status: "ok", action: "backfill_surgicalfail", blog_post_id: blogPostId };
           }
           // Terminaal: archiveren + melding + volgend onderwerp voor dit slot.
           await kickCoverIfMissing();
@@ -269,7 +291,7 @@ Deno.serve(async (req) => {
       const rwT0 = Date.now();
       await ev("rewrite_start", { model, prompt_chars: user.length });
       try {
-        const raw0 = await anthropicMessage({ apiKey, system: BLOG_REVISE_SYSTEM, user, model, maxTokens: Math.max(20000, maxTokens), retries: 1 });
+        const raw0 = await anthropicMessage({ apiKey, system: BLOG_REVISE_SYSTEM, user, model, maxTokens: Math.max(20000, maxTokens), retries: 1, thinking: "adaptive", effort: "medium" });
         await ev("rewrite_ok", { ms: Date.now() - rwT0, chars: raw0.length });
         draft = validateBlogJson(extractJson<any>(raw0), validSlugs, validCategorySlugs);
       } catch (e) {
@@ -371,7 +393,7 @@ Deno.serve(async (req) => {
       try {
         const faqTekst = draft.faq.map((f) => `V: ${f.question}\nA: ${f.answer}`).join("\n");
         const auditUser = `ZOEKVRAAG: ${zoekvraag}\n\nTITEL: ${draft.title}\n\nBLOG (HTML):\n${draft.content}${faqTekst ? `\n\nFAQ (apart veld):\n${faqTekst}` : ""}`;
-        const auditRaw = await anthropicMessage({ apiKey, system: BLOG_AUDIT_SYSTEM, user: auditUser, model: auditModel, maxTokens: 1500 });
+        const auditRaw = await anthropicMessage({ apiKey, system: BLOG_AUDIT_SYSTEM, user: auditUser, model: auditModel, maxTokens: 1500, thinking: "disabled" });
         audit = validateAuditJson(extractJson<any>(auditRaw));
       } catch {
         audit = { seo_score: draft.seo_score, aeo_score: draft.aeo_score, quality_score: draft.quality_score, has_information_gain: false, has_first_hand_signal: false, issues: [], missing_experience: [], verdict: "revise" as const };

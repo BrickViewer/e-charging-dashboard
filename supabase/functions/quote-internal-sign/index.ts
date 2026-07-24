@@ -4,6 +4,7 @@ import { requireAdminOrInternal } from "../_shared/auth.ts";
 import { normalizeSettings } from "../_shared/configurator.ts";
 import { sha256Hex } from "../_shared/hash.ts";
 import { CORS_STD } from "../_shared/cors.ts";
+import { joinStreetAndHouse } from "../_shared/installationHandoff.ts";
 
 // Interne tekenpagina-backend. JWT vereist (inloggen) + de ingelogde gebruiker moet
 // de toegewezen ondertekenaar zijn. Acties (POST body.action):
@@ -90,7 +91,8 @@ Deno.serve(async (req) => {
       const tariffs = (quote.tariff_data ?? {}) as Record<string, any>;
       // deno-lint-ignore no-explicit-any
       const snap = (quote.calculation_snapshot ?? {}) as Record<string, any>;
-      const addr = lead ? [lead.address_street, [lead.postal_code, lead.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
+      // leads slaan straat en huisnummer los op — samenvoegen, anders mist de adresregel het huisnummer.
+      const addr = lead ? [joinStreetAndHouse(lead.address_street, lead.house_number), [lead.postal_code, lead.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
       const { data: settingsRow } = await sb.from("configurator_settings")
         .select("settings").eq("organization_id", quote.organization_id).eq("is_active", true)
         .order("version", { ascending: false }).limit(1).maybeSingle();

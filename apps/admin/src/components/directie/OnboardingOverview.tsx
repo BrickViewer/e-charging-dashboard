@@ -8,12 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarClock, CheckCircle2, ChevronRight, Rocket } from "lucide-react";
-import { ONBOARDING_STAGES, useOnboardingClients, useOnboardingOrders } from "@/hooks/useOnboarding";
-import { useSignedQuotesAwaitingClient } from "@/hooks/useQuotes";
+import { ONBOARDING_STAGES, useOnboardingPipeline } from "@/hooks/useOnboarding";
 import { onboardingName, summarizeOnboarding, type AttentionTone } from "@/services/onboardingOverview";
 
 const STAGE_META = new Map(ONBOARDING_STAGES.map((s) => [s.key, s]));
-const GETEKEND = STAGE_META.get("getekend");
 
 interface ActionRow {
   key: string;
@@ -40,34 +38,22 @@ function formatPlanDate(date: string): string {
 }
 
 export function OnboardingOverview() {
-  const clientsQ = useOnboardingClients();
-  const ordersQ = useOnboardingOrders();
-  // Getekende offertes zonder klantaccount (nog géén klant/order) — de eerste
-  // onboardingstap. Vallen anders buiten clients + order-only, dus expliciet erbij.
-  const awaitingQ = useSignedQuotesAwaitingClient();
-  const isLoading = clientsQ.isLoading || ordersQ.isLoading || awaitingQ.isLoading;
+  // Eén bron: klanten + clientloze orders + getekende offertes zonder klant. Bord en
+  // dashboard kunnen daardoor per constructie niet meer uit elkaar lopen.
+  const { items, skips, isLoading } = useOnboardingPipeline();
 
-  const summary = useMemo(
-    () => summarizeOnboarding([...(clientsQ.data ?? []), ...(ordersQ.data ?? [])]),
-    [clientsQ.data, ordersQ.data],
-  );
+  const summary = useMemo(() => summarizeOnboarding(items, undefined, skips), [items, skips]);
 
-  const awaiting = useMemo(
-    () => (awaitingQ.data ?? []).map((q) => ({
-      id: q.id,
-      name: (q.prospect_company ?? "").trim() || (q.prospect_contact ?? "").trim() || q.quote_number || "Getekende offerte",
-    })),
-    [awaitingQ.data],
-  );
-
-  // Getekende-offertes tellen als fase "getekend" en hebben altijd actie nodig
-  // (klantaccount aanmaken). Samen met de aandachtslijst gesorteerd op urgentie.
-  const total = summary.total + awaiting.length;
-  const getekenedCount = summary.stageCounts.getekend + awaiting.length;
-  const actionRows: ActionRow[] = [
-    ...awaiting.map((a) => ({ key: `q-${a.id}`, name: a.name, stageLabel: GETEKEND?.label, stageColor: GETEKEND?.color, tone: "amber" as AttentionTone, label: "Klant account aanmaken", priority: 4 })),
-    ...summary.attention.map((a) => ({ key: `c-${a.item.id}`, name: onboardingName(a.item), stageLabel: STAGE_META.get(a.stage)?.label, stageColor: STAGE_META.get(a.stage)?.color, tone: a.tone, label: a.label, priority: a.priority })),
-  ].sort((x, y) => x.priority - y.priority);
+  const total = summary.total;
+  const actionRows: ActionRow[] = summary.attention.map((a) => ({
+    key: `${a.item.kind ?? "client"}-${a.item.id}`,
+    name: onboardingName(a.item),
+    stageLabel: STAGE_META.get(a.stage)?.label,
+    stageColor: STAGE_META.get(a.stage)?.color,
+    tone: a.tone,
+    label: a.label,
+    priority: a.priority,
+  }));
 
   // Actieve fases (archief apart onderaan getoond).
   const pipelineStages = ONBOARDING_STAGES.filter((s) => s.key !== "archief");
@@ -93,7 +79,7 @@ export function OnboardingOverview() {
             {/* Pijplijn: aantal per fase */}
             <div className="flex flex-wrap gap-1.5">
               {pipelineStages.map((s) => {
-                const n = s.key === "getekend" ? getekenedCount : summary.stageCounts[s.key];
+                const n = summary.stageCounts[s.key];
                 return (
                   <span
                     key={s.key}
@@ -119,7 +105,7 @@ export function OnboardingOverview() {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ingepland</p>
                 {summary.planned.slice(0, MAX_ATTENTION).map((p) => (
                   <Link
-                    key={p.item.id}
+                    key={`${p.item.kind ?? "client"}-${p.item.id}`}
                     to="/sales/onboarding"
                     className="group flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:bg-muted/40"
                   >

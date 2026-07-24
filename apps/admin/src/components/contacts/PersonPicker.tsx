@@ -7,11 +7,18 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePersonSearch, useCreatePerson, useLinkPersonToCompany, splitName } from "@/hooks/useContacts";
 
+export type PersonCreateDefaults = {
+  email?: string | null;
+  phone?: string | null;
+  address?: { street?: string | null; houseNumber?: string | null; postalCode?: string | null; city?: string | null } | null;
+};
+
 export function PersonPicker({
   value,
   valueLabel,
   onChange,
   companyId,
+  defaults,
   placeholder = "Kies of zoek persoon…",
 }: {
   value: string | null;
@@ -19,6 +26,9 @@ export function PersonPicker({
   onChange: (personId: string | null, person?: { id: string; full_name: string }) => void;
   /** Wanneer gezet: nieuw/gekozen persoon wordt aan dit bedrijf gekoppeld. */
   companyId?: string | null;
+  /** Voorinvulling (bv. uit de lead) voor een NIEUW aangemaakte persoon — een debiteur
+   *  zonder adres levert facturen zonder adresblok op. Bestaande personen blijven ongemoeid. */
+  defaults?: PersonCreateDefaults;
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -53,7 +63,16 @@ export function PersonPicker({
     if (!full) return;
     try {
       const { first_name, last_name } = splitName(full);
-      const created = await createPerson.mutateAsync({ first_name, last_name });
+      const created = await createPerson.mutateAsync({
+        first_name,
+        last_name,
+        email: defaults?.email?.trim() || null,
+        phone: defaults?.phone?.trim() || null,
+        address_street: defaults?.address?.street?.trim() || null,
+        house_number: defaults?.address?.houseNumber?.trim() || null,
+        postal_code: defaults?.address?.postalCode?.trim() || null,
+        city: defaults?.address?.city?.trim() || null,
+      });
       await linkIfNeeded(created.id);
       onChange(created.id, { id: created.id, full_name: created.full_name ?? full });
       toast.success(`Persoon "${created.full_name || full}" aangemaakt`);

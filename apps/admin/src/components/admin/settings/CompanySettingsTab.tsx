@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { PhoneField } from "@/components/contacts/PhoneField";
 import { AddressFields, type AddressValue } from "@/components/contacts/AddressFields";
+import { splitStreetAndHouse } from "@/lib/houseNumber";
 import { useOrganization, useUpdateOrganization } from "@/hooks/useAdminData";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
@@ -34,10 +35,12 @@ export function CompanySettingsTab() {
       country: org.country || "Nederland",
       rsin: org.rsin || "", vestigingsnummer: org.vestigingsnummer || "", sbi_code: org.sbi_code || "",
     });
-    // Straat + huisnummer zitten gecombineerd in address_street; die gaat in het
-    // straatveld. Huisnummer blijft leeg tot de gebruiker het los invult.
+    // organizations draagt straat + huisnummer in ÉÉN kolom; AddressFields wil ze los.
+    // Splitsen bij het laden; handleSaveCompany voegt ze weer samen, dus de opgeslagen
+    // string blijft byte-gelijk (belangrijk: de offertefooter leest deze rij).
+    const [orgStreet, orgHouse] = splitStreetAndHouse(org.address_street);
     setCompanyAddr({
-      street: org.address_street || "", houseNumber: "",
+      street: orgStreet, houseNumber: orgHouse,
       postalCode: org.address_postal || "", city: org.address_city || "",
     });
   }, [org]);

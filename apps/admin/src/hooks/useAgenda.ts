@@ -4,7 +4,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGraphApi } from "@/hooks/useGraphApi";
-import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
+import { useMicrosoftAuth, MicrosoftReauthRequiredError } from "@/hooks/useMicrosoftAuth";
 
 const TZ = "Europe/Amsterdam";
 const PREFER_TZ = { Prefer: `outlook.timezone="${TZ}"` };
@@ -22,8 +22,10 @@ export interface AgendaEvent {
 }
 
 // connected = Microsoft gekoppeld én lijst opgehaald; not_connected = geen MSAL-sessie
-// (koppel-knop tonen); error = wel gekoppeld maar Graph gaf een fout (retry tonen).
-export type AgendaStatus = "connected" | "not_connected" | "error";
+// (koppel-knop tonen); reauth_required = wel een sessie, maar de opgeslagen toestemming dekt de
+// gevraagde scopes niet meer (herkoppel-knop tonen); error = wel gekoppeld maar Graph gaf een
+// andere fout (retry tonen).
+export type AgendaStatus = "connected" | "not_connected" | "reauth_required" | "error";
 
 export interface AgendaEventInput {
   subject: string;
@@ -68,6 +70,9 @@ export function useAgendaEvents(startIso: string, endIso: string) {
     queryKey: ["agenda", startIso, endIso],
     enabled: isConnected,
     staleTime: 60_000,
+    // Een ontbrekende toestemming lost zichzelf niet op met herproberen; alleen een klik van de
+    // gebruiker helpt. Drie zinloze rondes zouden het grijze vlak alleen maar verlengen.
+    retry: (count, error) => !(error instanceof MicrosoftReauthRequiredError) && count < 2,
     queryFn: async () => {
       const select = "id,subject,start,end,isAllDay,location,bodyPreview,organizer,webLink";
       const path = `/me/calendarView?startDateTime=${encodeURIComponent(startIso)}&endDateTime=${encodeURIComponent(endIso)}` +
@@ -78,12 +83,22 @@ export function useAgendaEvents(startIso: string, endIso: string) {
     },
   });
 
-  const status: AgendaStatus = !isConnected ? "not_connected" : query.isError ? "error" : "connected";
+  const needsReauth = query.error instanceof MicrosoftReauthRequiredError;
+  const status: AgendaStatus = !isConnected
+    ? "not_connected"
+    : needsReauth
+      ? "reauth_required"
+      : query.isError
+        ? "error"
+        : "connected";
   return {
     status,
     events: query.data ?? [],
-    isLoading: isConnected && query.isLoading,
+    // Alleen laden zolang er écht een verzoek loopt: bij reauth of fout moet de UI meteen de
+    // juiste knop tonen in plaats van eindeloos een skeleton.
+    isLoading: isConnected && query.isLoading && !needsReauth,
     isError: query.isError,
+    errorMessage: query.error instanceof Error ? query.error.message : null,
     refetch: query.refetch,
   };
 }

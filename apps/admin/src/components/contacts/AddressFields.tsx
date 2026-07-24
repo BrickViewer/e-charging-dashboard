@@ -46,7 +46,7 @@ export function AddressFields({ value, onChange, disabled }: {
         <Input value={value.postalCode} disabled={disabled} placeholder="1234 AB" onChange={(e) => onChange({ postalCode: e.target.value })} />
       </Field>
       <Field label="Huisnummer" className="sm:col-span-2">
-        <Input value={houseNo} disabled={disabled} placeholder="10-14" onChange={(e) => setHouse(e.target.value, addition)} />
+        <Input value={houseNo} disabled={disabled} placeholder="10" onChange={(e) => setHouse(e.target.value, addition)} />
       </Field>
       <Field label="Toevoeging" className="sm:col-span-2">
         <Input value={addition} disabled={disabled} placeholder="A" onChange={(e) => setHouse(houseNo, e.target.value)} />
